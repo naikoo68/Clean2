@@ -3352,8 +3352,22 @@ function rankModels(models) {
   return clean.map((m) => ({ m, s: score(m) })).sort((a, b) => a.s - b.s).map((x) => x.m);
 }
 
+// Order candidate models for DETECTION so the ones most likely to work on a FREE
+// tier are tried FIRST: light/cheap models (flash-lite, flash, ":free", mini,
+// lite/nano/small, haiku) BEFORE the heavy ones (pro/opus/large), which on free
+// tiers are quota-starved. Trying a light model first usually succeeds on the
+// FIRST call — so we don't fire a burst of probes (e.g. against gemini-2.5-pro)
+// that trips the key's own per-minute limit and makes a perfectly good, freshly
+// added key look "rate-limited".
+function orderForDetection(models) {
+  const clean = (models || []).filter((m) => m && !/embed|vision|image|whisper|tts|audio|moderation|rerank|dall|diffusion/i.test(m));
+  const pref = [/flash[.\-]?lite/i, /flash/i, /:free$/i, /lite|nano|small/i, /mini/i, /haiku/i, /chat/i];
+  const score = (m) => { const i = pref.findIndex((rx) => rx.test(m)); return i === -1 ? pref.length : i; };
+  return clean.map((m) => ({ m, s: score(m) })).sort((a, b) => a.s - b.s).map((x) => x.m);
+}
+
 // Auto-find a WORKING model for a key: list the models it can use, then live-
-// test them best-first until one replies ok, and store that model on the key.
+// test them LIGHTEST-first until one replies ok, and store that model on the key.
 // A model that only hits a rate limit (429/quota) is still valid, so it's kept
 // as a fallback if nothing replies ok. Returns { ok, model, tried, limited }.
 async function autoDetectModel(doc) {
@@ -3364,18 +3378,28 @@ async function autoDetectModel(doc) {
     candidates = (doc.models || "").split(",").map((m) => m.trim()).filter(Boolean);
     if (!candidates.length) candidates = ["gpt-4o-mini", "gemini-2.5-flash", "llama-3.3-70b-versatile", "deepseek-chat"];
   }
-  const ranked = rankModels(candidates);
-  // Track rate-limited models. We iterate strongest→lightest, so by overwriting
-  // on each hit this ends up holding the LIGHTEST rate-limited model. That's the
-  // better fallback: on free tiers the light models (flash / flash-lite) have far
-  // more quota than the heavy ones (e.g. gemini-2.5-pro is quota-starved on the
-  // free tier), so a light model is much more likely to actually generate.
+  // Probe light models FIRST (see orderForDetection) so a healthy key goes Active
+  // on the first call instead of burning its per-minute quota on heavy models.
+  const ordered = orderForDetection(candidates);
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  // First rate-limited model becomes the fallback — since we go lightest-first,
+  // the first one is the lightest (most free-quota-friendly) choice.
   let limited = "";
   let tried = 0;
-  for (const model of ranked.slice(0, 18)) { // cap attempts so the request stays bounded
+  for (const model of ordered.slice(0, 8)) { // fewer, light-first attempts → far less chance of self-inflicted rate limiting
     tried += 1;
     // eslint-disable-next-line no-await-in-loop
-    const r = await callProvider({ key: doc.key, baseUrl, model, userPrompt: "Reply with the word ok.", maxTokens: 5 });
+    let r = await callProvider({ key: doc.key, baseUrl, model, userPrompt: "Reply with the word ok.", maxTokens: 5 });
+    // A 429 during rapid probing is usually just the per-MINUTE limit (not a dead
+    // key). Wait the suggested delay (capped) and retry this SAME model ONCE
+    // before giving up on it — this stops fresh, healthy keys being wrongly
+    // flagged rate-limited.
+    if (!r.ok && (r.status === 429 || /quota|rate.?limit|exhausted/i.test(r.detail || ""))) {
+      // eslint-disable-next-line no-await-in-loop
+      await sleep(Math.min(retryWaitMs(null, r.detail) || 5000, 12000));
+      // eslint-disable-next-line no-await-in-loop
+      r = await callProvider({ key: doc.key, baseUrl, model, userPrompt: "Reply with the word ok.", maxTokens: 5 });
+    }
     if (r.ok) {
       doc.models = model;
       doc.lastStatus = "ok";
@@ -3384,7 +3408,9 @@ async function autoDetectModel(doc) {
       await doc.save();
       return { ok: true, model, tried };
     }
-    if (r.status === 429 || /quota|rate.?limit|exhausted/i.test(r.detail || "")) limited = model; // keep the lightest one
+    if (!limited && (r.status === 429 || /quota|rate.?limit|exhausted/i.test(r.detail || ""))) limited = model; // lightest (tried first)
+    // eslint-disable-next-line no-await-in-loop
+    await sleep(400); // gentle spacing so we don't burst the per-minute limit
   }
   if (limited) {
     doc.models = limited;
@@ -3449,16 +3475,24 @@ export async function testAllKeys(req, res) {
 // runs in PARALLEL so a large pool finishes quickly. Returns a per-key summary.
 export async function autoDetectAllKeys(req, res) {
   const keys = await AiKey.find({ owner: keyOwner(req) ?? null });
-  const results = await Promise.all(
-    keys.map(async (doc) => {
+  // Detect several keys at a time (not ALL at once): each key's detection already
+  // spaces out its own probes, and a bounded fan-out keeps the whole run from
+  // hammering the server / tripping limits while still finishing quickly.
+  const CONCURRENCY = 6;
+  const results = [];
+  let idx = 0;
+  const worker = async () => {
+    while (idx < keys.length) {
+      const doc = keys[idx++];
       try {
         const r = await autoDetectModel(doc);
-        return { id: doc._id, ok: !!r.ok, model: doc.models, limited: !!r.limited };
+        results.push({ id: doc._id, ok: !!r.ok, model: doc.models, limited: !!r.limited });
       } catch {
-        return { id: doc._id, ok: false, model: doc.models };
+        results.push({ id: doc._id, ok: false, model: doc.models });
       }
-    })
-  );
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(CONCURRENCY, keys.length || 1) }, worker));
   const ok = results.filter((r) => r.ok).length;
   res.json({ total: keys.length, ok, failed: keys.length - ok, results });
 }
