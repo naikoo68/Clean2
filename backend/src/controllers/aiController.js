@@ -3379,24 +3379,27 @@ async function autoDetectModel(doc) {
     if (!candidates.length) candidates = ["gpt-4o-mini", "gemini-2.5-flash", "llama-3.3-70b-versatile", "deepseek-chat"];
   }
   // Probe light models FIRST (see orderForDetection) so a healthy key goes Active
-  // on the first call instead of burning its per-minute quota on heavy models.
+  // on the very first call instead of burning its per-minute quota on heavy models.
   const ordered = orderForDetection(candidates);
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  const isRate = (r) => r.status === 429 || /quota|rate.?limit|exhausted/i.test(r.detail || "");
   // First rate-limited model becomes the fallback — since we go lightest-first,
   // the first one is the lightest (most free-quota-friendly) choice.
   let limited = "";
+  let denied = null; // a 401/403 → the whole key/project is refused (see below)
   let tried = 0;
-  for (const model of ordered.slice(0, 8)) { // fewer, light-first attempts → far less chance of self-inflicted rate limiting
+  let retried = false; // at most ONE short 429 retry per key, so a big pool stays fast
+  for (const model of ordered.slice(0, 6)) {
     tried += 1;
     // eslint-disable-next-line no-await-in-loop
     let r = await callProvider({ key: doc.key, baseUrl, model, userPrompt: "Reply with the word ok.", maxTokens: 5 });
-    // A 429 during rapid probing is usually just the per-MINUTE limit (not a dead
-    // key). Wait the suggested delay (capped) and retry this SAME model ONCE
-    // before giving up on it — this stops fresh, healthy keys being wrongly
-    // flagged rate-limited.
-    if (!r.ok && (r.status === 429 || /quota|rate.?limit|exhausted/i.test(r.detail || ""))) {
+    // A per-minute 429 clears in seconds. Retry the SAME model ONCE per key (short
+    // wait) so a fresh, healthy key isn't wrongly flagged rate-limited — but only
+    // once, so a genuinely spent key doesn't stall the whole run.
+    if (!r.ok && isRate(r) && !retried) {
+      retried = true;
       // eslint-disable-next-line no-await-in-loop
-      await sleep(Math.min(retryWaitMs(null, r.detail) || 5000, 12000));
+      await sleep(Math.min(retryWaitMs(null, r.detail) || 3000, 5000));
       // eslint-disable-next-line no-await-in-loop
       r = await callProvider({ key: doc.key, baseUrl, model, userPrompt: "Reply with the word ok.", maxTokens: 5 });
     }
@@ -3408,15 +3411,25 @@ async function autoDetectModel(doc) {
       await doc.save();
       return { ok: true, model, tried };
     }
-    if (!limited && (r.status === 429 || /quota|rate.?limit|exhausted/i.test(r.detail || ""))) limited = model; // lightest (tried first)
+    // 401/403 = the KEY/PROJECT is denied (invalid key, API not enabled, or key
+    // restricted). No model will fix that, so stop immediately instead of
+    // pointlessly probing the rest — this is the big speed-up for bad keys.
+    if (r.status === 401 || r.status === 403) { denied = r; break; }
+    if (!limited && isRate(r)) limited = model; // lightest (tried first)
     // eslint-disable-next-line no-await-in-loop
-    await sleep(400); // gentle spacing so we don't burst the per-minute limit
+    await sleep(120); // light spacing; the first probe usually already succeeded
+  }
+  if (denied) {
+    doc.lastStatus = "error";
+    doc.lastError = `HTTP ${denied.status}: ${(denied.detail || "").slice(0, 150)}`;
+    doc.lastCheckedAt = new Date();
+    await doc.save();
+    return { ok: false, model: "", tried, denied: true };
   }
   if (limited) {
     doc.models = limited;
     // Honest status: the key is valid but couldn't complete the test because it
-    // was rate-limited. Matches what the Test button now reports (no more
-    // "auto-detect says OK but Test says not working" contradiction).
+    // was rate-limited. Matches what the Test button reports.
     doc.lastStatus = "limited";
     doc.lastError = "Valid key set to a light model, but it was rate-limited / out of quota during detection. It should work once quota is available.";
     doc.lastCheckedAt = new Date();
@@ -3475,10 +3488,10 @@ export async function testAllKeys(req, res) {
 // runs in PARALLEL so a large pool finishes quickly. Returns a per-key summary.
 export async function autoDetectAllKeys(req, res) {
   const keys = await AiKey.find({ owner: keyOwner(req) ?? null });
-  // Detect several keys at a time (not ALL at once): each key's detection already
-  // spaces out its own probes, and a bounded fan-out keeps the whole run from
-  // hammering the server / tripping limits while still finishing quickly.
-  const CONCURRENCY = 6;
+  // Detect many keys at a time. Each key's own detection is now fast (usually one
+  // call; bad keys bail out immediately on 401/403), so a wider fan-out finishes
+  // a big pool quickly without hammering any single account (keys are independent).
+  const CONCURRENCY = 12;
   const results = [];
   let idx = 0;
   const worker = async () => {
