@@ -17,7 +17,9 @@ const aiKeySchema = new mongoose.Schema(
     enabled: { type: Boolean, default: true },
     order: { type: Number, default: 0 },
     // Result of the last "Test" — so the admin can see active/inactive.
-    lastStatus: { type: String, enum: ["", "ok", "error"], default: "" },
+    // "limited" = the key is VALID but was rate-limited / out of quota during the
+    // test (429). It's not broken — it just needs quota to be available.
+    lastStatus: { type: String, enum: ["", "ok", "error", "limited"], default: "" },
     lastError: { type: String, default: "" },
     lastCheckedAt: { type: Date, default: null },
     // Usage tracked by THIS app (providers don't expose remaining credits).
