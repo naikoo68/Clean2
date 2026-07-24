@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from "react";
-import { KeyRound, Plus, Trash2, Pencil, X, CheckCircle2, XCircle, Loader2, RefreshCw, Power, Download, List, Layers, Wand2 } from "lucide-react";
+import { KeyRound, Plus, Trash2, Pencil, X, CheckCircle2, XCircle, Loader2, RefreshCw, Power, Download, List, Layers, Wand2, AlertTriangle } from "lucide-react";
 import { aiService } from "../../services";
 import { Loading, ErrorState, EmptyState } from "../../components/ui/AsyncState";
 import AiPlansManager from "../../components/admin/AiPlansManager";
@@ -280,8 +280,9 @@ export default function AdminAiKeys({ clientMode = false }) {
   const StatusBadge = ({ k }) => {
     if (!k.enabled) return <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-500 dark:bg-slate-800">Disabled</span>;
     if (k.lastStatus === "ok") return <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-semibold text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300"><CheckCircle2 className="h-3.5 w-3.5" /> Active</span>;
+    if (k.lastStatus === "limited") return <span title={k.lastError || ""} className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-700 dark:bg-amber-900/40 dark:text-amber-300"><AlertTriangle className="h-3.5 w-3.5" /> Rate-limited</span>;
     if (k.lastStatus === "error") return <span className="inline-flex items-center gap-1 rounded-full bg-rose-100 px-2 py-0.5 text-xs font-semibold text-rose-700 dark:bg-rose-900/40 dark:text-rose-300"><XCircle className="h-3.5 w-3.5" /> Not working</span>;
-    return <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-700 dark:bg-amber-900/40 dark:text-amber-300">Untested</span>;
+    return <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-500 dark:bg-slate-800">Untested</span>;
   };
 
   return (
@@ -382,7 +383,7 @@ export default function AdminAiKeys({ clientMode = false }) {
                 </div>
                 <p className="mt-1 truncate text-xs text-slate-400">
                   {k.models} · {k.baseUrl}
-                  {k.lastStatus === "error" && k.lastError ? ` · ${k.lastError}` : ""}
+                  {(k.lastStatus === "error" || k.lastStatus === "limited") && k.lastError ? ` · ${k.lastError}` : ""}
                 </p>
                 {k.source !== "env" && (
                   <p className="mt-1 text-xs text-slate-400">

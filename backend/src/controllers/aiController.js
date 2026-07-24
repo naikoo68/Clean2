@@ -3316,11 +3316,23 @@ async function runKeyTest(doc) {
     }
   }
 
-  doc.lastStatus = r.ok ? "ok" : "error";
-  doc.lastError = r.ok ? "" : `HTTP ${r.status || 0}: ${(r.detail || "").slice(0, 150)}`;
+  // A 429 (or a quota/rate-limit message) means the key AND model are VALID —
+  // they're just throttled right now. Don't mark that as "not working"; flag it
+  // as rate-limited so the badge matches what auto-detect concluded.
+  const rateLimited = !r.ok && (r.status === 429 || /quota|rate.?limit|exhausted|resource has been exhausted/i.test(r.detail || ""));
+  if (r.ok) {
+    doc.lastStatus = "ok";
+    doc.lastError = "";
+  } else if (rateLimited) {
+    doc.lastStatus = "limited";
+    doc.lastError = "Valid key, but it was rate-limited / out of quota during the test. Per-minute limits clear in about a minute; free daily quota resets the next day.";
+  } else {
+    doc.lastStatus = "error";
+    doc.lastError = `HTTP ${r.status || 0}: ${(r.detail || "").slice(0, 150)}`;
+  }
   doc.lastCheckedAt = new Date();
   await doc.save();
-  return r.ok;
+  return doc.lastStatus !== "error";
 }
 
 // Order candidate models best-FIRST for auto-detect, preferring the most
@@ -3353,6 +3365,11 @@ async function autoDetectModel(doc) {
     if (!candidates.length) candidates = ["gpt-4o-mini", "gemini-2.5-flash", "llama-3.3-70b-versatile", "deepseek-chat"];
   }
   const ranked = rankModels(candidates);
+  // Track rate-limited models. We iterate strongest→lightest, so by overwriting
+  // on each hit this ends up holding the LIGHTEST rate-limited model. That's the
+  // better fallback: on free tiers the light models (flash / flash-lite) have far
+  // more quota than the heavy ones (e.g. gemini-2.5-pro is quota-starved on the
+  // free tier), so a light model is much more likely to actually generate.
   let limited = "";
   let tried = 0;
   for (const model of ranked.slice(0, 18)) { // cap attempts so the request stays bounded
@@ -3367,12 +3384,15 @@ async function autoDetectModel(doc) {
       await doc.save();
       return { ok: true, model, tried };
     }
-    if (!limited && (r.status === 429 || /quota|rate.?limit|exhausted/i.test(r.detail || ""))) limited = model;
+    if (r.status === 429 || /quota|rate.?limit|exhausted/i.test(r.detail || "")) limited = model; // keep the lightest one
   }
   if (limited) {
     doc.models = limited;
-    doc.lastStatus = "ok";
-    doc.lastError = "Model is valid but was rate-limited during the test.";
+    // Honest status: the key is valid but couldn't complete the test because it
+    // was rate-limited. Matches what the Test button now reports (no more
+    // "auto-detect says OK but Test says not working" contradiction).
+    doc.lastStatus = "limited";
+    doc.lastError = "Valid key set to a light model, but it was rate-limited / out of quota during detection. It should work once quota is available.";
     doc.lastCheckedAt = new Date();
     await doc.save();
     return { ok: true, model: limited, tried, limited: true };
