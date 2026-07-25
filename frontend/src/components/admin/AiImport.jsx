@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { X, Globe, Download, CheckCircle2, AlertTriangle, Loader2, Server, KeyRound, FileText, Upload, Files, ScanText, Maximize2, Minimize2, Plus, Sparkles, ListChecks, Circle } from "lucide-react";
 import { aiService, documentService } from "../../services";
 import { useAuth } from "../../context/AuthContext";
+import GraphView from "../ui/GraphView";
 
 const LETTERS = ["A", "B", "C", "D"];
 const BATCH = 50; // group the extracted questions into batches of this size for insertion
@@ -436,6 +437,7 @@ export default function AiImport({ open, onClose, onUpload, title = "Import Ques
         <span className="ml-auto font-semibold text-emerald-600 dark:text-emerald-400">Ans: {LETTERS[q.correct] || "?"}</span>
       </div>
       <p className="mt-1 font-medium text-slate-700 dark:text-slate-200">{n}. {q.text}</p>
+      <GraphView q={q} />
       <ul className="mt-1 grid grid-cols-2 gap-x-3 text-slate-500 dark:text-slate-400">
         {(q.options || []).map((o, j) => (
           <li key={j} className={j === q.correct ? "font-semibold text-emerald-600 dark:text-emerald-400" : ""}>{LETTERS[j]}. {o}</li>

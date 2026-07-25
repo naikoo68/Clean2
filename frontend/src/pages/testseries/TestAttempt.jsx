@@ -26,6 +26,7 @@ import MathText from "../../components/ui/MathText";
 import { getCbtSession, clearCbtSession } from "../../lib/cbtSession";
 import StatementPairView from "../../components/ui/StatementPairView";
 import TableView from "../../components/ui/TableView";
+import GraphView from "../../components/ui/GraphView";
 import AssertionReasonView from "../../components/ui/AssertionReasonView";
 import Watermark from "../../components/ui/Watermark";
 import FeedbackButton from "../../components/ui/FeedbackButton";
@@ -495,6 +496,7 @@ export default function TestAttempt() {
 
                   <StatementPairView q={r} />
                   <TableView q={r} />
+                  <GraphView q={r} />
                   <AssertionReasonView q={r} />
 
                   <div className="mt-3 space-y-2">
@@ -623,6 +625,7 @@ export default function TestAttempt() {
           {/* Statement/pair lists, table grids, and assertion–reason statements */}
           <StatementPairView q={q} />
           <TableView q={q} />
+          <GraphView q={q} />
           <AssertionReasonView q={q} />
 
           <div className="mt-5 space-y-3">

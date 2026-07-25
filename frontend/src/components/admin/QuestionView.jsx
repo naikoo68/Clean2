@@ -4,6 +4,7 @@ import MathText from "../ui/MathText";
 import { questionDateText } from "../../lib/questions";
 import StatementPairView from "../ui/StatementPairView";
 import TableView from "../ui/TableView";
+import GraphView from "../ui/GraphView";
 import AssertionReasonView from "../ui/AssertionReasonView";
 import Badge from "../ui/Badge";
 
@@ -67,6 +68,7 @@ export default function QuestionView({ q, index, studentView = false, onRegenera
 
       <StatementPairView q={q} />
       <TableView q={q} />
+      <GraphView q={q} />
       <AssertionReasonView q={q} />
 
       <div className="mt-3 space-y-2">

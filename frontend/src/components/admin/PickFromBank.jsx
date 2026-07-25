@@ -5,7 +5,7 @@ import MathText from "../ui/MathText";
 import QuestionView from "./QuestionView";
 
 const LETTERS = ["A", "B", "C", "D"];
-const CONTENT_FIELDS = ["text", "type", "options", "correct", "difficulty", "explanation", "optionExplanations", "columnA", "columnB", "tableRows", "assertion", "reason", "image"];
+const CONTENT_FIELDS = ["text", "type", "options", "correct", "difficulty", "explanation", "optionExplanations", "columnA", "columnB", "tableRows", "graph", "assertion", "reason", "image"];
 const cleanQ = (q) => {
   const o = {};
   CONTENT_FIELDS.forEach((k) => q[k] !== undefined && (o[k] = q[k]));
