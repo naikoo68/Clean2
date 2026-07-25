@@ -533,8 +533,44 @@ function Flashcards({ s }) {
   );
 }
 
+// ---- Reaction mechanism (stepwise species flow) ----------------------------
+function Mechanism({ s }) {
+  const species = Array.isArray(s.species) && s.species.length ? s.species : ["CH₃Br", "[Transition State]", "CH₃OH"];
+  const conditions = Array.isArray(s.conditions) ? s.conditions : [];
+  const notes = Array.isArray(s.notes) ? s.notes : [];
+  const n = species.length, cy = H / 2, unit = (W - 40) / n;
+  const boxW = Math.max(70, unit - 52), boxH = 66;
+  const cxOf = (i) => 20 + i * unit + unit / 2;
+  return (
+    <g>
+      {species.map((sp, i) => {
+        const x = cxOf(i), intermediate = /^\[.*\]$/.test(String(sp).trim());
+        return (
+          <g key={i}>
+            <rect x={x - boxW / 2} y={cy - boxH / 2} width={boxW} height={boxH} rx="10"
+              fill={intermediate ? "#fef9c3" : "#eff6ff"} stroke={intermediate ? "#ca8a04" : "#3b82f6"}
+              strokeWidth="2" strokeDasharray={intermediate ? "5 4" : undefined} />
+            <text x={x} y={cy + 5} fontSize="13" fontWeight="700" fill="currentColor" textAnchor="middle">{tr(sp, Math.max(8, Math.floor(boxW / 8)))}</text>
+            {i < n - 1 && (() => {
+              const x1 = x + boxW / 2 + 4, x2 = cxOf(i + 1) - boxW / 2 - 4, mx = (x1 + x2) / 2;
+              return (
+                <g>
+                  <line x1={x1} y1={cy} x2={x2} y2={cy} stroke="#334155" strokeWidth="2.5" markerEnd="url(#il-arrow)" />
+                  {conditions[i] && <text x={mx} y={cy - 12} fontSize="12" fontWeight="600" fill={P[2]} textAnchor="middle">{tr(conditions[i], 16)}</text>}
+                  {notes[i] && <text x={mx} y={cy + 22} fontSize="10" fill="#64748b" textAnchor="middle">{tr(notes[i], 18)}</text>}
+                </g>
+              );
+            })()}
+          </g>
+        );
+      })}
+    </g>
+  );
+}
+
 const KINDS = {
   wave: (p) => <Wave {...p} />, projectile: (p) => <Projectile {...p} />, circuit: (p) => <Circuit {...p} />,
+  mechanism: (p) => <Mechanism {...p} />,
   ray: (p) => <Ray {...p} />, molecule: (p) => <Molecule {...p} />, reaction: (p) => <Reaction {...p} />,
   orbital: (p) => <Orbital {...p} />, dna: (p) => <Dna {...p} />, rna: (p) => <Dna {...p} single />,
   cell: (p) => <Cell {...p} />, efield: (p) => <EField {...p} />, bmagnet: (p) => <BMagnet {...p} />,
