@@ -337,11 +337,210 @@ function BMagnet({ s }) {
   );
 }
 
+// ---- Vector / slope field --------------------------------------------------
+function Field({ s }) {
+  const slope = s.type === "slope";
+  const cx = W / 2, cy = H / 2, n = 9, gap = 62, len = 26;
+  const items = [];
+  for (let gy = 0; gy < n; gy++) for (let gx = 0; gx < n; gx++) {
+    const x = cx + (gx - (n - 1) / 2) * gap, y = cy + (gy - (n - 1) / 2) * gap;
+    const ux = (x - cx) / 62, uy = -(y - cy) / 62;
+    let vx, vy;
+    if (slope) { vx = 1; vy = Math.tanh(ux + uy); } else { vx = -uy; vy = ux; }
+    const L = Math.hypot(vx, vy) || 1, dx = (vx / L) * len, dy = (vy / L) * len;
+    items.push({ x, y, dx, dy: -dy });
+  }
+  return (
+    <g>
+      {items.map((c, i) => (
+        <line key={i} x1={c.x - c.dx / 2} y1={c.y - c.dy / 2} x2={c.x + c.dx / 2} y2={c.y + c.dy / 2} stroke={P[0]} strokeWidth="1.6" markerEnd={slope ? undefined : "url(#il-arrow)"} />
+      ))}
+    </g>
+  );
+}
+
+// ---- Generic data table ----------------------------------------------------
+const tr = (t, n = 26) => { t = String(t ?? ""); return t.length > n ? t.slice(0, n - 1) + "…" : t; };
+function TableFig({ s }) {
+  const headers = Array.isArray(s.headers) ? s.headers : [];
+  const rows = Array.isArray(s.rows) && s.rows.length ? s.rows : [["No data"]];
+  const cols = Math.max(headers.length, ...rows.map((r) => r.length), 1);
+  const tW = Math.min(680, Math.max(300, cols * 150)), x0 = (W - tW) / 2, colW = tW / cols;
+  const rowH = 40, y0 = 90, hasH = headers.length > 0, total = rows.length + (hasH ? 1 : 0);
+  return (
+    <g>
+      {hasH && (
+        <g>
+          <rect x={x0} y={y0} width={tW} height={rowH} fill={P[0]} />
+          {headers.map((h, i) => <text key={i} x={x0 + i * colW + colW / 2} y={y0 + rowH / 2 + 4} fontSize="13" fontWeight="700" fill="#fff" textAnchor="middle">{tr(h, 18)}</text>)}
+        </g>
+      )}
+      {rows.map((r, ri) => {
+        const ry = y0 + (hasH ? rowH : 0) + ri * rowH;
+        return (
+          <g key={ri}>
+            <rect x={x0} y={ry} width={tW} height={rowH} fill={ri % 2 ? "#94a3b822" : "transparent"} />
+            {Array.from({ length: cols }).map((_, ci) => <text key={ci} x={x0 + ci * colW + colW / 2} y={ry + rowH / 2 + 4} fontSize="12" fontWeight={ci === 0 ? 700 : 400} fill="currentColor" textAnchor="middle">{tr(r[ci], 18)}</text>)}
+          </g>
+        );
+      })}
+      <rect x={x0} y={y0} width={tW} height={total * rowH} fill="none" stroke="#334155" strokeWidth="1.5" />
+      {Array.from({ length: cols - 1 }).map((_, i) => <line key={i} x1={x0 + (i + 1) * colW} y1={y0} x2={x0 + (i + 1) * colW} y2={y0 + total * rowH} stroke="#94a3b8" strokeWidth="0.5" />)}
+    </g>
+  );
+}
+
+// ---- Cell division (mitosis / meiosis) -------------------------------------
+function chromosomes(ph, cx, cy) {
+  const X = (x, y, c, k) => <g key={k} stroke={c} strokeWidth="2.5" fill="none"><line x1={x - 6} y1={y - 8} x2={x + 6} y2={y + 8} /><line x1={x + 6} y1={y - 8} x2={x - 6} y2={y + 8} /></g>;
+  if (/Metaphase/.test(ph)) return [X(cx, cy - 15, P[1], 0), X(cx, cy + 15, P[4], 1)];
+  if (/Anaphase/.test(ph)) return [X(cx - 26, cy, P[1], 0), X(cx + 26, cy, P[1], 1), X(cx - 26, cy + 4, P[4], 2), X(cx + 26, cy + 4, P[4], 3)];
+  if (/Telophase|II/.test(ph)) return [X(cx - 24, cy - 6, P[1], 0), X(cx + 24, cy + 6, P[4], 1)];
+  return [X(cx - 16, cy - 12, P[1], 0), X(cx + 14, cy + 10, P[4], 1)];
+}
+function CellDivision({ s }) {
+  const meiosis = s.process === "meiosis";
+  const phases = meiosis ? ["Prophase I", "Metaphase I", "Anaphase I", "Telophase I", "Meiosis II"] : ["Prophase", "Metaphase", "Anaphase", "Telophase"];
+  const n = phases.length, band = (W - 40) / n, r = Math.min(52, band / 2 - 8), y = H / 2;
+  return (
+    <g>
+      {phases.map((ph, i) => {
+        const cx = 20 + band * i + band / 2;
+        return (
+          <g key={i}>
+            <circle cx={cx} cy={y} r={r} fill="#eff6ff" stroke="#3b82f6" strokeWidth="2" />
+            {chromosomes(ph, cx, y)}
+            <text x={cx} y={y + r + 20} fontSize="11" fontWeight="600" fill="currentColor" textAnchor="middle">{ph}</text>
+          </g>
+        );
+      })}
+    </g>
+  );
+}
+
+// ---- Human body (systems overview) -----------------------------------------
+function HumanBody({ s }) {
+  const cx = W / 2;
+  const organs = Array.isArray(s.organs) && s.organs.length ? s.organs : [
+    { t: "Brain", y: 88, c: "#ef4444" }, { t: "Lungs", y: 165, c: "#60a5fa" }, { t: "Heart", y: 180, c: "#dc2626" },
+    { t: "Liver", y: 205, c: "#f59e0b" }, { t: "Stomach", y: 220, c: "#10b981" }, { t: "Intestines", y: 250, c: "#a855f7" },
+  ];
+  return (
+    <g>
+      <g fill="#dbeafe" stroke="#3b82f6" strokeWidth="2">
+        <circle cx={cx} cy={90} r="34" />
+        <rect x={cx - 45} y={128} width="90" height="150" rx="22" />
+        <rect x={cx - 72} y={135} width="24" height="120" rx="12" /><rect x={cx + 48} y={135} width="24" height="120" rx="12" />
+        <rect x={cx - 42} y={276} width="30" height="150" rx="14" /><rect x={cx + 12} y={276} width="30" height="150" rx="14" />
+      </g>
+      {organs.map((o, i) => {
+        const right = i % 2 === 1, ox = cx + (o.t === "Lungs" ? 14 : o.t === "Heart" ? -12 : 0);
+        return (
+          <g key={i}>
+            <circle cx={ox} cy={o.y} r="7" fill={o.c} stroke="#fff" strokeWidth="1.5" />
+            <line x1={ox} y1={o.y} x2={right ? cx + 130 : cx - 130} y2={o.y} stroke="#94a3b8" strokeWidth="1" />
+            <text x={right ? cx + 134 : cx - 134} y={o.y + 3} fontSize="11" fill="currentColor" textAnchor={right ? "start" : "end"}>{o.t}</text>
+          </g>
+        );
+      })}
+    </g>
+  );
+}
+
+// ---- Periodic table --------------------------------------------------------
+const PT_ROWS = [
+  ["H", null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, "He"],
+  ["Li", "Be", null, null, null, null, null, null, null, null, null, null, "B", "C", "N", "O", "F", "Ne"],
+  ["Na", "Mg", null, null, null, null, null, null, null, null, null, null, "Al", "Si", "P", "S", "Cl", "Ar"],
+  ["K", "Ca", "Sc", "Ti", "V", "Cr", "Mn", "Fe", "Co", "Ni", "Cu", "Zn", "Ga", "Ge", "As", "Se", "Br", "Kr"],
+  ["Rb", "Sr", "Y", "Zr", "Nb", "Mo", "Tc", "Ru", "Rh", "Pd", "Ag", "Cd", "In", "Sn", "Sb", "Te", "I", "Xe"],
+  ["Cs", "Ba", "La", "Hf", "Ta", "W", "Re", "Os", "Ir", "Pt", "Au", "Hg", "Tl", "Pb", "Bi", "Po", "At", "Rn"],
+  ["Fr", "Ra", "Ac", "Rf", "Db", "Sg", "Bh", "Hs", "Mt", "Ds", "Rg", "Cn", "Nh", "Fl", "Mc", "Lv", "Ts", "Og"],
+];
+const PT_F = [
+  ["Ce", "Pr", "Nd", "Pm", "Sm", "Eu", "Gd", "Tb", "Dy", "Ho", "Er", "Tm", "Yb", "Lu"],
+  ["Th", "Pa", "U", "Np", "Pu", "Am", "Cm", "Bk", "Cf", "Es", "Fm", "Md", "No", "Lr"],
+];
+function PeriodicTable({ s }) {
+  const hi = new Set((s.highlight || []).map((x) => String(x)));
+  const cell = Math.min(38, (W - 40) / 18), x0 = (W - 18 * cell) / 2, y0 = 56;
+  const draw = (sym, col, row, k) => {
+    if (!sym) return null;
+    const on = hi.has(sym), x = x0 + col * cell, y = y0 + row * cell;
+    return (
+      <g key={k}>
+        <rect x={x} y={y} width={cell - 2} height={cell - 2} rx="2" fill={on ? P[1] : "#e2e8f0"} stroke="#94a3b8" strokeWidth="0.5" />
+        <text x={x + (cell - 2) / 2} y={y + (cell - 2) / 2 + 3} fontSize={cell * 0.34} fontWeight={on ? 800 : 500} fill={on ? "#fff" : "#334155"} textAnchor="middle">{sym}</text>
+      </g>
+    );
+  };
+  return (
+    <g>
+      {PT_ROWS.map((r, ri) => r.map((sym, ci) => draw(sym, ci, ri, `m${ri}-${ci}`)))}
+      {PT_F.map((r, ri) => r.map((sym, ci) => draw(sym, ci + 2, 7.6 + ri, `f${ri}-${ci}`)))}
+    </g>
+  );
+}
+
+// ---- Fishbone (Ishikawa) ---------------------------------------------------
+function Fishbone({ s }) {
+  const effect = s.effect || "Effect";
+  const causes = Array.isArray(s.causes) && s.causes.length ? s.causes : [
+    { category: "People", items: ["Training", "Staffing"] }, { category: "Process", items: ["Delays", "Steps"] },
+    { category: "Equipment", items: ["Old tools"] }, { category: "Materials", items: ["Quality"] },
+  ];
+  const spineY = H / 2, x0 = 60, x1 = W - 170, half = Math.ceil(causes.length / 2);
+  return (
+    <g>
+      <line x1={x0} y1={spineY} x2={x1} y2={spineY} stroke="#334155" strokeWidth="3" markerEnd="url(#il-arrow)" />
+      <rect x={x1 + 6} y={spineY - 26} width="158" height="52" rx="8" fill="#1e293b" />
+      <text x={x1 + 85} y={spineY + 5} fontSize="13" fontWeight="700" fill="#fff" textAnchor="middle">{tr(effect, 18)}</text>
+      {causes.map((c, i) => {
+        const top = i % 2 === 0, frac = (Math.floor(i / 2) + 1) / (half + 1);
+        const bx = x0 + frac * (x1 - x0), ey = top ? spineY - 120 : spineY + 120, ex = bx - 70, color = P[i % P.length];
+        return (
+          <g key={i}>
+            <line x1={bx} y1={spineY} x2={ex} y2={ey} stroke={color} strokeWidth="2" />
+            <text x={ex} y={ey + (top ? -6 : 16)} fontSize="12" fontWeight="700" fill={color} textAnchor="middle">{c.category}</text>
+            {(c.items || []).map((it, j) => <text key={j} x={ex + 30} y={ey + (top ? (j + 1) * 15 : -(j + 1) * 15)} fontSize="10" fill="currentColor">• {tr(it, 16)}</text>)}
+          </g>
+        );
+      })}
+    </g>
+  );
+}
+
+// ---- Flashcards ------------------------------------------------------------
+function Flashcards({ s }) {
+  const cards = (Array.isArray(s.cards) && s.cards.length ? s.cards : [
+    { front: "Capital of France?", back: "Paris" }, { front: "H₂O is?", back: "Water" }, { front: "2 + 2 = ?", back: "4" },
+  ]).slice(0, 3);
+  const cw = 200, ch = 130, gap = 30, total = cards.length * cw + (cards.length - 1) * gap, x0 = (W - total) / 2, y = H / 2 - ch / 2;
+  return (
+    <g>
+      {cards.map((c, i) => {
+        const x = x0 + i * (cw + gap);
+        return (
+          <g key={i}>
+            <rect x={x} y={y} width={cw} height={ch} rx="12" fill="#eff6ff" stroke={P[0]} strokeWidth="2" />
+            <text x={x + cw / 2} y={y + ch * 0.38} fontSize="13" fontWeight="700" fill="currentColor" textAnchor="middle">{tr(c.front, 22)}</text>
+            <line x1={x + 16} y1={y + ch * 0.55} x2={x + cw - 16} y2={y + ch * 0.55} stroke="#cbd5e1" strokeWidth="1" strokeDasharray="3 3" />
+            <text x={x + cw / 2} y={y + ch * 0.74} fontSize="12" fill={P[2]} textAnchor="middle">{tr(c.back, 22)}</text>
+          </g>
+        );
+      })}
+    </g>
+  );
+}
+
 const KINDS = {
   wave: (p) => <Wave {...p} />, projectile: (p) => <Projectile {...p} />, circuit: (p) => <Circuit {...p} />,
   ray: (p) => <Ray {...p} />, molecule: (p) => <Molecule {...p} />, reaction: (p) => <Reaction {...p} />,
   orbital: (p) => <Orbital {...p} />, dna: (p) => <Dna {...p} />, rna: (p) => <Dna {...p} single />,
   cell: (p) => <Cell {...p} />, efield: (p) => <EField {...p} />, bmagnet: (p) => <BMagnet {...p} />,
+  field: (p) => <Field {...p} />, table: (p) => <TableFig {...p} />, celldivision: (p) => <CellDivision {...p} />,
+  humanbody: (p) => <HumanBody {...p} />, periodictable: (p) => <PeriodicTable {...p} />, fishbone: (p) => <Fishbone {...p} />,
+  flashcards: (p) => <Flashcards {...p} />,
 };
 
 const IllustrationRenderer = forwardRef(function IllustrationRenderer({ spec }, ref) {
