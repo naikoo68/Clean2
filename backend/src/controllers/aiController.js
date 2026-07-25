@@ -844,6 +844,18 @@ const genJobs = new Map(); // id -> { status, questions, requested, error, model
 function newJobId() {
   return Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
 }
+
+// Guard a fire-and-forget background job: the job funcs have their own try/catch,
+// but if their promise ever rejects OUTSIDE that (an unexpected error), mark the
+// job errored so the client stops polling — and log it — instead of leaving a
+// stuck "pending" job and (pre-safety-net) crashing the process.
+function guardJob(id, p) {
+  Promise.resolve(p).catch((e) => {
+    const j = genJobs.get(id);
+    if (j) { j.status = "error"; j.error = e?.message || "The job failed unexpectedly."; j.updatedAt = Date.now(); }
+    console.error("[aiJob] background job failed:", e?.stack || e);
+  });
+}
 function cleanupJobs() {
   const cutoff = Date.now() - 20 * 60 * 1000; // 20 min
   for (const [id, j] of genJobs) if (j.updatedAt < cutoff) genJobs.delete(id);
@@ -1257,7 +1269,7 @@ export async function generateQuestions(req, res) {
     : [];
 
   // Fire-and-forget — the client polls /api/ai/job/:id for progress.
-  runGenerationJob(id, { workers, fallbackWorkers, model, topic, notes, plan, count, difficulty, types, target, avoid, owner: jobOwner, source, userSubtopics });
+  guardJob(id, runGenerationJob(id, { workers, fallbackWorkers, model, topic, notes, plan, count, difficulty, types, target, avoid, owner: jobOwner, source, userSubtopics }));
 
   res.json({ jobId: id, requested: target, model });
 }
@@ -1846,7 +1858,7 @@ export async function extractQuestions(req, res) {
   // Optional strong user instructions to steer extraction.
   const notes = String(req.body?.notes || "").trim();
 
-  runExtractionJob(id, { endpoints, model, chunks, owner: scope.owner, have, notes });
+  guardJob(id, runExtractionJob(id, { endpoints, model, chunks, owner: scope.owner, have, notes }));
   res.json({ jobId: id, chunks: chunks.length, questionsDetected: detected?.count || 0, model });
 }
 
@@ -2570,7 +2582,7 @@ export async function extendExplanations(req, res) {
   cleanupJobs();
   const id = newJobId();
   genJobs.set(id, { status: "pending", questions: [], requested: questions.length, error: null, model: chosen.model, updatedAt: Date.now() });
-  runExtendJob(id, { endpoints: chosen.endpoints, model: chosen.model, questions, owner: scope.owner, notes, fixOptions: !!req.body?.fixOptions });
+  guardJob(id, runExtendJob(id, { endpoints: chosen.endpoints, model: chosen.model, questions, owner: scope.owner, notes, fixOptions: !!req.body?.fixOptions }));
   res.json({ jobId: id, requested: questions.length, model: chosen.model });
 }
 
@@ -3023,7 +3035,7 @@ export async function regenerateAll(req, res) {
   cleanupJobs();
   const id = newJobId();
   genJobs.set(id, { status: "pending", questions: [], requested: questions.length, error: null, model: chosen.model, updatedAt: Date.now() });
-  runRegenAllJob(id, { endpoints: chosen.endpoints, model: chosen.model, questions, owner: scope.owner, notes });
+  guardJob(id, runRegenAllJob(id, { endpoints: chosen.endpoints, model: chosen.model, questions, owner: scope.owner, notes }));
   res.json({ jobId: id, requested: questions.length, model: chosen.model });
 }
 
