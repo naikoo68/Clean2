@@ -102,6 +102,49 @@ export function printNode(node, title) {
   setTimeout(() => { w.print(); }, 300);
 }
 
+// ---- Plotly-engine exports (uses Plotly's own image API) -----------------
+// `handle` = { engine:"plotly", node, lib } exposed by PlotlyRenderer.
+export function exportPlotly(handle, format, title) {
+  if (!handle?.lib || !handle?.node) throw new Error("Chart isn't ready yet — give it a moment.");
+  return handle.lib.downloadImage(handle.node, {
+    format, // "png" | "svg"
+    filename: safeName(title),
+    width: handle.node.clientWidth || 900,
+    height: handle.node.clientHeight || 500,
+  });
+}
+
+export async function printPlotly(handle, title) {
+  if (!handle?.lib || !handle?.node) throw new Error("Nothing to print yet.");
+  const url = await handle.lib.toImage(handle.node, { format: "png", width: handle.node.clientWidth || 900, height: handle.node.clientHeight || 500 });
+  const w = window.open("", "_blank");
+  if (!w) throw new Error("Pop-up blocked — allow pop-ups to print.");
+  w.document.write(`<html><head><title>${safeName(title)}</title></head><body style="margin:0;display:flex;align-items:center;justify-content:center;min-height:100vh"><img src="${url}" style="max-width:100%"/></body></html>`);
+  w.document.close();
+  w.focus();
+  setTimeout(() => { w.print(); }, 300);
+}
+
+// ---- Cytoscape-engine exports (graphs/networks/trees) --------------------
+// `handle` = { engine:"cytoscape", cy }. Cytoscape renders PNG via cy.png().
+export function exportCytoscape(handle, title) {
+  const cy = handle?.cy;
+  if (!cy) throw new Error("Graph isn't ready yet — give it a moment.");
+  download(`${safeName(title)}.png`, cy.png({ full: true, scale: 2, bg: "#ffffff" }));
+}
+
+export function printCytoscape(handle, title) {
+  const cy = handle?.cy;
+  if (!cy) throw new Error("Nothing to print yet.");
+  const uri = cy.png({ full: true, scale: 2, bg: "#ffffff" });
+  const w = window.open("", "_blank");
+  if (!w) throw new Error("Pop-up blocked — allow pop-ups to print.");
+  w.document.write(`<html><head><title>${safeName(title)}</title></head><body style="margin:0;display:flex;align-items:center;justify-content:center;min-height:100vh"><img src="${uri}" style="max-width:100%"/></body></html>`);
+  w.document.close();
+  w.focus();
+  setTimeout(() => { w.print(); }, 300);
+}
+
 // Print — open the chart image in a print-ready window.
 export function printChart(chartOrCanvas, title) {
   const canvas = chartOrCanvas?.canvas || (chartOrCanvas instanceof HTMLCanvasElement ? chartOrCanvas : null);

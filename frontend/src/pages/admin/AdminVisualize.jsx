@@ -11,7 +11,7 @@ import {
 import { aiService } from "../../services";
 import VizRenderer from "../../viz/VizRenderer";
 import { CATEGORIES, CATALOG, getModule, isImplemented, slug } from "../../viz/registry";
-import { exportPNG, exportJSON, exportCSV, printChart, exportSVG, exportPNGFromSVG, printNode } from "../../viz/exporters";
+import { exportPNG, exportJSON, exportCSV, printChart, exportSVG, exportPNGFromSVG, printNode, exportPlotly, printPlotly, exportCytoscape, printCytoscape } from "../../viz/exporters";
 
 export default function AdminVisualize() {
   const [category, setCategory] = useState("charts");
@@ -84,9 +84,22 @@ export default function AdminVisualize() {
   const doExport = (kind) => {
     const cur = chartRef.current;
     const isSvg = cur?.engine === "svg"; // Mermaid / SVG engines expose this
+    const isPlotly = cur?.engine === "plotly";
     try {
       if (kind === "json") return exportJSON(spec);
       if (kind === "csv") return exportCSV(spec);
+      if (isPlotly) {
+        if (kind === "png") return exportPlotly(cur, "png", spec?.title);
+        if (kind === "svg") return exportPlotly(cur, "svg", spec?.title);
+        if (kind === "print") return printPlotly(cur, spec?.title).catch((e) => setMsg(e.message));
+        return;
+      }
+      if (cur?.engine === "cytoscape") {
+        if (kind === "png") return exportCytoscape(cur, spec?.title);
+        if (kind === "svg") return setMsg("SVG export isn't available for graphs — use PNG.");
+        if (kind === "print") return printCytoscape(cur, spec?.title);
+        return;
+      }
       if (kind === "png") {
         if (isSvg) return exportPNGFromSVG(cur.node, spec?.title).catch((e) => setMsg(e.message));
         return exportPNG(cur, spec?.title);
