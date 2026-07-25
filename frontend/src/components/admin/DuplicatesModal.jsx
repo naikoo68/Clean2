@@ -5,6 +5,7 @@ import { Loading, ErrorState } from "../ui/AsyncState";
 import MathText from "../ui/MathText";
 import AssertionReasonView from "../ui/AssertionReasonView";
 import TableView from "../ui/TableView";
+import GraphView from "../ui/GraphView";
 
 const toRoman = (n) => ["I", "II", "III", "IV", "V", "VI", "VII", "VIII"][n] || String(n + 1);
 
@@ -242,6 +243,7 @@ export default function DuplicatesModal({
 
                           {/* Table-based */}
                           <TableView q={g} />
+                          <GraphView q={g} />
 
                           {/* Matching / pair columns */}
                           {(Array.isArray(g.columnA) && g.columnA.length > 0) || (Array.isArray(g.columnB) && g.columnB.length > 0) ? (
