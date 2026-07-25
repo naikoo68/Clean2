@@ -309,6 +309,7 @@ export const aiService = {
   cancelJob: (id) => api.post(`/ai/job/${id}/cancel`), // stop a running job → keeps partial results
   extract: (data) => api.post("/ai/extract", data), // import questions from a URL/text → { questions }
   notes: (data) => api.post("/ai/notes", data), // generate study notes (Markdown) on a topic
+  visualize: (prompt, mode) => api.post("/ai/visualize", { prompt, ...(mode ? { mode } : {}) }), // prompt → visualization JSON spec
   inferTopic: (data) => api.post("/ai/infer-topic", data), // name the topic a quiz's existing questions belong to → { topic }
   coverageGaps: (data) => api.post("/ai/coverage-gaps", data), // list uncovered syllabus areas → { topic, coveredCount, missing } → { notes }
   outlineUnits: (data) => api.post("/ai/outline-units", data), // detect units/chapters/topics in a PDF/source → { units: [...] }
