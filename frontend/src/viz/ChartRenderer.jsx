@@ -57,6 +57,10 @@ function buildConfig(spec, chartType) {
         data: Array.isArray(s.data) ? s.data : [],
         backgroundColor: withAlpha(s.color || colors[i % colors.length], 0.7),
         borderColor: s.color || colors[i % colors.length],
+        // A series can opt into a connecting line (e.g. a regression trend line
+        // or a parametric curve) via `line: true`.
+        showLine: !!s.line,
+        fill: false,
       })),
     };
   } else {
