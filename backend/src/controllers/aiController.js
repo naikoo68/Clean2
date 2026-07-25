@@ -776,7 +776,21 @@ async function callProvider({ key, baseUrl, model, userPrompt, maxTokens, system
     }
     clearTimeout(timer);
     if (resp.ok) {
-      const data = await resp.json();
+      // Read the body as TEXT first, then parse — so a non-JSON 200 (e.g. a
+      // firewall/WAF or gateway HTML page like "<!doctype html>…", which some
+      // proxies return) becomes a clean provider error instead of throwing an
+      // unhandled "Unexpected token '<'" that would break the whole job.
+      const raw = await resp.text().catch(() => "");
+      let data;
+      try {
+        data = JSON.parse(raw);
+      } catch {
+        return {
+          ok: false,
+          status: 502,
+          detail: `Provider returned a non-JSON response (looks like an HTML/error page). This usually means the Base URL is wrong or the key's gateway is blocking the request. ${raw.slice(0, 120)}`,
+        };
+      }
       return { ok: true, content: extractContent(data), tokens: data?.usage?.total_tokens || 0 };
     }
     const detail = await resp.text().catch(() => "");
