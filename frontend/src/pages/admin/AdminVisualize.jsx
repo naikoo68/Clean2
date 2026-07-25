@@ -9,9 +9,9 @@ import {
   Printer, Undo2, Redo2, Maximize2, Minimize2, Search, LayoutGrid, X,
 } from "lucide-react";
 import { aiService } from "../../services";
-import ChartRenderer from "../../viz/ChartRenderer";
+import VizRenderer from "../../viz/VizRenderer";
 import { CATEGORIES, CATALOG, getModule, isImplemented, slug } from "../../viz/registry";
-import { exportPNG, exportJSON, exportCSV, printChart } from "../../viz/exporters";
+import { exportPNG, exportJSON, exportCSV, printChart, exportSVG, exportPNGFromSVG, printNode } from "../../viz/exporters";
 
 export default function AdminVisualize() {
   const [category, setCategory] = useState("charts");
@@ -82,11 +82,20 @@ export default function AdminVisualize() {
   };
 
   const doExport = (kind) => {
+    const cur = chartRef.current;
+    const isSvg = cur?.engine === "svg"; // Mermaid / SVG engines expose this
     try {
-      if (kind === "png") exportPNG(chartRef.current, spec?.title);
-      else if (kind === "json") exportJSON(spec);
-      else if (kind === "csv") exportCSV(spec);
-      else if (kind === "print") printChart(chartRef.current, spec?.title);
+      if (kind === "json") return exportJSON(spec);
+      if (kind === "csv") return exportCSV(spec);
+      if (kind === "png") {
+        if (isSvg) return exportPNGFromSVG(cur.node, spec?.title).catch((e) => setMsg(e.message));
+        return exportPNG(cur, spec?.title);
+      }
+      if (kind === "svg") {
+        if (isSvg) return exportSVG(cur.node, spec?.title);
+        return setMsg("SVG export is available for diagram types (e.g. flowcharts). For data charts, use PNG.");
+      }
+      if (kind === "print") return isSvg ? printNode(cur.node, spec?.title) : printChart(cur, spec?.title);
     } catch (e) {
       setMsg(e.message || "Export failed.");
     }
@@ -113,7 +122,7 @@ export default function AdminVisualize() {
         </button>
       </div>
       <div className={`flex-1 rounded-xl border border-slate-200 bg-white p-3 dark:border-slate-700 dark:bg-slate-900 ${fullscreen ? "" : "min-h-[360px]"}`}>
-        <ChartRenderer ref={chartRef} spec={spec} />
+        <VizRenderer ref={chartRef} spec={spec} />
       </div>
     </div>
   );
@@ -189,6 +198,7 @@ export default function AdminVisualize() {
             <button onClick={redo} disabled={hi >= history.length - 1} className="btn-outline py-1.5 text-xs disabled:opacity-40"><Redo2 className="h-4 w-4" /> Redo</button>
             <span className="mx-1 h-5 w-px bg-slate-200 dark:bg-slate-700" />
             <button onClick={() => doExport("png")} className="btn-outline py-1.5 text-xs"><ImageIcon className="h-4 w-4" /> PNG</button>
+            <button onClick={() => doExport("svg")} className="btn-outline py-1.5 text-xs"><ImageIcon className="h-4 w-4" /> SVG</button>
             <button onClick={() => doExport("json")} className="btn-outline py-1.5 text-xs"><FileJson className="h-4 w-4" /> JSON</button>
             <button onClick={() => doExport("csv")} className="btn-outline py-1.5 text-xs"><TableIcon className="h-4 w-4" /> CSV</button>
             <button onClick={() => doExport("print")} className="btn-outline py-1.5 text-xs"><Printer className="h-4 w-4" /> Print</button>
@@ -223,7 +233,7 @@ export default function AdminVisualize() {
             </div>
           </div>
           <div className="min-h-0 flex-1 rounded-xl border border-slate-200 bg-white p-3 dark:border-slate-700 dark:bg-slate-900">
-            <ChartRenderer ref={chartRef} spec={spec} />
+            <VizRenderer ref={chartRef} spec={spec} />
           </div>
         </div>
       )}

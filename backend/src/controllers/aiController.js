@@ -2191,7 +2191,9 @@ Rules:
 - "series": array of { "name", "data" }. For category charts (bar/line/pie/…) "data" is an array of NUMBERS aligned to "labels" (pie/donut/polar/radar use ONE series). For "scatter"/"bubble" each series "data" is an array of points {"x":n,"y":n} (bubble adds "r":n).
 - "options" may include booleans: stacked, horizontal, smooth (spline curve), stepped, area (fill under line), donut, beginAtZero. Include only when relevant.
 - "colors": optional array of hex colours.
-- If the user gives no numbers, invent REALISTIC, sensible example data so the chart is meaningful. Keep it small (3-8 points). Keep everything renderable and valid JSON.`;
+- If the user gives no numbers, invent REALISTIC, sensible example data so the chart is meaningful. Keep it small (3-8 points). Keep everything renderable and valid JSON.
+
+DIAGRAM TYPES (structure, not data): if the request is a flowchart, algorithmflow, activitydiagram, processdiagram, mindmap, conceptmap, learningtree, sequencediagram, classdiagram, uml, statediagram, erdiagram, gantt, timeline, or customerjourney, DO NOT use labels/series. Instead return {"type":"<one of those>","title":"...","code":"<VALID Mermaid code>"} where "code" is correct Mermaid syntax for that diagram (e.g. flowchart → "flowchart TD\\n A[..]-->B[..]"; mindmap → "mindmap\\n root((..))\\n  Child"; sequencediagram → "sequenceDiagram\\n A->>B: msg"; classdiagram/uml → "classDiagram\\n class X{..}"; statediagram → "stateDiagram-v2\\n [*]-->S"; erdiagram → "erDiagram\\n A ||--o{ B : rel"; gantt → "gantt\\n title ..\\n dateFormat YYYY-MM-DD\\n section S\\n Task :2024-01-01, 10d"; customerjourney → "journey\\n title ..\\n section S\\n Step: 3: Actor"). Use real line breaks in the code. Keep the diagram small and valid.`;
 
 // Tolerant JSON extraction for the viz spec (handles code fences / stray text).
 function parseVizSpec(content) {
