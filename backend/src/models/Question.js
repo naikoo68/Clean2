@@ -28,6 +28,14 @@ const questionSchema = new mongoose.Schema(
     // First row is treated as the header. Stored as Mixed to allow any shape.
     tableRows: { type: mongoose.Schema.Types.Mixed, default: undefined },
 
+    // Optional DIAGRAM/GRAPH shown with the question (e.g. an economics
+    // supply-demand curve). The AI outputs it as structured data and the app
+    // renders it as an SVG line chart. Stored as Mixed; shape:
+    //   { title?, xLabel?, yLabel?, xMax?, yMax?,
+    //     lines: [ { label?, color?, points: [[x,y], ...] } ],
+    //     points: [ { label?, x, y } ] }   // annotations e.g. equilibrium
+    graph: { type: mongoose.Schema.Types.Mixed, default: undefined },
+
     // MCQ fields
     options: {
       type: [String],
