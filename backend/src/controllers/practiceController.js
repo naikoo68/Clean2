@@ -6,6 +6,7 @@ import Question from "../models/Question.js";
 import { isTestVisibleToUser } from "../utils/accessControl.js";
 import { ownerFilter, ownerValue } from "../utils/ownership.js";
 import { duplicateQuestions } from "../utils/duplicateQuestions.js";
+import { byNatural } from "../utils/naturalSort.js";
 
 // True when the caller owns this document (or is an admin working in the shared
 // space). Used to guard edits/plays of a specific record.
@@ -177,12 +178,14 @@ export async function deleteTopic(req, res) {
 export async function listItems(req, res) {
   const filter = { practice: true, practiceSubject: req.params.subjectId, ...ownerFilter(req) };
   if (req.query.kind) filter.practiceKind = req.query.kind;
-  const items = await TestSeries.find(filter).sort("createdAt").lean();
+  // Natural order by name (Test 1, Test 2, … Test 10) instead of creation order.
+  const items = (await TestSeries.find(filter).lean()).sort(byNatural("name"));
   res.json(items.map((t) => ({ ...t, questionCount: t.questions?.length || 0, questions: undefined })));
 }
 // My Quiz: items live under a topic.
 export async function listTopicItems(req, res) {
-  const items = await TestSeries.find({ practice: true, practiceTopic: req.params.topicId, ...ownerFilter(req) }).sort("createdAt").lean();
+  // Natural order by name (Quiz 1, Quiz 2, … Quiz 10) instead of creation order.
+  const items = (await TestSeries.find({ practice: true, practiceTopic: req.params.topicId, ...ownerFilter(req) }).lean()).sort(byNatural("name"));
   res.json(items.map((t) => ({ ...t, questionCount: t.questions?.length || 0, questions: undefined })));
 }
 export async function createItem(req, res) {
@@ -471,9 +474,9 @@ export async function browseTopics(req, res) {
 // My Quiz: quizzes under a topic.
 export async function browseTopicItems(req, res) {
   const grantAll = req.user?.myQuizAccess === true; // master grant to all My Quiz
-  const items = await TestSeries.find({ practice: true, practiceKind: "quiz", status: "published", practiceTopic: req.params.topicId, owner: null })
-    .sort("createdAt")
-    .lean();
+  // Natural order by name (Quiz 1, Quiz 2, … Quiz 10) instead of creation order.
+  const items = (await TestSeries.find({ practice: true, practiceKind: "quiz", status: "published", practiceTopic: req.params.topicId, owner: null })
+    .lean()).sort(byNatural("name"));
   res.json(
     items
       .filter((t) => grantAll || isTestVisibleToUser(t, req.user?._id))

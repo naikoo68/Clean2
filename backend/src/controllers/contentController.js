@@ -8,6 +8,7 @@ import TestSeries from "../models/TestSeries.js";
 import { notifyNewContent } from "../utils/notify.js";
 import { ownerValue, ownerFilter, isClient } from "../utils/ownership.js";
 import { duplicateQuestions } from "../utils/duplicateQuestions.js";
+import { byNatural } from "../utils/naturalSort.js";
 
 const slugify = (s) =>
   s.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
@@ -175,9 +176,11 @@ export async function deleteSession(req, res) {
 
 /* ---------------- Quizzes (within a session) ---------------- */
 
-// GET /api/sessions/:sessionId/quizzes — includes question count per quiz
+// GET /api/sessions/:sessionId/quizzes — includes question count per quiz.
+// Ordered by title in NATURAL order (Quiz 1, Quiz 2, … Quiz 9, Quiz 10) instead
+// of creation order, so numbered quizzes read in the expected sequence.
 export async function listQuizzes(req, res) {
-  const quizzes = await Quiz.find({ session: req.params.sessionId }).sort("index createdAt").lean();
+  const quizzes = (await Quiz.find({ session: req.params.sessionId }).lean()).sort(byNatural("title"));
   const qMap = await countMap(Question, quizzes.map((q) => q._id), "quiz");
   res.json(quizzes.map((q) => ({ ...q, questions: qMap[String(q._id)] || 0 })));
 }
