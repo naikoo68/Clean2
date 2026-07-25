@@ -746,7 +746,7 @@ function quota429Message(detail = "") {
 }
 
 // One provider call with transient-error retries. Returns { ok, status, content, detail }.
-async function callProvider({ key, baseUrl, model, userPrompt, maxTokens, systemPrompt = SYSTEM_PROMPT, temperature = 0.6 }) {
+async function callProvider({ key, baseUrl, model, userPrompt, maxTokens, systemPrompt = SYSTEM_PROMPT, temperature = 0.6, timeoutMs = 90000 }) {
   const payload = {
     model,
     messages: [
@@ -764,7 +764,7 @@ async function callProvider({ key, baseUrl, model, userPrompt, maxTokens, system
   // the next configured key. Only "busy" server errors are retried on this key.
   const TRANSIENT = [500, 502, 503, 504];
   const WAITS = [1500, 3000, 6000, 9000];
-  const TIMEOUT_MS = 90000; // hard cap per call so a hung provider can't stall the whole job
+  const TIMEOUT_MS = timeoutMs; // hard cap per call so a hung provider can't stall the whole job (short for key probes)
   for (let attempt = 0; ; attempt++) {
     let resp;
     const controller = new AbortController();
@@ -3314,14 +3314,14 @@ function pickPreferredModel(models) {
 async function runKeyTest(doc) {
   let model = (doc.models || "").split(",").map((m) => m.trim()).filter(Boolean)[0] || "gpt-4o-mini";
   const baseUrl = (doc.baseUrl || DEFAULT_BASE).replace(/\/$/, "");
-  let r = await callProvider({ key: doc.key, baseUrl, model, userPrompt: "Reply with the word ok.", maxTokens: 5 });
+  let r = await callProvider({ key: doc.key, baseUrl, model, userPrompt: "Reply with the word ok.", maxTokens: 5, timeoutMs: 20000 });
 
   if (!r.ok && r.status === 404) {
     const picked = pickPreferredModel(await fetchModels(doc.key, baseUrl));
     if (picked && picked !== model) {
       doc.models = picked; // remember the working model on this key
       model = picked;
-      r = await callProvider({ key: doc.key, baseUrl, model, userPrompt: "Reply with the word ok.", maxTokens: 5 });
+      r = await callProvider({ key: doc.key, baseUrl, model, userPrompt: "Reply with the word ok.", maxTokens: 5, timeoutMs: 20000 });
     }
   }
 
@@ -3401,7 +3401,7 @@ async function autoDetectModel(doc) {
   for (const model of ordered.slice(0, 6)) {
     tried += 1;
     // eslint-disable-next-line no-await-in-loop
-    let r = await callProvider({ key: doc.key, baseUrl, model, userPrompt: "Reply with the word ok.", maxTokens: 5 });
+    let r = await callProvider({ key: doc.key, baseUrl, model, userPrompt: "Reply with the word ok.", maxTokens: 5, timeoutMs: 20000 });
     // A per-minute 429 clears in seconds. Retry the SAME model ONCE per key (short
     // wait) so a fresh, healthy key isn't wrongly flagged rate-limited — but only
     // once, so a genuinely spent key doesn't stall the whole run.
@@ -3410,7 +3410,7 @@ async function autoDetectModel(doc) {
       // eslint-disable-next-line no-await-in-loop
       await sleep(Math.min(retryWaitMs(null, r.detail) || 3000, 5000));
       // eslint-disable-next-line no-await-in-loop
-      r = await callProvider({ key: doc.key, baseUrl, model, userPrompt: "Reply with the word ok.", maxTokens: 5 });
+      r = await callProvider({ key: doc.key, baseUrl, model, userPrompt: "Reply with the word ok.", maxTokens: 5, timeoutMs: 20000 });
     }
     if (r.ok) {
       doc.models = model;

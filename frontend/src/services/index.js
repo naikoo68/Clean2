@@ -331,8 +331,9 @@ export const aiService = {
     models: (id) => api.post(`/ai/keys/${id}/models`), // which models this key can use
     autoModel: (id) => api.post(`/ai/keys/${id}/auto-model`), // auto-detect + set a working model
     importEnv: () => api.post("/ai/keys/import"),
-    testAll: () => api.post("/ai/keys/test-all"),
-    autoModelAll: () => api.post("/ai/keys/auto-model-all"), // auto-pick a working model for every key at once
+    // These probe every key across the network, so allow a longer timeout.
+    testAll: () => api.post("/ai/keys/test-all", undefined, { timeout: 300000 }),
+    autoModelAll: () => api.post("/ai/keys/auto-model-all", undefined, { timeout: 300000 }), // auto-pick a working model for every key at once
   },
 };
 
