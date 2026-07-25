@@ -144,6 +144,72 @@ export const MODULES = {
   customerjourney: { label: "Customer Journey",  category: "business",  engine: "mermaid", sample: { type: "customerjourney", title: "Customer Journey", code: "journey\n  title Customer Journey\n  section Discover\n    Visit site: 3: Customer\n    Read reviews: 4: Customer\n  section Buy\n    Add to cart: 5: Customer\n    Checkout: 3: Customer" } },
 };
 
+// ---- Phase 3: math / statistics / economics / finance (Chart.js engine) ----
+// A function, distribution, or economics curve is just a line/scatter/bar chart
+// with computed points — so these render on the SAME verified Chart.js engine,
+// no new dependency. The samples give a real starting graph; the AI computes
+// fresh data for any prompt. Multiple curves = multiple series.
+const _range = (a, b, step = 1) => { const r = []; for (let x = a; x <= b + 1e-9; x += step) r.push(Math.round(x * 100) / 100); return r; };
+const _line = (type, label, category, labels, series, options = {}) => ({ label, category, engine: "chartjs", chartType: "line", sample: { type, title: label, labels, series, options: { smooth: true, ...options } } });
+const _scatter = (type, label, category, series, options = {}) => ({ label, category, engine: "chartjs", chartType: "scatter", sample: { type, title: label, series, options } });
+const _bar = (type, label, category, labels, series, options = {}) => ({ label, category, engine: "chartjs", chartType: "bar", sample: { type, title: label, labels, series, options } });
+const _pie = (type, label, category, labels, data) => ({ label, category, engine: "chartjs", chartType: "pie", sample: { type, title: label, labels, series: [{ name: label, data }] } });
+const _X = _range(-5, 5);
+const _Q = _range(0, 100, 20);
+const _sin = (deg) => Math.round(Math.sin((deg * Math.PI) / 180) * 100) / 100;
+const _cos = (deg) => Math.round(Math.cos((deg * Math.PI) / 180) * 100) / 100;
+
+Object.assign(MODULES, {
+  // Mathematics
+  quadratic:      _line("quadratic", "Quadratic (y=x²)", "math", _X, [{ name: "y = x²", data: _X.map((x) => x * x) }], { beginAtZero: false }),
+  polynomial:     _line("polynomial", "Polynomial", "math", _X, [{ name: "y = x³−3x", data: _X.map((x) => x ** 3 - 3 * x) }], { beginAtZero: false }),
+  exponential:    _line("exponential", "Exponential (y=2ˣ)", "math", _range(-3, 5, 0.5), [{ name: "y = 2^x", data: _range(-3, 5, 0.5).map((x) => Math.round(Math.pow(2, x) * 100) / 100) }]),
+  logarithmic:    _line("logarithmic", "Logarithmic (y=ln x)", "math", _range(0.2, 8, 0.4), [{ name: "y = ln x", data: _range(0.2, 8, 0.4).map((x) => Math.round(Math.log(x) * 100) / 100) }], { beginAtZero: false }),
+  trigonometric:  _line("trigonometric", "Sine & Cosine", "math", _range(0, 360, 30), [{ name: "sin", data: _range(0, 360, 30).map(_sin) }, { name: "cos", data: _range(0, 360, 30).map(_cos) }], { beginAtZero: false }),
+  derivative:     _line("derivative", "Function & Derivative", "math", _X, [{ name: "f(x)=x²", data: _X.map((x) => x * x) }, { name: "f'(x)=2x", data: _X.map((x) => 2 * x) }], { beginAtZero: false }),
+  integral:       _line("integral", "Function & Integral", "math", _X, [{ name: "f(x)=x", data: _X.map((x) => x) }, { name: "∫f = x²/2", data: _X.map((x) => Math.round((x * x) / 2 * 100) / 100) }], { beginAtZero: false }),
+  parametric:     _scatter("parametric", "Parametric (circle)", "math", [{ name: "x=cos t, y=sin t", data: _range(0, 360, 15).map((d) => ({ x: _cos(d), y: _sin(d) })), line: true }]),
+
+  // Statistics
+  normaldistribution: _line("normaldistribution", "Normal Distribution", "statistics", _range(-4, 4, 0.5), [{ name: "f(x)", data: _range(-4, 4, 0.5).map((x) => Math.round((Math.exp((-x * x) / 2) / Math.sqrt(2 * Math.PI)) * 1000) / 1000) }], { beginAtZero: true }),
+  binomial:       _bar("binomial", "Binomial Distribution", "statistics", ["0", "1", "2", "3", "4", "5", "6"], [{ name: "P(X)", data: [1, 6, 15, 20, 15, 6, 1].map((v) => Math.round((v / 64) * 1000) / 1000) }]),
+  poisson:        _bar("poisson", "Poisson Distribution", "statistics", ["0", "1", "2", "3", "4", "5", "6"], [{ name: "P(X)", data: [0.05, 0.15, 0.22, 0.22, 0.17, 0.1, 0.05] }]),
+  regressionline: _scatter("regressionline", "Regression Line", "statistics", [{ name: "Data", data: [{ x: 1, y: 2 }, { x: 2, y: 2.8 }, { x: 3, y: 3.6 }, { x: 4, y: 5 }, { x: 5, y: 5.5 }] }, { name: "Trend", data: [{ x: 1, y: 2 }, { x: 5, y: 5.6 }], line: true }]),
+  residualplot:   _scatter("residualplot", "Residual Plot", "statistics", [{ name: "Residuals", data: [{ x: 1, y: 0.2 }, { x: 2, y: -0.3 }, { x: 3, y: 0.1 }, { x: 4, y: 0.4 }, { x: 5, y: -0.2 }] }]),
+  frequencypolygon: _line("frequencypolygon", "Frequency Polygon", "statistics", ["10", "20", "30", "40", "50"], [{ name: "Frequency", data: [4, 9, 15, 8, 3] }], { smooth: false }),
+  ogive:          _line("ogive", "Ogive (Cumulative)", "statistics", ["10", "20", "30", "40", "50"], [{ name: "Cumulative f", data: [4, 13, 28, 36, 39] }], { smooth: false }),
+  confidenceinterval: _bar("confidenceinterval", "Confidence Interval", "statistics", ["A", "B", "C", "D"], [{ name: "Mean", data: [50, 62, 45, 58] }]),
+
+  // Economics
+  demandshift:    _line("demandshift", "Demand Shift", "economics", _Q, [{ name: "D₁", data: [100, 80, 60, 40, 30, 20] }, { name: "D₂ (shift)", data: [120, 100, 80, 60, 50, 40] }, { name: "Supply", data: [0, 20, 40, 60, 80, 100] }], { beginAtZero: true, smooth: false }),
+  supplyshift:    _line("supplyshift", "Supply Shift", "economics", _Q, [{ name: "Demand", data: [100, 80, 60, 40, 20, 0] }, { name: "S₁", data: [0, 20, 40, 60, 80, 100] }, { name: "S₂ (shift)", data: [20, 40, 60, 80, 100, 120] }], { beginAtZero: true, smooth: false }),
+  elasticity:     _line("elasticity", "Elasticity of Demand", "economics", _Q, [{ name: "Elastic", data: [100, 70, 45, 25, 10, 0] }, { name: "Inelastic", data: [100, 92, 82, 70, 55, 35] }], { beginAtZero: true, smooth: false }),
+  ppf:            _line("ppf", "Production Possibility Frontier", "economics", _range(0, 100, 20), [{ name: "PPF", data: [100, 96, 88, 74, 50, 0] }], { beginAtZero: true }),
+  indifferencecurve: _line("indifferencecurve", "Indifference Curve", "economics", _range(1, 10, 1), [{ name: "IC", data: _range(1, 10, 1).map((x) => Math.round(40 / x)) }], { beginAtZero: true }),
+  budgetline:     _line("budgetline", "Budget Line", "economics", _range(0, 10, 2), [{ name: "Budget", data: [10, 8, 6, 4, 2, 0] }], { beginAtZero: true, smooth: false }),
+  islm:           _line("islm", "IS-LM", "economics", _range(0, 100, 20), [{ name: "IS", data: [80, 64, 48, 32, 16, 0] }, { name: "LM", data: [0, 16, 32, 48, 64, 80] }], { beginAtZero: true, smooth: false }),
+  adas:           _line("adas", "AD-AS", "economics", _range(0, 100, 20), [{ name: "AD", data: [100, 80, 60, 40, 20, 0] }, { name: "AS", data: [0, 20, 40, 60, 80, 100] }], { beginAtZero: true, smooth: false }),
+  phillipscurve:  _line("phillipscurve", "Phillips Curve", "economics", _range(1, 10, 1), [{ name: "Inflation", data: _range(1, 10, 1).map((u) => Math.round((100 / u)) / 10) }], { beginAtZero: true }),
+  laffercurve:    _line("laffercurve", "Laffer Curve", "economics", _range(0, 100, 10), [{ name: "Revenue", data: _range(0, 100, 10).map((t) => Math.round((t * (100 - t)) / 25)) }], { beginAtZero: true }),
+  lorenzcurve:    _line("lorenzcurve", "Lorenz Curve", "economics", _range(0, 100, 20), [{ name: "Equality", data: [0, 20, 40, 60, 80, 100] }, { name: "Lorenz", data: [0, 5, 15, 35, 60, 100] }], { beginAtZero: true, smooth: false }),
+  costcurves:     _line("costcurves", "Cost Curves", "economics", _range(1, 10, 1), [{ name: "ATC", data: [50, 30, 23, 20, 19, 20, 22, 25, 29, 34] }, { name: "MC", data: [5, 6, 7, 9, 11, 13, 16, 20, 24, 28] }], { beginAtZero: true }),
+  revenuecurves:  _line("revenuecurves", "Revenue Curves", "economics", _range(1, 10, 1), [{ name: "AR", data: _range(1, 10, 1).map((q) => Math.max(0, 20 - 2 * q)) }, { name: "MR", data: _range(1, 10, 1).map((q) => 20 - 4 * q) }], { beginAtZero: false }),
+  gdpcomponentsbar: _bar("gdpcomponentsbar", "GDP Components (bar)", "economics", ["C", "I", "G", "NX"], [{ name: "% of GDP", data: [60, 18, 20, 2] }]),
+
+  // Accounting & Finance
+  breakevenchart: _line("breakevenchart", "Break-even Chart", "finance", _range(0, 100, 20), [{ name: "Revenue", data: [0, 40, 80, 120, 160, 200] }, { name: "Total Cost", data: [50, 70, 90, 110, 130, 150] }], { beginAtZero: true, smooth: false }),
+  roi:            _bar("roi", "ROI by Project", "finance", ["A", "B", "C", "D"], [{ name: "ROI %", data: [12, 18, 9, 22] }]),
+  riskreturn:     _scatter("riskreturn", "Risk vs Return", "finance", [{ name: "Assets", data: [{ x: 5, y: 4 }, { x: 10, y: 7 }, { x: 15, y: 11 }, { x: 20, y: 13 }] }]),
+  movingaverage:  _line("movingaverage", "Moving Average", "finance", ["1", "2", "3", "4", "5", "6", "7", "8"], [{ name: "Price", data: [10, 12, 11, 14, 13, 16, 15, 18] }, { name: "MA(3)", data: [null, null, 11, 12.3, 12.7, 14.3, 14.7, 16.3] }], { smooth: false }),
+  portfolioallocation: _pie("portfolioallocation", "Portfolio Allocation", "finance", ["Stocks", "Bonds", "Cash", "Real Estate"], [50, 25, 10, 15]),
+  financialratios: _bar("financialratios", "Financial Ratios", "finance", ["Current", "Quick", "Debt/Equity", "ROE"], [{ name: "Ratio", data: [1.8, 1.2, 0.6, 0.15] }]),
+
+  // Extra chart shapes on the Chart.js engine
+  pyramid:        _bar("pyramid", "Pyramid", "charts", ["Level 4", "Level 3", "Level 2", "Level 1"], [{ name: "Value", data: [10, 25, 45, 70] }], { horizontal: true }),
+  lollipop:       _bar("lollipop", "Lollipop (bar)", "charts", ["A", "B", "C", "D", "E"], [{ name: "Value", data: [8, 15, 12, 20, 6] }]),
+  dotplot:        _scatter("dotplot", "Dot Plot", "charts", [{ name: "Values", data: [{ x: 1, y: 1 }, { x: 2, y: 1 }, { x: 2, y: 2 }, { x: 3, y: 1 }, { x: 3, y: 2 }, { x: 3, y: 3 }, { x: 4, y: 1 }] }]),
+});
+
 // Chart.js chart types the ChartRenderer knows how to build.
 export const CHARTJS_TYPES = new Set(["bar", "line", "pie", "doughnut", "scatter", "bubble", "radar", "polarArea"]);
 
