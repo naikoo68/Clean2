@@ -233,6 +233,32 @@ Object.assign(MODULES, {
   scattermatrix:  _plotly("scattermatrix", "Scatter Matrix", "statistics", [{ type: "splom", dimensions: [{ label: "A", values: [1, 2, 3, 4, 5] }, { label: "B", values: [5, 3, 4, 2, 1] }, { label: "C", values: [2, 4, 1, 5, 3] }] }]),
 });
 
+// ---- Phase 5: graph / network / tree / data structures (Cytoscape engine) ---
+// Carry `sample.graph = { nodes, edges, layout, directed }`. Cytoscape is
+// CDN-lazy-loaded (see GraphRenderer). Layouts: breadthfirst (trees/hierarchy),
+// cose (force-directed networks), grid, circle, concentric.
+const _graph = (type, label, category, nodes, edges, layout = "breadthfirst", directed = true) => ({ label, category, engine: "cytoscape", sample: { type, title: label, graph: { nodes, edges, layout, directed } } });
+const _chain = (ids) => ids.map((id, i) => (i ? { source: ids[i - 1], target: id } : null)).filter(Boolean);
+
+Object.assign(MODULES, {
+  networkgraph:      _graph("networkgraph", "Network Graph", "cs", [{ id: "A" }, { id: "B" }, { id: "C" }, { id: "D" }, { id: "E" }], [{ source: "A", target: "B" }, { source: "A", target: "C" }, { source: "B", target: "D" }, { source: "C", target: "D" }, { source: "D", target: "E" }, { source: "E", target: "A" }], "cose", false),
+  forcedirectedgraph:_graph("forcedirectedgraph", "Force-Directed Graph", "charts", [{ id: "1" }, { id: "2" }, { id: "3" }, { id: "4" }, { id: "5" }, { id: "6" }], [{ source: "1", target: "2" }, { source: "1", target: "3" }, { source: "2", target: "4" }, { source: "3", target: "5" }, { source: "4", target: "6" }, { source: "5", target: "6" }, { source: "2", target: "5" }], "cose", false),
+  graph:             _graph("graph", "Graph", "cs", [{ id: "A" }, { id: "B" }, { id: "C" }, { id: "D" }], [{ source: "A", target: "B" }, { source: "B", target: "C" }, { source: "C", target: "D" }, { source: "D", target: "A" }, { source: "A", target: "C" }], "circle", false),
+  tree:              _graph("tree", "Tree", "cs", [{ id: "Root" }, { id: "A" }, { id: "B" }, { id: "C" }, { id: "A1" }, { id: "A2" }, { id: "B1" }], [{ source: "Root", target: "A" }, { source: "Root", target: "B" }, { source: "Root", target: "C" }, { source: "A", target: "A1" }, { source: "A", target: "A2" }, { source: "B", target: "B1" }]),
+  binarytree:        _graph("binarytree", "Binary Tree", "cs", [{ id: "8" }, { id: "3" }, { id: "10" }, { id: "1" }, { id: "6" }, { id: "14" }], [{ source: "8", target: "3" }, { source: "8", target: "10" }, { source: "3", target: "1" }, { source: "3", target: "6" }, { source: "10", target: "14" }]),
+  avl:               _graph("avl", "AVL Tree", "cs", [{ id: "30" }, { id: "20" }, { id: "40" }, { id: "10" }, { id: "25" }, { id: "50" }], [{ source: "30", target: "20" }, { source: "30", target: "40" }, { source: "20", target: "10" }, { source: "20", target: "25" }, { source: "40", target: "50" }]),
+  heap:              _graph("heap", "Heap", "cs", [{ id: "1" }, { id: "3" }, { id: "6" }, { id: "5" }, { id: "9" }, { id: "8" }], [{ source: "1", target: "3" }, { source: "1", target: "6" }, { source: "3", target: "5" }, { source: "3", target: "9" }, { source: "6", target: "8" }]),
+  trie:              _graph("trie", "Trie", "cs", [{ id: "root", label: "•" }, { id: "c", label: "c" }, { id: "a", label: "a" }, { id: "t", label: "t" }, { id: "r", label: "r" }], [{ source: "root", target: "c" }, { source: "c", target: "a" }, { source: "a", target: "t" }, { source: "a", target: "r" }]),
+  linkedlist:        _graph("linkedlist", "Linked List", "cs", [{ id: "10" }, { id: "20" }, { id: "30" }, { id: "40" }], _chain(["10", "20", "30", "40"]), "grid"),
+  queue:             _graph("queue", "Queue (FIFO)", "cs", [{ id: "front" }, { id: "a" }, { id: "b" }, { id: "c" }, { id: "rear" }], _chain(["front", "a", "b", "c", "rear"]), "grid"),
+  stack:             _graph("stack", "Stack (LIFO)", "cs", [{ id: "top" }, { id: "x" }, { id: "y" }, { id: "z", label: "bottom" }], _chain(["top", "x", "y", "z"]), "breadthfirst"),
+  organizationchart: _graph("organizationchart", "Organization Chart", "business", [{ id: "CEO" }, { id: "CTO" }, { id: "CFO" }, { id: "COO" }, { id: "Eng" }, { id: "Data" }], [{ source: "CEO", target: "CTO" }, { source: "CEO", target: "CFO" }, { source: "CEO", target: "COO" }, { source: "CTO", target: "Eng" }, { source: "CTO", target: "Data" }]),
+  decisiontree:      _graph("decisiontree", "Decision Tree", "business", [{ id: "q1", label: "Budget > 1000?" }, { id: "q2", label: "Urgent?" }, { id: "buy", label: "Buy" }, { id: "wait", label: "Wait" }, { id: "rent", label: "Rent" }], [{ source: "q1", target: "q2", label: "Yes" }, { source: "q1", target: "rent", label: "No" }, { source: "q2", target: "buy", label: "Yes" }, { source: "q2", target: "wait", label: "No" }]),
+  classificationtree:_graph("classificationtree", "Classification Tree", "biology", [{ id: "Animalia" }, { id: "Chordata" }, { id: "Mammalia" }, { id: "Carnivora" }, { id: "Felidae" }, { id: "Panthera" }], _chain(["Animalia", "Chordata", "Mammalia", "Carnivora", "Felidae", "Panthera"])),
+  foodchain:         _graph("foodchain", "Food Chain", "biology", [{ id: "Grass" }, { id: "Grasshopper" }, { id: "Frog" }, { id: "Snake" }, { id: "Eagle" }], _chain(["Grass", "Grasshopper", "Frog", "Snake", "Eagle"]), "grid"),
+  foodweb:           _graph("foodweb", "Food Web", "biology", [{ id: "Plants" }, { id: "Insect" }, { id: "Rabbit" }, { id: "Bird" }, { id: "Fox" }, { id: "Hawk" }], [{ source: "Plants", target: "Insect" }, { source: "Plants", target: "Rabbit" }, { source: "Insect", target: "Bird" }, { source: "Rabbit", target: "Fox" }, { source: "Bird", target: "Hawk" }, { source: "Fox", target: "Hawk" }, { source: "Bird", target: "Fox" }], "cose"),
+});
+
 // Chart.js chart types the ChartRenderer knows how to build.
 export const CHARTJS_TYPES = new Set(["bar", "line", "pie", "doughnut", "scatter", "bubble", "radar", "polarArea"]);
 

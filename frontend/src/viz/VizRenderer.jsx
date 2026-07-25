@@ -10,6 +10,7 @@ import { getModule } from "./registry";
 
 const MermaidRenderer = lazy(() => import("./MermaidRenderer"));
 const PlotlyRenderer = lazy(() => import("./PlotlyRenderer"));
+const GraphRenderer = lazy(() => import("./GraphRenderer"));
 
 const EngineLoading = (
   <div className="flex h-full min-h-[240px] items-center justify-center text-sm text-slate-400">
@@ -20,7 +21,7 @@ const EngineLoading = (
 const VizRenderer = forwardRef(function VizRenderer({ spec }, ref) {
   // Engine comes from the registered module; if an AI spec carries Mermaid
   // `code` but no known type, fall back to the Mermaid engine.
-  const engine = getModule(spec?.type)?.engine || (spec?.code ? "mermaid" : spec?.plotly ? "plotly" : "chartjs");
+  const engine = getModule(spec?.type)?.engine || (spec?.code ? "mermaid" : spec?.plotly ? "plotly" : spec?.graph ? "cytoscape" : "chartjs");
 
   if (engine === "mermaid") {
     return (
@@ -33,6 +34,13 @@ const VizRenderer = forwardRef(function VizRenderer({ spec }, ref) {
     return (
       <Suspense fallback={EngineLoading}>
         <PlotlyRenderer ref={ref} spec={spec} />
+      </Suspense>
+    );
+  }
+  if (engine === "cytoscape") {
+    return (
+      <Suspense fallback={EngineLoading}>
+        <GraphRenderer ref={ref} spec={spec} />
       </Suspense>
     );
   }
