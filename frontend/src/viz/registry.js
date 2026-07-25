@@ -259,6 +259,59 @@ Object.assign(MODULES, {
   foodweb:           _graph("foodweb", "Food Web", "biology", [{ id: "Plants" }, { id: "Insect" }, { id: "Rabbit" }, { id: "Bird" }, { id: "Fox" }, { id: "Hawk" }], [{ source: "Plants", target: "Insect" }, { source: "Plants", target: "Rabbit" }, { source: "Insect", target: "Bird" }, { source: "Rabbit", target: "Fox" }, { source: "Bird", target: "Hawk" }, { source: "Fox", target: "Hawk" }, { source: "Bird", target: "Fox" }], "cose"),
 });
 
+// ---- Phase 6: business / strategy frameworks (pure SVG, no library) --------
+// Carry `sample.framework = { kind, cols?, cells:[{ title, items[] }] }`.
+const _fw = (type, label, category, kind, cells, extra = {}) => ({ label, category, engine: "framework", sample: { type, title: label, framework: { kind, cells, ...extra } } });
+
+Object.assign(MODULES, {
+  swot: _fw("swot", "SWOT Analysis", "business", "swot", [
+    { title: "Strengths", items: ["Strong brand", "Loyal customers", "Skilled team"] },
+    { title: "Weaknesses", items: ["High costs", "Limited reach", "Old tech"] },
+    { title: "Opportunities", items: ["New markets", "Partnerships", "Automation"] },
+    { title: "Threats", items: ["New competitors", "Regulation", "Price wars"] },
+  ]),
+  pestle: _fw("pestle", "PESTLE Analysis", "business", "pestle", [
+    { title: "Political", items: ["Policy", "Stability"] },
+    { title: "Economic", items: ["Growth", "Inflation"] },
+    { title: "Social", items: ["Demographics", "Trends"] },
+    { title: "Technological", items: ["Innovation", "Automation"] },
+    { title: "Legal", items: ["Compliance", "Labour law"] },
+    { title: "Environmental", items: ["Climate", "Sustainability"] },
+  ]),
+  bcgmatrix: _fw("bcgmatrix", "BCG Matrix", "business", "bcg", [
+    { title: "Stars", items: ["High growth, high share"] },
+    { title: "Question Marks", items: ["High growth, low share"] },
+    { title: "Cash Cows", items: ["Low growth, high share"] },
+    { title: "Dogs", items: ["Low growth, low share"] },
+  ]),
+  portersfiveforces: _fw("portersfiveforces", "Porter's Five Forces", "business", "forces", [
+    { title: "Competitive Rivalry", items: ["Many rivals"] },
+    { title: "New Entrants", items: ["Low barriers"] },
+    { title: "Supplier Power", items: ["Few suppliers"] },
+    { title: "Buyer Power", items: ["Price sensitive"] },
+    { title: "Substitutes", items: ["Alternatives exist"] },
+  ]),
+  businessmodelcanvas: _fw("businessmodelcanvas", "Business Model Canvas", "business", "canvas", [
+    { title: "Key Partners", items: [] }, { title: "Key Activities", items: [] }, { title: "Value Propositions", items: [] },
+    { title: "Customer Relationships", items: [] }, { title: "Customer Segments", items: [] }, { title: "Key Resources", items: [] },
+    { title: "Channels", items: [] }, { title: "Cost Structure", items: [] }, { title: "Revenue Streams", items: [] },
+  ], { cols: 3 }),
+  valuechain: _fw("valuechain", "Value Chain", "business", "grid", [
+    { title: "Inbound Logistics", items: [] }, { title: "Operations", items: [] }, { title: "Outbound Logistics", items: [] },
+    { title: "Marketing & Sales", items: [] }, { title: "Service", items: [] },
+  ], { cols: 5, rows: 1 }),
+  comparisonchart: _fw("comparisonchart", "Comparison Chart", "education", "grid", [
+    { title: "Option A", items: ["Pro: fast", "Con: costly"] },
+    { title: "Option B", items: ["Pro: cheap", "Con: slower"] },
+  ], { cols: 2, rows: 1 }),
+  cyclediagram: _fw("cyclediagram", "Cycle Diagram", "education", "cycle", [
+    { title: "Plan" }, { title: "Do" }, { title: "Check" }, { title: "Act" },
+  ]),
+  causeeffect: _fw("causeeffect", "Cause & Effect", "education", "grid", [
+    { title: "Cause 1", items: [] }, { title: "Cause 2", items: [] }, { title: "Effect", items: [] },
+  ], { cols: 3, rows: 1 }),
+});
+
 // Chart.js chart types the ChartRenderer knows how to build.
 export const CHARTJS_TYPES = new Set(["bar", "line", "pie", "doughnut", "scatter", "bubble", "radar", "polarArea"]);
 
