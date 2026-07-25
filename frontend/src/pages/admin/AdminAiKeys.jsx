@@ -14,6 +14,10 @@ const PRESETS = [
   // OpenRouter — one key, hundreds of models (incl. free ":free" ones and Claude/Gemini/GPT).
   // After adding the key, use the "Show models" button to pick a valid model id.
   { label: "OpenRouter", baseUrl: "https://openrouter.ai/api/v1", models: "deepseek/deepseek-chat" },
+  // AgentRouter (agentrouter.org) — OpenAI-compatible gateway aggregating GPT /
+  // Claude / Gemini / DeepSeek behind one key. After adding, use "Show models"
+  // (or Auto-pick) to set a valid model id.
+  { label: "AgentRouter", baseUrl: "https://agentrouter.org/v1", models: "gpt-4o-mini" },
   // Kiro has no official public API — it works via a self-hosted "Kiro gateway"
   // (OpenAI-compatible). Replace the Base URL with YOUR gateway's public address.
   { label: "Kiro", baseUrl: "https://your-kiro-gateway/v1", models: "claude-sonnet-4" },
