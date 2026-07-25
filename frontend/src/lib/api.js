@@ -23,11 +23,18 @@ const RETRY_WAITS = [1500, 3000, 5000, 8000, 10000, 12000, 15000, 15000, 20000, 
 const MAX_RETRIES = RETRY_WAITS.length;
 const RETRYABLE = [502, 503, 504];
 
+// Abort a single attempt if the server accepts the request but never responds
+// (e.g. the backend is busy running AI-key probes). Without this the fetch stays
+// pending forever and the UI spins endlessly. On timeout we abort → it's treated
+// like a network error → the retry/cold-start flow runs and eventually surfaces
+// a real error instead of hanging. Generous by default; long endpoints override.
+const DEFAULT_TIMEOUT = 120000;
+
 // Optional hook so the UI can show "waking the server up…" progress during a
 // long cold-start retry sequence. Set via api.onRetry.
 let retryListener = null;
 
-async function request(path, { method = "GET", body, auth = true, headers = {} } = {}) {
+async function request(path, { method = "GET", body, auth = true, headers = {}, timeout = DEFAULT_TIMEOUT } = {}) {
   const finalHeaders = { ...headers };
   let payload = body;
 
@@ -45,9 +52,13 @@ async function request(path, { method = "GET", body, auth = true, headers = {} }
   let lastNetworkError = false;
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
     let res;
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeout);
     try {
-      res = await fetch(`${BASE_URL}${path}`, { method, headers: finalHeaders, body: payload });
+      res = await fetch(`${BASE_URL}${path}`, { method, headers: finalHeaders, body: payload, signal: controller.signal });
     } catch {
+      // Network error OR our own timeout abort — both mean "no usable response";
+      // retry a few times (rides out a cold start), then give up with an error.
       lastNetworkError = true;
       if (attempt < MAX_RETRIES) {
         retryListener?.(attempt + 1, MAX_RETRIES); // notify UI: still waking up
@@ -55,6 +66,8 @@ async function request(path, { method = "GET", body, auth = true, headers = {} }
         continue;
       }
       break;
+    } finally {
+      clearTimeout(timer);
     }
 
     // Gateway/cold-start errors → wait and retry
