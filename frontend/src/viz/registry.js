@@ -210,6 +210,29 @@ Object.assign(MODULES, {
   dotplot:        _scatter("dotplot", "Dot Plot", "charts", [{ name: "Values", data: [{ x: 1, y: 1 }, { x: 2, y: 1 }, { x: 2, y: 2 }, { x: 3, y: 1 }, { x: 3, y: 2 }, { x: 3, y: 3 }, { x: 4, y: 1 }] }]),
 });
 
+// ---- Phase 4: Plotly engine (advanced scientific / statistical charts) ------
+// These carry a ready Plotly figure in `sample.plotly = { data, layout }`.
+// Plotly is CDN-lazy-loaded (see PlotlyRenderer) — no dependency, no bundle cost.
+const _plotly = (type, label, category, data, layout = {}) => ({ label, category, engine: "plotly", sample: { type, title: label, plotly: { data, layout } } });
+
+Object.assign(MODULES, {
+  heatmap:        _plotly("heatmap", "Heatmap", "charts", [{ z: [[1, 20, 30], [20, 1, 60], [30, 60, 1]], x: ["A", "B", "C"], y: ["X", "Y", "Z"], type: "heatmap", colorscale: "Blues" }]),
+  boxplot:        _plotly("boxplot", "Box Plot", "charts", [{ y: [1, 2, 2, 3, 4, 4, 4, 5, 7, 9], type: "box", name: "Sample" }]),
+  violinplot:     _plotly("violinplot", "Violin Plot", "charts", [{ y: [1, 2, 2, 3, 4, 4, 4, 5, 7, 9], type: "violin", box: { visible: true }, meanline: { visible: true }, name: "Sample" }]),
+  sankey:         _plotly("sankey", "Sankey Diagram", "charts", [{ type: "sankey", orientation: "h", node: { label: ["Coal", "Gas", "Electricity", "Homes", "Industry"], pad: 15, thickness: 16 }, link: { source: [0, 1, 2, 2], target: [2, 2, 3, 4], value: [8, 4, 7, 5] } }]),
+  treemap:        _plotly("treemap", "Treemap", "charts", [{ type: "treemap", labels: ["Total", "A", "B", "A1", "A2", "B1"], parents: ["", "Total", "Total", "A", "A", "B"], values: [0, 6, 4, 3, 3, 4] }]),
+  sunburst:       _plotly("sunburst", "Sunburst", "charts", [{ type: "sunburst", labels: ["Total", "A", "B", "A1", "A2", "B1"], parents: ["", "Total", "Total", "A", "A", "B"], values: [0, 6, 4, 3, 3, 4], branchvalues: "total" }]),
+  candlestick:    _plotly("candlestick", "Candlestick", "charts", [{ type: "candlestick", x: ["Mon", "Tue", "Wed", "Thu", "Fri"], open: [10, 12, 11, 13, 12], high: [12, 14, 13, 15, 14], low: [9, 11, 10, 12, 11], close: [11, 13, 12, 14, 13] }]),
+  ohlc:           _plotly("ohlc", "OHLC", "charts", [{ type: "ohlc", x: ["Mon", "Tue", "Wed", "Thu", "Fri"], open: [10, 12, 11, 13, 12], high: [12, 14, 13, 15, 14], low: [9, 11, 10, 12, 11], close: [11, 13, 12, 14, 13] }]),
+  gauge:          _plotly("gauge", "Gauge", "charts", [{ type: "indicator", mode: "gauge+number", value: 68, gauge: { axis: { range: [0, 100] }, bar: { color: "#2563eb" } } }]),
+  funnel:         _plotly("funnel", "Funnel", "charts", [{ type: "funnel", y: ["Visits", "Sign-ups", "Trials", "Paid"], x: [1000, 600, 300, 120] }]),
+  waterfall:      _plotly("waterfall", "Waterfall", "charts", [{ type: "waterfall", x: ["Start", "Q1", "Q2", "Q3", "Total"], measure: ["absolute", "relative", "relative", "relative", "total"], y: [100, 20, -30, 40, 0] }]),
+  "3dsurface":    _plotly("3dsurface", "3D Surface", "math", [{ type: "surface", z: [[1, 2, 3, 2], [2, 4, 5, 3], [3, 5, 7, 4], [2, 3, 4, 2]] }]),
+  contourplot:    _plotly("contourplot", "Contour Plot", "math", [{ type: "contour", z: [[1, 2, 3, 2], [2, 4, 5, 3], [3, 5, 7, 4], [2, 3, 4, 2]], colorscale: "Viridis" }]),
+  correlationmatrix: _plotly("correlationmatrix", "Correlation Matrix", "statistics", [{ z: [[1, 0.8, -0.3], [0.8, 1, -0.1], [-0.3, -0.1, 1]], x: ["A", "B", "C"], y: ["A", "B", "C"], type: "heatmap", colorscale: "RdBu", zmin: -1, zmax: 1 }]),
+  scattermatrix:  _plotly("scattermatrix", "Scatter Matrix", "statistics", [{ type: "splom", dimensions: [{ label: "A", values: [1, 2, 3, 4, 5] }, { label: "B", values: [5, 3, 4, 2, 1] }, { label: "C", values: [2, 4, 1, 5, 3] }] }]),
+});
+
 // Chart.js chart types the ChartRenderer knows how to build.
 export const CHARTJS_TYPES = new Set(["bar", "line", "pie", "doughnut", "scatter", "bubble", "radar", "polarArea"]);
 
