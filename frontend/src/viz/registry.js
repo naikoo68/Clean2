@@ -72,7 +72,7 @@ export const CATALOG = {
   chemistry: [
     "Bohr Model", "Atomic Structure", "Molecular Structure", "Reaction Diagram",
     "Reaction Mechanism", "Substitution Mechanism", "Addition Mechanism",
-    "Elimination Mechanism", "Rearrangement Mechanism",
+    "Elimination Mechanism", "Rearrangement Mechanism", "Combined Mechanisms",
     "Periodic Table", "Electron Configuration", "Energy Level", "Orbital Diagram",
   ],
   physics: [
@@ -467,6 +467,16 @@ Object.assign(MODULES, {
     title: "Keto–Enol Tautomerism",
     steps: [{ smiles: "CC(=O)C", label: "keto tautomer" }, { smiles: "C=C(O)C", label: "enol tautomer" }],
     arrows: [{ type: "equilibrium" }],
+  }),
+  // All four reaction types stacked in a single figure (like a textbook plate).
+  combinedmechanisms: _chem("combinedmechanisms", "Combined Mechanisms", "chemistry", {
+    overallTitle: "Organic Reaction Mechanisms",
+    sections: [
+      { title: "Substitution", steps: [{ smiles: "CC(C)(C)O", label: "t-butanol" }, { smiles: "C[C+](C)C", label: "carbocation", bracket: true, charge: "+" }, { smiles: "CC(C)(C)Cl", label: "t-butyl chloride" }], arrows: [{ type: "equilibrium", top: "HCl", bottom: "− H₂O" }, { type: "equilibrium", top: "Cl⁻" }] },
+      { title: "Addition", steps: [{ smiles: "C=C", label: "ethene" }, { smiles: "C[CH2+]", label: "carbocation", bracket: true, charge: "+" }, { smiles: "CCBr", label: "bromoethane" }], arrows: [{ type: "forward", top: "H⁺ (from HBr)" }, { type: "forward", top: "Br⁻" }] },
+      { title: "Elimination", steps: [{ smiles: "CC(C)(C)Cl", label: "t-butyl chloride" }, { smiles: "C=C(C)C", label: "2-methylpropene" }], arrows: [{ type: "forward", top: "KOH (base)", bottom: "− H₂O, − KCl" }] },
+      { title: "Rearrangement (tautomerism)", steps: [{ smiles: "CC(=O)C", label: "keto" }, { smiles: "C=C(O)C", label: "enol" }], arrows: [{ type: "equilibrium" }] },
+    ],
   }),
 
   // computer science
