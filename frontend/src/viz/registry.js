@@ -71,7 +71,8 @@ export const CATALOG = {
   ],
   chemistry: [
     "Bohr Model", "Atomic Structure", "Molecular Structure", "Reaction Diagram",
-    "Periodic Table", "Electron Configuration", "Energy Level", "Orbital Diagram",
+    "Reaction Mechanism", "Periodic Table", "Electron Configuration", "Energy Level",
+    "Orbital Diagram",
   ],
   physics: [
     "Free Body Diagram", "Projectile Motion", "Wave", "Circuit Diagram", "Optics", "Ray Diagram",
@@ -439,6 +440,7 @@ Object.assign(MODULES, {
 
   // chemistry
   periodictable:   _il("periodictable", "Periodic Table", "chemistry", { kind: "periodictable", highlight: ["Na", "Cl", "O", "H", "Fe"] }),
+  reactionmechanism: _il("reactionmechanism", "Reaction Mechanism", "chemistry", { kind: "mechanism", species: ["CH₃Br", "[HO···CH₃···Br]", "CH₃OH"], conditions: ["OH⁻", "− Br⁻"], notes: ["slow (rate-determining)", "fast"] }),
 
   // computer science
   dfd:             _graph("dfd", "Data Flow Diagram", "cs", [{ id: "User" }, { id: "Process 1" }, { id: "Data Store" }, { id: "Process 2" }, { id: "Report" }], [{ source: "User", target: "Process 1", label: "input" }, { source: "Process 1", target: "Data Store", label: "write" }, { source: "Data Store", target: "Process 2", label: "read" }, { source: "Process 2", target: "Report", label: "output" }], "breadthfirst", true),
