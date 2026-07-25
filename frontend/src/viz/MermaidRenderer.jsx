@@ -6,6 +6,11 @@
 import { useEffect, useRef, useState, forwardRef, useImperativeHandle } from "react";
 import { useTheme } from "../context/ThemeContext";
 
+// Mermaid is loaded from a CDN (ESM build) at runtime rather than bundled, so it
+// adds nothing to package.json/the lockfile or the app bundle. esm.sh resolves
+// Mermaid's own dependency tree into a single module.
+const MERMAID_CDN = "https://esm.sh/mermaid@11";
+
 const MermaidRenderer = forwardRef(function MermaidRenderer({ spec }, ref) {
   const holder = useRef(null);
   const [error, setError] = useState("");
@@ -21,7 +26,11 @@ const MermaidRenderer = forwardRef(function MermaidRenderer({ spec }, ref) {
 
     (async () => {
       try {
-        const mermaid = (await import("mermaid")).default;
+        // Load Mermaid lazily from a CDN (ESM) at runtime — this keeps it out of
+        // package.json / the lockfile and the main bundle entirely, and it's only
+        // fetched the first time a Mermaid diagram is rendered. The @vite-ignore
+        // tells the bundler to leave this dynamic import as a native browser import.
+        const mermaid = (await import(/* @vite-ignore */ MERMAID_CDN)).default;
         mermaid.initialize({
           startOnLoad: false,
           theme: theme === "dark" ? "dark" : "default",
