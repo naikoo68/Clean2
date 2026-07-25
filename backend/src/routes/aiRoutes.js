@@ -1,6 +1,6 @@
 import { Router } from "express";
 import {
-  aiStatus, generateQuestions, jobStatus, cancelJob, extractQuestions, generateNotes, extendExplanations, extendOneExplanation, regenerateQuestion, regenerateAll,
+  aiStatus, generateQuestions, jobStatus, cancelJob, extractQuestions, generateNotes, visualizeSpec, extendExplanations, extendOneExplanation, regenerateQuestion, regenerateAll,
   listKeys, createKey, bulkCreateKeys, updateKey, deleteKey, testKey, importEnvKeys, testAllKeys, listKeyModels, autoDetectKeyModel,
   getAiAccess, setAiMode, inferTopic, coverageGaps, outlineUnits, classifyUnits, autoDetectAllKeys,
 } from "../controllers/aiController.js";
@@ -19,6 +19,7 @@ router.get("/job/:id", ...manage, jobStatus);
 router.post("/job/:id/cancel", ...manage, cancelJob); // stop a running job, keep partial results
 router.post("/extract", ...manage, extractQuestions);
 router.post("/notes", ...manage, generateNotes); // generate study notes (Markdown) on a topic
+router.post("/visualize", ...manage, visualizeSpec); // prompt → visualization JSON spec (Visualization Studio)
 router.post("/infer-topic", ...manage, inferTopic); // name the topic a quiz's existing questions belong to
 router.post("/coverage-gaps", ...manage, coverageGaps); // list uncovered syllabus areas for a topic
 router.post("/outline-units", ...manage, outlineUnits); // detect units/chapters/topics in a PDF/source

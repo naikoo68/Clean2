@@ -2176,6 +2176,72 @@ export async function generateNotes(req, res) {
 }
 
 
+/* --------------------- Visualization Engine (AI → JSON spec) ---------------------
+   Turns a natural-language prompt ("create a demand curve", "GDP pie chart") into
+   a structured, renderable visualization spec. The frontend Visualization Studio
+   renders the spec with Chart.js. Kept intentionally provider-agnostic — reuses
+   the same key pool / fallback as the rest of the AI features. */
+
+const VIZ_SYSTEM_PROMPT = `You output ONLY JSON for a data-visualization spec — no markdown, no commentary.
+Exact shape:
+{"type":"bar","title":"...","description":"...","labels":["A","B"],"series":[{"name":"Series 1","data":[10,20]}],"colors":["#2563eb"],"options":{}}
+Rules:
+- "type" MUST be one of: bar, groupedbar, stackedbar, horizontalbar, line, spline, step, area, stackedarea, pie, donut, scatter, bubble, radar, polar, histogram. Pick the type that best fits the request (e.g. a share/breakdown → pie or donut; a trend over time → line; a supply & demand or two-curve relationship → line with two series; a distribution → histogram; comparisons across categories → bar).
+- "labels": the category/x-axis labels (array of strings). Omit for scatter/bubble.
+- "series": array of { "name", "data" }. For category charts (bar/line/pie/…) "data" is an array of NUMBERS aligned to "labels" (pie/donut/polar/radar use ONE series). For "scatter"/"bubble" each series "data" is an array of points {"x":n,"y":n} (bubble adds "r":n).
+- "options" may include booleans: stacked, horizontal, smooth (spline curve), stepped, area (fill under line), donut, beginAtZero. Include only when relevant.
+- "colors": optional array of hex colours.
+- If the user gives no numbers, invent REALISTIC, sensible example data so the chart is meaningful. Keep it small (3-8 points). Keep everything renderable and valid JSON.`;
+
+// Tolerant JSON extraction for the viz spec (handles code fences / stray text).
+function parseVizSpec(content) {
+  let t = String(content || "").trim();
+  const fence = t.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  if (fence) t = fence[1].trim();
+  const tryParse = (s) => { try { return JSON.parse(s); } catch { return null; } };
+  let obj = tryParse(t);
+  if (!obj) {
+    const s = t.indexOf("{"), e = t.lastIndexOf("}");
+    if (s !== -1 && e > s) obj = tryParse(t.slice(s, e + 1)) || tryParse(repairJson(t.slice(s, e + 1)));
+  }
+  return obj && typeof obj === "object" ? obj : null;
+}
+
+// POST /api/ai/visualize — body: { prompt, model?, mode? } → { spec, model }.
+export async function visualizeSpec(req, res) {
+  const scope = resolveScope(req.user, req.body?.mode);
+  if (scope.denied) return res.status(403).json({ message: "AI access is not enabled for your account. Please contact the administrator." });
+  const chosen = await resolveModel(String(req.body?.model || "").trim(), scope);
+  if (!chosen || !chosen.endpoints.length) {
+    return res.status(400).json({
+      message: scope.mode === "self" ? "No API keys added yet. Add at least one key in the AI tab." : "AI is not configured. Add an API key in Admin → AI Keys.",
+    });
+  }
+  const prompt = String(req.body?.prompt || "").trim();
+  if (!prompt) return res.status(400).json({ message: "Describe the visualization you want." });
+
+  const r = await callWithFallback({
+    endpoints: chosen.endpoints,
+    model: chosen.model,
+    systemPrompt: VIZ_SYSTEM_PROMPT,
+    userPrompt: `Create a visualization for this request: ${prompt}\nReturn ONLY the JSON spec.`,
+    maxTokens: 2000,
+    owner: scope.owner,
+  });
+  if (!r.ok) {
+    const msg = r.status === 429
+      ? "AI quota/rate limit reached. Wait a minute and try again."
+      : `AI provider error (${r.status || 0}). ${(r.detail || "").slice(0, 150)}`;
+    return res.status(502).json({ message: msg });
+  }
+  const spec = parseVizSpec(r.content);
+  if (!spec || !spec.type) {
+    return res.status(502).json({ message: "The AI did not return a usable visualization. Try rephrasing the request." });
+  }
+  res.json({ spec, model: chosen.model });
+}
+
+
 /* --------------------- Extend explanations (bulk, in place) ---------------------
    Rewrites the explanation + per-option notes of EVERY question in one quiz or
    test — without changing the question, options or correct answer. Runs as a
