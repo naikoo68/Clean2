@@ -95,27 +95,36 @@ async function modelRegistry(scope = SYSTEM_SCOPE) {
   return reg;
 }
 
-// Resolve a requested model → { model, endpoints:[{key,baseUrl}] }. Endpoints are
-// EVERY enabled key whose model list includes this model. This lets several keys
-// (e.g. different Gemini accounts) serve the same model, so the generator can
-// fall back to the next key when one hits its quota.
+// Resolve a requested model → { model, endpoints:[{key,baseUrl,model}] }.
+// Endpoints now include EVERY enabled key so ALL keys act as quota fallbacks —
+// not just the ones that advertise the selected model. Keys that DO support the
+// selected model come FIRST (and use it); the remaining keys follow, each using
+// a model it actually supports (its own first model). So when the selected-model
+// keys run out of quota, generation/extraction rolls over to the other active
+// keys (on their own model) instead of stopping while healthy keys sit idle.
+// Each endpoint carries the exact model it should be called with.
 async function resolveModel(requested, scope = SYSTEM_SCOPE) {
   const provs = await providers(scope);
   if (!provs.length) return null;
   const defModel = provs[0].models[0];
   const model = provs.some((p) => p.models.includes(requested)) ? requested : defModel;
-  const endpoints = provs
-    .filter((p) => p.models.includes(model))
-    .map((p) => ({ key: p.key, baseUrl: p.baseUrl }));
-  return { model, endpoints };
+  const supporting = []; // keys that serve the selected model (preferred, tried first)
+  const others = [];     // every other enabled key, each on a model it supports
+  for (const p of provs) {
+    if (p.models.includes(model)) supporting.push({ key: p.key, baseUrl: p.baseUrl, model });
+    else others.push({ key: p.key, baseUrl: p.baseUrl, model: p.models[0] || model });
+  }
+  return { model, endpoints: [...supporting, ...others] };
 }
 
-// Try a request across all keys that serve the model, moving to the next key on
-// a quota/auth error (429/401/403). Other errors aren't retried on another key.
+// Try a request across the keys, moving to the next key on a quota/auth error
+// (429/401/403). Each endpoint uses the model it supports (ep.model), so keys on
+// a different model still work as fallbacks. Other errors aren't retried on
+// another key.
 async function callWithFallback({ endpoints, model, userPrompt, maxTokens, owner = null, systemPrompt }) {
   let last = { ok: false, status: 0, detail: "No AI key is configured." };
   for (const ep of endpoints || []) {
-    const r = await callProvider({ key: ep.key, baseUrl: ep.baseUrl, model, userPrompt, maxTokens, systemPrompt });
+    const r = await callProvider({ key: ep.key, baseUrl: ep.baseUrl, model: ep.model || model, userPrompt, maxTokens, systemPrompt });
     if (r.ok) {
       // Record app-side usage on the matching DB key (env-only keys aren't in
       // the DB, so this is a no-op for them). Scoped by owner so a client key
