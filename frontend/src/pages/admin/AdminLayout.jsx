@@ -27,6 +27,7 @@ import {
   Home,
   Feather,
   FilePlus2,
+  LayoutGrid,
 } from "lucide-react";
 import { useTheme } from "../../context/ThemeContext";
 import { useAuth } from "../../context/AuthContext";
@@ -56,6 +57,7 @@ const nav = [
   { to: "/admin/notices", label: "Notice Board", icon: Megaphone },
   { to: "/admin/facebook", label: "Facebook Auto-Post", icon: FacebookIcon },
   { to: "/admin/ai-generator", label: "AI Generator", icon: Sparkles },
+  { to: "/admin/visualize", label: "Visualization Studio", icon: LayoutGrid },
   { to: "/admin/ai-keys", label: "AI Keys", icon: KeyRound },
   { to: "/admin/customization", label: "Customization", icon: Palette },
 ];

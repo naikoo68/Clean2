@@ -76,6 +76,7 @@ const AdminDocuments = lazy(() => import("./pages/admin/AdminDocuments"));
 const AdminNotes = lazy(() => import("./pages/admin/AdminNotes"));
 const AdminPdfBuilder = lazy(() => import("./pages/admin/AdminPdfBuilder"));
 const AdminCbt = lazy(() => import("./pages/admin/AdminCbt"));
+const AdminVisualize = lazy(() => import("./pages/admin/AdminVisualize"));
 const CbtResult = lazy(() => import("./pages/cbt/CbtResult"));
 const CbtPortal = lazy(() => import("./pages/cbt/CbtPortal"));
 
@@ -199,6 +200,7 @@ const router = createHashRouter([
       { path: "notices", element: S(AdminNotices) },
       { path: "facebook", element: S(AdminFacebook) },
       { path: "ai-generator", element: S(AdminAiStudio) },
+      { path: "visualize", element: S(AdminVisualize) },
       { path: "documents", element: S(AdminDocuments) },
       { path: "notes", element: S(AdminNotes) },
       { path: "pdf-builder", element: S(AdminPdfBuilder) },
