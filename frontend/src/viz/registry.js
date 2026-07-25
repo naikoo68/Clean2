@@ -330,6 +330,20 @@ Object.assign(MODULES, {
 // Chart.js chart types the ChartRenderer knows how to build.
 export const CHARTJS_TYPES = new Set(["bar", "line", "pie", "doughnut", "scatter", "bubble", "radar", "polarArea"]);
 
+// ---- Phase 8: data-driven science & math illustrations (SVG engine) --------
+const _sci = (type, label, category, science) => ({ label, category, engine: "science", sample: { type, title: label, science } });
+
+Object.assign(MODULES, {
+  bohrmodel:            _sci("bohrmodel", "Bohr Model", "chemistry", { kind: "bohr", symbol: "Na", protons: 11, neutrons: 12, shells: [2, 8, 1] }),
+  atomicstructure:      _sci("atomicstructure", "Atomic Structure", "chemistry", { kind: "bohr", symbol: "O", protons: 8, neutrons: 8, shells: [2, 6] }),
+  electronconfiguration: _sci("electronconfiguration", "Electron Configuration", "chemistry", { kind: "bohr", symbol: "Cl", protons: 17, neutrons: 18, shells: [2, 8, 7] }),
+  energylevel:          _sci("energylevel", "Energy Level Diagram", "chemistry", { kind: "energy", levels: [{ label: "n=1", energy: -13.6 }, { label: "n=2", energy: -3.4 }, { label: "n=3", energy: -1.51 }, { label: "n=4", energy: -0.85 }], transitions: [{ from: 1, to: 0 }, { from: 2, to: 1 }] }),
+  energydiagram:        _sci("energydiagram", "Energy Diagram", "physics", { kind: "energy", levels: [{ label: "Ground", energy: 0 }, { label: "Excited 1", energy: 2.1 }, { label: "Excited 2", energy: 3.4 }] }),
+  freebodydiagram:      _sci("freebodydiagram", "Free Body Diagram", "physics", { kind: "freebody", label: "Block", forces: [{ label: "Weight", angle: 270, magnitude: 60 }, { label: "Normal", angle: 90, magnitude: 60 }, { label: "Applied", angle: 0, magnitude: 50 }, { label: "Friction", angle: 180, magnitude: 25 }] }),
+  numberline:           _sci("numberline", "Number Line", "math", { kind: "numberline", min: -5, max: 5, step: 1, points: [{ x: 2, label: "A" }, { x: -3, label: "B" }], intervals: [{ from: 1, to: 4 }] }),
+  coordinateplane:      _sci("coordinateplane", "Coordinate Plane", "math", { kind: "coordinate", min: -10, max: 10, points: [{ x: 3, y: 4, label: "P" }, { x: -5, y: -2, label: "Q" }], lines: [{ label: "y=x", points: [{ x: -8, y: -8 }, { x: 8, y: 8 }] }] }),
+});
+
 // Look up an implemented module by a type id (case-insensitive, de-slugged).
 export function getModule(typeId) {
   if (!typeId) return null;
