@@ -11,6 +11,22 @@ import User from "./models/User.js";
 
 const PORT = process.env.PORT || 5000;
 
+// Global safety net — never let a stray async error take down the whole API.
+// In modern Node an unhandled promise rejection (or an uncaught exception) exits
+// the process with status 1, which on a single-instance host (e.g. Render free
+// tier) takes the ENTIRE site down until it restarts. These almost always come
+// from isolated, non-fatal async work — a flaky AI-provider request, a slow
+// third-party key probe, a background generation/extend job — so we LOG them
+// (with stack) and keep serving instead of crashing. Per-request errors are
+// already handled by Express's error middleware; this only catches the detached
+// ones that would otherwise be fatal.
+process.on("unhandledRejection", (reason) => {
+  console.error("[unhandledRejection]", reason instanceof Error ? reason.stack : reason);
+});
+process.on("uncaughtException", (err) => {
+  console.error("[uncaughtException]", err?.stack || err);
+});
+
 // NOTE: Expired accounts are NEVER deleted. When a client's subscription/trial
 // ends we only RESTRICT access (the `protect` middleware blocks their content
 // and the frontend shows an Upgrade screen) — their account and the quizzes/
