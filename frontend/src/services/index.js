@@ -334,6 +334,7 @@ export const aiService = {
     // These probe every key across the network, so allow a longer timeout.
     testAll: () => api.post("/ai/keys/test-all", undefined, { timeout: 300000 }),
     autoModelAll: () => api.post("/ai/keys/auto-model-all", undefined, { timeout: 300000 }), // auto-pick a working model for every key at once
+    setAllEnabled: (enabled) => api.post("/ai/keys/set-enabled-all", { enabled }), // enable/disable every key at once
   },
 };
 
