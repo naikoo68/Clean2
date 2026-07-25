@@ -71,8 +71,9 @@ export const CATALOG = {
   ],
   chemistry: [
     "Bohr Model", "Atomic Structure", "Molecular Structure", "Reaction Diagram",
-    "Reaction Mechanism", "Periodic Table", "Electron Configuration", "Energy Level",
-    "Orbital Diagram",
+    "Reaction Mechanism", "Substitution Mechanism", "Addition Mechanism",
+    "Elimination Mechanism", "Rearrangement Mechanism",
+    "Periodic Table", "Electron Configuration", "Energy Level", "Orbital Diagram",
   ],
   physics: [
     "Free Body Diagram", "Projectile Motion", "Wave", "Circuit Diagram", "Optics", "Ray Diagram",
@@ -347,6 +348,7 @@ Object.assign(MODULES, {
 
 // ---- Phase 9: curated science illustrations (SVG engine) -------------------
 const _il = (type, label, category, illustration) => ({ label, category, engine: "illustration", sample: { type, title: label, illustration } });
+const _chem = (type, label, category, chem) => ({ label, category, engine: "chem", sample: { type, title: chem.title || label, chem } });
 
 Object.assign(MODULES, {
   wave:              _il("wave", "Wave", "physics", { kind: "wave", amplitude: 90, wavelength: 200, cycles: 2 }),
@@ -440,7 +442,32 @@ Object.assign(MODULES, {
 
   // chemistry
   periodictable:   _il("periodictable", "Periodic Table", "chemistry", { kind: "periodictable", highlight: ["Na", "Cl", "O", "H", "Fe"] }),
-  reactionmechanism: _il("reactionmechanism", "Reaction Mechanism", "chemistry", { kind: "mechanism", species: ["CH₃Br", "[HO···CH₃···Br]", "CH₃OH"], conditions: ["OH⁻", "− Br⁻"], notes: ["slow (rate-determining)", "fast"] }),
+  // Organic reaction mechanisms — real 2D structures from SMILES (OpenChemLib).
+  reactionmechanism:      _chem("reactionmechanism", "Reaction Mechanism", "chemistry", {
+    title: "Substitution (SN1): t-BuOH + HCl", electrons: [{ step: 1, from: [0.7, 0.35], to: [0.5, 0.5] }],
+    steps: [{ smiles: "CC(C)(C)O", label: "t-butanol" }, { smiles: "C[C+](C)C", label: "carbocation", bracket: true, charge: "+" }, { smiles: "CC(C)(C)Cl", label: "t-butyl chloride" }],
+    arrows: [{ type: "equilibrium", top: "HCl", bottom: "− H₂O" }, { type: "equilibrium", top: "Cl⁻" }],
+  }),
+  substitutionmechanism:  _chem("substitutionmechanism", "Substitution Mechanism", "chemistry", {
+    title: "Nucleophilic Substitution", electrons: [{ step: 1, from: [0.72, 0.35], to: [0.5, 0.5] }],
+    steps: [{ smiles: "CC(C)(C)O", label: "substrate" }, { smiles: "C[C+](C)C", label: "carbocation", bracket: true, charge: "+" }, { smiles: "CC(C)(C)Cl", label: "product" }],
+    arrows: [{ type: "equilibrium", top: "HCl", bottom: "− H₂O" }, { type: "equilibrium", top: "Cl⁻ (nucleophile)" }],
+  }),
+  additionmechanism:      _chem("additionmechanism", "Addition Mechanism", "chemistry", {
+    title: "Electrophilic Addition: ethene + HBr", electrons: [{ step: 0, from: [0.5, 0.3], to: [0.35, 0.5] }, { step: 1, from: [0.7, 0.4], to: [0.5, 0.5] }],
+    steps: [{ smiles: "C=C", label: "ethene" }, { smiles: "C[CH2+]", label: "carbocation", bracket: true, charge: "+" }, { smiles: "CCBr", label: "bromoethane" }],
+    arrows: [{ type: "forward", top: "H⁺ (from HBr)" }, { type: "forward", top: "Br⁻ (nucleophile)" }],
+  }),
+  eliminationmechanism:   _chem("eliminationmechanism", "Elimination Mechanism", "chemistry", {
+    title: "Elimination (E2): t-BuCl + KOH", electrons: [{ step: 0, from: [0.2, 0.35], to: [0.4, 0.45] }],
+    steps: [{ smiles: "CC(C)(C)Cl", label: "t-butyl chloride" }, { smiles: "C=C(C)C", label: "2-methylpropene" }],
+    arrows: [{ type: "forward", top: "KOH (base)", bottom: "− H₂O, − KCl" }],
+  }),
+  rearrangementmechanism: _chem("rearrangementmechanism", "Rearrangement Mechanism", "chemistry", {
+    title: "Keto–Enol Tautomerism",
+    steps: [{ smiles: "CC(=O)C", label: "keto tautomer" }, { smiles: "C=C(O)C", label: "enol tautomer" }],
+    arrows: [{ type: "equilibrium" }],
+  }),
 
   // computer science
   dfd:             _graph("dfd", "Data Flow Diagram", "cs", [{ id: "User" }, { id: "Process 1" }, { id: "Data Store" }, { id: "Process 2" }, { id: "Report" }], [{ source: "User", target: "Process 1", label: "input" }, { source: "Process 1", target: "Data Store", label: "write" }, { source: "Data Store", target: "Process 2", label: "read" }, { source: "Process 2", target: "Report", label: "output" }], "breadthfirst", true),
