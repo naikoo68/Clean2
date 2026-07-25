@@ -54,6 +54,54 @@ export function exportCSV(spec) {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
+// ---- SVG-engine exports (Mermaid and other SVG renderers) ----------------
+// The renderer's ref exposes { engine:"svg", node }, where `node` contains an
+// <svg>. These save/serialize that SVG.
+function svgFromNode(node) {
+  const svg = node?.querySelector?.("svg");
+  if (!svg) throw new Error("Nothing to export yet.");
+  return svg;
+}
+
+// SVG — serialize the rendered diagram to a .svg file.
+export function exportSVG(node, title) {
+  const xml = new XMLSerializer().serializeToString(svgFromNode(node));
+  const url = URL.createObjectURL(new Blob([xml], { type: "image/svg+xml" }));
+  download(`${safeName(title)}.svg`, url);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+// PNG — rasterize the SVG diagram onto a white canvas (2× for crispness).
+export async function exportPNGFromSVG(node, title) {
+  const svg = svgFromNode(node);
+  const xml = new XMLSerializer().serializeToString(svg);
+  const src = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(xml);
+  const img = new Image();
+  await new Promise((res, rej) => { img.onload = res; img.onerror = () => rej(new Error("Could not rasterize the diagram.")); img.src = src; });
+  const w = svg.viewBox?.baseVal?.width || svg.getBoundingClientRect().width || 800;
+  const h = svg.viewBox?.baseVal?.height || svg.getBoundingClientRect().height || 600;
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.max(1, Math.round(w * 2));
+  canvas.height = Math.max(1, Math.round(h * 2));
+  const ctx = canvas.getContext("2d");
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.scale(2, 2);
+  ctx.drawImage(img, 0, 0, w, h);
+  download(`${safeName(title)}.png`, canvas.toDataURL("image/png"));
+}
+
+// Print an SVG diagram.
+export function printNode(node, title) {
+  const xml = new XMLSerializer().serializeToString(svgFromNode(node));
+  const w = window.open("", "_blank");
+  if (!w) throw new Error("Pop-up blocked — allow pop-ups to print.");
+  w.document.write(`<html><head><title>${safeName(title)}</title></head><body style="margin:0;padding:16px;display:flex;justify-content:center">${xml}</body></html>`);
+  w.document.close();
+  w.focus();
+  setTimeout(() => { w.print(); }, 300);
+}
+
 // Print — open the chart image in a print-ready window.
 export function printChart(chartOrCanvas, title) {
   const canvas = chartOrCanvas?.canvas || (chartOrCanvas instanceof HTMLCanvasElement ? chartOrCanvas : null);
