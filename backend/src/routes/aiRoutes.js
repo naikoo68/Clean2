@@ -2,7 +2,7 @@ import { Router } from "express";
 import {
   aiStatus, generateQuestions, jobStatus, cancelJob, extractQuestions, generateNotes, extendExplanations, extendOneExplanation, regenerateQuestion, regenerateAll,
   listKeys, createKey, bulkCreateKeys, updateKey, deleteKey, testKey, importEnvKeys, testAllKeys, listKeyModels, autoDetectKeyModel,
-  getAiAccess, setAiMode, inferTopic, coverageGaps, outlineUnits, classifyUnits, autoDetectAllKeys,
+  getAiAccess, setAiMode, inferTopic, coverageGaps, outlineUnits, classifyUnits, autoDetectAllKeys, setAllKeysEnabled,
 } from "../controllers/aiController.js";
 import { protect, authorize } from "../middleware/auth.js";
 
@@ -40,6 +40,7 @@ router.post("/keys/bulk", ...manage, bulkCreateKeys); // add many keys at once (
 router.post("/keys/import", ...admin, importEnvKeys); // import Render env keys — platform only
 router.post("/keys/test-all", ...manage, testAllKeys); // test every key in the caller's pool
 router.post("/keys/auto-model-all", ...manage, autoDetectAllKeys); // auto-pick a working model for every key at once
+router.post("/keys/set-enabled-all", ...manage, setAllKeysEnabled); // enable/disable every key at once
 router.put("/keys/:id", ...manage, updateKey);
 router.delete("/keys/:id", ...manage, deleteKey);
 router.post("/keys/:id/test", ...manage, testKey);

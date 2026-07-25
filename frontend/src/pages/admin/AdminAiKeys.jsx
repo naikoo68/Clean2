@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from "react";
-import { KeyRound, Plus, Trash2, Pencil, X, CheckCircle2, XCircle, Loader2, RefreshCw, Power, Download, List, Layers, Wand2, AlertTriangle } from "lucide-react";
+import { KeyRound, Plus, Trash2, Pencil, X, CheckCircle2, XCircle, Loader2, RefreshCw, Power, PowerOff, Download, List, Layers, Wand2, AlertTriangle } from "lucide-react";
 import { aiService } from "../../services";
 import { Loading, ErrorState, EmptyState } from "../../components/ui/AsyncState";
 import AiPlansManager from "../../components/admin/AiPlansManager";
@@ -261,6 +261,22 @@ export default function AdminAiKeys({ clientMode = false }) {
     }
   };
 
+  // Enable or disable ALL keys at once. Disabling asks for confirmation since it
+  // turns off AI generation until at least one key is re-enabled.
+  const setAllEnabled = async (enabled) => {
+    if (!enabled && !window.confirm("Disable ALL keys? The AI Generator won't work until you enable at least one key again.")) return;
+    setBulkBusy(enabled ? "enableall" : "disableall");
+    setError("");
+    try {
+      await aiService.keys.setAllEnabled(enabled);
+      load();
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setBulkBusy("");
+    }
+  };
+
   // Auto-detect + set the best working model for EVERY key at once (parallel).
   const autoModelAll = async () => {
     setBulkBusy("automodel");
@@ -316,6 +332,16 @@ export default function AdminAiKeys({ clientMode = false }) {
           {keys.length > 0 && (
             <button onClick={autoModelAll} disabled={bulkBusy === "automodel"} className="btn-outline" title="Auto-detect & set the best working model for every key at once">
               {bulkBusy === "automodel" ? <><Loader2 className="h-4 w-4 animate-spin" /> Picking models…</> : <><Wand2 className="h-4 w-4" /> Auto-pick models</>}
+            </button>
+          )}
+          {keys.length > 0 && (
+            <button onClick={() => setAllEnabled(true)} disabled={bulkBusy === "enableall"} className="btn-outline" title="Enable every key">
+              {bulkBusy === "enableall" ? <><Loader2 className="h-4 w-4 animate-spin" /> Enabling…</> : <><Power className="h-4 w-4" /> Enable all</>}
+            </button>
+          )}
+          {keys.length > 0 && (
+            <button onClick={() => setAllEnabled(false)} disabled={bulkBusy === "disableall"} className="btn-outline !text-rose-600 dark:!text-rose-400" title="Disable every key (then enable just the one you want)">
+              {bulkBusy === "disableall" ? <><Loader2 className="h-4 w-4 animate-spin" /> Disabling…</> : <><PowerOff className="h-4 w-4" /> Disable all</>}
             </button>
           )}
           {hasEnvKeys && (
