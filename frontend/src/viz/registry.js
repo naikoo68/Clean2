@@ -365,6 +365,96 @@ Object.assign(MODULES, {
   plantcell:         _il("plantcell", "Plant Cell", "biology", { kind: "cell", type: "plant" }),
 });
 
+// ---- Phase 10: fill remaining catalog (aliases + charts/graphs/tables/illustrations) ----
+Object.assign(MODULES, {
+  // pure chart-type aliases (renderers already exist under short slugs)
+  barchart: MODULES.bar, linechart: MODULES.line, splinechart: MODULES.spline, stepchart: MODULES.step,
+  areachart: MODULES.area, piechart: MODULES.pie, donutchart: MODULES.donut, scatterplot: MODULES.scatter,
+  bubblechart: MODULES.bubble, radarchart: MODULES.radar, polarchart: MODULES.polar,
+
+  // charts
+  pareto:          _bar("pareto", "Pareto Chart", "charts", ["A", "B", "C", "D", "E"], [{ name: "Frequency", data: [40, 25, 15, 12, 8] }]),
+  calendarheatmap: _plotly("calendarheatmap", "Calendar Heatmap", "charts", [{ z: [[1, 3, 2, 5, 0, 1, 4], [2, 4, 1, 0, 3, 5, 2], [0, 1, 5, 4, 2, 3, 1], [3, 2, 4, 1, 5, 0, 2], [1, 4, 2, 3, 0, 5, 1]], x: ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"], y: ["W1", "W2", "W3", "W4", "W5"], type: "heatmap", colorscale: "Greens" }]),
+  chorddiagram:    _graph("chorddiagram", "Chord Diagram", "charts", [{ id: "A" }, { id: "B" }, { id: "C" }, { id: "D" }, { id: "E" }], [{ source: "A", target: "C" }, { source: "A", target: "D" }, { source: "B", target: "D" }, { source: "B", target: "E" }, { source: "C", target: "E" }, { source: "A", target: "B" }], "circle", false),
+  alluvial:        _plotly("alluvial", "Alluvial Diagram", "charts", [{ type: "sankey", orientation: "h", node: { label: ["Group A", "Group B", "Stage 1", "Stage 2", "Outcome X", "Outcome Y"], pad: 15, thickness: 16 }, link: { source: [0, 0, 1, 1, 2, 3], target: [2, 3, 2, 3, 4, 5], value: [5, 3, 2, 6, 7, 9] } }]),
+
+  // math
+  cartesiangraph:  _line("cartesiangraph", "Cartesian Graph", "math", _X, [{ name: "y = x", data: _X.map((x) => x) }, { name: "y = 2x+1", data: _X.map((x) => 2 * x + 1) }], { beginAtZero: false, smooth: false }),
+  hyperbola:       _scatter("hyperbola", "Hyperbola (y=1/x)", "math", [{ name: "branch +", data: _range(0.5, 5, 0.25).map((x) => ({ x, y: Math.round(100 / x) / 100 })), line: true }, { name: "branch −", data: _range(-5, -0.5, 0.25).map((x) => ({ x, y: Math.round(100 / x) / 100 })), line: true }]),
+  polargraph:      _scatter("polargraph", "Polar Graph (rose)", "math", [{ name: "r = cos(2θ)", data: _range(0, 360, 5).map((d) => { const t = (d * Math.PI) / 180, r = Math.cos(2 * t); return { x: Math.round(r * Math.cos(t) * 100) / 100, y: Math.round(r * Math.sin(t) * 100) / 100 }; }), line: true }]),
+  implicitfunction:_scatter("implicitfunction", "Implicit: x²+y²=16", "math", [{ name: "circle", data: _range(0, 360, 10).map((d) => { const t = (d * Math.PI) / 180; return { x: Math.round(4 * Math.cos(t) * 100) / 100, y: Math.round(4 * Math.sin(t) * 100) / 100 }; }), line: true }]),
+  limit:           _line("limit", "Limit of (x²−1)/(x−1) → 2", "math", _range(-2, 4, 0.5), [{ name: "f(x) = x+1", data: _range(-2, 4, 0.5).map((x) => x + 1) }], { beginAtZero: false, smooth: false }),
+  taylorseries:    _line("taylorseries", "Taylor Series of sin(x)", "math", _range(-3, 3, 0.5), [{ name: "sin x", data: _range(-3, 3, 0.5).map((x) => Math.round(Math.sin(x) * 100) / 100) }, { name: "x", data: _range(-3, 3, 0.5).map((x) => Math.round(x * 100) / 100) }, { name: "x − x³/6", data: _range(-3, 3, 0.5).map((x) => Math.round((x - x ** 3 / 6) * 100) / 100) }], { beginAtZero: false }),
+  complexplane:    _scatter("complexplane", "Complex Plane", "math", [{ name: "points", data: [{ x: 2, y: 3 }, { x: -1, y: 2 }, { x: -2, y: -1 }, { x: 3, y: -2 }] }]),
+  vectorfield:     _il("vectorfield", "Vector Field", "math", { kind: "field", type: "vector" }),
+  slopefield:      _il("slopefield", "Slope Field", "math", { kind: "field", type: "slope" }),
+
+  // statistics
+  samplingdistribution: _line("samplingdistribution", "Sampling Distribution", "statistics", _range(-4, 4, 0.5), [{ name: "x̄ distribution", data: _range(-4, 4, 0.5).map((x) => Math.round(Math.exp((-x * x) / 0.5) * 1000) / 1000) }], { beginAtZero: true }),
+  multipleregression:   _scatter("multipleregression", "Multiple Regression (fit)", "statistics", [{ name: "Observed", data: [{ x: 1, y: 2.2 }, { x: 2, y: 3.1 }, { x: 3, y: 3.9 }, { x: 4, y: 5.2 }, { x: 5, y: 5.8 }, { x: 6, y: 7.1 }] }, { name: "Predicted", data: [{ x: 1, y: 2.1 }, { x: 6, y: 7.0 }], line: true }]),
+  qqplot:          _scatter("qqplot", "Q–Q Plot", "statistics", [{ name: "Quantiles", data: [{ x: -2, y: -1.8 }, { x: -1, y: -1.1 }, { x: -0.5, y: -0.4 }, { x: 0, y: 0.1 }, { x: 0.5, y: 0.6 }, { x: 1, y: 1.2 }, { x: 2, y: 1.9 }] }, { name: "y = x", data: [{ x: -2, y: -2 }, { x: 2, y: 2 }], line: true }]),
+  stemleaf:        _il("stemleaf", "Stem & Leaf Plot", "statistics", { kind: "table", headers: ["Stem", "Leaves"], rows: [["1", "2 5 7"], ["2", "0 3 3 8"], ["3", "1 4 6 6 9"], ["4", "2 5"]] }),
+  anova:           _bar("anova", "ANOVA (group means)", "statistics", ["Group A", "Group B", "Group C"], [{ name: "Mean", data: [52, 61, 47] }]),
+
+  // economics
+  productionfunction: _line("productionfunction", "Production Function", "economics", _range(0, 10, 1), [{ name: "Output Q", data: _range(0, 10, 1).map((l) => Math.round(20 * Math.sqrt(l))) }], { beginAtZero: true }),
+  isoquant:        _line("isoquant", "Isoquant Map", "economics", _range(1, 10, 1), [{ name: "Q=20", data: _range(1, 10, 1).map((l) => Math.round(20 / l)) }, { name: "Q=40", data: _range(1, 10, 1).map((l) => Math.round(40 / l)) }], { beginAtZero: true }),
+  isocost:         _line("isocost", "Isocost Line", "economics", _range(0, 10, 2), [{ name: "C₁", data: [10, 8, 6, 4, 2, 0] }, { name: "C₂", data: [15, 12, 9, 6, 3, 0] }], { beginAtZero: true, smooth: false }),
+  monopoly:        _line("monopoly", "Monopoly", "economics", _range(1, 10, 1), [{ name: "Demand (AR)", data: _range(1, 10, 1).map((q) => Math.max(0, 20 - 1.5 * q)) }, { name: "MR", data: _range(1, 10, 1).map((q) => 20 - 3 * q) }, { name: "MC", data: _range(1, 10, 1).map((q) => Math.round((4 + 0.8 * q) * 10) / 10) }, { name: "ATC", data: [18, 11, 9, 8, 8, 8.5, 9.5, 11, 13, 15] }], { beginAtZero: false }),
+  oligopoly:       _line("oligopoly", "Kinked Demand (Oligopoly)", "economics", _range(1, 10, 1), [{ name: "Demand", data: [19, 17, 15, 13, 11, 8, 5, 2, 0, 0] }, { name: "MR", data: [18, 15, 12, 9, 6, 0, -4, -8, -12, -16] }], { beginAtZero: false, smooth: false }),
+  gametheory:      _il("gametheory", "Game Theory (payoff matrix)", "economics", { kind: "table", headers: ["", "Left", "Right"], rows: [["Up", "3, 3", "0, 5"], ["Down", "5, 0", "1, 1"]] }),
+  circularflow:    _graph("circularflow", "Circular Flow of Income", "economics", [{ id: "Households" }, { id: "Firms" }, { id: "Govt" }, { id: "Banks" }], [{ source: "Households", target: "Firms", label: "Spending" }, { source: "Firms", target: "Households", label: "Wages" }, { source: "Households", target: "Banks", label: "Savings" }, { source: "Banks", target: "Firms", label: "Investment" }, { source: "Households", target: "Govt", label: "Taxes" }, { source: "Govt", target: "Households", label: "Services" }], "circle", true),
+  businesscycle:   _line("businesscycle", "Business Cycle", "economics", _range(0, 12, 1), [{ name: "GDP", data: _range(0, 12, 1).map((t) => Math.round((100 + 15 * Math.sin(t / 2)) * 10) / 10) }, { name: "Trend", data: _range(0, 12, 1).map((t) => 100 + t * 0.5) }], { beginAtZero: false }),
+  solowgrowth:     _line("solowgrowth", "Solow Growth Model", "economics", _range(0, 10, 1), [{ name: "Output f(k)", data: _range(0, 10, 1).map((k) => Math.round(10 * Math.sqrt(k))) }, { name: "Investment sf(k)", data: _range(0, 10, 1).map((k) => Math.round(4 * Math.sqrt(k))) }, { name: "Depreciation δk", data: _range(0, 10, 1).map((k) => Math.round(k * 1.2 * 10) / 10) }], { beginAtZero: true }),
+  comparativeadvantage: _line("comparativeadvantage", "Comparative Advantage (PPF)", "economics", _range(0, 10, 2), [{ name: "Country A", data: [20, 16, 12, 8, 4, 0] }, { name: "Country B", data: [10, 8, 6, 4, 2, 0] }], { beginAtZero: true, smooth: false }),
+  trademodels:     _line("trademodels", "Trade Model", "economics", _Q, [{ name: "Domestic Demand", data: [100, 80, 60, 40, 20, 0] }, { name: "Domestic Supply", data: [0, 20, 40, 60, 80, 100] }, { name: "World Price", data: [30, 30, 30, 30, 30, 30] }], { beginAtZero: true, smooth: false }),
+  exchangerate:    _line("exchangerate", "Exchange Rate (FX market)", "economics", _range(0, 100, 20), [{ name: "Demand for $", data: [100, 80, 60, 40, 20, 0] }, { name: "Supply of $", data: [0, 20, 40, 60, 80, 100] }], { beginAtZero: true, smooth: false }),
+  moneymultiplier: _bar("moneymultiplier", "Money Multiplier", "economics", ["R1", "R2", "R3", "R4", "R5", "R6"], [{ name: "New deposits", data: [100, 80, 64, 51.2, 41, 32.8] }]),
+
+  // accounting & finance
+  balancesheet:    _il("balancesheet", "Balance Sheet", "finance", { kind: "table", headers: ["Assets", "Liabilities & Equity"], rows: [["Cash 20k", "Payables 15k"], ["Inventory 30k", "Loans 40k"], ["Equipment 50k", "Equity 45k"], ["Total 100k", "Total 100k"]] }),
+  incomestatement: _plotly("incomestatement", "Income Statement", "finance", [{ type: "waterfall", x: ["Revenue", "COGS", "Gross", "OpEx", "Op Income", "Tax", "Net Income"], measure: ["absolute", "relative", "total", "relative", "total", "relative", "total"], y: [200, -120, 0, -40, 0, -12, 0] }]),
+  cashflow:        _plotly("cashflow", "Cash Flow Statement", "finance", [{ type: "waterfall", x: ["Start", "Operating", "Investing", "Financing", "End"], measure: ["absolute", "relative", "relative", "relative", "total"], y: [50, 40, -30, 15, 0] }]),
+  ledger:          _il("ledger", "Ledger (T-account)", "finance", { kind: "table", headers: ["Debit", "Credit"], rows: [["Cash 5,000", ""], ["", "Sales 5,000"], ["Rent 1,200", ""], ["", "Cash 1,200"]] }),
+  journalflow:     _graph("journalflow", "Journal → Ledger Flow", "finance", [{ id: "Transaction" }, { id: "Journal" }, { id: "Ledger" }, { id: "Trial Balance" }, { id: "Statements" }], _chain(["Transaction", "Journal", "Ledger", "Trial Balance", "Statements"]), "grid", true),
+  trialbalance:    _il("trialbalance", "Trial Balance", "finance", { kind: "table", headers: ["Account", "Debit", "Credit"], rows: [["Cash", "5000", ""], ["Sales", "", "8000"], ["Rent", "1200", ""], ["Capital", "", "3000"], ["Purchases", "4800", ""], ["Total", "11000", "11000"]] }),
+  npv:             _bar("npv", "NPV (discounted cash flows)", "finance", ["Y0", "Y1", "Y2", "Y3", "Y4"], [{ name: "Discounted CF", data: [-100, 45, 38, 30, 22] }]),
+  irr:             _line("irr", "IRR (NPV vs discount rate)", "finance", _range(0, 20, 2), [{ name: "NPV", data: [60, 42, 27, 15, 5, -3, -10, -16, -21, -25, -28] }], { beginAtZero: false }),
+  stockanalysis:   _plotly("stockanalysis", "Stock Analysis", "finance", [{ type: "candlestick", x: ["Mon", "Tue", "Wed", "Thu", "Fri", "Mon", "Tue", "Wed"], open: [100, 104, 102, 108, 110, 107, 112, 115], high: [106, 108, 107, 112, 114, 113, 117, 120], low: [98, 101, 100, 105, 108, 105, 110, 113], close: [104, 102, 108, 110, 107, 112, 115, 118] }]),
+  macd:            _line("macd", "MACD", "finance", _range(1, 12, 1), [{ name: "MACD", data: [0.2, 0.5, 0.8, 0.6, 0.3, -0.1, -0.4, -0.2, 0.1, 0.4, 0.7, 0.9] }, { name: "Signal", data: [0.1, 0.3, 0.6, 0.65, 0.5, 0.2, -0.1, -0.2, -0.05, 0.2, 0.5, 0.75] }], { beginAtZero: false }),
+  rsi:             _line("rsi", "RSI (14)", "finance", _range(1, 14, 1), [{ name: "RSI", data: [45, 52, 60, 68, 74, 71, 66, 58, 49, 42, 38, 44, 55, 63] }, { name: "Overbought 70", data: Array(14).fill(70) }, { name: "Oversold 30", data: Array(14).fill(30) }], { beginAtZero: true, smooth: false }),
+
+  // geography
+  riversystem:     _graph("riversystem", "River System", "geography", [{ id: "Source" }, { id: "Trib A" }, { id: "Trib B" }, { id: "Main" }, { id: "Trib C" }, { id: "Mouth" }], [{ source: "Source", target: "Main" }, { source: "Trib A", target: "Main" }, { source: "Trib B", target: "Main" }, { source: "Main", target: "Trib C" }, { source: "Trib C", target: "Mouth" }, { source: "Main", target: "Mouth" }], "breadthfirst", true),
+  drainagepattern: _graph("drainagepattern", "Drainage Pattern (dendritic)", "geography", [{ id: "Main" }, { id: "B1" }, { id: "B2" }, { id: "B3" }, { id: "B4" }, { id: "C1" }, { id: "C2" }], [{ source: "B1", target: "Main" }, { source: "B2", target: "Main" }, { source: "B3", target: "B1" }, { source: "B4", target: "B2" }, { source: "C1", target: "B3" }, { source: "C2", target: "B4" }], "breadthfirst", true),
+  contourdiagram:  _plotly("contourdiagram", "Contour Diagram", "geography", [{ type: "contour", z: [[10, 20, 30, 25, 15], [20, 40, 55, 45, 25], [30, 55, 80, 60, 35], [25, 45, 60, 50, 30], [15, 25, 35, 30, 20]], colorscale: "Earth", contours: { coloring: "heatmap" } }]),
+  dem:             _plotly("dem", "Digital Elevation Model", "geography", [{ type: "surface", z: [[1, 2, 3, 4, 3], [2, 4, 6, 5, 3], [3, 6, 9, 7, 4], [2, 5, 7, 5, 3], [1, 3, 4, 3, 2]], colorscale: "Earth" }]),
+  terrain:         _plotly("terrain", "Terrain (3D)", "geography", [{ type: "surface", z: [[2, 3, 5, 4, 2], [3, 6, 8, 6, 3], [5, 8, 12, 9, 5], [4, 6, 9, 7, 4], [2, 3, 5, 4, 2]], colorscale: "Earth" }]),
+
+  // biology
+  mitosis:         _il("mitosis", "Mitosis", "biology", { kind: "celldivision", process: "mitosis" }),
+  meiosis:         _il("meiosis", "Meiosis", "biology", { kind: "celldivision", process: "meiosis" }),
+  humanbody:       _il("humanbody", "Human Body", "biology", { kind: "humanbody" }),
+  ecosystem:       _graph("ecosystem", "Ecosystem", "biology", [{ id: "Sun" }, { id: "Plants" }, { id: "Herbivores" }, { id: "Carnivores" }, { id: "Decomposers" }], [{ source: "Sun", target: "Plants" }, { source: "Plants", target: "Herbivores" }, { source: "Herbivores", target: "Carnivores" }, { source: "Carnivores", target: "Decomposers" }, { source: "Herbivores", target: "Decomposers" }, { source: "Decomposers", target: "Plants" }], "circle", true),
+
+  // chemistry
+  periodictable:   _il("periodictable", "Periodic Table", "chemistry", { kind: "periodictable", highlight: ["Na", "Cl", "O", "H", "Fe"] }),
+
+  // computer science
+  dfd:             _graph("dfd", "Data Flow Diagram", "cs", [{ id: "User" }, { id: "Process 1" }, { id: "Data Store" }, { id: "Process 2" }, { id: "Report" }], [{ source: "User", target: "Process 1", label: "input" }, { source: "Process 1", target: "Data Store", label: "write" }, { source: "Data Store", target: "Process 2", label: "read" }, { source: "Process 2", target: "Report", label: "output" }], "breadthfirst", true),
+  architecturediagram: _graph("architecturediagram", "Architecture Diagram", "cs", [{ id: "Client" }, { id: "CDN" }, { id: "API Gateway" }, { id: "Service" }, { id: "Database" }, { id: "Cache" }], [{ source: "Client", target: "CDN" }, { source: "CDN", target: "API Gateway" }, { source: "API Gateway", target: "Service" }, { source: "Service", target: "Database" }, { source: "Service", target: "Cache" }], "breadthfirst", true),
+  networkdiagram:  _graph("networkdiagram", "Network Diagram", "cs", [{ id: "Internet" }, { id: "Router" }, { id: "Switch" }, { id: "Server" }, { id: "PC 1" }, { id: "PC 2" }], [{ source: "Internet", target: "Router" }, { source: "Router", target: "Switch" }, { source: "Switch", target: "Server" }, { source: "Switch", target: "PC 1" }, { source: "Switch", target: "PC 2" }], "breadthfirst", false),
+  apiflow:         _graph("apiflow", "API Flow", "cs", [{ id: "Client" }, { id: "Auth" }, { id: "API" }, { id: "DB" }, { id: "Response" }], _chain(["Client", "Auth", "API", "DB", "Response"]), "grid", true),
+  databaseschema:  _graph("databaseschema", "Database Schema", "cs", [{ id: "users" }, { id: "orders" }, { id: "products" }, { id: "order_items" }], [{ source: "users", target: "orders", label: "1:N" }, { source: "orders", target: "order_items", label: "1:N" }, { source: "products", target: "order_items", label: "1:N" }], "cose", true),
+  fsm:             _graph("fsm", "Finite State Machine", "cs", [{ id: "Start" }, { id: "Idle" }, { id: "Running" }, { id: "Paused" }, { id: "Done" }], [{ source: "Start", target: "Idle" }, { source: "Idle", target: "Running", label: "play" }, { source: "Running", target: "Paused", label: "pause" }, { source: "Paused", target: "Running", label: "resume" }, { source: "Running", target: "Done", label: "finish" }], "breadthfirst", true),
+
+  // business & education
+  fishbone:        _il("fishbone", "Fishbone Diagram", "business", { kind: "fishbone", effect: "Low Quality", causes: [{ category: "People", items: ["Training", "Fatigue"] }, { category: "Process", items: ["No checks"] }, { category: "Machine", items: ["Wear"] }, { category: "Material", items: ["Defects"] }, { category: "Method", items: ["Unclear SOP"] }, { category: "Environment", items: ["Heat"] }] }),
+  kanban:          _fw("kanban", "Kanban Board", "business", "grid", [{ title: "To Do", items: ["Design API", "Write specs", "Setup CI"] }, { title: "In Progress", items: ["Auth module", "Dashboard"] }, { title: "Done", items: ["Login page", "DB schema"] }], { cols: 3 }),
+  roadmap:         _fw("roadmap", "Roadmap", "business", "grid", [{ title: "Q1", items: ["MVP", "Beta launch"] }, { title: "Q2", items: ["Mobile app", "Payments"] }, { title: "Q3", items: ["Analytics", "Scale"] }, { title: "Q4", items: ["Enterprise", "Global"] }], { cols: 4 }),
+  flashcards:      _il("flashcards", "Flashcards", "education", { kind: "flashcards", cards: [{ front: "Capital of Japan?", back: "Tokyo" }, { front: "Speed of light?", back: "3×10⁸ m/s" }, { front: "Largest planet?", back: "Jupiter" }] }),
+});
+
 // Look up an implemented module by a type id (case-insensitive, de-slugged).
 export function getModule(typeId) {
   if (!typeId) return null;
