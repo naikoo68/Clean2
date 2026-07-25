@@ -26,7 +26,7 @@ const EngineLoading = (
 const VizRenderer = forwardRef(function VizRenderer({ spec }, ref) {
   // Engine comes from the registered module; if an AI spec carries Mermaid
   // `code` but no known type, fall back to the Mermaid engine.
-  const engine = getModule(spec?.type)?.engine || (spec?.code ? "mermaid" : spec?.plotly ? "plotly" : spec?.graph ? "cytoscape" : spec?.framework ? "framework" : spec?.map ? "leaflet" : spec?.science ? "science" : spec?.chem ? "chem" : spec?.illustration ? "illustration" : "chartjs");
+  const engine = getModule(spec?.type)?.engine || (spec?.code ? "mermaid" : spec?.plotly ? "plotly" : (spec?.graph || spec?.network) ? "cytoscape" : spec?.framework ? "framework" : spec?.map ? "leaflet" : spec?.science ? "science" : spec?.chem ? "chem" : spec?.illustration ? "illustration" : "chartjs");
 
   if (engine === "mermaid") {
     return (

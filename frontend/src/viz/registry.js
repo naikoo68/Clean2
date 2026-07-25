@@ -459,9 +459,9 @@ Object.assign(MODULES, {
     arrows: [{ type: "forward", top: "H⁺ (from HBr)" }, { type: "forward", top: "Br⁻ (nucleophile)" }],
   }),
   eliminationmechanism:   _chem("eliminationmechanism", "Elimination Mechanism", "chemistry", {
-    title: "Elimination (E2): t-BuCl + KOH", electrons: [{ step: 0, from: [0.2, 0.35], to: [0.4, 0.45] }],
+    title: "Elimination (E2): t-BuCl + KOH", byproducts: ["H₂O", "KCl"],
     steps: [{ smiles: "CC(C)(C)Cl", label: "t-butyl chloride" }, { smiles: "C=C(C)C", label: "2-methylpropene" }],
-    arrows: [{ type: "forward", top: "KOH (base)", bottom: "− H₂O, − KCl" }],
+    arrows: [{ type: "forward", top: "KOH" }],
   }),
   rearrangementmechanism: _chem("rearrangementmechanism", "Rearrangement Mechanism", "chemistry", {
     title: "Keto–Enol Tautomerism",
