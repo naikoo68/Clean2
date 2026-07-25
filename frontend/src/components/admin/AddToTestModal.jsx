@@ -9,7 +9,7 @@ import { Loading, ErrorState } from "../ui/AsyncState";
 const COPY_FIELDS = [
   "type", "text", "options", "correct", "optionExplanations", "explanation",
   "difficulty", "columnA", "columnB", "assertion", "reason", "tableRows",
-  "image", "status",
+  "graph", "image", "status",
 ];
 
 const gid = (x) => (x && x._id ? String(x._id) : "none");

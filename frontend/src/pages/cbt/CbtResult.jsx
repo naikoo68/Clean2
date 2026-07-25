@@ -6,6 +6,7 @@ import { Loading, ErrorState } from "../../components/ui/AsyncState";
 import MathText from "../../components/ui/MathText";
 import StatementPairView from "../../components/ui/StatementPairView";
 import TableView from "../../components/ui/TableView";
+import GraphView from "../../components/ui/GraphView";
 import AssertionReasonView from "../../components/ui/AssertionReasonView";
 
 function toRoman(n) {
@@ -150,6 +151,7 @@ export default function CbtResult() {
 
               <StatementPairView q={r} />
               <TableView q={r} />
+              <GraphView q={r} />
               <AssertionReasonView q={r} />
 
               <div className="mt-3 space-y-2">

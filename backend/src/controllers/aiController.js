@@ -301,6 +301,7 @@ Type-specific rules — each type needs specific extra fields AND a specific sty
 - "assertion": include "assertion" (Assertion A text) and "reason" (Reason R text); "text" may be empty. The 4 "options" MUST be exactly: "Both A and R are true and R is the correct explanation of A", "Both A and R are true but R is NOT the correct explanation of A", "A is true but R is false", "A is false but R is true". In "explanation", separately evaluate Assertion (A) — state true/false and WHY with supporting facts — then separately evaluate Reason (R) — true/false and WHY — and finally explain the RELATIONSHIP: whether R correctly explains A and why.
 - "table": put the data table in "tableRows" (a 2D array; the first inner array is the header row) — NEVER write it as a markdown/pipe ("| a | b |") table inside "text". "text" is ONLY the question sentence. Wrap any math in a cell in $...$. 4 normal options that match a calculation done from the table.
 Do NOT prefix columnA / columnB / statement items with numbers or roman numerals (no "1.", "I.") — the app numbers Column A (1,2,3,4), Column B (I,II,III,IV) and statements (1,2,3) automatically.
+OPTIONAL DIAGRAM ("graph"): ONLY when a question genuinely needs a diagram to be answered or understood — e.g. an ECONOMICS supply/demand curve, a shift, an equilibrium, a cost curve, or any simple straight-line/curve relationship — include a "graph" object. The app DRAWS it as a labelled chart, so provide DATA, not prose. Shape: {"xLabel":"Quantity","yLabel":"Price","lines":[{"label":"Demand","points":[[0,100],[100,0]]},{"label":"Supply","points":[[0,0],[100,100]]}],"points":[{"label":"E (equilibrium)","x":50,"y":50}]}. Rules for "graph": use a consistent numeric scale for all points; each line needs a short "label" and at least two [x,y] points (use 3-6 points for a curve); put key intersections/equilibria in "points" with a short label; keep values simple (0-100 is ideal). If the question also refers to the diagram in words, keep "text" as the question itself (e.g. "In the diagram, the equilibrium price is:"). OMIT "graph" entirely for questions that don't need a visual (most questions) — never add a decorative or irrelevant graph.
 VARIETY IS MANDATORY: within the set, every question must test a DIFFERENT fact / sub-topic and a DIFFERENT angle (definition, cause, effect, date or number, example, comparison, application, exception, sequence). NEVER ask about the same fact, entity or correct answer more than once, and NEVER reword or rephrase another question — a different sentence with the same meaning counts as a duplicate and is forbidden. Spread the questions across the full breadth of the topic rather than clustering on the few most obvious facts.
 SAME-CATEGORY OPTIONS (CRITICAL FOR PLAUSIBILITY): all four "options" MUST belong to the SAME real-world category, type and format as the correct answer, so every wrong option is a genuine, closely-related distractor — never off-topic or an obvious give-away. If the answer is a plant/tree, ALL four options are real plant/tree names; if a person, all are people of the same field/era; if a river, all are rivers; if a place, all are comparable places; if a date/year, all are plausible nearby dates; and likewise for chemicals, diseases, units, languages, books, laws, awards, animals, festivals, etc. Match the grammatical form, language, length and level of specificity across the four options, and prefer real, well-known members of that category that a knowledgeable student could genuinely confuse with the answer. NEVER mix unrelated kinds (for example, for "the Kashmiri name of the Chinar TREE", every option must be a tree name — do NOT put a flower, a bird or an unrelated word among them).
 CALCULATIONS & SELF-VERIFICATION (do this for EVERY question before you finalise it):
@@ -538,6 +539,44 @@ function parseQuestions(content) {
   return [];
 }
 
+// Coerce a model-supplied graph/diagram into a safe, renderable shape, or
+// undefined if there's nothing usable. Accepts lines as { points:[[x,y]…] } or
+// [{x,y}…], and annotation points (e.g. an equilibrium) under points/annotations.
+function normalizeGraph(g) {
+  if (!g || typeof g !== "object" || Array.isArray(g)) return undefined;
+  const num = (v) => (Number.isFinite(Number(v)) ? Number(v) : null);
+  const asStr = (x) => (x == null ? "" : String(x));
+  const rawLines = Array.isArray(g.lines) ? g.lines : Array.isArray(g.series) ? g.series : [];
+  const lines = [];
+  for (const l of rawLines) {
+    const pts = Array.isArray(l?.points) ? l.points : [];
+    const points = pts
+      .map((p) => (Array.isArray(p) ? [num(p[0]), num(p[1])] : p && typeof p === "object" ? [num(p.x), num(p.y)] : null))
+      .filter((p) => p && p[0] != null && p[1] != null);
+    if (points.length >= 2) {
+      lines.push({
+        label: asStr(l?.label).slice(0, 40),
+        ...(typeof l?.color === "string" && /^#|^rgb|^[a-z]+$/i.test(l.color) ? { color: l.color } : {}),
+        points,
+      });
+    }
+  }
+  if (!lines.length) return undefined; // a graph must have at least one real line
+  const rawPts = Array.isArray(g.points) ? g.points : Array.isArray(g.annotations) ? g.annotations : [];
+  const points = rawPts
+    .map((p) => ({ label: asStr(p?.label).slice(0, 24), x: num(p?.x), y: num(p?.y) }))
+    .filter((p) => p.x != null && p.y != null);
+  return {
+    ...(asStr(g.title).trim() ? { title: asStr(g.title).trim().slice(0, 80) } : {}),
+    ...(asStr(g.xLabel || g.xlabel || g.xAxis).trim() ? { xLabel: asStr(g.xLabel || g.xlabel || g.xAxis).trim().slice(0, 40) } : {}),
+    ...(asStr(g.yLabel || g.ylabel || g.yAxis).trim() ? { yLabel: asStr(g.yLabel || g.ylabel || g.yAxis).trim().slice(0, 40) } : {}),
+    ...(num(g.xMax) != null ? { xMax: num(g.xMax) } : {}),
+    ...(num(g.yMax) != null ? { yMax: num(g.yMax) } : {}),
+    lines: lines.slice(0, 5),
+    points: points.slice(0, 8),
+  };
+}
+
 // Coerce anything the model returned into a valid Question document shape.
 function normalize(list) {
   const clampIdx = (n) => Math.min(3, Math.max(0, parseInt(n, 10) || 0));
@@ -600,6 +639,10 @@ function normalize(list) {
           ? q.tableRows.map((row) => arrStr(row))
           : [];
       }
+      // Optional diagram/graph (any type may carry one, e.g. an economics
+      // supply-demand curve). Kept only when it has at least one valid line.
+      const graph = normalizeGraph(q?.graph);
+      if (graph) out.graph = graph;
       return out;
     })
     .filter((q) => q.text); // drop empty questions

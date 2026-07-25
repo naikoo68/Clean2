@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { X, Sparkles, Wand2, CheckCircle2, AlertTriangle, Loader2, Server, KeyRound, ListChecks, Circle, Square } from "lucide-react";
 import { aiService } from "../../services";
 import { useAuth } from "../../context/AuthContext";
+import GraphView from "../ui/GraphView";
 
 const TYPE_OPTIONS = [
   { id: "mcq", label: "MCQ" },
@@ -506,6 +507,7 @@ export default function AiGenerate({ open, onClose, onUpload, title = "Generate 
                         <span className="ml-auto font-semibold text-emerald-600 dark:text-emerald-400">Ans: {LETTERS[q.correct] || "?"}</span>
                       </div>
                       <p className="mt-1 font-medium text-slate-700 dark:text-slate-200">{i + 1}. {q.text}</p>
+                      <GraphView q={q} />
                       <ul className="mt-1 grid grid-cols-2 gap-x-3 text-slate-500 dark:text-slate-400">
                         {(q.options || []).map((o, j) => (
                           <li key={j} className={j === q.correct ? "font-semibold text-emerald-600 dark:text-emerald-400" : ""}>
