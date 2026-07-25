@@ -100,6 +100,10 @@ export default function AdminVisualize() {
         if (kind === "print") return printCytoscape(cur, spec?.title);
         return;
       }
+      if (cur?.engine === "leaflet") {
+        // Live map tiles are cross-origin, so canvas image export is unreliable.
+        return setMsg("Live maps export as JSON (use the JSON button) — or take a screenshot for an image.");
+      }
       if (kind === "png") {
         if (isSvg) return exportPNGFromSVG(cur.node, spec?.title).catch((e) => setMsg(e.message));
         return exportPNG(cur, spec?.title);
