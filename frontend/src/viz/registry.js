@@ -344,6 +344,27 @@ Object.assign(MODULES, {
   coordinateplane:      _sci("coordinateplane", "Coordinate Plane", "math", { kind: "coordinate", min: -10, max: 10, points: [{ x: 3, y: 4, label: "P" }, { x: -5, y: -2, label: "Q" }], lines: [{ label: "y=x", points: [{ x: -8, y: -8 }, { x: 8, y: 8 }] }] }),
 });
 
+// ---- Phase 9: curated science illustrations (SVG engine) -------------------
+const _il = (type, label, category, illustration) => ({ label, category, engine: "illustration", sample: { type, title: label, illustration } });
+
+Object.assign(MODULES, {
+  wave:              _il("wave", "Wave", "physics", { kind: "wave", amplitude: 90, wavelength: 200, cycles: 2 }),
+  projectilemotion:  _il("projectilemotion", "Projectile Motion", "physics", { kind: "projectile", angle: 45, speed: 20 }),
+  circuitdiagram:    _il("circuitdiagram", "Circuit Diagram", "physics", { kind: "circuit", components: [{ type: "battery", label: "9V" }, { type: "switch", label: "S" }, { type: "resistor", label: "R" }, { type: "bulb", label: "Lamp" }] }),
+  raydiagram:        _il("raydiagram", "Ray Diagram", "physics", { kind: "ray", lens: "convex", focalLength: 3, objectDistance: 6, objectHeight: 2 }),
+  optics:            _il("optics", "Optics", "physics", { kind: "ray", lens: "convex", focalLength: 3, objectDistance: 8, objectHeight: 2 }),
+  electricfield:     _il("electricfield", "Electric Field", "physics", { kind: "efield", charges: [{ x: -0.5, q: 1 }, { x: 0.5, q: -1 }] }),
+  magneticfield:     _il("magneticfield", "Magnetic Field", "physics", { kind: "bmagnet" }),
+  molecularstructure:_il("molecularstructure", "Molecular Structure", "chemistry", { kind: "molecule", atoms: [{ el: "O", x: 0, y: 0 }, { el: "H", x: -1, y: 0.8 }, { el: "H", x: 1, y: 0.8 }], bonds: [{ a: 0, b: 1 }, { a: 0, b: 2 }] }),
+  reactiondiagram:   _il("reactiondiagram", "Reaction Diagram", "chemistry", { kind: "reaction", reactants: 40, products: 15, activationEnergy: 60, exothermic: true }),
+  orbitaldiagram:    _il("orbitaldiagram", "Orbital Diagram", "chemistry", { kind: "orbital", subshells: [{ label: "1s", electrons: 2, capacity: 2 }, { label: "2s", electrons: 2, capacity: 2 }, { label: "2p", electrons: 4, capacity: 6 }] }),
+  dna:               _il("dna", "DNA", "biology", { kind: "dna", sequence: "ATGCGATCGT" }),
+  rna:               _il("rna", "RNA", "biology", { kind: "rna", sequence: "AUGCGAUCGU" }),
+  cellstructure:     _il("cellstructure", "Cell Structure", "biology", { kind: "cell", type: "animal" }),
+  animalcell:        _il("animalcell", "Animal Cell", "biology", { kind: "cell", type: "animal" }),
+  plantcell:         _il("plantcell", "Plant Cell", "biology", { kind: "cell", type: "plant" }),
+});
+
 // Look up an implemented module by a type id (case-insensitive, de-slugged).
 export function getModule(typeId) {
   if (!typeId) return null;
