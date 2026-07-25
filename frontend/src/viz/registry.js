@@ -312,6 +312,21 @@ Object.assign(MODULES, {
   ], { cols: 3, rows: 1 }),
 });
 
+// ---- Phase 7: maps (Leaflet engine) + geography quick-wins -----------------
+const _map = (type, label, category, map) => ({ label, category, engine: "leaflet", sample: { type, title: label, map } });
+const _cities = [{ lat: 28.6, lng: 77.2, label: "Delhi" }, { lat: 19.1, lng: 72.9, label: "Mumbai" }, { lat: 13.1, lng: 80.3, label: "Chennai" }, { lat: 22.6, lng: 88.4, label: "Kolkata" }];
+
+Object.assign(MODULES, {
+  map:          _map("map", "Map", "geography", { center: [20.6, 78.9], zoom: 4, markers: _cities }),
+  choropleth:   _map("choropleth", "Choropleth (value markers)", "geography", { center: [20.6, 78.9], zoom: 4, scale: 4, markers: [{ lat: 28.6, lng: 77.2, label: "North · 90", value: 90 }, { lat: 19.1, lng: 72.9, label: "West · 70", value: 70 }, { lat: 13.1, lng: 80.3, label: "South · 55", value: 55 }, { lat: 22.6, lng: 88.4, label: "East · 40", value: 40 }] }),
+  flowmap:      _map("flowmap", "Flow Map", "geography", { center: [20.6, 78.9], zoom: 4, markers: _cities, lines: [{ from: [28.6, 77.2], to: [19.1, 72.9] }, { from: [28.6, 77.2], to: [13.1, 80.3] }, { from: [28.6, 77.2], to: [22.6, 88.4] }] }),
+  // Geography quick-wins on existing engines
+  windrose:     _plotly("windrose", "Wind Rose", "geography", [{ type: "barpolar", r: [20, 15, 30, 10, 25, 18, 12, 22], theta: ["N", "NE", "E", "SE", "S", "SW", "W", "NW"], marker: { color: "#2563eb" } }], { polar: { radialaxis: { ticksuffix: "%" } } }),
+  rainfallgraph: _bar("rainfallgraph", "Rainfall Graph", "geography", ["J", "F", "M", "A", "M", "J", "J", "A", "S", "O", "N", "D"], [{ name: "Rainfall (mm)", data: [40, 35, 50, 60, 90, 120, 160, 150, 100, 70, 50, 45] }]),
+  topographicprofile: _line("topographicprofile", "Topographic Profile", "geography", _range(0, 10, 1), [{ name: "Elevation (m)", data: [200, 350, 500, 720, 650, 800, 900, 750, 600, 400, 250] }], { beginAtZero: true, smooth: true }),
+  elevation:    _line("elevation", "Elevation Profile", "geography", _range(0, 10, 1), [{ name: "Elevation (m)", data: [100, 180, 300, 420, 500, 610, 540, 400, 300, 220, 150] }], { beginAtZero: true, smooth: true }),
+});
+
 // Chart.js chart types the ChartRenderer knows how to build.
 export const CHARTJS_TYPES = new Set(["bar", "line", "pie", "doughnut", "scatter", "bubble", "radar", "polarArea"]);
 

@@ -2193,6 +2193,8 @@ Rules:
 - "colors": optional array of hex colours.
 - If the user gives no numbers, invent REALISTIC, sensible example data so the chart is meaningful. Keep it small (3-8 points). Keep everything renderable and valid JSON.
 
+MAPS: if the request is a map, choropleth, or flow map, return {"type":"<map|choropleth|flowmap>","title":"...","map":{"center":[lat,lng],"zoom":4,"markers":[{"lat":N,"lng":N,"label":"...","value":N}],"lines":[{"from":[lat,lng],"to":[lat,lng]}]}}. Use REAL latitude/longitude. For choropleth put a numeric "value" on each marker (0-100); for a flow map add "lines" connecting points.
+
 FRAMEWORKS: if the request is a SWOT, PESTLE, BCG matrix, Porter's Five Forces, Business Model Canvas, value chain, comparison, or cycle diagram, return {"type":"<that>","title":"...","framework":{"kind":"<swot|pestle|bcg|forces|canvas|grid|cycle>","cells":[{"title":"...","items":["...","..."]}]}}. Use the standard cells for the framework (e.g. SWOT → Strengths/Weaknesses/Opportunities/Threats; Porter → the 5 forces with Competitive Rivalry first). Keep 2-5 short items per cell.
 
 GRAPHS & NETWORKS: if the request is a network graph, force-directed graph, tree, binary tree, AVL, heap, trie, linked list, queue, stack, organization chart, decision tree, classification tree, food chain, or food web, return {"type":"<that>","title":"...","graph":{"nodes":[{"id":"A","label":"A"}],"edges":[{"source":"A","target":"B","label":""}],"layout":"breadthfirst","directed":true}}. Use "breadthfirst" for trees/hierarchies, "cose" for networks/webs, "grid" for lists/chains. Keep it to ~4-12 nodes.
