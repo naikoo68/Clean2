@@ -20,6 +20,22 @@ import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "re
 
 const W = 760, P0 = "#059669";
 const toHref = (svg) => "data:image/svg+xml;base64," + btoa(unescape(encodeURIComponent(svg)));
+const tr = (t, n) => { t = String(t ?? ""); return t.length > n ? t.slice(0, Math.max(1, n - 1)) + "…" : t; };
+const clamp01 = (v, d) => { const x = Number(v); return Number.isFinite(x) ? Math.max(0, Math.min(1, x)) : d; };
+
+// Wrap a label into at most 2 lines that each fit `maxChars`, so long reagent
+// text never bleeds into the neighbouring structure.
+function wrapLabel(text, maxChars) {
+  const t = String(text ?? "").trim();
+  if (!t) return [];
+  if (t.length <= maxChars) return [t];
+  const words = t.split(/\s+/);
+  let l1 = "", i = 0;
+  while (i < words.length && (l1 ? l1.length + 1 + words[i].length : words[i].length) <= maxChars) { l1 = l1 ? `${l1} ${words[i]}` : words[i]; i++; }
+  if (!l1) return [tr(t, maxChars)];
+  const rest = words.slice(i).join(" ");
+  return rest ? [l1, tr(rest, maxChars)] : [l1];
+}
 
 function bracketPath(x, y, h, right) {
   const w = 9;
@@ -60,16 +76,21 @@ function Section({ sec, top, height, imgMap }) {
             )}
             {st.label && im && <text x={x + cellW / 2} y={boxTop + cellH + 15} fontSize="11" fontWeight="600" fill="currentColor" textAnchor="middle">{st.label}</text>}
             {(sec.electrons || []).filter((e) => e.step === i).map((e, k) => {
-              const fx = x + (e.from?.[0] ?? 0.3) * cellW, fy = boxTop + (e.from?.[1] ?? 0.3) * cellH;
-              const tx = x + (e.to?.[0] ?? 0.7) * cellW, ty = boxTop + (e.to?.[1] ?? 0.5) * cellH;
-              const mx = (fx + tx) / 2, my = Math.min(fy, ty) - 22;
-              return <path key={k} d={`M${fx} ${fy} Q${mx} ${my} ${tx} ${ty}`} fill="none" stroke="#db2777" strokeWidth="1.8" markerEnd="url(#mech-eln)" />;
+              // coords are clamped to 0..1 within the box so a bad value can't
+              // produce a giant off-box arc.
+              const fx = x + clamp01(e.from?.[0], 0.3) * cellW, fy = boxTop + clamp01(e.from?.[1], 0.3) * cellH;
+              const tx = x + clamp01(e.to?.[0], 0.7) * cellW, ty = boxTop + clamp01(e.to?.[1], 0.5) * cellH;
+              const mx = (fx + tx) / 2, my = Math.max(boxTop + 6, Math.min(fy, ty) - 18);
+              return <path key={k} d={`M${fx} ${fy} Q${mx} ${my} ${tx} ${ty}`} fill="none" stroke="#db2777" strokeWidth="1.6" markerEnd="url(#mech-eln)" />;
             })}
           </g>
         );
       })}
       {arrows.slice(0, n - 1).map((ar, i) => {
         const x1 = cellX(i) + cellW + 6, x2 = cellX(i + 1) - 6, mxx = (x1 + x2) / 2, equil = ar?.type === "equilibrium";
+        // keep labels inside the arrow gap: wrap/truncate to the available width
+        const maxC = Math.max(6, Math.floor((x2 - x1 + 24) / 5.4));
+        const topLines = ar?.top ? wrapLabel(ar.top, maxC) : [];
         return (
           <g key={i}>
             {equil ? (
@@ -80,11 +101,16 @@ function Section({ sec, top, height, imgMap }) {
             ) : (
               <line x1={x1} y1={cy} x2={x2} y2={cy} stroke="currentColor" strokeWidth="2" markerEnd="url(#mech-arrow)" />
             )}
-            {ar?.top && <text x={mxx} y={cy - 12} fontSize="11" fontWeight="600" fill={P0} textAnchor="middle">{ar.top}</text>}
-            {ar?.bottom && <text x={mxx} y={cy + 18} fontSize="10" fill="#64748b" textAnchor="middle">{ar.bottom}</text>}
+            {topLines.map((ln, li) => (
+              <text key={li} x={mxx} y={cy - 14 - (topLines.length - 1 - li) * 11} fontSize="10" fontWeight="600" fill={P0} textAnchor="middle">{ln}</text>
+            ))}
+            {ar?.bottom && <text x={mxx} y={cy + 17} fontSize="9" fill="#64748b" textAnchor="middle">{tr(ar.bottom, maxC)}</text>}
           </g>
         );
       })}
+      {Array.isArray(sec.byproducts) && sec.byproducts.length > 0 && (
+        <text x={cellX(n - 1) + cellW / 2} y={cy - cellH / 2 - 8} fontSize="11" fill="#64748b" textAnchor="middle">+ {tr(sec.byproducts.join(" + "), 26)}</text>
+      )}
     </g>
   );
 }
@@ -94,7 +120,7 @@ const MechanismRenderer = forwardRef(function MechanismRenderer({ spec }, ref) {
   const chem = spec?.chem || {};
   const sections = Array.isArray(chem.sections) && chem.sections.length
     ? chem.sections
-    : [{ title: chem.title || spec?.title, steps: chem.steps, arrows: chem.arrows, electrons: chem.electrons }];
+    : [{ title: chem.title || spec?.title, steps: chem.steps, arrows: chem.arrows, electrons: chem.electrons, byproducts: chem.byproducts }];
   const allSmiles = Array.from(new Set(sections.flatMap((s) => (Array.isArray(s.steps) ? s.steps : []).map((st) => st?.smiles).filter(Boolean))));
   const [imgMap, setImgMap] = useState({});
 
