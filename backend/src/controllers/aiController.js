@@ -3510,6 +3510,15 @@ export async function importEnvKeys(req, res) {
   res.json({ imported });
 }
 
+// POST /api/ai/keys/set-enabled-all — enable OR disable every key in the caller's
+// pool at once. Body: { enabled: boolean }. Handy to switch everything off and
+// then re-enable only the key(s) you actually want to generate with.
+export async function setAllKeysEnabled(req, res) {
+  const enabled = !!req.body?.enabled;
+  const { modifiedCount } = await AiKey.updateMany({ owner: keyOwner(req) ?? null }, { $set: { enabled } });
+  res.json({ enabled, updated: modifiedCount });
+}
+
 // POST /api/ai/keys/test-all — test every DB key in the caller's pool.
 export async function testAllKeys(req, res) {
   const keys = await AiKey.find({ owner: keyOwner(req) ?? null });
