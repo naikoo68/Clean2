@@ -21,7 +21,7 @@ import RegenerateAllModal from "../../components/admin/RegenerateAllModal";
 import ScheduleQuestionModal from "../../components/admin/ScheduleQuestionModal";
 import MigrateQuizModal from "../../components/admin/MigrateQuizModal";
 import MigrateTopicsModal from "../../components/admin/MigrateTopicsModal";
-import { Files, ScanSearch, Loader2, Sparkles, Scissors } from "lucide-react";
+import { Files, ScanSearch, Loader2, Sparkles, Scissors, Maximize2, Minimize2 } from "lucide-react";
 
 // Question types offered per subtopic in the "Missing areas" sequential generator
 // (table excluded to match the usual mix).
@@ -79,6 +79,7 @@ export default function AdminPractice({ clientMode = false }) {
   const [aiTarget, setAiTarget] = useState(null); // {id,name} — after AI creates a new quiz/test, later batches target it
   // "Scan missing areas": analyse all quizzes in this topic for uncovered syllabus.
   const [scanOpen, setScanOpen] = useState(false);
+  const [scanFull, setScanFull] = useState(false); // full-screen the Missing areas modal
   const [scanning, setScanning] = useState(false);
   const [scanErr, setScanErr] = useState("");
   const [scanMissing, setScanMissing] = useState([]);
@@ -871,13 +872,18 @@ export default function AdminPractice({ clientMode = false }) {
 
       {/* Scan missing areas — coverage report across all quizzes/tests in this topic */}
       {scanOpen && (
-        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/50 p-4" onClick={() => setScanOpen(false)}>
-          <div className="my-8 w-full max-w-lg card p-6" onClick={(e) => e.stopPropagation()}>
+        <div className={`fixed inset-0 z-50 flex justify-center overflow-y-auto bg-black/50 ${scanFull ? "items-stretch p-2 sm:p-4" : "items-start p-4"}`} onClick={() => setScanOpen(false)}>
+          <div className={`card flex flex-col p-6 ${scanFull ? "m-0 h-full w-full max-w-none" : "my-8 max-h-[calc(100vh-4rem)] w-full max-w-lg"}`} onClick={(e) => e.stopPropagation()}>
             <div className="mb-3 flex items-center justify-between">
               <h3 className="flex items-center gap-2 text-lg font-bold">
                 <ScanSearch className="h-5 w-5 text-brand-600" /> Missing areas{scanTopic ? ` — ${scanTopic}` : ""}
               </h3>
-              <button onClick={() => setScanOpen(false)}><X className="h-5 w-5" /></button>
+              <div className="flex items-center gap-1">
+                <button onClick={() => setScanFull((v) => !v)} title={scanFull ? "Exit full screen" : "Full screen"} className="rounded-lg p-1.5 text-slate-500 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800">
+                  {scanFull ? <Minimize2 className="h-5 w-5" /> : <Maximize2 className="h-5 w-5" />}
+                </button>
+                <button onClick={() => setScanOpen(false)} title="Close"><X className="h-5 w-5" /></button>
+              </div>
             </div>
 
             {scanning ? (
@@ -893,7 +899,7 @@ export default function AdminPractice({ clientMode = false }) {
                 <p className="mb-2 text-sm text-slate-500">
                   These subtopics are <b>not yet covered</b> (in study order). Set how many questions to generate for each — they're generated <b>one subtopic at a time</b>, then inserted into a new {kind}:
                 </p>
-                <div className="max-h-72 space-y-1 overflow-y-auto rounded-xl border border-slate-200 p-3 dark:border-slate-700">
+                <div className={`space-y-1 overflow-y-auto rounded-xl border border-slate-200 p-3 dark:border-slate-700 ${scanFull ? "min-h-0 flex-1" : "max-h-72"}`}>
                   {scanMissing.map((m, i) => {
                     const st = seqProgress[m];
                     const cap = Math.max(0, parseInt(scanCounts[i], 10) || 0);
