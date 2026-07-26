@@ -91,8 +91,10 @@ export default function AdminPractice({ clientMode = false }) {
   const [scanStems, setScanStems] = useState([]);
   // Per-subtopic sequential generation from the "missing areas" scan.
   const [scanCounts, setScanCounts] = useState({}); // subtopic index -> total question count
-  const [scanTypes, setScanTypes] = useState({});   // subtopic index -> { type: count } (sum ≤ total)
+  const [scanTypes, setScanTypes] = useState({});   // subtopic index -> { type: { level: count } }
   const [openTypeRows, setOpenTypeRows] = useState(() => new Set()); // which rows show the type editor
+  const [globalMix, setGlobalMix] = useState({});   // shared type×level mix set once for ALL subtopics
+  const [mixOpen, setMixOpen] = useState(false);
   const [seqRunning, setSeqRunning] = useState(false);
   const [seqProgress, setSeqProgress] = useState({}); // subtopic name -> { status, count }
   const [seqMsg, setSeqMsg] = useState("");
@@ -216,7 +218,7 @@ export default function AdminPractice({ clientMode = false }) {
   const scanMissingAreas = async () => {
     const topicName = (kind === "quiz" ? topic : subject)?.name || "";
     setScanOpen(true); setScanning(true); setScanErr(""); setScanMissing([]); setScanTopic(topicName); setScanStems([]);
-    setScanCounts({}); setScanTypes({}); setOpenTypeRows(new Set()); setSeqProgress({}); setSeqMsg(""); seqStopRef.current = false;
+    setScanCounts({}); setScanTypes({}); setOpenTypeRows(new Set()); setGlobalMix({}); setMixOpen(false); setSeqProgress({}); setSeqMsg(""); seqStopRef.current = false;
     try {
       const lists = await Promise.all((items || []).map((it) => testService.getQuestions(it._id).catch(() => [])));
       const stems = lists.flat().map((q) => q?.text).filter(Boolean);
@@ -363,6 +365,23 @@ export default function AdminPractice({ clientMode = false }) {
   };
 
   const cancelSequential = () => { seqStopRef.current = true; setSeqMsg("Stopping after the current subtopic…"); };
+
+  // Shared mix: set a type × level count once (no per-subtopic cap here — its
+  // total becomes each subtopic's question count when applied).
+  const setGlobalType = (type, diff, value) => setGlobalMix((prev) => {
+    const row = { ...prev }; const cell = { ...(row[type] || {}) };
+    let n = parseInt(value, 10); if (!Number.isFinite(n) || n < 0) n = 0;
+    cell[diff] = n; row[type] = cell; return row;
+  });
+  // Copy the shared mix onto EVERY subtopic (its total = per-subtopic count).
+  const applyMixToAll = () => {
+    const total = mixTotal(globalMix);
+    if (total <= 0) { setSeqMsg("Set at least one question in the mix above first."); return; }
+    const clone = JSON.parse(JSON.stringify(globalMix));
+    setScanTypes(Object.fromEntries(scanMissing.map((_, i) => [i, JSON.parse(JSON.stringify(clone))])));
+    setScanCounts(Object.fromEntries(scanMissing.map((_, i) => [i, total])));
+    setSeqMsg(`Applied ${total} question(s) per subtopic (same mix) to all ${scanMissing.length} subtopic(s).`);
+  };
 
   // Set a type's count for a subtopic, clamped so the type totals never exceed
   // the subtopic's overall question count (the max the user chose).
@@ -911,8 +930,36 @@ export default function AdminPractice({ clientMode = false }) {
             ) : (
               <>
                 <p className="mb-2 text-sm text-slate-500">
-                  These subtopics are <b>not yet covered</b> (in study order). Set how many questions to generate for each — they're generated <b>one subtopic at a time</b>, then inserted into a new {kind}:
+                  These subtopics are <b>not yet covered</b> (in study order). Set the question mix <b>once</b> below and apply it to every subtopic — they're generated <b>one subtopic at a time</b> into a new {kind}:
                 </p>
+
+                {/* Shared question mix — set the type × level counts once, apply to all subtopics. */}
+                <div className="mb-2 rounded-xl border border-brand-200 bg-brand-50/40 dark:border-brand-900/40 dark:bg-brand-900/10">
+                  <button onClick={() => setMixOpen((o) => !o)} className="flex w-full items-center justify-between px-3 py-2 text-sm font-semibold">
+                    <span>Question mix for all subtopics{mixTotal(globalMix) > 0 ? ` — ${mixTotal(globalMix)}/subtopic` : ""}</span>
+                    <span className="text-slate-400">{mixOpen ? "▾" : "▸"}</span>
+                  </button>
+                  {mixOpen && (
+                    <div className="px-3 pb-3">
+                      <div className="grid grid-cols-[1fr_repeat(3,3rem)] items-center gap-x-2 gap-y-1">
+                        <span />
+                        {GEN_DIFFS.map((d) => <span key={d} className="text-center text-[11px] font-semibold text-slate-500 dark:text-slate-400">{d}</span>)}
+                        {GEN_TYPES.map((t) => (
+                          <Fragment key={t.id}>
+                            <span className="text-xs text-slate-600 dark:text-slate-300">{t.label}</span>
+                            {GEN_DIFFS.map((d) => (
+                              <input key={d} type="number" min="0" value={globalMix[t.id]?.[d] ?? 0} onChange={(e) => setGlobalType(t.id, d, e.target.value)} className="input !w-12 py-0.5 text-center text-xs" />
+                            ))}
+                          </Fragment>
+                        ))}
+                      </div>
+                      <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+                        <span className="text-xs text-slate-500 dark:text-slate-400">Total <b>{mixTotal(globalMix)}</b> questions per subtopic</span>
+                        <button onClick={applyMixToAll} className="btn-primary py-1 text-xs"><Sparkles className="h-3.5 w-3.5" /> Apply to all {scanMissing.length} subtopics</button>
+                      </div>
+                    </div>
+                  )}
+                </div>
                 <div className={`space-y-1 overflow-y-auto rounded-xl border border-slate-200 p-3 dark:border-slate-700 ${scanFull ? "min-h-0 flex-1" : "max-h-72"}`}>
                   {scanMissing.map((m, i) => {
                     const st = seqProgress[m];
