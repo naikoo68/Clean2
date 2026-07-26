@@ -2080,6 +2080,46 @@ export async function classifyUnits(req, res) {
 
 // POST /api/ai/coverage-gaps — given a topic and the stems of questions ALREADY
 // made across a set of quizzes, list the syllabus subtopics/areas NOT yet
+// Pedagogical ordering for the coverage checklist so "missing areas" read as a
+// logical study sequence (foundational first) instead of a random list. Each
+// item is ranked by the FIRST syllabus category keyword it contains; unmatched
+// concept items sit in the middle. The sort is stable (original order breaks
+// ties), so the model's own ordering is preserved within a tier.
+const COVERAGE_ORDER = [
+  ["introduction", "intro", "overview", "meaning", "definition", "define", "what is", "basics", "fundamental", "concept"],
+  ["terminology", "terms", "nomenclature", "notation", "symbol"],
+  ["history", "background", "origin", "evolution", "discovery"],
+  ["classification", "types", "kinds", "categories", "forms", "classes"],
+  ["components", "parts", "structure", "elements", "composition", "anatomy", "constituent"],
+  ["properties", "characteristics", "features", "nature", "attribute"],
+  ["principle", "laws", "law of", "rules", "theory", "theorem", "postulate", "axiom"],
+  ["process", "mechanism", "working", "functioning", "procedure", "method", "steps", "cycle"],
+  ["function", "role", "purpose"],
+  ["factors", "determinant", "conditions", "requirement"],
+  ["causes", "reasons"],
+  ["effects", "impact", "consequence", "result", "outcome"],
+  ["importance", "significance", "need", "relevance", "advantage", "merit", "benefit", "uses", "application"],
+  ["disadvantage", "limitation", "demerit", "drawback", "problem", "challenge", "issue"],
+  ["example", "case study", "instance", "illustration"],
+  ["comparison", "difference", "versus", "distinguish", "contrast"],
+  ["exception", "special case"],
+  ["formula", "equation", "numerical", "calculation", "derivation"],
+  ["diagram", "map ", "graph", "figure"],
+  ["current affairs", "recent", "latest", "modern", "advanced", "future development"],
+];
+const COVERAGE_DEFAULT_RANK = 7.5; // concept items with no category keyword → middle
+function coverageRank(item) {
+  const s = String(item || "").toLowerCase();
+  for (let r = 0; r < COVERAGE_ORDER.length; r++) if (COVERAGE_ORDER[r].some((k) => s.includes(k))) return r;
+  return COVERAGE_DEFAULT_RANK;
+}
+function orderSyllabus(items) {
+  return (Array.isArray(items) ? items : [])
+    .map((s, i) => ({ s, i, r: coverageRank(s) }))
+    .sort((a, b) => a.r - b.r || a.i - b.i)
+    .map((x) => x.s);
+}
+
 // covered so the user can generate questions to fill the gaps. Returns
 // { topic, coveredCount, missing:[...] }.
 export async function coverageGaps(req, res) {
@@ -2118,7 +2158,7 @@ export async function coverageGaps(req, res) {
   if (!syllabus.length) {
     const buildPrompt = source
       ? [
-          "You are a coverage analyst. Read the SOURCE MATERIAL below and extract a FIXED checklist of the distinct topics/areas/sections it actually covers (the things a question could be asked about). Base it ONLY on what is present in this source — do NOT add outside topics. Keep items at a consistent, medium granularity (not hyper-specific single facts). Aim for 10-40 items.",
+          "You are a coverage analyst. Read the SOURCE MATERIAL below and extract a FIXED checklist of the distinct topics/areas/sections it actually covers (the things a question could be asked about). Base it ONLY on what is present in this source — do NOT add outside topics. Keep items at a consistent, medium granularity (not hyper-specific single facts). Aim for 10-40 items. ORDER them as a learner would study them, step by step: foundational items first (introduction, definitions, terminology), then structure/classification, then processes/mechanisms, then causes/effects/factors, then importance/applications, and finally comparisons/exceptions/advanced items.",
           "",
           "SOURCE MATERIAL:",
           source,
@@ -2126,7 +2166,7 @@ export async function coverageGaps(req, res) {
           "Return ONLY a JSON array of strings, e.g. [\"area one\",\"area two\"]. No commentary, no markdown.",
         ].join("\n")
       : [
-          "You are a syllabus coverage analyst. Build a FIXED checklist of the 30 most important, broad, non-overlapping subtopics for the topic below (NCERT / standard university / competitive-exam scope). Keep them at a consistent, medium granularity — NOT hyper-specific niche facts.",
+          "You are a syllabus coverage analyst. Build a FIXED checklist of the 30 most important, broad, non-overlapping subtopics for the topic below (NCERT / standard university / competitive-exam scope). Keep them at a consistent, medium granularity — NOT hyper-specific niche facts. ORDER them as a learner would study them, step by step: foundational items first (introduction, definitions, terminology), then structure/classification, then processes/mechanisms, then causes/effects/factors, then importance/applications, and finally comparisons/exceptions/advanced items.",
           `Topic: ${topic}.`,
           TOPIC_SCOPE_RULE,
           "Return ONLY a JSON array of strings, e.g. [\"subtopic one\",\"subtopic two\"]. No commentary, no markdown.",
@@ -2145,6 +2185,13 @@ export async function coverageGaps(req, res) {
     syllabus = parseStringArray(rb.content).slice(0, 40);
   }
   if (!syllabus.length) return res.json({ topic: label, coveredCount: stems.length, syllabus: [], covered: [], missing: [] });
+
+  // Order the checklist as a logical study sequence (introduction/definition
+  // first → structure → process → causes/effects → importance/applications →
+  // comparisons/advanced) so "missing areas" can be tackled step by step. The
+  // sort is deterministic, so it stays consistent as the caller passes the
+  // fixed checklist back on later calls.
+  syllabus = orderSyllabus(syllabus);
 
   // Step 2 — classify coverage by ITEM NUMBER (robust: no wording match needed).
   // For each numbered checklist item, the model returns whether any question
