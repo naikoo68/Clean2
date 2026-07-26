@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { Plus, Pencil, Trash2, X, ChevronRight, GraduationCap, FolderOpen, ListChecks, FileStack, HelpCircle, Users, Search, Share2, ClipboardList, ArrowRightLeft } from "lucide-react";
 import { practiceService, testService, contentService, aiService } from "../../services";
 import { loadNav, saveNav } from "../../lib/navState";
@@ -73,6 +73,12 @@ export default function AdminPractice({ clientMode = false }) {
   const [scanMissing, setScanMissing] = useState([]);
   const [scanTopic, setScanTopic] = useState("");
   const [scanStems, setScanStems] = useState([]);
+  // Per-subtopic sequential generation from the "missing areas" scan.
+  const [scanCounts, setScanCounts] = useState({}); // subtopic index -> desired question count
+  const [seqRunning, setSeqRunning] = useState(false);
+  const [seqProgress, setSeqProgress] = useState({}); // subtopic name -> { status, count }
+  const [seqMsg, setSeqMsg] = useState("");
+  const seqStopRef = useRef(false);
   const [gapPrefill, setGapPrefill] = useState(null); // {topic, subtopics, avoid} when generating from the scan gaps
   const [topicStems, setTopicStems] = useState([]); // stems of ALL quizzes in this topic → coverage panel scans the whole topic
   const [bankOpen, setBankOpen] = useState(false); // hand-pick questions from the bank
@@ -192,12 +198,16 @@ export default function AdminPractice({ clientMode = false }) {
   const scanMissingAreas = async () => {
     const topicName = (kind === "quiz" ? topic : subject)?.name || "";
     setScanOpen(true); setScanning(true); setScanErr(""); setScanMissing([]); setScanTopic(topicName); setScanStems([]);
+    setScanCounts({}); setSeqProgress({}); setSeqMsg(""); seqStopRef.current = false;
     try {
       const lists = await Promise.all((items || []).map((it) => testService.getQuestions(it._id).catch(() => [])));
       const stems = lists.flat().map((q) => q?.text).filter(Boolean);
       setScanStems(stems);
       const r = await aiService.coverageGaps({ topic: topicName, questions: stems });
-      setScanMissing(Array.isArray(r?.missing) ? r.missing : []);
+      const missing = Array.isArray(r?.missing) ? r.missing : [];
+      setScanMissing(missing);
+      // Default 10 questions per missing subtopic.
+      setScanCounts(Object.fromEntries(missing.map((_, i) => [i, 10])));
     } catch (e) {
       setScanErr(e.message || "Scan failed.");
     } finally {
@@ -227,6 +237,92 @@ export default function AdminPractice({ clientMode = false }) {
     setScanOpen(false);
     setAiOpen(true);
   };
+
+  // Poll a generation job until done; honours the sequential-run cancel flag.
+  const pollGenJob = async (jobId) => {
+    const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+    let cancelSent = false;
+    for (let i = 0; i < 240; i++) {
+      await sleep(2000);
+      if (seqStopRef.current && !cancelSent) { cancelSent = true; try { await aiService.cancelJob(jobId); } catch { /* keep polling for the partial */ } }
+      let s;
+      try { s = await aiService.job(jobId); } catch { continue; }
+      if (s.status === "done") return s.questions || [];
+      if (s.status === "error") throw new Error(s.error || "Generation failed.");
+    }
+    throw new Error("Generation timed out.");
+  };
+
+  // Generate questions for each missing subtopic ONE AT A TIME (in the study
+  // order the scan returned): finish subtopic 1, then subtopic 2, and so on.
+  // Everything is inserted into a single new quiz/test as it goes, avoiding
+  // duplicates across subtopics and the questions already in the topic.
+  const generateSequential = async () => {
+    const subs = scanMissing
+      .map((name, i) => ({ name, count: Math.max(0, parseInt(scanCounts[i], 10) || 0) }))
+      .filter((s) => s.count > 0);
+    if (!subs.length) { setSeqMsg("Set a question count (e.g. 10) on at least one subtopic first."); return; }
+
+    seqStopRef.current = false;
+    setSeqRunning(true); setSeqMsg("");
+    const prog = {}; subs.forEach((s) => (prog[s.name] = { status: "pending", count: 0 })); setSeqProgress({ ...prog });
+    // Fresh target so the first insert creates a new quiz and later inserts append to it.
+    setQItem(null); setAiTarget(null);
+    const targetName = `${scanTopic} — gaps`;
+    const doneStems = [...scanStems];
+    let created = false, total = 0;
+
+    try {
+      for (const s of subs) {
+        if (seqStopRef.current) break;
+        prog[s.name].status = "working"; setSeqProgress({ ...prog });
+        const collected = [];
+        let rounds = 0;
+        while (collected.length < s.count && rounds < 4 && !seqStopRef.current) {
+          const shortfall = s.count - collected.length;
+          const body = {
+            topic: scanTopic,
+            count: shortfall,
+            notes: `Write EVERY question ONLY about the subtopic "${s.name}" within "${scanTopic}". Do not drift to other subtopics.`,
+            avoid: [...doneStems, ...collected.map((q) => q.text)].filter(Boolean).slice(-400),
+            mode: undefined,
+          };
+          let got = [];
+          try { const { jobId } = await aiService.generate(body); if (jobId) got = await pollGenJob(jobId); } catch { /* keep what we have */ }
+          const before = collected.length;
+          for (const q of got) {
+            const t = String(q?.text || "").trim().toLowerCase();
+            if (t && !collected.some((c) => String(c.text || "").trim().toLowerCase() === t)) collected.push(q);
+          }
+          if (collected.length <= before) break; // no new distinct questions
+          rounds += 1;
+        }
+        if (collected.length) {
+          try {
+            await saveAiBatch(collected, {
+              newTarget: created ? undefined : { name: targetName },
+              topic: scanTopic,
+              subtopics: subs.map((x) => x.name).join(", "),
+            });
+            created = true;
+            total += collected.length;
+            doneStems.push(...collected.map((q) => q.text).filter(Boolean));
+          } catch (e) { setSeqMsg(e.message || "Insert failed."); }
+        }
+        prog[s.name] = { status: "done", count: collected.length }; setSeqProgress({ ...prog });
+      }
+      setSeqMsg(seqStopRef.current
+        ? `Stopped. Generated ${total} question(s) into “${targetName}” so far.`
+        : `Done — generated ${total} question(s) across ${subs.length} subtopic(s) into “${targetName}”.`);
+    } catch (e) {
+      setSeqMsg(e.message || "Sequential generation failed.");
+    } finally {
+      setSeqRunning(false);
+      seqStopRef.current = false;
+    }
+  };
+
+  const cancelSequential = () => { seqStopRef.current = true; setSeqMsg("Stopping after the current subtopic…"); };
 
   // Save an AI-generated / imported batch. When opts.newTarget = { name } is set
   // (the "New quiz/test" option in the modal) we CREATE a new practice item under
@@ -748,20 +844,47 @@ export default function AdminPractice({ clientMode = false }) {
             ) : (
               <>
                 <p className="mb-2 text-sm text-slate-500">
-                  These syllabus areas are <b>not yet covered</b> by the {scanStems.length} question(s) across your {kind === "quiz" ? "quizzes" : "tests"}:
+                  These subtopics are <b>not yet covered</b> (in study order). Set how many questions to generate for each — they're generated <b>one subtopic at a time</b>, then inserted into a new {kind}:
                 </p>
-                <ul className="max-h-72 space-y-1 overflow-y-auto rounded-xl border border-slate-200 p-3 text-sm dark:border-slate-700">
-                  {scanMissing.map((m, i) => (
-                    <li key={i} className="flex gap-2"><span className="text-brand-500">•</span><span>{m}</span></li>
-                  ))}
-                </ul>
+                <div className="max-h-72 space-y-1 overflow-y-auto rounded-xl border border-slate-200 p-3 dark:border-slate-700">
+                  {scanMissing.map((m, i) => {
+                    const st = seqProgress[m];
+                    return (
+                      <div key={i} className="flex items-center gap-2 py-0.5">
+                        <span className="text-brand-500">•</span>
+                        <span className="flex-1 text-sm">{m}</span>
+                        {st ? (
+                          st.status === "working"
+                            ? <span className="inline-flex items-center gap-1 text-xs font-semibold text-brand-600"><Loader2 className="h-3.5 w-3.5 animate-spin" /> generating…</span>
+                            : st.status === "done"
+                              ? <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400">✓ {st.count}</span>
+                              : <span className="text-xs text-slate-400">queued</span>
+                        ) : (
+                          <input
+                            type="number" min="0"
+                            value={scanCounts[i] ?? 10}
+                            onChange={(e) => setScanCounts((c) => ({ ...c, [i]: e.target.value }))}
+                            disabled={seqRunning}
+                            title="Questions to generate for this subtopic"
+                            className="input !w-16 py-1 text-xs"
+                          />
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+                {seqMsg && <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">{seqMsg}</p>}
                 <div className="mt-4 flex flex-wrap justify-end gap-2">
-                  <button onClick={() => { try { navigator.clipboard?.writeText(scanMissing.join(", ")); } catch { /* ignore */ } }} className="btn-outline">
-                    Copy list
-                  </button>
-                  <button onClick={generateFromGaps} className="btn-primary">
-                    <Sparkles className="h-4 w-4" /> Generate these into a new {kind}
-                  </button>
+                  {seqRunning ? (
+                    <button onClick={cancelSequential} className="btn-outline !text-rose-600 dark:!text-rose-400"><X className="h-4 w-4" /> Cancel &amp; keep</button>
+                  ) : (
+                    <>
+                      <button onClick={() => setScanCounts(Object.fromEntries(scanMissing.map((_, i) => [i, 10])))} className="btn-outline">Set all to 10</button>
+                      <button onClick={() => { try { navigator.clipboard?.writeText(scanMissing.join(", ")); } catch { /* ignore */ } }} className="btn-outline">Copy list</button>
+                      <button onClick={generateFromGaps} className="btn-outline"><Sparkles className="h-4 w-4" /> All-in-one</button>
+                      <button onClick={generateSequential} className="btn-primary"><Sparkles className="h-4 w-4" /> Generate per subtopic</button>
+                    </>
+                  )}
                 </div>
               </>
             )}
