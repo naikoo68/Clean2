@@ -6,7 +6,10 @@ import AiPlansManager from "../../components/admin/AiPlansManager";
 
 const GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta/openai";
 const PRESETS = [
-  { label: "Google Gemini", baseUrl: GEMINI_BASE, models: "gemini-2.5-flash" },
+  // gemini-2.5-flash-lite has the most generous FREE tier (15 RPM / 1,000 req-day
+  // vs 10 RPM / 250 for 2.5-flash), so fresh free keys are far less likely to be
+  // rate-limited. Switch to gemini-2.5-flash for higher quality once quota allows.
+  { label: "Google Gemini", baseUrl: GEMINI_BASE, models: "gemini-2.5-flash-lite" },
   { label: "OpenAI", baseUrl: "https://api.openai.com/v1", models: "gpt-4o-mini" },
   { label: "TokenLab", baseUrl: "https://api.tokenlab.sh/v1", models: "gpt-4o-mini" },
   { label: "Groq", baseUrl: "https://api.groq.com/openai/v1", models: "llama-3.3-70b-versatile" },
@@ -23,9 +26,9 @@ const PRESETS = [
   { label: "Kiro", baseUrl: "https://your-kiro-gateway/v1", models: "claude-sonnet-4" },
 ];
 
-const blank = { label: "", baseUrl: GEMINI_BASE, models: "gemini-2.5-flash", key: "", creditLimit: "", autoDetect: true };
+const blank = { label: "", baseUrl: GEMINI_BASE, models: "gemini-2.5-flash-lite", key: "", creditLimit: "", autoDetect: true };
 // Bulk-add defaults: one shared preset applied to every pasted key.
-const blankBulk = { label: "", baseUrl: GEMINI_BASE, models: "gemini-2.5-flash", creditLimit: "", keysText: "" };
+const blankBulk = { label: "", baseUrl: GEMINI_BASE, models: "gemini-2.5-flash-lite", creditLimit: "", keysText: "" };
 
 const PER_PAGE = 10; // keys shown per page; bulk actions are scoped to the current page
 
