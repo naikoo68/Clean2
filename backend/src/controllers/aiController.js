@@ -188,6 +188,31 @@ const ANSWER_DEDUP_TYPES = new Set(["mcq", "table"]);
 const stripListMarker = (x) =>
   String(x || "").replace(/^\s*[([]?\s*(?:\d{1,2}|[ivxlcIVXLC]{1,5})\s*[.)\]:\-]\s+/, "").trim();
 
+// Recover numbered statements that a model dumped INTO the stem instead of the
+// "columnA" array, e.g. "Consider the following statements:\n1. ...\n2. ..." or
+// inline "... : (1) ... (2) ...". Returns { intro, statements } when it finds
+// at least 2 numbered items, else null. Handles "1." "1)" "(1)" and
+// "Statement 1:" markers, newline- or space-separated.
+function extractNumbered(text) {
+  const t = String(text || "").trim();
+  if (!t) return null;
+  const marker = /(?:^|[\n\s])(?:statement\s*)?\(?(\d{1,2})\)?\s*[.):-]\s+/gi;
+  const hits = [];
+  let m;
+  while ((m = marker.exec(t))) hits.push({ start: m.index, contentStart: marker.lastIndex, num: parseInt(m[1], 10) });
+  if (hits.length < 2) return null;
+  // require the numbering to start at 1 and be broadly sequential (1,2,3…)
+  if (hits[0].num !== 1) return null;
+  const intro = t.slice(0, hits[0].start).trim();
+  const statements = [];
+  for (let i = 0; i < hits.length; i++) {
+    const end = i + 1 < hits.length ? hits[i + 1].start : t.length;
+    const s = t.slice(hits[i].contentStart, end).trim();
+    if (s) statements.push(s);
+  }
+  return statements.length >= 2 ? { intro, statements } : null;
+}
+
 // Split a combined "Left — Right" pair string into [left, right] on the first
 // dash / arrow / colon separator (e.g. "Dal Lake — Srinagar").
 function splitPairString(s) {
@@ -295,7 +320,7 @@ Each question object uses these fields:
 Type-specific rules — each type needs specific extra fields AND a specific style of "options":
 - "mcq": a normal question with 4 plausible options; "correct" is the right one. No extra fields.
 - "matching": include "columnA" (array) and "columnB" (array) — the two lists to match. The 4 "options" are FULL MAPPING SEQUENCES like "1-III, 2-I, 3-IV, 4-II" (Column A is auto-numbered 1,2,3,4; Column B is I,II,III,IV). Exactly one option is the correct complete mapping; the others are wrong mappings. In "explanation", justify EVERY correct pairing individually (e.g. "1-III because …; 2-I because …") with the fact/definition behind each match.
-- "statement": put the individual statements in "columnA" (an array of 2-4 statement strings). "text" is the intro line, e.g. "Consider the following statements:". The 4 "options" are COMBINATIONS like "1 only", "2 only", "1 and 2 only", "Neither 1 nor 2".
+- "statement": REQUIRED — put the individual statements in "columnA" as an array of 2-4 complete statement SENTENCES (e.g. ["The carbon cycle involves photosynthesis and respiration.","Nitrogen fixation is performed only by plants."]). "columnA" must NEVER be empty. "text" is ONLY the intro line ending with a colon (e.g. "Consider the following statements regarding the nitrogen cycle:") — do NOT put the numbered statements inside "text", and do NOT rely on the explanation alone to describe them. The 4 "options" are COMBINATIONS like "1 only", "2 only", "1 and 2 only", "Neither 1 nor 2". In "explanation", evaluate EACH statement (1, 2, …) as true/false with the reason.
 - "pair": include "columnA" (left items) and "columnB" (right items); item i is paired with item i. "text" is ONLY the intro line (e.g. "Consider the following pairs:") — the pairs themselves MUST be the arrays "columnA" and "columnB", each with 3-4 items and the SAME length. NEVER put the pair items inside "text", and NEVER use a different key such as "pairs"/"matches". The 4 "options" state HOW MANY pairs are correctly matched, e.g. "Only one pair", "Only two pairs", "Only three pairs", "All four pairs". In "explanation", go through EACH pair stating whether it is correctly matched and the fact behind it.
 - "pairselect": include "columnA" and "columnB" (candidate pairs), each with 3-4 items of the SAME length; put them ONLY in these arrays (NOT inside "text", NOT under any other key). "text" is only the intro line. The 4 "options" state WHICH pairs are correct, e.g. "1 and 2 only", "2 and 3 only", "1, 3 and 4 only", "All of the above". In "explanation", go through EACH pair stating whether it is correct or wrong and why.
 - "assertion": include "assertion" (Assertion A text) and "reason" (Reason R text); "text" may be empty. The 4 "options" MUST be exactly: "Both A and R are true and R is the correct explanation of A", "Both A and R are true but R is NOT the correct explanation of A", "A is true but R is false", "A is false but R is true". In "explanation", separately evaluate Assertion (A) — state true/false and WHY with supporting facts — then separately evaluate Reason (R) — true/false and WHY — and finally explain the RELATIONSHIP: whether R correctly explains A and why.
@@ -622,10 +647,19 @@ function normalize(list) {
         out.columnB = columnB.map(stripListMarker);
       }
       if (type === "statement") {
-        // Statements live in columnA (models may also send them as "statements").
+        // Statements live in columnA. Models sometimes send them under a
+        // different key ("statements"/"statementList"/"points") or, worse, dump
+        // them into the stem text — recover all of those so the list never
+        // renders empty.
         let stmts = arrStr(q?.columnA);
         if (!stmts.length && Array.isArray(q?.statements)) stmts = arrStr(q.statements);
-        out.columnA = stmts.map(stripListMarker);
+        if (!stmts.length && Array.isArray(q?.statementList)) stmts = arrStr(q.statementList);
+        if (!stmts.length && Array.isArray(q?.points)) stmts = arrStr(q.points);
+        if (stmts.filter((s) => s.trim()).length < 2) {
+          const ex = extractNumbered(q?.text);
+          if (ex) { stmts = ex.statements; if (ex.intro) out.text = ex.intro; }
+        }
+        out.columnA = stmts.map(stripListMarker).filter((s) => s.trim() !== "");
         out.columnB = [];
         if (!out.text) out.text = "Consider the following statements:";
       }
