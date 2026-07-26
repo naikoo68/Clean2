@@ -153,12 +153,19 @@ export default function AdminAiKeys({ clientMode = false }) {
 
   // Set one model on every (editable) key in the current scope (this page / all pages).
   const applyModelToPage = async () => {
+    const model = pageModel.trim();
     const targets = (scopeAll ? keys : pageKeys).filter((k) => !k.readOnly);
-    if (!targets.length || !pageModel) return;
+    if (!targets.length || !model) return;
+    // Remember a hand-typed model so it stays in the list next time.
+    if (!GEMINI_MODELS.some((m) => m.id === model) && !customModels.includes(model)) {
+      const next = [...customModels, model];
+      setCustomModels(next);
+      try { localStorage.setItem("aiKeys.customModels", JSON.stringify(next)); } catch { /* ignore */ }
+    }
     setBulkBusy("pagemodel");
     setError("");
     try {
-      await Promise.allSettled(targets.map((k) => aiService.keys.update(k._id, { models: pageModel })));
+      await Promise.allSettled(targets.map((k) => aiService.keys.update(k._id, { models: model })));
       load();
     } catch (e) {
       setError(e.message);
@@ -566,14 +573,18 @@ export default function AdminAiKeys({ clientMode = false }) {
           <div className="space-y-2 rounded-xl border border-slate-200 bg-slate-50/60 px-3 py-2 text-xs dark:border-slate-700 dark:bg-slate-800/40">
             <div className="flex flex-wrap items-center gap-2">
               <span className="font-semibold text-slate-600 dark:text-slate-300">Set model for {scopeLabel}:</span>
-              <select value={pageModel} onChange={(e) => setPageModel(e.target.value)} className="input !w-auto py-1 text-xs">
+              {/* Editable combobox: pick from the list OR type any model id directly. */}
+              <input
+                list="ai-model-list"
+                value={pageModel}
+                onChange={(e) => setPageModel(e.target.value)}
+                placeholder="Type or pick a model (e.g. gemini-2.5-flash-lite)"
+                className="input !w-auto min-w-[15rem] py-1 text-xs"
+              />
+              <datalist id="ai-model-list">
                 {GEMINI_MODELS.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}
-                {customModels.length > 0 && (
-                  <optgroup label="Custom models">
-                    {customModels.map((m) => <option key={m} value={m}>{m}</option>)}
-                  </optgroup>
-                )}
-              </select>
+                {customModels.map((m) => <option key={m} value={m} />)}
+              </datalist>
               <button onClick={applyModelToPage} disabled={bulkBusy === "pagemodel"} className="btn-primary py-1 text-xs">
                 {bulkBusy === "pagemodel" ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Applying…</> : <><Wand2 className="h-3.5 w-3.5" /> Apply to {scopeLabel}</>}
               </button>
