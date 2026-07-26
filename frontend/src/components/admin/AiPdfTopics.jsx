@@ -51,10 +51,23 @@ export default function AiPdfTopics({ open, onClose, adapter, sel, subjectName =
   const [includeExisting, setIncludeExisting] = useState(true); // also copy questions already in the PDF
 
   const [generating, setGenerating] = useState(false);
+  const [stopping, setStopping] = useState(false); // user asked to cancel the current run
+  const stopRef = useRef(false);                   // set on Cancel — breaks the per-topic loop
+  const jobIdRef = useRef(null);                   // current background job, so Cancel can stop it
   const [results, setResults] = useState([]);     // [{ unit, questions:[], status, count }]
   const [coverage, setCoverage] = useState(null); // { covered:[], missing:[] }
   const [inserting, setInserting] = useState(false);
   const [msg, setMsg] = useState("");
+
+  // Cancel the running generation. Stops the current background job and breaks
+  // the per-topic loop; everything generated so far stays in `results` for
+  // review/Insert (nothing is thrown away).
+  const cancel = async () => {
+    stopRef.current = true;
+    setStopping(true);
+    setMsg("Cancelling… keeping everything generated so far.");
+    try { if (jobIdRef.current) await aiService.cancelJob(jobIdRef.current); } catch { /* best-effort */ }
+  };
 
   const maxPerBatch = status?.maxPerBatch || 50;
 
@@ -62,6 +75,7 @@ export default function AiPdfTopics({ open, onClose, adapter, sel, subjectName =
     if (!open) return;
     setText(""); setPdfName(""); setUnits([]); setResults([]); setCoverage(null); setMsg("");
     setMatrix({ mcq: { Easy: 0, Medium: 20, Hard: 0 } }); setQuizSize(50); setIncludeExisting(true); setGenerating(false); setInserting(false);
+    setStopping(false); stopRef.current = false; jobIdRef.current = null;
     aiService.status(isClient ? apiSource : undefined).then(setStatus).catch(() => setStatus(null));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
@@ -126,8 +140,16 @@ export default function AiPdfTopics({ open, onClose, adapter, sel, subjectName =
   // ---- Generate questions for every unit (sequentially, from the PDF) ----
   const pollJob = async (jobId) => {
     const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+    let cancelSent = false;
     for (let i = 0; i < 240; i++) {
       await sleep(2000);
+      // If the user hit Cancel, tell the server to stop this job once; the
+      // backend then finalizes as "done" with whatever it produced so far,
+      // which this loop returns just like a normal completion.
+      if (stopRef.current && !cancelSent) {
+        cancelSent = true;
+        try { await aiService.cancelJob(jobId); } catch { /* keep polling for the partial */ }
+      }
       let s;
       try { s = await aiService.job(jobId); } catch { continue; }
       if (s.status === "done") return s.questions || [];
@@ -160,7 +182,8 @@ export default function AiPdfTopics({ open, onClose, adapter, sel, subjectName =
     if (avoid && avoid.length) body.avoid = avoid.slice(-300);
     const { jobId } = await aiService.generate(body);
     if (!jobId) throw new Error("Could not start generation.");
-    return await pollJob(jobId);
+    jobIdRef.current = jobId; // so Cancel can stop this job
+    try { return await pollJob(jobId); } finally { jobIdRef.current = null; }
   };
 
   // Extract the EXISTING questions already present in the PDF, then file each
@@ -196,7 +219,7 @@ export default function AiPdfTopics({ open, onClose, adapter, sel, subjectName =
     if (!wantGenerate && !includeExisting) { setMsg("Set question counts above, or tick “Also copy questions already in the PDF”."); return; }
     if (wantGenerate && perTopicTotal > maxPerBatch) { setMsg(`Keep each topic to ${maxPerBatch} questions or fewer.`); return; }
     const MAX_TOPUP_ROUNDS = 4; // extra passes to fill any shortfall per topic
-    setGenerating(true); setMsg(""); setCoverage(null);
+    setGenerating(true); setStopping(false); stopRef.current = false; setMsg(""); setCoverage(null);
     // A topic is auto-CREATED under the subject for each unit as we go, so the
     // topics appear immediately (even before questions are inserted).
     const out = clean.map((unit) => ({ unit, questions: [], status: "pending", count: 0, requested: wantGenerate ? requested : 0, topicId: null }));
@@ -214,6 +237,7 @@ export default function AiPdfTopics({ open, onClose, adapter, sel, subjectName =
       }
 
       for (let i = 0; i < clean.length; i++) {
+        if (stopRef.current) break; // cancelled — keep the topics already built
         const unit = clean[i];
         out[i].status = "working"; setResults(out.slice());
         try {
@@ -235,7 +259,7 @@ export default function AiPdfTopics({ open, onClose, adapter, sel, subjectName =
               out[i].count = collected.length; setResults(out.slice());
             }
             let round = 0;
-            while (collected.length < requested && round < MAX_TOPUP_ROUNDS) {
+            while (collected.length < requested && round < MAX_TOPUP_ROUNDS && !stopRef.current) {
               const shortfall = requested - collected.length;
               setMsg(`Topping up “${unit}” — ${collected.length}/${requested} (round ${round + 1})…`);
               const before = collected.length;
@@ -262,16 +286,24 @@ export default function AiPdfTopics({ open, onClose, adapter, sel, subjectName =
       const madeTopics = out.filter((r) => r.topicId).length;
       const short = out.filter((r) => r.status === "done" && r.requested && r.count < r.requested);
       const copied = extractInfo.extracted ? ` Copied ${extractInfo.extracted} question(s) already in the PDF${extractInfo.unfiled ? ` (${extractInfo.unfiled} didn't match a topic and were skipped)` : ""}.` : "";
-      setMsg(
-        `✓ Created ${madeTopics} topic(s), ${total} question(s) total.${copied}` +
-        (short.length ? ` ${short.length} topic(s) came up short — click “Top up short topics” to try again.` : " Review below, then click Insert.")
-      );
+      if (stopRef.current) {
+        const doneTopics = out.filter((r) => r.count > 0).length;
+        setMsg(`⏹ Cancelled — kept ${total} question(s) across ${doneTopics} topic(s) generated so far.${copied} Review below and click Insert to save them.`);
+      } else {
+        setMsg(
+          `✓ Created ${madeTopics} topic(s), ${total} question(s) total.${copied}` +
+          (short.length ? ` ${short.length} topic(s) came up short — click “Top up short topics” to try again.` : " Review below, then click Insert.")
+        );
+      }
       // Overall coverage against the PDF (areas covered vs not).
       refreshCoverage(out.flatMap((r) => r.questions.map((q) => q.text)).filter(Boolean));
     } catch (err) {
       setMsg(err.message || "Generation failed.");
     } finally {
       setGenerating(false);
+      setStopping(false);
+      stopRef.current = false;
+      jobIdRef.current = null;
     }
   };
 
@@ -280,16 +312,17 @@ export default function AiPdfTopics({ open, onClose, adapter, sel, subjectName =
     const out = results.slice();
     const shortIdx = out.map((r, i) => (r.status === "done" && r.count < (r.requested || 0) ? i : -1)).filter((i) => i >= 0);
     if (!shortIdx.length) { setMsg("All topics are already at their target."); return; }
-    setGenerating(true); setMsg("");
+    setGenerating(true); setStopping(false); stopRef.current = false; setMsg("");
     const MAX_TOPUP_ROUNDS = 4;
     try {
       for (const i of shortIdx) {
+        if (stopRef.current) break; // cancelled — keep what's collected
         const r = out[i];
         const requested = r.requested || 0;
         const collected = r.questions.slice();
         out[i].status = "working"; setResults(out.slice());
         let round = 0;
-        while (collected.length < requested && round < MAX_TOPUP_ROUNDS) {
+        while (collected.length < requested && round < MAX_TOPUP_ROUNDS && !stopRef.current) {
           const shortfall = requested - collected.length;
           setMsg(`Topping up “${r.unit}” — ${collected.length}/${requested} (round ${round + 1})…`);
           const before = collected.length;
@@ -314,6 +347,9 @@ export default function AiPdfTopics({ open, onClose, adapter, sel, subjectName =
       setMsg(err.message || "Top-up failed.");
     } finally {
       setGenerating(false);
+      setStopping(false);
+      stopRef.current = false;
+      jobIdRef.current = null;
     }
   };
 
@@ -494,11 +530,22 @@ export default function AiPdfTopics({ open, onClose, adapter, sel, subjectName =
           </label>
         )}
 
-        {/* Step 4 — generate */}
+        {/* Step 4 — generate (with Cancel that keeps whatever is generated so far) */}
         {units.some((u) => u.name.trim()) && (
-          <button type="button" onClick={generateAll} disabled={generating || inserting || !status?.enabled} className="btn-primary mt-3 w-full">
-            {generating ? <><Loader2 className="h-4 w-4 animate-spin" /> Working…</> : <><Sparkles className="h-4 w-4" /> Create topics &amp; build questions</>}
-          </button>
+          generating ? (
+            <div className="mt-3 flex gap-2">
+              <button type="button" disabled className="btn-primary w-full opacity-80">
+                <Loader2 className="h-4 w-4 animate-spin" /> Working…
+              </button>
+              <button type="button" onClick={cancel} disabled={stopping} className="btn-outline shrink-0 text-rose-600">
+                {stopping ? <><Loader2 className="h-4 w-4 animate-spin" /> Cancelling…</> : <><X className="h-4 w-4" /> Cancel &amp; keep</>}
+              </button>
+            </div>
+          ) : (
+            <button type="button" onClick={generateAll} disabled={inserting || !status?.enabled} className="btn-primary mt-3 w-full">
+              <Sparkles className="h-4 w-4" /> Create topics &amp; build questions
+            </button>
+          )
         )}
 
         {/* Per-topic results */}
