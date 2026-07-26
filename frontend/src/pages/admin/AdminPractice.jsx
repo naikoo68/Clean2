@@ -277,9 +277,79 @@ export default function AdminPractice({ clientMode = false }) {
   // order the scan returned): finish subtopic 1, then subtopic 2, and so on.
   // Everything is inserted into a single new quiz/test as it goes, avoiding
   // duplicates across subtopics and the questions already in the topic.
+  // Core generator for ONE subtopic (index i): produces its type×level mix,
+  // avoiding `avoidBase` stems + duplicates within the batch. Returns
+  // { collected, lastErr }. Shared by the full run and the per-row button.
+  const runSubtopic = async (i, avoidBase) => {
+    const name = scanMissing[i];
+    const chosen = scanTypes[i];
+    const want = (() => {
+      const b = [];
+      if (chosen) {
+        for (const [type, dm] of Object.entries(chosen)) {
+          for (const [difficulty, v] of Object.entries(dm || {})) {
+            const n = parseInt(v, 10) || 0;
+            if (n > 0) b.push({ type, difficulty, count: n });
+          }
+        }
+      }
+      return b.length ? b : [{ type: "mcq", difficulty: "Medium", count: Math.max(0, parseInt(scanCounts[i], 10) || 0) }];
+    })();
+    const collected = [];
+    // Distinct-question key includes type + columnA + assertion so structured
+    // questions (which share an intro "text") don't wrongly collapse to ~0.
+    const keyOf = (q) => `${q?.type || "mcq"}::${String(q?.text || "").trim().toLowerCase()}::${Array.isArray(q?.columnA) ? q.columnA.join("|").toLowerCase() : ""}::${String(q?.assertion || "").toLowerCase()}`;
+    const seen = new Set();
+    let rounds = 0, emptyRounds = 0, lastErr = "";
+    while (rounds < 6 && emptyRounds < 2 && !seqStopRef.current) {
+      const have = {};
+      collected.forEach((q) => { const k = `${q.type || "mcq"}|${q.difficulty || "Medium"}`; have[k] = (have[k] || 0) + 1; });
+      const plan = want
+        .map((b) => ({ type: b.type, difficulty: b.difficulty, count: Math.max(0, b.count - (have[`${b.type}|${b.difficulty}`] || 0)) }))
+        .filter((b) => b.count > 0);
+      if (!plan.length) break;
+      const body = {
+        topic: scanTopic,
+        plan,
+        notes: `Write EVERY question ONLY about the subtopic "${name}" within "${scanTopic}". Do not drift to other subtopics.`,
+        avoid: [...avoidBase, ...collected.map((q) => q.text)].filter(Boolean).slice(-400),
+      };
+      let got = [];
+      try { const { jobId } = await aiService.generate(body); if (jobId) got = await pollGenJob(jobId); else lastErr = "Could not start generation."; }
+      catch (e) { lastErr = e?.message || "Generation failed."; }
+      const before = collected.length;
+      for (const q of got) { const k = keyOf(q); if (String(q?.text || "").trim() && !seen.has(k)) { seen.add(k); collected.push(q); } }
+      if (collected.length <= before) emptyRounds += 1; else emptyRounds = 0;
+      rounds += 1;
+    }
+    return { collected, lastErr };
+  };
+
+  // Generate just ONE subtopic on demand (the per-row "Generate" button).
+  const generateOne = async (i) => {
+    const name = scanMissing[i];
+    const cnt = scanTypes[i] ? mixTotal(scanTypes[i]) : (parseInt(scanCounts[i], 10) || 0);
+    if (cnt <= 0) { setSeqMsg(`Set a question count for “${name}” first.`); return; }
+    seqStopRef.current = false;
+    setSeqProgress((p) => ({ ...p, [name]: { status: "working", count: 0 } }));
+    setSeqMsg("");
+    try {
+      const { collected, lastErr } = await runSubtopic(i, [...scanStems]);
+      if (collected.length) {
+        await saveAiBatch(collected, { newTarget: aiTarget ? undefined : { name: `${scanTopic} — gaps` }, topic: scanTopic, subtopics: name });
+        setSeqProgress((p) => ({ ...p, [name]: { status: "done", count: collected.length } }));
+        setSeqMsg(`Generated ${collected.length} question(s) for “${name}”.`);
+      } else {
+        setSeqProgress((p) => ({ ...p, [name]: { status: "failed", count: 0, err: lastErr || "No questions returned — rate-limited/quota, or mix too large." } }));
+      }
+    } catch (e) {
+      setSeqProgress((p) => ({ ...p, [name]: { status: "failed", count: 0, err: e.message || "Generation failed." } }));
+    }
+  };
+
   const generateSequential = async () => {
     const subs = scanMissing
-      .map((name, i) => ({ name, i, count: Math.max(0, parseInt(scanCounts[i], 10) || 0) }))
+      .map((name, i) => ({ name, i, count: (scanTypes[i] ? mixTotal(scanTypes[i]) : (parseInt(scanCounts[i], 10) || 0)) }))
       .filter((s) => s.count > 0);
     if (!subs.length) { setSeqMsg("Set a question count (e.g. 10) on at least one subtopic first."); return; }
 
@@ -296,51 +366,7 @@ export default function AdminPractice({ clientMode = false }) {
       for (const s of subs) {
         if (seqStopRef.current) break;
         prog[s.name].status = "working"; setSeqProgress({ ...prog });
-        // Desired count PER TYPE for this subtopic. If the user opened the type
-        // editor, use their mix; otherwise the whole total is MCQ.
-        const chosen = scanTypes[s.i];
-        // Desired buckets per type × level. If the editor wasn't used, the whole
-        // total is Medium MCQ.
-        const want = (() => {
-          const b = [];
-          if (chosen) {
-            for (const [type, dm] of Object.entries(chosen)) {
-              for (const [difficulty, v] of Object.entries(dm || {})) {
-                const n = parseInt(v, 10) || 0;
-                if (n > 0) b.push({ type, difficulty, count: n });
-              }
-            }
-          }
-          return b.length ? b : [{ type: "mcq", difficulty: "Medium", count: s.count }];
-        })();
-        const collected = [];
-        // Distinct-question key: structured types (statement/pair/…) often share
-        // the same intro "text", so keying on text alone wrongly collapsed them
-        // to ~0. Include type + columnA + assertion so distinct ones survive.
-        const keyOf = (q) => `${q?.type || "mcq"}::${String(q?.text || "").trim().toLowerCase()}::${Array.isArray(q?.columnA) ? q.columnA.join("|").toLowerCase() : ""}::${String(q?.assertion || "").toLowerCase()}`;
-        const seen = new Set();
-        let rounds = 0, emptyRounds = 0, lastErr = "";
-        while (rounds < 6 && emptyRounds < 2 && !seqStopRef.current) {
-          const have = {};
-          collected.forEach((q) => { const k = `${q.type || "mcq"}|${q.difficulty || "Medium"}`; have[k] = (have[k] || 0) + 1; });
-          const plan = want
-            .map((b) => ({ type: b.type, difficulty: b.difficulty, count: Math.max(0, b.count - (have[`${b.type}|${b.difficulty}`] || 0)) }))
-            .filter((b) => b.count > 0);
-          if (!plan.length) break; // every type×level target met
-          const body = {
-            topic: scanTopic,
-            plan,
-            notes: `Write EVERY question ONLY about the subtopic "${s.name}" within "${scanTopic}". Do not drift to other subtopics.`,
-            avoid: [...doneStems, ...collected.map((q) => q.text)].filter(Boolean).slice(-400),
-          };
-          let got = [];
-          try { const { jobId } = await aiService.generate(body); if (jobId) got = await pollGenJob(jobId); else lastErr = "Could not start generation."; }
-          catch (e) { lastErr = e?.message || "Generation failed."; }
-          const before = collected.length;
-          for (const q of got) { const k = keyOf(q); if (String(q?.text || "").trim() && !seen.has(k)) { seen.add(k); collected.push(q); } }
-          if (collected.length <= before) emptyRounds += 1; else emptyRounds = 0; // give a transient empty round another try
-          rounds += 1;
-        }
+        const { collected, lastErr } = await runSubtopic(s.i, doneStems);
         if (collected.length) {
           try {
             await saveAiBatch(collected, {
@@ -354,7 +380,6 @@ export default function AdminPractice({ clientMode = false }) {
             prog[s.name] = { status: "done", count: collected.length };
           } catch (e) { prog[s.name] = { status: "failed", count: 0, err: e.message || "Insert failed." }; }
         } else {
-          // Surface WHY it produced nothing instead of a silent "✓ 0".
           prog[s.name] = { status: "failed", count: 0, err: lastErr || "No questions returned — keys may be rate-limited/out of quota, or the mix is too large for the free tier." };
         }
         setSeqProgress({ ...prog });
@@ -980,31 +1005,30 @@ export default function AdminPractice({ clientMode = false }) {
                         <div className="flex items-center gap-2">
                           <span className="text-brand-500">•</span>
                           <span className="flex-1 text-sm">{m}</span>
-                          {st ? (
-                            st.status === "working"
-                              ? <span className="inline-flex items-center gap-1 text-xs font-semibold text-brand-600"><Loader2 className="h-3.5 w-3.5 animate-spin" /> generating…</span>
-                              : st.status === "done"
-                                ? <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400">✓ {st.count}</span>
-                                : st.status === "failed"
-                                  ? <span title={st.err} className="cursor-help text-xs font-semibold text-rose-600 dark:text-rose-400">✗ 0</span>
-                                  : <span className="text-xs text-slate-400">queued</span>
+                          {st?.status === "working" ? (
+                            <span className="inline-flex items-center gap-1 text-xs font-semibold text-brand-600"><Loader2 className="h-3.5 w-3.5 animate-spin" /> generating…</span>
                           ) : (
                             <>
+                              {st?.status === "done" && <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400">✓ {st.count}</span>}
+                              {st?.status === "failed" && <span title={st.err} className="cursor-help text-xs font-semibold text-rose-600 dark:text-rose-400">✗ 0</span>}
                               <input
                                 type="number" min="0"
                                 value={scanCounts[i] ?? 10}
                                 onChange={(e) => setScanCounts((c) => ({ ...c, [i]: e.target.value }))}
                                 disabled={seqRunning}
                                 title="Total questions for this subtopic (max for the type mix)"
-                                className="input !w-16 py-1 text-xs"
+                                className="input !w-14 py-1 text-xs"
                               />
                               <button onClick={() => toggleTypeRow(i)} className={`rounded-lg border px-2 py-1 text-xs font-medium ${customized ? "border-brand-500 text-brand-600" : "border-slate-200 text-slate-500 dark:border-slate-700"}`} title="Choose how many of each question type (MCQ, matching, …)">
                                 Types{customized ? ` (${alloc})` : ""}
                               </button>
+                              <button onClick={() => generateOne(i)} disabled={seqRunning} className="inline-flex items-center gap-1 rounded-lg bg-brand-600 px-2 py-1 text-xs font-semibold text-white hover:bg-brand-700 disabled:opacity-50" title="Generate this subtopic now">
+                                <Sparkles className="h-3.5 w-3.5" /> {st?.status === "done" || st?.status === "failed" ? "Again" : "Generate"}
+                              </button>
                             </>
                           )}
                         </div>
-                        {!st && openTypeRows.has(i) && (
+                        {st?.status !== "working" && openTypeRows.has(i) && (
                           <div className="ml-4 mt-1 rounded-lg border border-slate-200 bg-slate-50/60 p-2 dark:border-slate-700 dark:bg-slate-800/40">
                             <div className="mb-1.5 flex items-center justify-between text-xs">
                               <span className="text-slate-500 dark:text-slate-400">Split up to <b>{cap}</b> across types</span>
