@@ -23,6 +23,17 @@ import MigrateQuizModal from "../../components/admin/MigrateQuizModal";
 import MigrateTopicsModal from "../../components/admin/MigrateTopicsModal";
 import { Files, ScanSearch, Loader2, Sparkles, Scissors } from "lucide-react";
 
+// Question types offered per subtopic in the "Missing areas" sequential generator
+// (table excluded to match the usual mix).
+const GEN_TYPES = [
+  { id: "mcq", label: "MCQ" },
+  { id: "matching", label: "Matching" },
+  { id: "statement", label: "Statement" },
+  { id: "pair", label: "Pair" },
+  { id: "pairselect", label: "Pair-select" },
+  { id: "assertion", label: "Assertion" },
+];
+
 // Subject names from a practice item's typed plan (for "add to subject" tools).
 const sectionsOf = (item) => (item?.subjectPlan || []).map((p) => p.subject).filter(Boolean);
 // Normalize a chosen subject: "__unassigned__" means "no subject".
@@ -74,7 +85,9 @@ export default function AdminPractice({ clientMode = false }) {
   const [scanTopic, setScanTopic] = useState("");
   const [scanStems, setScanStems] = useState([]);
   // Per-subtopic sequential generation from the "missing areas" scan.
-  const [scanCounts, setScanCounts] = useState({}); // subtopic index -> desired question count
+  const [scanCounts, setScanCounts] = useState({}); // subtopic index -> total question count
+  const [scanTypes, setScanTypes] = useState({});   // subtopic index -> { type: count } (sum ≤ total)
+  const [openTypeRows, setOpenTypeRows] = useState(() => new Set()); // which rows show the type editor
   const [seqRunning, setSeqRunning] = useState(false);
   const [seqProgress, setSeqProgress] = useState({}); // subtopic name -> { status, count }
   const [seqMsg, setSeqMsg] = useState("");
@@ -198,7 +211,7 @@ export default function AdminPractice({ clientMode = false }) {
   const scanMissingAreas = async () => {
     const topicName = (kind === "quiz" ? topic : subject)?.name || "";
     setScanOpen(true); setScanning(true); setScanErr(""); setScanMissing([]); setScanTopic(topicName); setScanStems([]);
-    setScanCounts({}); setSeqProgress({}); setSeqMsg(""); seqStopRef.current = false;
+    setScanCounts({}); setScanTypes({}); setOpenTypeRows(new Set()); setSeqProgress({}); setSeqMsg(""); seqStopRef.current = false;
     try {
       const lists = await Promise.all((items || []).map((it) => testService.getQuestions(it._id).catch(() => [])));
       const stems = lists.flat().map((q) => q?.text).filter(Boolean);
@@ -259,7 +272,7 @@ export default function AdminPractice({ clientMode = false }) {
   // duplicates across subtopics and the questions already in the topic.
   const generateSequential = async () => {
     const subs = scanMissing
-      .map((name, i) => ({ name, count: Math.max(0, parseInt(scanCounts[i], 10) || 0) }))
+      .map((name, i) => ({ name, i, count: Math.max(0, parseInt(scanCounts[i], 10) || 0) }))
       .filter((s) => s.count > 0);
     if (!subs.length) { setSeqMsg("Set a question count (e.g. 10) on at least one subtopic first."); return; }
 
@@ -276,16 +289,32 @@ export default function AdminPractice({ clientMode = false }) {
       for (const s of subs) {
         if (seqStopRef.current) break;
         prog[s.name].status = "working"; setSeqProgress({ ...prog });
+        // Desired count PER TYPE for this subtopic. If the user opened the type
+        // editor, use their mix; otherwise the whole total is MCQ.
+        const chosen = scanTypes[s.i];
+        const want = (() => {
+          if (chosen) {
+            const w = {};
+            for (const [t, v] of Object.entries(chosen)) { const n = parseInt(v, 10) || 0; if (n > 0) w[t] = n; }
+            if (Object.keys(w).length) return w;
+          }
+          return { mcq: s.count };
+        })();
         const collected = [];
         let rounds = 0;
-        while (collected.length < s.count && rounds < 4 && !seqStopRef.current) {
-          const shortfall = s.count - collected.length;
+        while (rounds < 5 && !seqStopRef.current) {
+          // Re-compute the shortfall per type from what we've collected so far.
+          const have = {};
+          collected.forEach((q) => { const ty = q.type || "mcq"; have[ty] = (have[ty] || 0) + 1; });
+          const plan = Object.entries(want)
+            .map(([type, n]) => ({ type, difficulty: "Medium", count: Math.max(0, n - (have[type] || 0)) }))
+            .filter((b) => b.count > 0);
+          if (!plan.length) break; // every type target met
           const body = {
             topic: scanTopic,
-            count: shortfall,
+            plan,
             notes: `Write EVERY question ONLY about the subtopic "${s.name}" within "${scanTopic}". Do not drift to other subtopics.`,
             avoid: [...doneStems, ...collected.map((q) => q.text)].filter(Boolean).slice(-400),
-            mode: undefined,
           };
           let got = [];
           try { const { jobId } = await aiService.generate(body); if (jobId) got = await pollGenJob(jobId); } catch { /* keep what we have */ }
@@ -323,6 +352,24 @@ export default function AdminPractice({ clientMode = false }) {
   };
 
   const cancelSequential = () => { seqStopRef.current = true; setSeqMsg("Stopping after the current subtopic…"); };
+
+  // Set a type's count for a subtopic, clamped so the type totals never exceed
+  // the subtopic's overall question count (the max the user chose).
+  const setSubType = (i, type, value) => setScanTypes((prev) => {
+    const cap = Math.max(0, parseInt(scanCounts[i], 10) || 0);
+    const row = { ...(prev[i] || {}) };
+    const others = Object.entries(row).reduce((sum, [k, v]) => (k === type ? sum : sum + (parseInt(v, 10) || 0)), 0);
+    let n = parseInt(value, 10); if (!Number.isFinite(n) || n < 0) n = 0;
+    n = Math.min(n, Math.max(0, cap - others));
+    row[type] = n;
+    return { ...prev, [i]: row };
+  });
+  // Open/close a subtopic's type editor. First open seeds it as "all MCQ" up to
+  // the chosen total, so it defaults to (e.g.) 50 MCQ that you then redistribute.
+  const toggleTypeRow = (i) => {
+    setOpenTypeRows((prev) => { const n = new Set(prev); n.has(i) ? n.delete(i) : n.add(i); return n; });
+    setScanTypes((prev) => (prev[i] ? prev : { ...prev, [i]: { mcq: Math.max(0, parseInt(scanCounts[i], 10) || 0) } }));
+  };
 
   // Save an AI-generated / imported batch. When opts.newTarget = { name } is set
   // (the "New quiz/test" option in the modal) we CREATE a new practice item under
@@ -849,25 +896,52 @@ export default function AdminPractice({ clientMode = false }) {
                 <div className="max-h-72 space-y-1 overflow-y-auto rounded-xl border border-slate-200 p-3 dark:border-slate-700">
                   {scanMissing.map((m, i) => {
                     const st = seqProgress[m];
+                    const cap = Math.max(0, parseInt(scanCounts[i], 10) || 0);
+                    const row = scanTypes[i] || {};
+                    const alloc = Object.values(row).reduce((s2, v) => s2 + (parseInt(v, 10) || 0), 0);
+                    const customized = Object.keys(row).length > 0;
                     return (
-                      <div key={i} className="flex items-center gap-2 py-0.5">
-                        <span className="text-brand-500">•</span>
-                        <span className="flex-1 text-sm">{m}</span>
-                        {st ? (
-                          st.status === "working"
-                            ? <span className="inline-flex items-center gap-1 text-xs font-semibold text-brand-600"><Loader2 className="h-3.5 w-3.5 animate-spin" /> generating…</span>
-                            : st.status === "done"
-                              ? <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400">✓ {st.count}</span>
-                              : <span className="text-xs text-slate-400">queued</span>
-                        ) : (
-                          <input
-                            type="number" min="0"
-                            value={scanCounts[i] ?? 10}
-                            onChange={(e) => setScanCounts((c) => ({ ...c, [i]: e.target.value }))}
-                            disabled={seqRunning}
-                            title="Questions to generate for this subtopic"
-                            className="input !w-16 py-1 text-xs"
-                          />
+                      <div key={i} className="border-b border-slate-100 py-1 last:border-0 dark:border-slate-800">
+                        <div className="flex items-center gap-2">
+                          <span className="text-brand-500">•</span>
+                          <span className="flex-1 text-sm">{m}</span>
+                          {st ? (
+                            st.status === "working"
+                              ? <span className="inline-flex items-center gap-1 text-xs font-semibold text-brand-600"><Loader2 className="h-3.5 w-3.5 animate-spin" /> generating…</span>
+                              : st.status === "done"
+                                ? <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400">✓ {st.count}</span>
+                                : <span className="text-xs text-slate-400">queued</span>
+                          ) : (
+                            <>
+                              <input
+                                type="number" min="0"
+                                value={scanCounts[i] ?? 10}
+                                onChange={(e) => setScanCounts((c) => ({ ...c, [i]: e.target.value }))}
+                                disabled={seqRunning}
+                                title="Total questions for this subtopic (max for the type mix)"
+                                className="input !w-16 py-1 text-xs"
+                              />
+                              <button onClick={() => toggleTypeRow(i)} className={`rounded-lg border px-2 py-1 text-xs font-medium ${customized ? "border-brand-500 text-brand-600" : "border-slate-200 text-slate-500 dark:border-slate-700"}`} title="Choose how many of each question type (MCQ, matching, …)">
+                                Types{customized ? ` (${alloc})` : ""}
+                              </button>
+                            </>
+                          )}
+                        </div>
+                        {!st && openTypeRows.has(i) && (
+                          <div className="ml-4 mt-1 rounded-lg border border-slate-200 bg-slate-50/60 p-2 dark:border-slate-700 dark:bg-slate-800/40">
+                            <div className="mb-1.5 flex items-center justify-between text-xs">
+                              <span className="text-slate-500 dark:text-slate-400">Split up to <b>{cap}</b> across types</span>
+                              <span className={alloc > cap ? "font-semibold text-rose-600" : "text-slate-500 dark:text-slate-400"}>allocated {alloc} · {Math.max(0, cap - alloc)} left</span>
+                            </div>
+                            <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3">
+                              {GEN_TYPES.map((t) => (
+                                <label key={t.id} className="flex items-center justify-between gap-1 rounded-md bg-white px-2 py-1 text-xs dark:bg-slate-900/40">
+                                  <span className="text-slate-600 dark:text-slate-300">{t.label}</span>
+                                  <input type="number" min="0" max={cap} value={row[t.id] ?? 0} onChange={(e) => setSubType(i, t.id, e.target.value)} className="input !w-14 py-0.5 text-xs" />
+                                </label>
+                              ))}
+                            </div>
+                          </div>
                         )}
                       </div>
                     );
