@@ -27,6 +27,8 @@ const blank = { label: "", baseUrl: GEMINI_BASE, models: "gemini-2.5-flash", key
 // Bulk-add defaults: one shared preset applied to every pasted key.
 const blankBulk = { label: "", baseUrl: GEMINI_BASE, models: "gemini-2.5-flash", creditLimit: "", keysText: "" };
 
+const PER_PAGE = 10; // keys shown per page; bulk actions are scoped to the current page
+
 // Compact number formatter (1234567 -> "1.23M", 12345 -> "12.3K").
 const fmt = (n) => {
   const v = Number(n) || 0;
@@ -60,6 +62,7 @@ export default function AdminAiKeys({ clientMode = false }) {
   const [keyModels, setKeyModels] = useState({}); // id -> available model ids
   const [modelsBusy, setModelsBusy] = useState({}); // id -> bool
   const [modelSearch, setModelSearch] = useState({}); // id -> filter text
+  const [page, setPage] = useState(0); // current page (0-based)
 
   const load = useCallback(() => {
     setLoading(true);
@@ -77,6 +80,14 @@ export default function AdminAiKeys({ clientMode = false }) {
       .finally(() => setLoading(false));
   }, []);
   useEffect(load, [load]);
+
+  // Pagination — 10 keys per page. The bulk actions (test / auto-pick / enable /
+  // disable) run ONLY over `pageKeys`, so e.g. "Test all" on page 3 tests just
+  // that page's 10 keys and never touches other pages.
+  const pageCount = Math.max(1, Math.ceil(keys.length / PER_PAGE));
+  const curPage = Math.min(page, pageCount - 1);
+  const pageStart = curPage * PER_PAGE;
+  const pageKeys = keys.slice(pageStart, pageStart + PER_PAGE);
 
   const openAdd = () => { setForm(blank); setModal({ mode: "add" }); };
   const openEdit = (k) => {
@@ -249,26 +260,32 @@ export default function AdminAiKeys({ clientMode = false }) {
     }
   };
 
+  // Test only the keys on the CURRENT page (per-key calls, run in parallel).
   const testAll = async () => {
+    const targets = pageKeys.filter((k) => !k.readOnly);
+    if (!targets.length) return;
     setBulkBusy("test");
+    setTesting((t) => { const n = { ...t }; targets.forEach((k) => (n[k._id] = true)); return n; });
     try {
-      await aiService.keys.testAll();
+      await Promise.allSettled(targets.map((k) => aiService.keys.test(k._id)));
       load();
     } catch (e) {
       setError(e.message);
     } finally {
       setBulkBusy("");
+      setTesting((t) => { const n = { ...t }; targets.forEach((k) => (n[k._id] = false)); return n; });
     }
   };
 
-  // Enable or disable ALL keys at once. Disabling asks for confirmation since it
-  // turns off AI generation until at least one key is re-enabled.
+  // Enable or disable every key ON THIS PAGE. Disabling asks for confirmation.
   const setAllEnabled = async (enabled) => {
-    if (!enabled && !window.confirm("Disable ALL keys? The AI Generator won't work until you enable at least one key again.")) return;
+    const targets = pageKeys.filter((k) => !k.readOnly);
+    if (!targets.length) return;
+    if (!enabled && !window.confirm(`Disable the ${targets.length} key(s) on this page? Keys on other pages are unaffected.`)) return;
     setBulkBusy(enabled ? "enableall" : "disableall");
     setError("");
     try {
-      await aiService.keys.setAllEnabled(enabled);
+      await Promise.allSettled(targets.map((k) => aiService.keys.update(k._id, { enabled })));
       load();
     } catch (e) {
       setError(e.message);
@@ -277,15 +294,18 @@ export default function AdminAiKeys({ clientMode = false }) {
     }
   };
 
-  // Auto-detect + set the best working model for EVERY key at once (parallel).
+  // Auto-detect + set the best working model for every key ON THIS PAGE.
   const autoModelAll = async () => {
+    const targets = pageKeys.filter((k) => !k.readOnly);
+    if (!targets.length) return;
     setBulkBusy("automodel");
     setError("");
     try {
-      const res = await aiService.keys.autoModelAll();
+      const results = await Promise.allSettled(targets.map((k) => aiService.keys.autoModel(k._id)));
       load();
-      if (res && typeof res.ok === "number" && res.ok < (res.total || 0)) {
-        setError(`Auto-picked models for ${res.ok} of ${res.total} key(s). ${res.failed} couldn't find a working model (invalid key or out of quota).`);
+      const ok = results.filter((r) => r.status === "fulfilled" && r.value?.ok !== false).length;
+      if (ok < targets.length) {
+        setError(`Auto-picked models for ${ok} of ${targets.length} key(s) on this page. The rest couldn't find a working model (invalid key or out of quota).`);
       }
     } catch (e) {
       setError(e.message);
@@ -325,23 +345,23 @@ export default function AdminAiKeys({ clientMode = false }) {
             <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} /> Refresh
           </button>
           {keys.length > 0 && (
-            <button onClick={testAll} disabled={bulkBusy === "test"} className="btn-outline">
-              {bulkBusy === "test" ? <><Loader2 className="h-4 w-4 animate-spin" /> Testing…</> : <><RefreshCw className="h-4 w-4" /> Test all</>}
+            <button onClick={testAll} disabled={bulkBusy === "test"} className="btn-outline" title={`Test only the ${pageKeys.length} key(s) on this page (page ${curPage + 1})`}>
+              {bulkBusy === "test" ? <><Loader2 className="h-4 w-4 animate-spin" /> Testing…</> : <><RefreshCw className="h-4 w-4" /> Test all (page {curPage + 1})</>}
             </button>
           )}
           {keys.length > 0 && (
-            <button onClick={autoModelAll} disabled={bulkBusy === "automodel"} className="btn-outline" title="Auto-detect & set the best working model for every key at once">
-              {bulkBusy === "automodel" ? <><Loader2 className="h-4 w-4 animate-spin" /> Picking models…</> : <><Wand2 className="h-4 w-4" /> Auto-pick models</>}
+            <button onClick={autoModelAll} disabled={bulkBusy === "automodel"} className="btn-outline" title="Auto-detect & set the best working model for every key ON THIS PAGE">
+              {bulkBusy === "automodel" ? <><Loader2 className="h-4 w-4 animate-spin" /> Picking models…</> : <><Wand2 className="h-4 w-4" /> Auto-pick (page {curPage + 1})</>}
             </button>
           )}
           {keys.length > 0 && (
-            <button onClick={() => setAllEnabled(true)} disabled={bulkBusy === "enableall"} className="btn-outline" title="Enable every key">
-              {bulkBusy === "enableall" ? <><Loader2 className="h-4 w-4 animate-spin" /> Enabling…</> : <><Power className="h-4 w-4" /> Enable all</>}
+            <button onClick={() => setAllEnabled(true)} disabled={bulkBusy === "enableall"} className="btn-outline" title="Enable every key on this page">
+              {bulkBusy === "enableall" ? <><Loader2 className="h-4 w-4 animate-spin" /> Enabling…</> : <><Power className="h-4 w-4" /> Enable page</>}
             </button>
           )}
           {keys.length > 0 && (
-            <button onClick={() => setAllEnabled(false)} disabled={bulkBusy === "disableall"} className="btn-outline !text-rose-600 dark:!text-rose-400" title="Disable every key (then enable just the one you want)">
-              {bulkBusy === "disableall" ? <><Loader2 className="h-4 w-4 animate-spin" /> Disabling…</> : <><PowerOff className="h-4 w-4" /> Disable all</>}
+            <button onClick={() => setAllEnabled(false)} disabled={bulkBusy === "disableall"} className="btn-outline !text-rose-600 dark:!text-rose-400" title="Disable every key on this page (other pages unaffected)">
+              {bulkBusy === "disableall" ? <><Loader2 className="h-4 w-4 animate-spin" /> Disabling…</> : <><PowerOff className="h-4 w-4" /> Disable page</>}
             </button>
           )}
           {hasEnvKeys && (
@@ -400,7 +420,11 @@ export default function AdminAiKeys({ clientMode = false }) {
         <EmptyState message="No API keys yet. Click “Add API Key” to add your first one." />
       ) : (
         <div className="space-y-3">
-          {keys.map((k) => (
+          <div className="flex items-center justify-between px-1 text-xs text-slate-500 dark:text-slate-400">
+            <span>Showing <b>{pageStart + 1}–{Math.min(pageStart + PER_PAGE, keys.length)}</b> of <b>{keys.length}</b> key(s) · page {curPage + 1} of {pageCount}</span>
+            <span className="text-slate-400">Bulk actions above apply to this page only</span>
+          </div>
+          {pageKeys.map((k) => (
             <div key={k._id} className="card flex flex-wrap items-center justify-between gap-3 p-4">
               <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-2">
@@ -497,6 +521,22 @@ export default function AdminAiKeys({ clientMode = false }) {
               )}
             </div>
           ))}
+
+          {pageCount > 1 && (
+            <div className="flex flex-wrap items-center justify-center gap-1.5 pt-1">
+              <button onClick={() => setPage(0)} disabled={curPage === 0} className="btn-outline px-2 py-1 text-xs disabled:opacity-40">« First</button>
+              <button onClick={() => setPage((p) => Math.max(0, Math.min(p, pageCount - 1) - 1))} disabled={curPage === 0} className="btn-outline px-2 py-1 text-xs disabled:opacity-40">‹ Prev</button>
+              {Array.from({ length: pageCount }, (_, i) => i)
+                .filter((i) => i === 0 || i === pageCount - 1 || Math.abs(i - curPage) <= 2)
+                .reduce((acc, i) => { if (acc.length && i - acc[acc.length - 1] > 1) acc.push("…"); acc.push(i); return acc; }, [])
+                .map((i, idx) => (i === "…"
+                  ? <span key={`gap${idx}`} className="px-1 text-slate-400">…</span>
+                  : <button key={i} onClick={() => setPage(i)} className={`min-w-[2rem] rounded-lg border px-2 py-1 text-xs font-semibold ${i === curPage ? "border-brand-500 bg-brand-50 text-brand-700 dark:bg-brand-900/30 dark:text-brand-300" : "border-slate-200 text-slate-600 hover:border-brand-500 dark:border-slate-700 dark:text-slate-300"}`}>{i + 1}</button>
+                ))}
+              <button onClick={() => setPage((p) => Math.min(pageCount - 1, Math.min(p, pageCount - 1) + 1))} disabled={curPage >= pageCount - 1} className="btn-outline px-2 py-1 text-xs disabled:opacity-40">Next ›</button>
+              <button onClick={() => setPage(pageCount - 1)} disabled={curPage >= pageCount - 1} className="btn-outline px-2 py-1 text-xs disabled:opacity-40">Last »</button>
+            </div>
+          )}
         </div>
       )}
 
