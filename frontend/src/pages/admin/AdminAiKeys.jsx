@@ -81,6 +81,7 @@ export default function AdminAiKeys({ clientMode = false }) {
   const [selected, setSelected] = useState(() => new Set()); // ids ticked for bulk delete
   const [bulkDeleting, setBulkDeleting] = useState(false);
   const [pageModel, setPageModel] = useState(GEMINI_MODELS[0].id); // model to apply to the current page
+  const [scope, setScope] = useState("page"); // "page" | "all" — what bulk actions target
   // Custom model ids the admin adds by hand — persisted in the browser so they
   // stay in the dropdown across reloads.
   const [customModels, setCustomModels] = useState(() => {
@@ -112,6 +113,11 @@ export default function AdminAiKeys({ clientMode = false }) {
   const curPage = Math.min(page, pageCount - 1);
   const pageStart = curPage * PER_PAGE;
   const pageKeys = keys.slice(pageStart, pageStart + PER_PAGE);
+
+  // Scope for the bulk actions: just the current page, or every key on all pages
+  // (so all keys can be tested / model-set / enabled together and work as one pool).
+  const scopeAll = scope === "all";
+  const scopeLabel = scopeAll ? "all pages" : `page ${curPage + 1}`;
 
   // ---- Multi-select delete (tick keys, delete them together) ----------------
   const selectableOnPage = pageKeys.filter((k) => !k.readOnly && !k.source);
@@ -145,9 +151,9 @@ export default function AdminAiKeys({ clientMode = false }) {
     if (pageModel === id) setPageModel(GEMINI_MODELS[0].id);
   };
 
-  // Set one Gemini model on every (editable) key on the CURRENT page.
+  // Set one model on every (editable) key in the current scope (this page / all pages).
   const applyModelToPage = async () => {
-    const targets = pageKeys.filter((k) => !k.readOnly);
+    const targets = (scopeAll ? keys : pageKeys).filter((k) => !k.readOnly);
     if (!targets.length || !pageModel) return;
     setBulkBusy("pagemodel");
     setError("");
@@ -349,8 +355,13 @@ export default function AdminAiKeys({ clientMode = false }) {
     }
   };
 
-  // Test only the keys on the CURRENT page (per-key calls, run in parallel).
+  // Test keys — the whole pool ("all pages") or just this page.
   const testAll = async () => {
+    if (scopeAll) {
+      setBulkBusy("test"); setError("");
+      try { await aiService.keys.testAll(); load(); } catch (e) { setError(e.message); } finally { setBulkBusy(""); }
+      return;
+    }
     const targets = pageKeys.filter((k) => !k.readOnly);
     if (!targets.length) return;
     setBulkBusy("test");
@@ -366,8 +377,14 @@ export default function AdminAiKeys({ clientMode = false }) {
     }
   };
 
-  // Enable or disable every key ON THIS PAGE. Disabling asks for confirmation.
+  // Enable / disable keys — the whole pool ("all pages") or just this page.
   const setAllEnabled = async (enabled) => {
+    if (scopeAll) {
+      if (!enabled && !window.confirm("Disable ALL keys on every page? The AI Generator won't work until you enable at least one again.")) return;
+      setBulkBusy(enabled ? "enableall" : "disableall"); setError("");
+      try { await aiService.keys.setAllEnabled(enabled); load(); } catch (e) { setError(e.message); } finally { setBulkBusy(""); }
+      return;
+    }
     const targets = pageKeys.filter((k) => !k.readOnly);
     if (!targets.length) return;
     if (!enabled && !window.confirm(`Disable the ${targets.length} key(s) on this page? Keys on other pages are unaffected.`)) return;
@@ -383,8 +400,19 @@ export default function AdminAiKeys({ clientMode = false }) {
     }
   };
 
-  // Auto-detect + set the best working model for every key ON THIS PAGE.
+  // Auto-detect the best working model — the whole pool ("all pages") or this page.
   const autoModelAll = async () => {
+    if (scopeAll) {
+      setBulkBusy("automodel"); setError("");
+      try {
+        const res = await aiService.keys.autoModelAll();
+        load();
+        if (res && typeof res.ok === "number" && res.ok < (res.total || 0)) {
+          setError(`Auto-picked models for ${res.ok} of ${res.total} key(s). ${res.failed} couldn't find a working model (invalid key or out of quota).`);
+        }
+      } catch (e) { setError(e.message); } finally { setBulkBusy(""); }
+      return;
+    }
     const targets = pageKeys.filter((k) => !k.readOnly);
     if (!targets.length) return;
     setBulkBusy("automodel");
@@ -433,24 +461,30 @@ export default function AdminAiKeys({ clientMode = false }) {
           <button onClick={load} disabled={loading} className="btn-outline" title="Refresh usage & totals">
             <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} /> Refresh
           </button>
+          {keys.length > PER_PAGE && (
+            <div className="inline-flex items-center gap-0.5 rounded-lg border border-slate-200 p-0.5 dark:border-slate-700" title="Choose whether the bulk actions affect only this page or every key on all pages">
+              <button onClick={() => setScope("page")} className={`rounded-md px-2.5 py-1 text-xs font-semibold ${!scopeAll ? "bg-brand-600 text-white" : "text-slate-600 dark:text-slate-300"}`}>This page</button>
+              <button onClick={() => setScope("all")} className={`rounded-md px-2.5 py-1 text-xs font-semibold ${scopeAll ? "bg-brand-600 text-white" : "text-slate-600 dark:text-slate-300"}`}>All pages</button>
+            </div>
+          )}
           {keys.length > 0 && (
-            <button onClick={testAll} disabled={bulkBusy === "test"} className="btn-outline" title={`Test only the ${pageKeys.length} key(s) on this page (page ${curPage + 1})`}>
-              {bulkBusy === "test" ? <><Loader2 className="h-4 w-4 animate-spin" /> Testing…</> : <><RefreshCw className="h-4 w-4" /> Test all (page {curPage + 1})</>}
+            <button onClick={testAll} disabled={bulkBusy === "test"} className="btn-outline" title={`Test the keys on ${scopeLabel}`}>
+              {bulkBusy === "test" ? <><Loader2 className="h-4 w-4 animate-spin" /> Testing…</> : <><RefreshCw className="h-4 w-4" /> Test ({scopeLabel})</>}
             </button>
           )}
           {keys.length > 0 && (
-            <button onClick={autoModelAll} disabled={bulkBusy === "automodel"} className="btn-outline" title="Auto-detect & set the best working model for every key ON THIS PAGE">
-              {bulkBusy === "automodel" ? <><Loader2 className="h-4 w-4 animate-spin" /> Picking models…</> : <><Wand2 className="h-4 w-4" /> Auto-pick (page {curPage + 1})</>}
+            <button onClick={autoModelAll} disabled={bulkBusy === "automodel"} className="btn-outline" title={`Auto-detect & set the best working model for the keys on ${scopeLabel}`}>
+              {bulkBusy === "automodel" ? <><Loader2 className="h-4 w-4 animate-spin" /> Picking models…</> : <><Wand2 className="h-4 w-4" /> Auto-pick ({scopeLabel})</>}
             </button>
           )}
           {keys.length > 0 && (
-            <button onClick={() => setAllEnabled(true)} disabled={bulkBusy === "enableall"} className="btn-outline" title="Enable every key on this page">
-              {bulkBusy === "enableall" ? <><Loader2 className="h-4 w-4 animate-spin" /> Enabling…</> : <><Power className="h-4 w-4" /> Enable page</>}
+            <button onClick={() => setAllEnabled(true)} disabled={bulkBusy === "enableall"} className="btn-outline" title={`Enable the keys on ${scopeLabel}`}>
+              {bulkBusy === "enableall" ? <><Loader2 className="h-4 w-4 animate-spin" /> Enabling…</> : <><Power className="h-4 w-4" /> Enable ({scopeLabel})</>}
             </button>
           )}
           {keys.length > 0 && (
-            <button onClick={() => setAllEnabled(false)} disabled={bulkBusy === "disableall"} className="btn-outline !text-rose-600 dark:!text-rose-400" title="Disable every key on this page (other pages unaffected)">
-              {bulkBusy === "disableall" ? <><Loader2 className="h-4 w-4 animate-spin" /> Disabling…</> : <><PowerOff className="h-4 w-4" /> Disable page</>}
+            <button onClick={() => setAllEnabled(false)} disabled={bulkBusy === "disableall"} className="btn-outline !text-rose-600 dark:!text-rose-400" title={`Disable the keys on ${scopeLabel}`}>
+              {bulkBusy === "disableall" ? <><Loader2 className="h-4 w-4 animate-spin" /> Disabling…</> : <><PowerOff className="h-4 w-4" /> Disable ({scopeLabel})</>}
             </button>
           )}
           {hasEnvKeys && (
@@ -531,7 +565,7 @@ export default function AdminAiKeys({ clientMode = false }) {
           {/* Per-page model setter — apply a built-in OR custom model to every key on this page. */}
           <div className="space-y-2 rounded-xl border border-slate-200 bg-slate-50/60 px-3 py-2 text-xs dark:border-slate-700 dark:bg-slate-800/40">
             <div className="flex flex-wrap items-center gap-2">
-              <span className="font-semibold text-slate-600 dark:text-slate-300">Set model for page {curPage + 1}:</span>
+              <span className="font-semibold text-slate-600 dark:text-slate-300">Set model for {scopeLabel}:</span>
               <select value={pageModel} onChange={(e) => setPageModel(e.target.value)} className="input !w-auto py-1 text-xs">
                 {GEMINI_MODELS.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}
                 {customModels.length > 0 && (
@@ -540,10 +574,10 @@ export default function AdminAiKeys({ clientMode = false }) {
                   </optgroup>
                 )}
               </select>
-              <button onClick={applyModelToPage} disabled={bulkBusy === "pagemodel" || pageKeys.every((k) => k.readOnly)} className="btn-primary py-1 text-xs">
-                {bulkBusy === "pagemodel" ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Applying…</> : <><Wand2 className="h-3.5 w-3.5" /> Apply to this page</>}
+              <button onClick={applyModelToPage} disabled={bulkBusy === "pagemodel"} className="btn-primary py-1 text-xs">
+                {bulkBusy === "pagemodel" ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Applying…</> : <><Wand2 className="h-3.5 w-3.5" /> Apply to {scopeLabel}</>}
               </button>
-              <span className="text-slate-400">Applies to the {pageKeys.filter((k) => !k.readOnly).length} key(s) on this page only.</span>
+              <span className="text-slate-400">Applies to the {(scopeAll ? keys : pageKeys).filter((k) => !k.readOnly).length} key(s) on {scopeLabel}.</span>
             </div>
             <div className="flex flex-wrap items-center gap-2">
               <span className="text-slate-500 dark:text-slate-400">Add a custom model:</span>
