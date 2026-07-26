@@ -32,6 +32,18 @@ const blankBulk = { label: "", baseUrl: GEMINI_BASE, models: "gemini-2.5-flash-l
 
 const PER_PAGE = 10; // keys shown per page; bulk actions are scoped to the current page
 
+// Built-in Gemini models offered by the per-page "Set model" control. Free-tier
+// limits are noted so you can trade quota vs quality. Ordered best-free-tier first.
+const GEMINI_MODELS = [
+  { id: "gemini-2.5-flash-lite", label: "gemini-2.5-flash-lite — free 15 RPM · 1,000/day (best quota)" },
+  { id: "gemini-2.5-flash", label: "gemini-2.5-flash — free 10 RPM · 250/day" },
+  { id: "gemini-2.5-pro", label: "gemini-2.5-pro — free 5 RPM · 100/day" },
+  { id: "gemini-2.0-flash", label: "gemini-2.0-flash" },
+  { id: "gemini-2.0-flash-lite", label: "gemini-2.0-flash-lite" },
+  { id: "gemini-flash-latest", label: "gemini-flash-latest (alias)" },
+  { id: "gemini-flash-lite-latest", label: "gemini-flash-lite-latest (alias)" },
+];
+
 // Compact number formatter (1234567 -> "1.23M", 12345 -> "12.3K").
 const fmt = (n) => {
   const v = Number(n) || 0;
@@ -68,6 +80,7 @@ export default function AdminAiKeys({ clientMode = false }) {
   const [page, setPage] = useState(0); // current page (0-based)
   const [selected, setSelected] = useState(() => new Set()); // ids ticked for bulk delete
   const [bulkDeleting, setBulkDeleting] = useState(false);
+  const [pageModel, setPageModel] = useState(GEMINI_MODELS[0].id); // model to apply to the current page
 
   const load = useCallback(() => {
     setLoading(true);
@@ -105,6 +118,23 @@ export default function AdminAiKeys({ clientMode = false }) {
     return n;
   });
   const clearSelection = () => setSelected(new Set());
+
+  // Set one Gemini model on every (editable) key on the CURRENT page.
+  const applyModelToPage = async () => {
+    const targets = pageKeys.filter((k) => !k.readOnly);
+    if (!targets.length || !pageModel) return;
+    setBulkBusy("pagemodel");
+    setError("");
+    try {
+      await Promise.allSettled(targets.map((k) => aiService.keys.update(k._id, { models: pageModel })));
+      load();
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setBulkBusy("");
+    }
+  };
+
   const deleteSelected = async () => {
     const ids = [...selected];
     if (!ids.length) return;
@@ -470,6 +500,18 @@ export default function AdminAiKeys({ clientMode = false }) {
             ) : (
               <span className="text-slate-400">Bulk actions above apply to this page only</span>
             )}
+          </div>
+
+          {/* Per-page model setter — apply one built-in Gemini model to every key on this page. */}
+          <div className="flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-slate-50/60 px-3 py-2 text-xs dark:border-slate-700 dark:bg-slate-800/40">
+            <span className="font-semibold text-slate-600 dark:text-slate-300">Set model for page {curPage + 1}:</span>
+            <select value={pageModel} onChange={(e) => setPageModel(e.target.value)} className="input !w-auto py-1 text-xs">
+              {GEMINI_MODELS.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}
+            </select>
+            <button onClick={applyModelToPage} disabled={bulkBusy === "pagemodel" || pageKeys.every((k) => k.readOnly)} className="btn-primary py-1 text-xs">
+              {bulkBusy === "pagemodel" ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Applying…</> : <><Wand2 className="h-3.5 w-3.5" /> Apply to this page</>}
+            </button>
+            <span className="text-slate-400">Sets this model on the {pageKeys.filter((k) => !k.readOnly).length} key(s) on this page only.</span>
           </div>
           {pageKeys.map((k) => (
             <div key={k._id} className={`card flex flex-wrap items-center justify-between gap-3 p-4 ${selected.has(k._id) ? "ring-2 ring-rose-400 dark:ring-rose-500/60" : ""}`}>
