@@ -66,6 +66,8 @@ export default function AdminAiKeys({ clientMode = false }) {
   const [modelsBusy, setModelsBusy] = useState({}); // id -> bool
   const [modelSearch, setModelSearch] = useState({}); // id -> filter text
   const [page, setPage] = useState(0); // current page (0-based)
+  const [selected, setSelected] = useState(() => new Set()); // ids ticked for bulk delete
+  const [bulkDeleting, setBulkDeleting] = useState(false);
 
   const load = useCallback(() => {
     setLoading(true);
@@ -91,6 +93,34 @@ export default function AdminAiKeys({ clientMode = false }) {
   const curPage = Math.min(page, pageCount - 1);
   const pageStart = curPage * PER_PAGE;
   const pageKeys = keys.slice(pageStart, pageStart + PER_PAGE);
+
+  // ---- Multi-select delete (tick keys, delete them together) ----------------
+  const selectableOnPage = pageKeys.filter((k) => !k.readOnly && !k.source);
+  const allPageSelected = selectableOnPage.length > 0 && selectableOnPage.every((k) => selected.has(k._id));
+  const toggleSelect = (id) => setSelected((s) => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  const toggleSelectAllPage = () => setSelected((s) => {
+    const n = new Set(s);
+    if (allPageSelected) selectableOnPage.forEach((k) => n.delete(k._id));
+    else selectableOnPage.forEach((k) => n.add(k._id));
+    return n;
+  });
+  const clearSelection = () => setSelected(new Set());
+  const deleteSelected = async () => {
+    const ids = [...selected];
+    if (!ids.length) return;
+    if (!window.confirm(`Delete ${ids.length} selected key(s)? This cannot be undone.`)) return;
+    setBulkDeleting(true);
+    setError("");
+    try {
+      await Promise.allSettled(ids.map((id) => aiService.keys.remove(id)));
+      clearSelection();
+      load();
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setBulkDeleting(false);
+    }
+  };
 
   const openAdd = () => { setForm(blank); setModal({ mode: "add" }); };
   const openEdit = (k) => {
@@ -423,12 +453,35 @@ export default function AdminAiKeys({ clientMode = false }) {
         <EmptyState message="No API keys yet. Click “Add API Key” to add your first one." />
       ) : (
         <div className="space-y-3">
-          <div className="flex items-center justify-between px-1 text-xs text-slate-500 dark:text-slate-400">
-            <span>Showing <b>{pageStart + 1}–{Math.min(pageStart + PER_PAGE, keys.length)}</b> of <b>{keys.length}</b> key(s) · page {curPage + 1} of {pageCount}</span>
-            <span className="text-slate-400">Bulk actions above apply to this page only</span>
+          <div className="flex flex-wrap items-center justify-between gap-2 px-1 text-xs text-slate-500 dark:text-slate-400">
+            <label className="flex items-center gap-2 font-medium">
+              <input type="checkbox" className="h-4 w-4 accent-brand-600" checked={allPageSelected} onChange={toggleSelectAllPage} disabled={selectableOnPage.length === 0} />
+              Select all on this page
+              <span className="text-slate-400">· showing <b>{pageStart + 1}–{Math.min(pageStart + PER_PAGE, keys.length)}</b> of <b>{keys.length}</b> · page {curPage + 1}/{pageCount}</span>
+            </label>
+            {selected.size > 0 ? (
+              <span className="flex items-center gap-2">
+                <span className="font-semibold text-slate-600 dark:text-slate-300">{selected.size} selected</span>
+                <button onClick={deleteSelected} disabled={bulkDeleting} className="inline-flex items-center gap-1 rounded-lg bg-rose-600 px-2.5 py-1 font-semibold text-white hover:bg-rose-700 disabled:opacity-50">
+                  {bulkDeleting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />} Delete selected
+                </button>
+                <button onClick={clearSelection} disabled={bulkDeleting} className="rounded-lg border border-slate-200 px-2 py-1 font-medium hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800">Clear</button>
+              </span>
+            ) : (
+              <span className="text-slate-400">Bulk actions above apply to this page only</span>
+            )}
           </div>
           {pageKeys.map((k) => (
-            <div key={k._id} className="card flex flex-wrap items-center justify-between gap-3 p-4">
+            <div key={k._id} className={`card flex flex-wrap items-center justify-between gap-3 p-4 ${selected.has(k._id) ? "ring-2 ring-rose-400 dark:ring-rose-500/60" : ""}`}>
+              {!k.readOnly && !k.source && (
+                <input
+                  type="checkbox"
+                  className="h-4 w-4 flex-shrink-0 accent-rose-600"
+                  checked={selected.has(k._id)}
+                  onChange={() => toggleSelect(k._id)}
+                  title="Select for bulk delete"
+                />
+              )}
               <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-2">
                   <p className="font-bold">{k.label || "Untitled key"}</p>
