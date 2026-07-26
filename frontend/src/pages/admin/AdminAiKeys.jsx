@@ -81,6 +81,12 @@ export default function AdminAiKeys({ clientMode = false }) {
   const [selected, setSelected] = useState(() => new Set()); // ids ticked for bulk delete
   const [bulkDeleting, setBulkDeleting] = useState(false);
   const [pageModel, setPageModel] = useState(GEMINI_MODELS[0].id); // model to apply to the current page
+  // Custom model ids the admin adds by hand — persisted in the browser so they
+  // stay in the dropdown across reloads.
+  const [customModels, setCustomModels] = useState(() => {
+    try { return JSON.parse(localStorage.getItem("aiKeys.customModels") || "[]").filter(Boolean); } catch { return []; }
+  });
+  const [newModel, setNewModel] = useState("");
 
   const load = useCallback(() => {
     setLoading(true);
@@ -118,6 +124,26 @@ export default function AdminAiKeys({ clientMode = false }) {
     return n;
   });
   const clearSelection = () => setSelected(new Set());
+
+  // Add a hand-typed model id to the dropdown and persist it (browser-local).
+  const addCustomModel = () => {
+    const id = newModel.trim();
+    if (!id) return;
+    const known = GEMINI_MODELS.some((m) => m.id === id) || customModels.includes(id);
+    if (!known) {
+      const next = [...customModels, id];
+      setCustomModels(next);
+      try { localStorage.setItem("aiKeys.customModels", JSON.stringify(next)); } catch { /* ignore */ }
+    }
+    setPageModel(id);
+    setNewModel("");
+  };
+  const removeCustomModel = (id) => {
+    const next = customModels.filter((m) => m !== id);
+    setCustomModels(next);
+    try { localStorage.setItem("aiKeys.customModels", JSON.stringify(next)); } catch { /* ignore */ }
+    if (pageModel === id) setPageModel(GEMINI_MODELS[0].id);
+  };
 
   // Set one Gemini model on every (editable) key on the CURRENT page.
   const applyModelToPage = async () => {
@@ -502,16 +528,40 @@ export default function AdminAiKeys({ clientMode = false }) {
             )}
           </div>
 
-          {/* Per-page model setter — apply one built-in Gemini model to every key on this page. */}
-          <div className="flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-slate-50/60 px-3 py-2 text-xs dark:border-slate-700 dark:bg-slate-800/40">
-            <span className="font-semibold text-slate-600 dark:text-slate-300">Set model for page {curPage + 1}:</span>
-            <select value={pageModel} onChange={(e) => setPageModel(e.target.value)} className="input !w-auto py-1 text-xs">
-              {GEMINI_MODELS.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}
-            </select>
-            <button onClick={applyModelToPage} disabled={bulkBusy === "pagemodel" || pageKeys.every((k) => k.readOnly)} className="btn-primary py-1 text-xs">
-              {bulkBusy === "pagemodel" ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Applying…</> : <><Wand2 className="h-3.5 w-3.5" /> Apply to this page</>}
-            </button>
-            <span className="text-slate-400">Sets this model on the {pageKeys.filter((k) => !k.readOnly).length} key(s) on this page only.</span>
+          {/* Per-page model setter — apply a built-in OR custom model to every key on this page. */}
+          <div className="space-y-2 rounded-xl border border-slate-200 bg-slate-50/60 px-3 py-2 text-xs dark:border-slate-700 dark:bg-slate-800/40">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="font-semibold text-slate-600 dark:text-slate-300">Set model for page {curPage + 1}:</span>
+              <select value={pageModel} onChange={(e) => setPageModel(e.target.value)} className="input !w-auto py-1 text-xs">
+                {GEMINI_MODELS.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}
+                {customModels.length > 0 && (
+                  <optgroup label="Custom models">
+                    {customModels.map((m) => <option key={m} value={m}>{m}</option>)}
+                  </optgroup>
+                )}
+              </select>
+              <button onClick={applyModelToPage} disabled={bulkBusy === "pagemodel" || pageKeys.every((k) => k.readOnly)} className="btn-primary py-1 text-xs">
+                {bulkBusy === "pagemodel" ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Applying…</> : <><Wand2 className="h-3.5 w-3.5" /> Apply to this page</>}
+              </button>
+              <span className="text-slate-400">Applies to the {pageKeys.filter((k) => !k.readOnly).length} key(s) on this page only.</span>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-slate-500 dark:text-slate-400">Add a custom model:</span>
+              <input
+                value={newModel}
+                onChange={(e) => setNewModel(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addCustomModel(); } }}
+                placeholder="e.g. gemini-3-flash-preview"
+                className="input !w-auto py-1 text-xs"
+              />
+              <button onClick={addCustomModel} disabled={!newModel.trim()} className="btn-outline py-1 text-xs"><Plus className="h-3.5 w-3.5" /> Add &amp; save</button>
+              {customModels.map((m) => (
+                <span key={m} className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 font-medium text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+                  {m}
+                  <button onClick={() => removeCustomModel(m)} title="Remove this saved model" className="text-slate-400 hover:text-rose-600"><X className="h-3 w-3" /></button>
+                </span>
+              ))}
+            </div>
           </div>
           {pageKeys.map((k) => (
             <div key={k._id} className={`card flex flex-wrap items-center justify-between gap-3 p-4 ${selected.has(k._id) ? "ring-2 ring-rose-400 dark:ring-rose-500/60" : ""}`}>
