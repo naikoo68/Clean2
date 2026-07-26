@@ -3543,6 +3543,26 @@ function pickPreferredModel(models) {
 }
 
 // Live-test one key doc: updates lastStatus and returns whether it worked.
+// Turn a raw provider error body into a SHORT, actionable message so a "Not
+// working" key tells the admin exactly what to fix (instead of dumping raw JSON
+// like `[{ "error": ... }]`). Handles the common Gemini 403 causes.
+function explainKeyError(status, detail) {
+  let msg = "";
+  try {
+    const j = JSON.parse(detail);
+    const e = Array.isArray(j) ? j[0]?.error : (j?.error || j);
+    msg = e?.message || e?.status || "";
+  } catch { msg = String(detail || "").replace(/\s+/g, " ").trim(); }
+  const low = msg.toLowerCase();
+  if (status === 403 && /(has not been used|is disabled|service_disabled|enable it|not enabled|activate)/.test(low))
+    return "Generative Language API is disabled for this key's Google Cloud project. Enable it in the Cloud console — or simplest, recreate the key at aistudio.google.com/apikey (that enables the API automatically).";
+  if ((status === 403 || status === 400) && /(api key not valid|api_key_invalid|invalid api key|permission denied|caller does not have permission)/.test(low))
+    return "This API key is invalid or restricted. Recreate it at aistudio.google.com/apikey with no API/website (referrer) restrictions.";
+  if (status === 403)
+    return `Access denied (403)${msg ? `: ${msg.slice(0, 110)}` : ""}. The key is likely restricted or its API isn't enabled — recreate it at aistudio.google.com/apikey.`;
+  return `HTTP ${status || 0}: ${(msg || String(detail || "")).slice(0, 150)}`;
+}
+
 // AUTO-REPAIR: if the configured model is invalid (404), find a valid model for
 // this key and switch to it automatically, so a valid key never stays "broken".
 async function runKeyTest(doc) {
@@ -3571,7 +3591,7 @@ async function runKeyTest(doc) {
     doc.lastError = "Valid key, but it was rate-limited / out of quota during the test. Per-minute limits clear in about a minute; free daily quota resets the next day.";
   } else {
     doc.lastStatus = "error";
-    doc.lastError = `HTTP ${r.status || 0}: ${(r.detail || "").slice(0, 150)}`;
+    doc.lastError = explainKeyError(r.status, r.detail);
   }
   doc.lastCheckedAt = new Date();
   await doc.save();
