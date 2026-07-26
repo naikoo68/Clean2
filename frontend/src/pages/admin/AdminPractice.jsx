@@ -314,9 +314,13 @@ export default function AdminPractice({ clientMode = false }) {
           return b.length ? b : [{ type: "mcq", difficulty: "Medium", count: s.count }];
         })();
         const collected = [];
-        let rounds = 0;
-        while (rounds < 5 && !seqStopRef.current) {
-          // Re-compute the shortfall per type×level from what we've collected.
+        // Distinct-question key: structured types (statement/pair/…) often share
+        // the same intro "text", so keying on text alone wrongly collapsed them
+        // to ~0. Include type + columnA + assertion so distinct ones survive.
+        const keyOf = (q) => `${q?.type || "mcq"}::${String(q?.text || "").trim().toLowerCase()}::${Array.isArray(q?.columnA) ? q.columnA.join("|").toLowerCase() : ""}::${String(q?.assertion || "").toLowerCase()}`;
+        const seen = new Set();
+        let rounds = 0, emptyRounds = 0, lastErr = "";
+        while (rounds < 6 && emptyRounds < 2 && !seqStopRef.current) {
           const have = {};
           collected.forEach((q) => { const k = `${q.type || "mcq"}|${q.difficulty || "Medium"}`; have[k] = (have[k] || 0) + 1; });
           const plan = want
@@ -330,13 +334,11 @@ export default function AdminPractice({ clientMode = false }) {
             avoid: [...doneStems, ...collected.map((q) => q.text)].filter(Boolean).slice(-400),
           };
           let got = [];
-          try { const { jobId } = await aiService.generate(body); if (jobId) got = await pollGenJob(jobId); } catch { /* keep what we have */ }
+          try { const { jobId } = await aiService.generate(body); if (jobId) got = await pollGenJob(jobId); else lastErr = "Could not start generation."; }
+          catch (e) { lastErr = e?.message || "Generation failed."; }
           const before = collected.length;
-          for (const q of got) {
-            const t = String(q?.text || "").trim().toLowerCase();
-            if (t && !collected.some((c) => String(c.text || "").trim().toLowerCase() === t)) collected.push(q);
-          }
-          if (collected.length <= before) break; // no new distinct questions
+          for (const q of got) { const k = keyOf(q); if (String(q?.text || "").trim() && !seen.has(k)) { seen.add(k); collected.push(q); } }
+          if (collected.length <= before) emptyRounds += 1; else emptyRounds = 0; // give a transient empty round another try
           rounds += 1;
         }
         if (collected.length) {
@@ -349,13 +351,19 @@ export default function AdminPractice({ clientMode = false }) {
             created = true;
             total += collected.length;
             doneStems.push(...collected.map((q) => q.text).filter(Boolean));
-          } catch (e) { setSeqMsg(e.message || "Insert failed."); }
+            prog[s.name] = { status: "done", count: collected.length };
+          } catch (e) { prog[s.name] = { status: "failed", count: 0, err: e.message || "Insert failed." }; }
+        } else {
+          // Surface WHY it produced nothing instead of a silent "✓ 0".
+          prog[s.name] = { status: "failed", count: 0, err: lastErr || "No questions returned — keys may be rate-limited/out of quota, or the mix is too large for the free tier." };
         }
-        prog[s.name] = { status: "done", count: collected.length }; setSeqProgress({ ...prog });
+        setSeqProgress({ ...prog });
       }
+      const failed = Object.values(prog).filter((p) => p.status === "failed").length;
+      const failNote = failed ? ` ${failed} subtopic(s) produced 0 (rate-limited/out of quota or too large a mix — try fewer questions or more working keys).` : "";
       setSeqMsg(seqStopRef.current
-        ? `Stopped. Generated ${total} question(s) into “${targetName}” so far.`
-        : `Done — generated ${total} question(s) across ${subs.length} subtopic(s) into “${targetName}”.`);
+        ? `Stopped. Generated ${total} question(s) into “${targetName}” so far.${failNote}`
+        : `Done — generated ${total} question(s) across ${subs.length} subtopic(s) into “${targetName}”.${failNote}`);
     } catch (e) {
       setSeqMsg(e.message || "Sequential generation failed.");
     } finally {
@@ -977,7 +985,9 @@ export default function AdminPractice({ clientMode = false }) {
                               ? <span className="inline-flex items-center gap-1 text-xs font-semibold text-brand-600"><Loader2 className="h-3.5 w-3.5 animate-spin" /> generating…</span>
                               : st.status === "done"
                                 ? <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400">✓ {st.count}</span>
-                                : <span className="text-xs text-slate-400">queued</span>
+                                : st.status === "failed"
+                                  ? <span title={st.err} className="cursor-help text-xs font-semibold text-rose-600 dark:text-rose-400">✗ 0</span>
+                                  : <span className="text-xs text-slate-400">queued</span>
                           ) : (
                             <>
                               <input
@@ -1024,6 +1034,20 @@ export default function AdminPractice({ clientMode = false }) {
                     );
                   })}
                 </div>
+                {scanMissing.length > 0 && (() => {
+                  const perSub = (i) => (scanTypes[i] ? mixTotal(scanTypes[i]) : (parseInt(scanCounts[i], 10) || 0));
+                  const req = scanMissing.reduce((a, _, i) => a + perSub(i), 0);
+                  const gen = Object.values(seqProgress).reduce((a, p) => a + (p.count || 0), 0);
+                  const doneN = Object.values(seqProgress).filter((p) => p.status === "done" || p.status === "failed").length;
+                  const activeSubs = scanMissing.filter((_, i) => perSub(i) > 0).length;
+                  return (
+                    <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 rounded-lg bg-slate-50 px-3 py-1.5 text-xs dark:bg-slate-800/40">
+                      <span>Total requested: <b>{req}</b></span>
+                      <span>Generated so far: <b className="text-emerald-600 dark:text-emerald-400">{gen}</b></span>
+                      <span>Subtopics done: <b>{doneN}</b> / {activeSubs}</span>
+                    </div>
+                  );
+                })()}
                 {seqMsg && <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">{seqMsg}</p>}
                 <div className="mt-4 flex flex-wrap justify-end gap-2">
                   {seqRunning ? (
