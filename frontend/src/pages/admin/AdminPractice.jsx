@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, Fragment } from "react";
 import { Plus, Pencil, Trash2, X, ChevronRight, GraduationCap, FolderOpen, ListChecks, FileStack, HelpCircle, Users, Search, Share2, ClipboardList, ArrowRightLeft } from "lucide-react";
 import { practiceService, testService, contentService, aiService } from "../../services";
 import { loadNav, saveNav } from "../../lib/navState";
@@ -33,6 +33,10 @@ const GEN_TYPES = [
   { id: "pairselect", label: "Pair-select" },
   { id: "assertion", label: "Assertion" },
 ];
+const GEN_DIFFS = ["Easy", "Medium", "Hard"]; // difficulty levels per type
+
+// Sum every type×level cell of a subtopic's mix.
+const mixTotal = (row) => Object.values(row || {}).reduce((s, dm) => s + Object.values(dm || {}).reduce((a, v) => a + (parseInt(v, 10) || 0), 0), 0);
 
 // Subject names from a practice item's typed plan (for "add to subject" tools).
 const sectionsOf = (item) => (item?.subjectPlan || []).map((p) => p.subject).filter(Boolean);
@@ -293,24 +297,30 @@ export default function AdminPractice({ clientMode = false }) {
         // Desired count PER TYPE for this subtopic. If the user opened the type
         // editor, use their mix; otherwise the whole total is MCQ.
         const chosen = scanTypes[s.i];
+        // Desired buckets per type × level. If the editor wasn't used, the whole
+        // total is Medium MCQ.
         const want = (() => {
+          const b = [];
           if (chosen) {
-            const w = {};
-            for (const [t, v] of Object.entries(chosen)) { const n = parseInt(v, 10) || 0; if (n > 0) w[t] = n; }
-            if (Object.keys(w).length) return w;
+            for (const [type, dm] of Object.entries(chosen)) {
+              for (const [difficulty, v] of Object.entries(dm || {})) {
+                const n = parseInt(v, 10) || 0;
+                if (n > 0) b.push({ type, difficulty, count: n });
+              }
+            }
           }
-          return { mcq: s.count };
+          return b.length ? b : [{ type: "mcq", difficulty: "Medium", count: s.count }];
         })();
         const collected = [];
         let rounds = 0;
         while (rounds < 5 && !seqStopRef.current) {
-          // Re-compute the shortfall per type from what we've collected so far.
+          // Re-compute the shortfall per type×level from what we've collected.
           const have = {};
-          collected.forEach((q) => { const ty = q.type || "mcq"; have[ty] = (have[ty] || 0) + 1; });
-          const plan = Object.entries(want)
-            .map(([type, n]) => ({ type, difficulty: "Medium", count: Math.max(0, n - (have[type] || 0)) }))
+          collected.forEach((q) => { const k = `${q.type || "mcq"}|${q.difficulty || "Medium"}`; have[k] = (have[k] || 0) + 1; });
+          const plan = want
+            .map((b) => ({ type: b.type, difficulty: b.difficulty, count: Math.max(0, b.count - (have[`${b.type}|${b.difficulty}`] || 0)) }))
             .filter((b) => b.count > 0);
-          if (!plan.length) break; // every type target met
+          if (!plan.length) break; // every type×level target met
           const body = {
             topic: scanTopic,
             plan,
@@ -356,20 +366,24 @@ export default function AdminPractice({ clientMode = false }) {
 
   // Set a type's count for a subtopic, clamped so the type totals never exceed
   // the subtopic's overall question count (the max the user chose).
-  const setSubType = (i, type, value) => setScanTypes((prev) => {
+  // Set the count for one type × level cell, clamped so the whole mix never
+  // exceeds the subtopic's total (the max the user chose).
+  const setSubType = (i, type, diff, value) => setScanTypes((prev) => {
     const cap = Math.max(0, parseInt(scanCounts[i], 10) || 0);
     const row = { ...(prev[i] || {}) };
-    const others = Object.entries(row).reduce((sum, [k, v]) => (k === type ? sum : sum + (parseInt(v, 10) || 0)), 0);
+    const cell = { ...(row[type] || {}) };
+    const othersTotal = mixTotal(row) - (parseInt(cell[diff], 10) || 0);
     let n = parseInt(value, 10); if (!Number.isFinite(n) || n < 0) n = 0;
-    n = Math.min(n, Math.max(0, cap - others));
-    row[type] = n;
+    n = Math.min(n, Math.max(0, cap - othersTotal));
+    cell[diff] = n;
+    row[type] = cell;
     return { ...prev, [i]: row };
   });
-  // Open/close a subtopic's type editor. First open seeds it as "all MCQ" up to
-  // the chosen total, so it defaults to (e.g.) 50 MCQ that you then redistribute.
+  // Open/close a subtopic's type editor. First open seeds it as "all Medium MCQ"
+  // up to the chosen total, so it defaults to (e.g.) 50 Medium MCQ to redistribute.
   const toggleTypeRow = (i) => {
     setOpenTypeRows((prev) => { const n = new Set(prev); n.has(i) ? n.delete(i) : n.add(i); return n; });
-    setScanTypes((prev) => (prev[i] ? prev : { ...prev, [i]: { mcq: Math.max(0, parseInt(scanCounts[i], 10) || 0) } }));
+    setScanTypes((prev) => (prev[i] ? prev : { ...prev, [i]: { mcq: { Medium: Math.max(0, parseInt(scanCounts[i], 10) || 0) } } }));
   };
 
   // Save an AI-generated / imported batch. When opts.newTarget = { name } is set
@@ -904,8 +918,8 @@ export default function AdminPractice({ clientMode = false }) {
                     const st = seqProgress[m];
                     const cap = Math.max(0, parseInt(scanCounts[i], 10) || 0);
                     const row = scanTypes[i] || {};
-                    const alloc = Object.values(row).reduce((s2, v) => s2 + (parseInt(v, 10) || 0), 0);
-                    const customized = Object.keys(row).length > 0;
+                    const alloc = mixTotal(row);
+                    const customized = alloc > 0;
                     return (
                       <div key={i} className="border-b border-slate-100 py-1 last:border-0 dark:border-slate-800">
                         <div className="flex items-center gap-2">
@@ -939,12 +953,22 @@ export default function AdminPractice({ clientMode = false }) {
                               <span className="text-slate-500 dark:text-slate-400">Split up to <b>{cap}</b> across types</span>
                               <span className={alloc > cap ? "font-semibold text-rose-600" : "text-slate-500 dark:text-slate-400"}>allocated {alloc} · {Math.max(0, cap - alloc)} left</span>
                             </div>
-                            <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3">
+                            <div className="grid grid-cols-[1fr_repeat(3,3rem)] items-center gap-x-2 gap-y-1">
+                              <span />
+                              {GEN_DIFFS.map((d) => <span key={d} className="text-center text-[11px] font-semibold text-slate-500 dark:text-slate-400">{d}</span>)}
                               {GEN_TYPES.map((t) => (
-                                <label key={t.id} className="flex items-center justify-between gap-1 rounded-md bg-white px-2 py-1 text-xs dark:bg-slate-900/40">
-                                  <span className="text-slate-600 dark:text-slate-300">{t.label}</span>
-                                  <input type="number" min="0" max={cap} value={row[t.id] ?? 0} onChange={(e) => setSubType(i, t.id, e.target.value)} className="input !w-14 py-0.5 text-xs" />
-                                </label>
+                                <Fragment key={t.id}>
+                                  <span className="text-xs text-slate-600 dark:text-slate-300">{t.label}</span>
+                                  {GEN_DIFFS.map((d) => (
+                                    <input
+                                      key={d}
+                                      type="number" min="0" max={cap}
+                                      value={row[t.id]?.[d] ?? 0}
+                                      onChange={(e) => setSubType(i, t.id, d, e.target.value)}
+                                      className="input !w-12 py-0.5 text-center text-xs"
+                                    />
+                                  ))}
+                                </Fragment>
                               ))}
                             </div>
                           </div>
