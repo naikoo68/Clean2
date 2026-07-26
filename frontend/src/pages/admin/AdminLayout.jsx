@@ -65,6 +65,16 @@ const nav = [
 export default function AdminLayout() {
   const [open, setOpen] = useState(false);
   const [unread, setUnread] = useState(0);
+
+  // Lock background page scroll while the mobile drawer is open, so scrolling
+  // inside the drawer doesn't move the page behind it (and the drawer can scroll
+  // independently to reveal every nav item + Log out on small screens).
+  useEffect(() => {
+    if (!open) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => { document.body.style.overflow = prev; };
+  }, [open]);
   const { theme, toggleTheme } = useTheme();
   const { user, logout } = useAuth();
   const { settings } = useSettings();
@@ -104,7 +114,7 @@ export default function AdminLayout() {
         </div>
       </Link>
 
-      <nav className="flex-1 space-y-1 px-3">
+      <nav className="min-h-0 flex-1 space-y-1 overflow-y-auto px-3">
         {nav.map((n) => (
           <NavLink
             key={n.to}
