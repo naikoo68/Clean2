@@ -23,8 +23,7 @@ import MigrateQuizModal from "../../components/admin/MigrateQuizModal";
 import MigrateTopicsModal from "../../components/admin/MigrateTopicsModal";
 import { Files, ScanSearch, Loader2, Sparkles, Scissors, Maximize2, Minimize2 } from "lucide-react";
 
-// Question types offered per subtopic in the "Missing areas" sequential generator
-// (table excluded to match the usual mix).
+// Question types offered per subtopic in the "Missing areas" sequential generator.
 const GEN_TYPES = [
   { id: "mcq", label: "MCQ" },
   { id: "matching", label: "Matching" },
@@ -32,6 +31,7 @@ const GEN_TYPES = [
   { id: "pair", label: "Pair" },
   { id: "pairselect", label: "Pair-select" },
   { id: "assertion", label: "Assertion" },
+  { id: "table", label: "Table" },
 ];
 const GEN_DIFFS = ["Easy", "Medium", "Hard"]; // difficulty levels per type
 
