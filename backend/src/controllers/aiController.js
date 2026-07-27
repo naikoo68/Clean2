@@ -69,6 +69,7 @@ async function providers(scope = SYSTEM_SCOPE) {
         key: k.key.trim(),
         baseUrl: (k.baseUrl || DEFAULT_BASE).replace(/\/$/, ""),
         models: models.length ? models : ["gemini-2.5-flash"],
+        label: (k.label || "").trim(),
       };
     });
   // DB keys first, then env slots (if in scope) — de-duplicated by key value so
@@ -944,6 +945,7 @@ async function runGenerationJob(id, ctx) {
   const { workers, fallbackWorkers = [], model, topic, notes, plan, count, difficulty, types, target, avoid, owner = null, source = "", userSubtopics = [] } = ctx;
   const job = genJobs.get(id);
   const deadline = Date.now() + 8 * 60 * 1000; // overall time budget
+  if (!job.keyStats) job.keyStats = {}; // live per-key activity for THIS run
 
   // Spread the work across ALL keys at once. With many keys and a modest target
   // (e.g. 40 questions across 20 keys) each key produces a SMALL batch (~2) so
@@ -1064,12 +1066,18 @@ async function runGenerationJob(id, ctx) {
         : buildUserPrompt({ topic, notes, count: res.n, difficulty, types, avoid: avoidNow(), source, focus: res.focus });
       const maxTokens = Math.min(16000, 1800 + res.n * 1000);
       attempts += 1;
+      // Live per-key activity for this run (surfaced via jobStatus.keyStats).
+      const _kl = ep.label || "Key";
+      const _ks = job.keyStats[_kl] || (job.keyStats[_kl] = { requests: 0, ok: 0, limited: 0, error: 0, questions: 0 });
+      _ks.requests += 1; save({}); // reflect the in-flight request immediately
       // Higher temperature for generation → more varied questions (extraction
       // stays at the low default so it copies the source faithfully).
       const r = await callProvider({ key: ep.key, baseUrl: ep.baseUrl, model: ep.model || model, userPrompt: prompt, maxTokens, temperature: 0.85 });
       release(res); // free the reservation — any shortfall gets re-targeted next round
       if (r.ok) {
+        _ks.ok += 1;
         AiKey.updateOne({ key: ep.key, owner: ep.owner ?? owner ?? null }, { $inc: { usedRequests: 1, usedTokens: r.tokens || 0 } }).catch(() => {});
+        const beforeLen = collected.length;
         for (const q of normalize(parseQuestions(r.content))) {
           if (collected.length >= target) break;
           const sig = qSig(q);
@@ -1078,9 +1086,12 @@ async function runGenerationJob(id, ctx) {
           seen.add(sig);
           collected.push(q);
         }
+        _ks.questions += collected.length - beforeLen;
         save({ questions: collected.slice() });
         continue;
       }
+      _ks[(r.status === 429 || /quota|rate.?limit|exhausted|resource has been exhausted/i.test(r.detail || "")) ? "limited" : "error"] += 1;
+      save({});
       lastError = r;
       if ([401, 403].includes(r.status)) break; // key dead/unauthorized — retire
       if (r.status === 404) {
@@ -1189,6 +1200,7 @@ export async function generateQuestions(req, res) {
         baseUrl: p.baseUrl,
         owner: sc.owner ?? null,
         model: p.models.includes(chosen.model) ? chosen.model : (p.models[0] || chosen.model),
+        label: p.label || `••••${String(p.key).slice(-4)}`,
       })),
     };
   };
@@ -1344,6 +1356,7 @@ export function jobStatus(req, res) {
     model: job.model,
     error: job.error,
     cancelled: !!job.cancelled,
+    keyStats: job.keyStats || {}, // live per-key activity this run
     questions: job.status === "done" ? job.questions : undefined,
   });
 }

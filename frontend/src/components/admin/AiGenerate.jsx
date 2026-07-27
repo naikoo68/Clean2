@@ -48,6 +48,7 @@ export default function AiGenerate({ open, onClose, onUpload, title = "Generate 
   const stopRef = useRef(false); // set when the user clicks Stop — breaks/short-circuits the poll loop
   const [inserting, setInserting] = useState(false);
   const [msg, setMsg] = useState("");
+  const [keyStats, setKeyStats] = useState(null); // live per-key activity this run { label: {requests,ok,limited,error,questions} }
   const [destChoice, setDestChoice] = useState("current"); // "current" | "new" (where the batch is inserted)
   const [newName, setNewName] = useState("");
   const [inferring, setInferring] = useState(false); // detecting the topic from a quiz's existing questions
@@ -157,6 +158,7 @@ export default function AiGenerate({ open, onClose, onUpload, title = "Generate 
     setStopping(false);
     stopRef.current = false;
     jobIdRef.current = null;
+    setKeyStats(null);
     if (!append) setPreview([]);
     setMsg(append ? `Generating ${total} more from this topic (no duplicates)…` : `Starting generation of ${total} question(s)…`);
     try {
@@ -184,6 +186,7 @@ export default function AiGenerate({ open, onClose, onUpload, title = "Generate 
         } catch {
           continue; // transient poll hiccup — keep waiting
         }
+        if (s.keyStats && Object.keys(s.keyStats).length) setKeyStats(s.keyStats); // live per-key counter
         if (s.status === "done") {
           const qs = s.questions || [];
           // Append when "Generate more", otherwise replace the preview.
@@ -591,6 +594,28 @@ export default function AiGenerate({ open, onClose, onUpload, title = "Generate 
         )}
 
         {msg && <p className="mt-3 text-sm font-medium">{msg}</p>}
+
+        {/* Live per-key activity for this run — see every key working in real time. */}
+        {keyStats && Object.keys(keyStats).length > 0 && (
+          <div className="mt-3 rounded-xl border border-slate-200 p-3 dark:border-slate-700">
+            <p className="mb-2 text-xs font-semibold text-slate-500 dark:text-slate-400">
+              Keys working this run ({Object.keys(keyStats).length}) · {Object.values(keyStats).reduce((a, s) => a + (s.requests || 0), 0)} requests · {Object.values(keyStats).reduce((a, s) => a + (s.questions || 0), 0)} questions
+            </p>
+            <div className="max-h-40 space-y-1 overflow-y-auto">
+              {Object.entries(keyStats).sort((a, b) => (b[1].requests || 0) - (a[1].requests || 0)).map(([label, s]) => (
+                <div key={label} className="flex items-center justify-between gap-2 text-xs">
+                  <span className="truncate font-medium text-slate-700 dark:text-slate-200">{label}</span>
+                  <span className="flex flex-shrink-0 items-center gap-2 whitespace-nowrap">
+                    <span className="text-slate-500 dark:text-slate-400">{s.requests || 0} req</span>
+                    <span className="font-semibold text-emerald-600 dark:text-emerald-400">{s.questions || 0} Q</span>
+                    {s.limited > 0 && <span className="text-amber-600 dark:text-amber-400">{s.limited} limited</span>}
+                    {s.error > 0 && <span className="text-rose-600 dark:text-rose-400">{s.error} err</span>}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         <div className="mt-6 flex justify-end gap-3">
           <button type="button" onClick={onClose} className="btn-outline">Close</button>
