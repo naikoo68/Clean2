@@ -2692,6 +2692,8 @@ async function runExtendJob(id, { endpoints, model, questions, owner = null, not
   let updated = 0;
   let lastError = null;
   let keyDead = false;
+  let parseFails = 0;   // calls that succeeded (HTTP ok) but yielded no usable explanation
+  let emptyReplies = 0; // of those, how many returned empty content (safety filter / blank completion)
 
   // Extend ONE question: call AI, parse (robustly), update in place. Returns
   // true only when the DB was actually updated with a real explanation.
@@ -2710,7 +2712,13 @@ async function runExtendJob(id, { endpoints, model, questions, owner = null, not
       return false;
     }
     const parsed = parseExplanationJson(r.content);
-    if (!parsed || !parsed.explanation) return false; // require a real explanation
+    if (!parsed || !parsed.explanation) {
+      // Call succeeded but the reply couldn't be turned into an explanation —
+      // track it so a 0-updated run can report the REAL reason.
+      parseFails += 1;
+      if (!String(r.content || "").trim()) emptyReplies += 1;
+      return false; // require a real explanation
+    }
     const set = buildExtendSet(q, parsed); // may also fix a wrong numerical answer/options
     await Question.updateOne({ _id: q._id }, { $set: set }).catch(() => {});
     updated += 1;
@@ -2762,7 +2770,11 @@ async function runExtendJob(id, { endpoints, model, questions, owner = null, not
           ? (lastError.status === 429
             ? "AI quota/rate limit reached before any explanation was updated. Wait a minute and try again."
             : `AI provider error (${lastError.status || 0}). ${(lastError.detail || "").slice(0, 150)}`)
-          : "No explanations could be updated. Try again.",
+          : parseFails
+            ? (emptyReplies >= parseFails
+              ? `The AI returned empty replies for all ${total} question(s) — usually a safety filter or an overloaded/weak model. Try again, or set the key's model to gemini-2.5-flash.`
+              : `The AI replied but its answers weren't valid JSON for all ${total} question(s). Try again, or switch to a stronger model (gemini-2.5-flash / gemini-2.5-pro).`)
+            : "No explanations could be updated. Try again.",
       });
     } else {
       // If some remain, tell the caller so they can simply run it again.
