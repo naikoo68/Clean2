@@ -381,6 +381,10 @@ function parseQuestionsJson(text) {
     const need4 = () => opts4.every((o) => o.trim());
     if (type === "assertion") {
       row.assertion = S(q?.assertion); row.reason = S(q?.reason);
+      // The DB requires a `text` on every question, but an assertion carries its
+      // meaning in assertion/reason — supply the standard stem when omitted (same
+      // default the AI generator uses) so it isn't silently dropped on save.
+      if (!row.text) row.text = "Consider the following Assertion (A) and Reason (R):";
       if (!row.assertion || !row.reason || !need4()) { errors.push(`Question ${i + 1} (assertion): needs assertion, reason and 4 options.`); return; }
     } else if (type === "image") {
       row.image = S(q?.image ?? q?.imageUrl);
@@ -394,7 +398,8 @@ function parseQuestionsJson(text) {
       if (!row.text || !row.columnA.length || !row.columnB.length || !need4()) { errors.push(`Question ${i + 1} (${type}): needs text, columnA, columnB and 4 options.`); return; }
     } else if (type === "statement") {
       row.columnA = arr(q?.columnA ?? q?.statements);
-      if (!row.text || !row.columnA.length || !need4()) { errors.push(`Question ${i + 1} (statement): needs text, statements and 4 options.`); return; }
+      if (!row.text) row.text = "Consider the following statements:"; // default intro when omitted
+      if (!row.columnA.length || !need4()) { errors.push(`Question ${i + 1} (statement): needs statements (columnA) and 4 options.`); return; }
     } else { // mcq
       if (!row.text || !need4()) { errors.push(`Question ${i + 1} (mcq): needs text and 4 options.`); return; }
     }
@@ -407,7 +412,10 @@ const TEMPLATE_JSON = JSON.stringify([
   { type: "mcq", text: "What is 2+2?", options: ["3", "4", "5", "6"], correct: "B", difficulty: "Easy", explanation: "2+2 equals 4.", optionExplanations: ["3 is 2+1.", "", "5 is 2+3.", "6 is 2+4."] },
   { type: "statement", text: "Consider the following statements:", columnA: ["The Sun is a star.", "The Moon is a planet."], options: ["1 only", "2 only", "1 and 2 only", "Neither 1 nor 2"], correct: "A", difficulty: "Medium", explanation: "Only statement 1 is correct; the Moon is a satellite." },
   { type: "matching", text: "Match the scientist to the discovery:", columnA: ["Newton", "Einstein", "Bohr"], columnB: ["Gravity", "Relativity", "Atom model"], options: ["1-I, 2-II, 3-III", "1-II, 2-I, 3-III", "1-III, 2-II, 3-I", "1-I, 2-III, 3-II"], correct: "A", difficulty: "Medium", explanation: "Newton–Gravity, Einstein–Relativity, Bohr–Atom model." },
-  { type: "assertion", assertion: "Earth is closer to the Sun in January.", reason: "Earth's orbit is elliptical.", options: ["Both A and R are true and R is the correct explanation of A", "Both A and R are true but R is NOT the correct explanation of A", "A is true but R is false", "A is false but R is true"], correct: "A", difficulty: "Medium", explanation: "Perihelion is in early January because the orbit is elliptical." },
+  { type: "pair", text: "Consider the following pairs:", columnA: ["Xylem", "Phloem", "Stomata"], columnB: ["Water transport", "Food transport", "Gas exchange"], options: ["Only one pair", "Only two pairs", "All three pairs", "None"], correct: "C", difficulty: "Easy", explanation: "All three pairs are correctly matched." },
+  { type: "pairselect", text: "Consider the following vector-disease pairs:", columnA: ["Anopheles", "Aedes", "Housefly"], columnB: ["Malaria", "Dengue", "Malaria"], options: ["1 and 2 only", "2 and 3 only", "1 and 3 only", "All of the above"], correct: "A", difficulty: "Easy", explanation: "Anopheles-malaria and Aedes-dengue are correct; the housefly does not transmit malaria, so pair 3 is wrong.", optionExplanations: ["", "Pair 3 is wrong", "Pair 3 is wrong", "Pair 3 is wrong"] },
+  { type: "assertion", text: "Consider the following Assertion (A) and Reason (R):", assertion: "Earth is closer to the Sun in January.", reason: "Earth's orbit is elliptical.", options: ["Both A and R are true and R is the correct explanation of A", "Both A and R are true but R is NOT the correct explanation of A", "A is true but R is false", "A is false but R is true"], correct: "A", difficulty: "Medium", explanation: "Perihelion is in early January because the orbit is elliptical." },
+  { type: "table", text: "Study the table and answer which product had the highest sales:", tableRows: [["Product", "Sales"], ["Pens", "120"], ["Books", "340"], ["Bags", "90"]], options: ["Pens", "Books", "Bags", "Cannot be determined"], correct: "B", difficulty: "Easy", explanation: "Books have the highest sales at 340." },
 ], null, 2);
 
 const TEMPLATE =
