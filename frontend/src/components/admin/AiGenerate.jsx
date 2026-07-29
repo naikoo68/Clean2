@@ -58,8 +58,35 @@ export default function AiGenerate({ open, onClose, onUpload, title = "Generate 
   // A saved "to-do" list of subtopics for THIS quiz/test, kept in the browser so
   // you can jot down the areas still missing and come back later to generate them
   // one at a time. Persisted per target (falls back to the topic name).
-  const [plan, setPlan] = useState([]); // [{ text, done }]
+  const [plan, setPlan] = useState([]); // [{ text, done, src }] aggregated from all saved plans
+  const [selected, setSelected] = useState(() => new Set()); // ticked subtopics to add to "Subtopics to cover"
   const planKey = `mstg.subtopicPlan:${currentTargetName || defaultTopic || "global"}`;
+  // Read EVERY saved subtopic — this quiz/test's own plan PLUS anything saved from
+  // the "Missing areas" scans — so you can pick from all of them here. Deduped by
+  // text; each item remembers which store it came from (src) for removal.
+  const readAllSaved = () => {
+    const out = []; const seen = new Set();
+    const add = (text, done, src) => {
+      const t = String(text || "").trim(); if (!t) return;
+      const k = t.toLowerCase(); if (seen.has(k)) return; seen.add(k);
+      out.push({ text: t, done: !!done, src });
+    };
+    try {
+      const keys = [];
+      for (let i = 0; i < localStorage.length; i++) { const kk = localStorage.key(i); if (kk && (kk.startsWith("mstg.subtopicPlan:") || kk.startsWith("mstg.missingAreas:"))) keys.push(kk); }
+      keys.sort((a, b) => (a === planKey ? -1 : b === planKey ? 1 : 0)); // this target's own plan first
+      for (const key of keys) {
+        const rawV = localStorage.getItem(key); if (!rawV) continue;
+        if (key.startsWith("mstg.subtopicPlan:")) {
+          const arr = JSON.parse(rawV); if (Array.isArray(arr)) arr.forEach((p) => add(p?.text, p?.done, key));
+        } else {
+          const obj = JSON.parse(rawV); const prog = obj?.progress || {};
+          (obj?.missing || []).forEach((m) => add(m, prog?.[m]?.status === "done", key));
+        }
+      }
+    } catch { /* ignore malformed entries */ }
+    return out;
+  };
 
   useEffect(() => {
     if (!open) return;
@@ -108,15 +135,13 @@ export default function AiGenerate({ open, onClose, onUpload, title = "Generate 
       .catch(() => setStatus({ enabled: false }));
   }, [open, source, isClient]);
 
-  // Load this target's saved subtopic plan when the modal opens.
+  // Load ALL saved subtopics (this target's plan + every Missing-areas scan) on open.
   useEffect(() => {
     if (!open) return;
-    try {
-      const raw = localStorage.getItem(planKey);
-      setPlan(raw ? JSON.parse(raw) : []);
-    } catch { setPlan([]); }
+    setPlan(readAllSaved());
+    setSelected(new Set());
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, planKey]);
+  }, [open]);
 
   if (!open) return null;
 
@@ -249,25 +274,42 @@ export default function AiGenerate({ open, onClose, onUpload, title = "Generate 
     }
   };
 
-  // ---- Saved subtopic plan (browser-persisted, per quiz/test) --------------
-  const persistPlan = (list) => {
-    setPlan(list);
-    try { localStorage.setItem(planKey, JSON.stringify(list)); } catch { /* storage blocked/full */ }
-  };
-  // Add subtopics (from the uncovered list or the typed box) to the saved plan,
-  // skipping any that are already there (case-insensitive).
+  // ---- Saved subtopics (this target's plan + Missing-areas scans) ----------
+  // Save subtopics (typed box or uncovered list) to THIS target's own plan.
   const addToPlan = (items) => {
-    const seen = new Set(plan.map((p) => p.text.trim().toLowerCase()));
-    const adds = (items || [])
-      .map((t) => String(t).trim())
-      .filter((t) => t && !seen.has(t.toLowerCase()))
-      .map((t) => ({ text: t, done: false }));
-    if (adds.length) persistPlan([...plan, ...adds]);
-    setMsg(adds.length ? `Saved ${adds.length} subtopic(s) to your plan — come back any time and generate them one by one.` : "Those subtopics are already in your plan.");
+    let arr = [];
+    try { arr = JSON.parse(localStorage.getItem(planKey) || "[]"); if (!Array.isArray(arr)) arr = []; } catch { arr = []; }
+    const seen = new Set(arr.map((p) => String(p?.text || "").trim().toLowerCase()));
+    const adds = (items || []).map((t) => String(t).trim()).filter((t) => t && !seen.has(t.toLowerCase())).map((t) => ({ text: t, done: false }));
+    if (adds.length) { try { localStorage.setItem(planKey, JSON.stringify([...arr, ...adds])); } catch { /* storage blocked/full */ } }
+    setPlan(readAllSaved());
+    setMsg(adds.length ? `Saved ${adds.length} subtopic(s) — tick the ones you want below and click "Add selected".` : "Those subtopics are already saved.");
   };
-  const togglePlanDone = (i) => persistPlan(plan.map((p, idx) => (idx === i ? { ...p, done: !p.done } : p)));
-  const removeFromPlan = (i) => persistPlan(plan.filter((_, idx) => idx !== i));
-  const clearDonePlan = () => persistPlan(plan.filter((p) => !p.done));
+  // Remove a saved subtopic from its own store. (Only offered for this modal's own
+  // plan items; Missing-areas items are managed in that modal to keep it in sync.)
+  const removeFromPlan = (item) => {
+    try {
+      if (item.src?.startsWith("mstg.subtopicPlan:")) {
+        const arr = JSON.parse(localStorage.getItem(item.src) || "[]");
+        localStorage.setItem(item.src, JSON.stringify((Array.isArray(arr) ? arr : []).filter((p) => String(p?.text || "").trim().toLowerCase() !== item.text.toLowerCase())));
+      }
+    } catch { /* ignore */ }
+    setSelected((s) => { const n = new Set(s); n.delete(item.text.toLowerCase()); return n; });
+    setPlan(readAllSaved());
+  };
+  const toggleSelect = (text) => setSelected((s) => { const n = new Set(s); const k = text.toLowerCase(); if (n.has(k)) n.delete(k); else n.add(k); return n; });
+  const allSelected = plan.length > 0 && plan.every((p) => selected.has(p.text.toLowerCase()));
+  const toggleSelectAll = () => setSelected(allSelected ? new Set() : new Set(plan.map((p) => p.text.toLowerCase())));
+  // Put the ticked subtopics into the "Subtopics to cover" box (merged, deduped).
+  const addSelectedToSubtopics = () => {
+    const picks = plan.filter((p) => selected.has(p.text.toLowerCase())).map((p) => p.text);
+    if (!picks.length) { setMsg("Tick the subtopics you want first, then click \"Add selected\"."); return; }
+    setSubtopics((cur) => {
+      const existing = cur.split(/[\n,]+/).map((s) => s.trim()).filter(Boolean);
+      return Array.from(new Set([...existing, ...picks])).join(", ");
+    });
+    setMsg(`Added ${picks.length} subtopic(s) to "Subtopics to cover". Set the question mix and Generate.`);
+  };
   // Generate a batch focused on ONE saved subtopic (uses the type/difficulty grid).
   const generateSubtopic = (text) => { setSubtopics(text); generate(false, text); };
 
@@ -430,33 +472,38 @@ export default function AiGenerate({ open, onClose, onUpload, title = "Generate 
               </button>
             )}
 
-            {/* Saved subtopic plan — a persistent to-do list for this quiz/test. Each
-                item can be generated on its own, so you can knock them out one by one. */}
+            {/* Saved subtopics — from THIS quiz/test's plan AND every "Missing areas"
+                scan you saved. Tick the ones you want and add them to "Subtopics to
+                cover", or generate any single one on its own. */}
             {plan.length > 0 && (
               <div className="mt-3 rounded-xl border border-brand-200 bg-brand-50/50 p-3 dark:border-brand-900/40 dark:bg-brand-900/10">
-                <div className="mb-1 flex items-center justify-between gap-2">
+                <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
                   <p className="flex items-center gap-2 text-sm font-semibold">
-                    <Bookmark className="h-4 w-4 text-brand-600" /> Saved subtopic plan
-                    <span className="rounded-full bg-brand-100 px-2 py-0.5 text-xs font-bold text-brand-700 dark:bg-brand-900/40 dark:text-brand-300">{plan.filter((p) => !p.done).length} left</span>
+                    <Bookmark className="h-4 w-4 text-brand-600" /> Saved subtopics
+                    <span className="rounded-full bg-brand-100 px-2 py-0.5 text-xs font-bold text-brand-700 dark:bg-brand-900/40 dark:text-brand-300">{plan.length}</span>
                   </p>
-                  {plan.some((p) => p.done) && (
-                    <button type="button" onClick={clearDonePlan} className="text-xs font-semibold text-slate-500 hover:text-rose-600 dark:text-slate-400">Clear done</button>
-                  )}
+                  <div className="flex items-center gap-3 text-xs">
+                    <button type="button" onClick={toggleSelectAll} className="font-semibold text-brand-600 hover:underline dark:text-brand-300">{allSelected ? "Clear all" : "Select all"}</button>
+                    <button type="button" onClick={addSelectedToSubtopics} className="inline-flex items-center gap-1 rounded-md bg-brand-600 px-2 py-1 font-semibold text-white transition hover:bg-brand-700"><ListChecks className="h-3.5 w-3.5" /> Add selected ({selected.size})</button>
+                  </div>
                 </div>
-                <p className="mb-2 text-xs text-slate-500 dark:text-slate-400">Generate one subtopic at a time (uses the type &amp; difficulty grid below). Tick each when done — the list is saved on this device for this {newLeafLabel}.</p>
+                <p className="mb-2 text-xs text-slate-500 dark:text-slate-400">Tick the subtopics you need and click <b>Add selected</b> to drop them into "Subtopics to cover", or hit <b>Generate</b> on a single one. Saved on this device.</p>
                 <ul className="max-h-56 space-y-1 overflow-y-auto">
-                  {plan.map((p, i) => (
-                    <li key={i} className="flex items-center gap-2 rounded-lg bg-white px-2 py-1.5 text-xs dark:bg-slate-900/50">
-                      <button type="button" onClick={() => togglePlanDone(i)} title={p.done ? "Mark not done" : "Mark done"} className="flex-shrink-0">
-                        {p.done ? <CheckCircle2 className="h-4 w-4 text-emerald-500" /> : <Circle className="h-4 w-4 text-slate-300 dark:text-slate-600" />}
-                      </button>
-                      <span className={`flex-1 ${p.done ? "text-slate-400 line-through" : "text-slate-700 dark:text-slate-200"}`}>{p.text}</span>
-                      <button type="button" onClick={() => generateSubtopic(p.text)} disabled={busy} className="inline-flex flex-shrink-0 items-center gap-1 rounded-md bg-brand-600 px-2 py-1 font-semibold text-white transition hover:bg-brand-700 disabled:opacity-50">
-                        <Wand2 className="h-3 w-3" /> Generate
-                      </button>
-                      <button type="button" onClick={() => removeFromPlan(i)} title="Remove from plan" className="flex-shrink-0 text-slate-400 hover:text-rose-600"><Trash2 className="h-3.5 w-3.5" /></button>
-                    </li>
-                  ))}
+                  {plan.map((p, i) => {
+                    const sel = selected.has(p.text.toLowerCase());
+                    return (
+                      <li key={i} className="flex items-center gap-2 rounded-lg bg-white px-2 py-1.5 text-xs dark:bg-slate-900/50">
+                        <input type="checkbox" checked={sel} onChange={() => toggleSelect(p.text)} className="h-4 w-4 flex-shrink-0 accent-brand-600" />
+                        <span className={`flex-1 ${p.done ? "text-slate-400 line-through" : "text-slate-700 dark:text-slate-200"}`}>{p.text}{p.done && <span className="ml-1 text-emerald-500">✓</span>}</span>
+                        <button type="button" onClick={() => generateSubtopic(p.text)} disabled={busy} className="inline-flex flex-shrink-0 items-center gap-1 rounded-md bg-brand-600 px-2 py-1 font-semibold text-white transition hover:bg-brand-700 disabled:opacity-50">
+                          <Wand2 className="h-3 w-3" /> Generate
+                        </button>
+                        {p.src && p.src.startsWith("mstg.subtopicPlan:") && (
+                          <button type="button" onClick={() => removeFromPlan(p)} title="Remove from plan" className="flex-shrink-0 text-slate-400 hover:text-rose-600"><Trash2 className="h-3.5 w-3.5" /></button>
+                        )}
+                      </li>
+                    );
+                  })}
                 </ul>
               </div>
             )}
