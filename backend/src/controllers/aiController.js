@@ -2427,7 +2427,7 @@ JSON VALIDITY RULES (follow exactly or the answer is discarded):
 Content rules:
 - "explanation": a THOROUGH, self-contained explanation of the correct answer (3-6 sentences). Include EVERY relevant supporting fact — exact dates/years, historical background, definitions, full formulas WITH the actual calculation, laws/theorems/principles by name, and cause-and-effect reasoning. Teach the concept as if to someone seeing it for the first time; never just restate the option. Put each sentence or distinct point on its OWN line (a real line break between points), not one long paragraph.
 - LOCAL / ALTERNATIVE NAMES: whenever a term/place/concept/person/disease/chemical/unit/law has a common local or vernacular (Hindi/regional) name, synonym, abbreviation's full form or old name, add it in brackets right after it.
-- "optionExplanations": an array of EXACTLY 4 strings, one per option. For EACH option state clearly whether it is correct or incorrect and WHY (for a wrong numeric option, show what mistake produces that value). Keep each to 1-2 short sentences. Leave the truly-CORRECT option's entry an empty string "".
+- "optionExplanations": a real JSON array of EXACTLY 4 SEPARATE strings, in the same order as the options (entry 0 = option A, 1 = B, 2 = C, 3 = D). For EACH option state clearly whether it is correct or incorrect and WHY (for a wrong numeric option, show what mistake produces that value). Keep each to 1-2 short sentences. Do NOT prefix an entry with a label such as "A)", "(A)", "A." or "Option A", and do NOT put more than one option's note inside a single entry. Leave the truly-CORRECT option's entry an empty string "".
 NUMERICAL / QUANTITATIVE QUESTIONS — you MUST verify by SOLVING, not just describe:
 - Solve the problem yourself from scratch. In "explanation" show the working STEP BY STEP: state the formula, substitute the actual values, and show each intermediate result on its OWN line, ending with the final computed value. Every arithmetic step must be correct and lead exactly to the answer you choose.
 - Compare your computed value with the four options and decide which option is TRULY correct.
@@ -2460,7 +2460,7 @@ OPTIONS — MANDATORY, this is the main task:
 - After your fix, ALL FOUR options must be plausible members of the one category. NEVER leave an off-category, unrelated or joke option, and never make a distractor an obvious give-away.
 - "correct": the 0-based index (0-3) of the correct option in the "options" array you return (it must still point to the original correct answer's text).
 
-EXPLANATION — "explanation": thorough and self-contained; put each point on its OWN line; add local/alternative names in brackets. "optionExplanations": EXACTLY 4 short notes saying why each option is right/wrong; leave the correct option's entry "". MATH: wrap any math/number in $...$ (never \\( \\) or \\[ \\]); NEVER use "$" for money. No markdown, no trailing commas. Return ONLY the JSON object.`;
+EXPLANATION — "explanation": thorough and self-contained; put each point on its OWN line; add local/alternative names in brackets. "optionExplanations": a real JSON array of EXACTLY 4 SEPARATE notes, one per option in order (0=A,1=B,2=C,3=D), saying why each option is right/wrong; do NOT prefix entries with labels like "A)"/"Option A" and do NOT pack multiple options into one entry; leave the correct option's entry "". MATH: wrap any math/number in $...$ (never \\( \\) or \\[ \\]); NEVER use "$" for money. No markdown, no trailing commas. Return ONLY the JSON object.`;
 
 const EXT_LETTERS = ["A", "B", "C", "D"];
 const toRomanLite = (n) => { const m = [["X", 10], ["IX", 9], ["V", 5], ["IV", 4], ["I", 1]]; let r = ""; for (const [s, v] of m) while (n >= v) { r += s; n -= v; } return r; };
@@ -2611,6 +2611,51 @@ function salvageExplanation(t) {
   return { explanation, optionExplanations: oe };
 }
 
+// The model sometimes returns the per-option notes malformed: ALL four packed
+// into the first array slot (renders as a blob under option A, nothing on the
+// rest), or each note prefixed with an "A)" / "(B)" / "Option C" label — which
+// leaves the correct option showing a bare stray label like "B)". Normalize into
+// a clean 4-slot array: re-split a packed blob by its option labels, and strip a
+// leading enumerator from each per-option note. Leaves already-correct arrays
+// untouched.
+function normalizeOptionNotes(rawOe) {
+  const arr = (Array.isArray(rawOe) ? rawOe : []).map((x) => (x == null ? "" : String(x)));
+  while (arr.length < 4) arr.push("");
+  const trimmed = arr.slice(0, 4).map((s) => s.trim());
+  const filled = trimmed.filter(Boolean).length;
+  const joined = trimmed.filter(Boolean).join("\n");
+
+  // Find option labels at a line start: "Option A", "(A)", "A)", "A.", "A:", "A-".
+  const findRe = /(?:^|\n)[\t ]*(?:option[\t ]+([A-Da-d])\b|\(([A-Da-d])\)|([A-Da-d])[\).:\u2013-])/gi;
+  const labels = [];
+  let m;
+  while ((m = findRe.exec(joined)) !== null) {
+    labels.push({
+      labelStart: m.index + (/^\n/.test(m[0]) ? 1 : 0),
+      afterLabel: findRe.lastIndex,
+      letter: (m[1] || m[2] || m[3] || "").toUpperCase(),
+      kind: m[1] ? "word" : "enum", // "Option A" keeps the words; "A)" is dropped
+    });
+  }
+  const distinct = new Set(labels.map((l) => l.letter));
+
+  // Packed into one slot but clearly labelled for 2+ options → re-split by label.
+  if (filled <= 1 && distinct.size >= 2) {
+    const bucket = { A: "", B: "", C: "", D: "" };
+    for (let i = 0; i < labels.length; i++) {
+      const from = labels[i].kind === "word" ? labels[i].labelStart : labels[i].afterLabel;
+      const to = i + 1 < labels.length ? labels[i + 1].labelStart : undefined;
+      const seg = joined.slice(from, to).trim();
+      if (seg) bucket[labels[i].letter] = seg;
+    }
+    return [bucket.A, bucket.B, bucket.C, bucket.D];
+  }
+  // Otherwise per-slot already — just strip a leading enumerator ("A)", "(B)", "C.").
+  const out = trimmed.map((s) => s.replace(/^\s*(?:\([A-Da-d]\)|[A-Da-d][\).:\u2013-])\s*/, "").trim());
+  while (out.length < 4) out.push("");
+  return out.slice(0, 4);
+}
+
 // Robustly pull { explanation, optionExplanations } from the model's text.
 function parseExplanationJson(content) {
   let t = String(content || "").trim();
@@ -2628,8 +2673,12 @@ function parseExplanationJson(content) {
 
   if (obj && typeof obj === "object") {
     const explanation = typeof obj.explanation === "string" ? obj.explanation.trim() : "";
-    let oe = Array.isArray(obj.optionExplanations) ? obj.optionExplanations.map((x) => (x == null ? "" : String(x))) : null;
-    if (oe) { oe = oe.slice(0, 4); while (oe.length < 4) oe.push(""); }
+    let oe = Array.isArray(obj.optionExplanations)
+      ? obj.optionExplanations.map((x) => (x == null ? "" : String(x)))
+      : typeof obj.optionExplanations === "string"
+        ? [obj.optionExplanations] // a single blob string — normalizeOptionNotes will split it
+        : null;
+    if (oe) oe = normalizeOptionNotes(oe); // split packed blobs / strip "A)" labels; pads to 4
     // Optional numerical-correction fields: a corrected 0-based answer index and
     // a corrected 4-option array (only present when the AI's working proves the
     // stored answer wrong). Accept a number, a "0".."3" string, or a letter A-D.
