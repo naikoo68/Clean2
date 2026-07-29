@@ -1039,7 +1039,8 @@ async function runGenerationJob(id, ctx) {
     return false;
   };
   const MAX_QUOTA_WAITS = 6; // per key: how many per-minute 429s we ride out before retiring it
-  const MAX_ATTEMPTS = Math.ceil(target / chunkSize) + 12 + workerCount * MAX_QUOTA_WAITS; // global safety cap
+  const MAX_EMPTY = 4; // per key: empty (safety/thinking-only) replies we retry before retiring the key
+  const MAX_ATTEMPTS = Math.ceil(target / chunkSize) + 12 + workerCount * (MAX_QUOTA_WAITS + MAX_EMPTY); // global safety cap
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
   const collected = [];
@@ -1114,6 +1115,7 @@ async function runGenerationJob(id, ctx) {
   // batches and spreads the rate-limit load across all keys at once.
   const worker = async (ep) => {
     let quotaWaits = 0;
+    let emptyReplies = 0;
     while (collected.length < target && attempts < MAX_ATTEMPTS && Date.now() < deadline && !job.cancelled) {
       const res = reserveChunk();
       if (!res) break; // nothing left to generate
@@ -1128,7 +1130,7 @@ async function runGenerationJob(id, ctx) {
       _ks.requests += 1; save({}); // reflect the in-flight request immediately
       // Higher temperature for generation → more varied questions (extraction
       // stays at the low default so it copies the source faithfully).
-      const r = await callProvider({ key: ep.key, baseUrl: ep.baseUrl, model: ep.model || model, userPrompt: prompt, maxTokens, temperature: 0.85 });
+      const r = await callProvider({ key: ep.key, baseUrl: ep.baseUrl, model: ep.model || model, userPrompt: prompt, maxTokens, temperature: 0.85, failOnEmpty: true });
       release(res); // free the reservation — any shortfall gets re-targeted next round
       if (r.ok) {
         _ks.ok += 1;
@@ -1149,6 +1151,18 @@ async function runGenerationJob(id, ctx) {
       _ks[(r.status === 429 || /quota|rate.?limit|exhausted|resource has been exhausted/i.test(r.detail || "")) ? "limited" : "error"] += 1;
       save({});
       lastError = r;
+      if (r.status === 520 && r.empty) {
+        // A 200 with no usable text — a Gemini safety block, or a "thinking-only"/
+        // weak model (especially the default lite model) that spends its whole
+        // budget reasoning and emits nothing. Previously these came back as ok:true
+        // with 0 questions and silently burned the attempt budget, so a batch would
+        // stop after the few non-empty replies. Retry a bounded number of times on
+        // this key; if it KEEPS returning empty, retire the key so the other keys /
+        // the fallback pool take over instead of stalling the whole batch.
+        if (emptyReplies >= MAX_EMPTY) break;
+        emptyReplies += 1;
+        continue;
+      }
       if ([401, 403].includes(r.status)) break; // key dead/unauthorized — retire
       if (r.status === 404) {
         // The model isn't valid for this key. Auto-find a valid one (once),
@@ -1191,7 +1205,7 @@ async function runGenerationJob(id, ctx) {
       collected.length < target &&
       Date.now() < deadline &&
       !job.cancelled &&
-      (collected.length === 0 || lastError?.status === 429)
+      (collected.length === 0 || lastError?.status === 429 || lastError?.status === 520)
     ) {
       lastError = null; // give the fallback pool a clean slate for error reporting
       attempts = 0; // and its own attempt budget
@@ -1210,6 +1224,9 @@ async function runGenerationJob(id, ctx) {
       let msg;
       if (lastError?.status === 429) {
         msg = quota429Message(lastError.detail);
+      } else if (lastError?.status === 520) {
+        msg =
+          "The AI kept returning empty responses. This usually means the selected model is a 'thinking'/lite model (the default gemini-2.5-flash-lite often does this) or a safety filter blocked the request. Go to Admin → AI Keys, set the key's model to gemini-2.5-flash (or another full model), pick that model in the generator, and try again.";
       } else if (lastError?.status === 404) {
         msg =
           "The selected AI model isn't available for your key (404). Go to Admin → AI Keys, click 'Show models' on the key to see valid model ids, click one to set it, then pick that model in the generator.";
