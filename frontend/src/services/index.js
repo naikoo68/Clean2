@@ -31,6 +31,7 @@ export const contentService = {
   moveQuiz: (id, data) => api.patch(`/quizzes/${id}/move`, data), // { session, copy }
   splitQuiz: (id, perQuiz) => api.post(`/quizzes/${id}/split`, { perQuiz }), // split one quiz into quizzes of N
   splitTopic: (id, perQuiz) => api.post(`/topics/${id}/split`, { perQuiz }), // split all a topic's questions into quizzes of N
+  mergeQuiz: (id, sourceIds) => api.post(`/quizzes/${id}/merge`, { sourceIds }), // merge other quizzes (same session) into this one
   // streams (admin)
   createStream: (data) => api.post("/streams", data),
   updateStream: (id, data) => api.put(`/streams/${id}`, data),
@@ -159,6 +160,7 @@ export const practiceService = {
   moveItem: (id, target) => api.patch(`/practice/items/${id}/move`, target), // internal practice migration
   splitItem: (id, perQuiz) => api.post(`/practice/items/${id}/split`, { perQuiz }), // split one My-Quiz item into quizzes of N
   splitTopic: (id, perQuiz) => api.post(`/practice/topics/${id}/split`, { perQuiz }), // split all a topic's questions into quizzes of N
+  mergeItem: (id, sourceIds) => api.post(`/practice/items/${id}/merge`, { sourceIds }), // merge other My-Quiz items (same topic) into this one
 };
 
 // ---- CBT online exams (single public portal; name+email sign-in; deferred results) ----
