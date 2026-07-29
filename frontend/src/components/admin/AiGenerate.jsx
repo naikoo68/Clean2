@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { X, Sparkles, Wand2, CheckCircle2, AlertTriangle, Loader2, Server, KeyRound, ListChecks, Circle, Square } from "lucide-react";
+import { X, Sparkles, Wand2, CheckCircle2, AlertTriangle, Loader2, Server, KeyRound, ListChecks, Circle, Square, Bookmark, Trash2 } from "lucide-react";
 import { aiService } from "../../services";
 import { useAuth } from "../../context/AuthContext";
 import GraphView from "../ui/GraphView";
@@ -55,6 +55,11 @@ export default function AiGenerate({ open, onClose, onUpload, title = "Generate 
   const [coverage, setCoverage] = useState(null); // { covered:[], missing:[] } — refreshed after each batch
   const [coverageLoading, setCoverageLoading] = useState(false);
   const [syllabus, setSyllabus] = useState(null); // FIXED checklist for this session so coverage totals stay stable
+  // A saved "to-do" list of subtopics for THIS quiz/test, kept in the browser so
+  // you can jot down the areas still missing and come back later to generate them
+  // one at a time. Persisted per target (falls back to the topic name).
+  const [plan, setPlan] = useState([]); // [{ text, done }]
+  const planKey = `mstg.subtopicPlan:${currentTargetName || defaultTopic || "global"}`;
 
   useEffect(() => {
     if (!open) return;
@@ -103,6 +108,16 @@ export default function AiGenerate({ open, onClose, onUpload, title = "Generate 
       .catch(() => setStatus({ enabled: false }));
   }, [open, source, isClient]);
 
+  // Load this target's saved subtopic plan when the modal opens.
+  useEffect(() => {
+    if (!open) return;
+    try {
+      const raw = localStorage.getItem(planKey);
+      setPlan(raw ? JSON.parse(raw) : []);
+    } catch { setPlan([]); }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, planKey]);
+
   if (!open) return null;
 
   // Effective per-batch cap for THIS account — the admin's global limit or the
@@ -149,7 +164,7 @@ export default function AiGenerate({ open, onClose, onUpload, title = "Generate 
 
   // `append` = "Generate more": keep the current preview and add a fresh batch
   // on the same topic, avoiding everything already generated (via avoidStems).
-  const generate = async (append = false) => {
+  const generate = async (append = false, overrideSubtopics = null) => {
     if (!topic.trim() && !url.trim()) { setMsg("Enter a topic/syllabus, or paste a source link (web page or YouTube video)."); return; }
     const plan = buildPlan();
     if (!plan.length) { setMsg("Set at least one question count in the grid below."); return; }
@@ -164,7 +179,9 @@ export default function AiGenerate({ open, onClose, onUpload, title = "Generate 
     try {
       const { jobId, requested } = await aiService.generate({
         topic: topic.trim(),
-        subtopics: subtopics.trim() || undefined, // optional — specific subtopics to spread questions across
+        // A per-subtopic "Generate" button passes the single subtopic to focus on;
+        // otherwise use whatever is typed in the Subtopics box.
+        subtopics: (overrideSubtopics != null ? overrideSubtopics : subtopics).trim() || undefined,
         url: url.trim() || undefined, // optional web page / YouTube link → its text/transcript
         plan,
         notes: notes.trim(),
@@ -231,6 +248,28 @@ export default function AiGenerate({ open, onClose, onUpload, title = "Generate 
       jobIdRef.current = null;
     }
   };
+
+  // ---- Saved subtopic plan (browser-persisted, per quiz/test) --------------
+  const persistPlan = (list) => {
+    setPlan(list);
+    try { localStorage.setItem(planKey, JSON.stringify(list)); } catch { /* storage blocked/full */ }
+  };
+  // Add subtopics (from the uncovered list or the typed box) to the saved plan,
+  // skipping any that are already there (case-insensitive).
+  const addToPlan = (items) => {
+    const seen = new Set(plan.map((p) => p.text.trim().toLowerCase()));
+    const adds = (items || [])
+      .map((t) => String(t).trim())
+      .filter((t) => t && !seen.has(t.toLowerCase()))
+      .map((t) => ({ text: t, done: false }));
+    if (adds.length) persistPlan([...plan, ...adds]);
+    setMsg(adds.length ? `Saved ${adds.length} subtopic(s) to your plan — come back any time and generate them one by one.` : "Those subtopics are already in your plan.");
+  };
+  const togglePlanDone = (i) => persistPlan(plan.map((p, idx) => (idx === i ? { ...p, done: !p.done } : p)));
+  const removeFromPlan = (i) => persistPlan(plan.filter((_, idx) => idx !== i));
+  const clearDonePlan = () => persistPlan(plan.filter((p) => !p.done));
+  // Generate a batch focused on ONE saved subtopic (uses the type/difficulty grid).
+  const generateSubtopic = (text) => { setSubtopics(text); generate(false, text); };
 
   // Stop the current generation. Tells the server to cancel the background job;
   // the poll loop then finalizes with whatever was produced so far, so the
@@ -385,6 +424,42 @@ export default function AiGenerate({ open, onClose, onUpload, title = "Generate 
             <p className="mt-1 text-xs text-slate-400">
               List the exact subtopics you want questions spread across. Leave empty and the AI works out the subtopics itself to cover the whole syllabus.
             </p>
+            {subtopics.trim() && (
+              <button type="button" onClick={() => addToPlan(subtopics.split(/[\n,]+/))} className="btn-outline mt-2 text-xs">
+                <Bookmark className="h-3.5 w-3.5" /> Save these subtopics to my plan
+              </button>
+            )}
+
+            {/* Saved subtopic plan — a persistent to-do list for this quiz/test. Each
+                item can be generated on its own, so you can knock them out one by one. */}
+            {plan.length > 0 && (
+              <div className="mt-3 rounded-xl border border-brand-200 bg-brand-50/50 p-3 dark:border-brand-900/40 dark:bg-brand-900/10">
+                <div className="mb-1 flex items-center justify-between gap-2">
+                  <p className="flex items-center gap-2 text-sm font-semibold">
+                    <Bookmark className="h-4 w-4 text-brand-600" /> Saved subtopic plan
+                    <span className="rounded-full bg-brand-100 px-2 py-0.5 text-xs font-bold text-brand-700 dark:bg-brand-900/40 dark:text-brand-300">{plan.filter((p) => !p.done).length} left</span>
+                  </p>
+                  {plan.some((p) => p.done) && (
+                    <button type="button" onClick={clearDonePlan} className="text-xs font-semibold text-slate-500 hover:text-rose-600 dark:text-slate-400">Clear done</button>
+                  )}
+                </div>
+                <p className="mb-2 text-xs text-slate-500 dark:text-slate-400">Generate one subtopic at a time (uses the type &amp; difficulty grid below). Tick each when done — the list is saved on this device for this {newLeafLabel}.</p>
+                <ul className="max-h-56 space-y-1 overflow-y-auto">
+                  {plan.map((p, i) => (
+                    <li key={i} className="flex items-center gap-2 rounded-lg bg-white px-2 py-1.5 text-xs dark:bg-slate-900/50">
+                      <button type="button" onClick={() => togglePlanDone(i)} title={p.done ? "Mark not done" : "Mark done"} className="flex-shrink-0">
+                        {p.done ? <CheckCircle2 className="h-4 w-4 text-emerald-500" /> : <Circle className="h-4 w-4 text-slate-300 dark:text-slate-600" />}
+                      </button>
+                      <span className={`flex-1 ${p.done ? "text-slate-400 line-through" : "text-slate-700 dark:text-slate-200"}`}>{p.text}</span>
+                      <button type="button" onClick={() => generateSubtopic(p.text)} disabled={busy} className="inline-flex flex-shrink-0 items-center gap-1 rounded-md bg-brand-600 px-2 py-1 font-semibold text-white transition hover:bg-brand-700 disabled:opacity-50">
+                        <Wand2 className="h-3 w-3" /> Generate
+                      </button>
+                      <button type="button" onClick={() => removeFromPlan(i)} title="Remove from plan" className="flex-shrink-0 text-slate-400 hover:text-rose-600"><Trash2 className="h-3.5 w-3.5" /></button>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
 
             <label className="mb-1 mt-3 block text-sm font-semibold">
               Source link <span className="font-normal text-slate-400">(optional — web page or YouTube video)</span>
@@ -556,9 +631,14 @@ export default function AiGenerate({ open, onClose, onUpload, title = "Generate 
                       </div>
                     </div>
                     {coverage.missing.length > 0 && (
-                      <button type="button" onClick={() => setSubtopics(coverage.missing.join(", "))} className="btn-outline mt-3 text-xs">
-                        <Sparkles className="h-3.5 w-3.5" /> Put uncovered ones in Subtopics → generate them next
-                      </button>
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        <button type="button" onClick={() => setSubtopics(coverage.missing.join(", "))} className="btn-outline text-xs">
+                          <Sparkles className="h-3.5 w-3.5" /> Put uncovered ones in Subtopics → generate them next
+                        </button>
+                        <button type="button" onClick={() => addToPlan(coverage.missing)} className="btn-outline text-xs">
+                          <Bookmark className="h-3.5 w-3.5" /> Save uncovered to my plan
+                        </button>
+                      </div>
                     )}
                   </>
                 )}
