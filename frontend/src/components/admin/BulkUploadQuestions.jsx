@@ -347,6 +347,10 @@ function looseJsonParse(text) {
 function parseQuestionsJson(text) {
   const rows = [];
   const errors = [];
+  // An empty box isn't an error — it just means nothing has been pasted yet.
+  // Without this guard, JSON.parse("") throws "Unexpected end of JSON input",
+  // which showed a misleading "1 row will be skipped" on the empty modal.
+  if (!String(text || "").trim()) return { rows, errors };
   const parsed = looseJsonParse(text);
   if (parsed.error) return { rows, errors: [`Invalid JSON: ${parsed.error.message || "could not parse"}. (Common cause: unescaped LaTeX backslashes — the importer tries to auto-fix them; check for stray "\\" or unescaped quotes.)`] };
   const data = parsed.data;
