@@ -347,7 +347,7 @@ CALCULATIONS & SELF-VERIFICATION (do this for EVERY question before you finalise
 - NUMERICAL / QUANTITATIVE questions: pick the correct FORMULA for the concept, substitute the actual values, and COMPUTE the answer step by step. Mark as "correct" ONLY the option that EXACTLY equals your computed result; make the other three plausible but genuinely wrong (each reflecting a specific common mistake). In "explanation" show the full working — formula, then substitution, then each intermediate result, then the final value — each step on its OWN line. NEVER mark an answer your own calculation does not produce, and make sure the explanation's steps end at the marked option.
 - MATCHING / PAIR / STATEMENT questions: verify each pairing/statement individually and make "correct" reflect the TRUE count/combination (and provide an option that matches it).
 - Re-check every calculation and fact; the marked "correct" option and the "optionExplanations" must be mutually consistent.
-MATH RENDERING (so numericals display correctly): wrap EVERY mathematical element in $...$ (inline LaTeX) — in the "text", the "options" AND the "explanation". This includes each numeric ANSWER OPTION that is a number/quantity/expression (e.g. options "$12.5$", "$\\frac{3}{4}$", "$2^{10}$", "$25\\%$", "$\\sqrt{2}$", "$3:4$"), every fraction, power, root, ratio, percentage and equation, and each step of a calculation. A plain number that is only ordinary prose (a year, a page count) need not be wrapped, but any numeric option or math expression MUST be. Use $...$ only (never \\( \\) or \\[ \\]) and never write bare LaTeX commands outside dollar signs. For a simple arrow between items (a route/sequence such as "Lakhanpur → Samba → Udhampur → Banihal"), use the plain Unicode arrow character → directly — do NOT write \\rightarrow or \\to.
+MATH RENDERING (so numericals display correctly): wrap EVERY mathematical element in $...$ (inline LaTeX) — in the "text", the "options" AND the "explanation". This includes each numeric ANSWER OPTION that is a number/quantity/expression (e.g. options "$12.5$", "$\\frac{3}{4}$", "$2^{10}$", "$25\\%$", "$\\sqrt{2}$", "$3:4$"), every fraction, power, root, ratio, percentage and equation, and each step of a calculation. A plain number that is only ordinary prose (a year, a page count) need not be wrapped, but any numeric option or math expression MUST be. Use $...$ only (never \\( \\) or \\[ \\]) and never write bare LaTeX commands outside dollar signs. NEVER wrap ordinary words, names, proper nouns, transliterated/Sanskrit/vernacular terms or whole phrases in $...$ (write Natya, abhinaya, Abhinaya Darpana — NOT $Natya$, $abhinaya$, $AbhinayaDarpana$); $...$ is EXCLUSIVELY for numbers, numeric values, units, scientific/chemical symbols, variables and formulas. For a simple arrow between items (a route/sequence such as "Lakhanpur → Samba → Udhampur → Banihal"), use the plain Unicode arrow character → directly — do NOT write \\rightarrow or \\to.
 CURRENCY: NEVER use the "$" character for money/amounts anywhere ("text", "options", "explanation", "optionExplanations") — "$" is reserved ONLY for wrapping inline math, and a stray "$" (e.g. "$300") corrupts the rendering of the whole field. Write money as a plain number with the currency word, e.g. "300 dollars" or "900 rupees" or just "300".
 ${TOPIC_SCOPE_RULE}
 COMPLETE SYLLABUS COVERAGE (top priority for CHOOSING what to ask):
@@ -616,6 +616,20 @@ function normalizeGraph(g) {
   };
 }
 
+// The "$...$" delimiters render inline math, so they are for numbers, values,
+// units, symbols and formulas ONLY. Models often wrap ordinary words or proper
+// nouns too (e.g. "$Natya$", "$AbhinayaDarpana$", "$abhinaya$"), which then show
+// in italic math font mid-sentence. Unwrap any $...$ whose contents are a PLAIN
+// word/phrase — two-or-more letters, letters and spaces only, with no digit,
+// backslash or math symbol — so genuine math ("$H_2O$", "$\\frac{d}{t}$", a
+// single-letter variable "$x$", "$25\\%$") is left untouched.
+function unwrapWordMath(s) {
+  return String(s == null ? "" : s).replace(/\$([^$]+)\$/g, (m, inner) => {
+    const t = inner.trim();
+    return /^[A-Za-z][A-Za-z ]*[A-Za-z]$/.test(t) ? t : m;
+  });
+}
+
 // Coerce anything the model returned into a valid Question document shape.
 function normalize(list) {
   const clampIdx = (n) => Math.min(3, Math.max(0, parseInt(n, 10) || 0));
@@ -691,6 +705,18 @@ function normalize(list) {
       // supply-demand curve). Kept only when it has at least one valid line.
       const graph = normalizeGraph(q?.graph);
       if (graph) out.graph = graph;
+
+      // Strip stray $...$ the model put around plain words (math is for numbers/
+      // formulas only), across every user-visible text field.
+      out.text = unwrapWordMath(out.text);
+      out.options = out.options.map(unwrapWordMath);
+      out.explanation = unwrapWordMath(out.explanation);
+      out.optionExplanations = out.optionExplanations.map(unwrapWordMath);
+      if (out.assertion != null) out.assertion = unwrapWordMath(out.assertion);
+      if (out.reason != null) out.reason = unwrapWordMath(out.reason);
+      if (Array.isArray(out.columnA)) out.columnA = out.columnA.map(unwrapWordMath);
+      if (Array.isArray(out.columnB)) out.columnB = out.columnB.map(unwrapWordMath);
+      if (Array.isArray(out.tableRows)) out.tableRows = out.tableRows.map((r) => (Array.isArray(r) ? r.map(unwrapWordMath) : r));
       return out;
     })
     .filter((q) => q.text); // drop empty questions
