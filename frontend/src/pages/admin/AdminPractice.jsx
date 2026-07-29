@@ -825,6 +825,7 @@ export default function AdminPractice({ clientMode = false }) {
             <div className="mb-4 flex items-center justify-between"><h3 className="text-lg font-bold">Question</h3><button onClick={() => setViewQ(null)}><X className="h-5 w-5" /></button></div>
             <QuestionView q={viewQ} onRegenerate={() => regenerateQ(viewQ)} regenerating={regenId === viewQ._id} onExtend={() => setExtendOneItem(viewQ)} extending={extendingQId === viewQ._id} onSchedule={clientMode ? undefined : () => setScheduleQ(viewQ)} />
             <div className="mt-6 flex justify-end gap-2">
+              <button onClick={async () => { if (!window.confirm("Delete this question?")) return; await testService.deleteQuestion(qItem._id, viewQ._id); setViewQ(null); await reloadTq(); load("items"); }} className="btn-outline mr-auto text-rose-600"><Trash2 className="h-4 w-4" /> Delete</button>
               <button onClick={() => setAddToTestQ(viewQ)} className="btn-outline"><ClipboardList className="h-4 w-4" /> Add to test</button>
               <button onClick={() => setViewQ(null)} className="btn-outline">Close</button>
             </div>
