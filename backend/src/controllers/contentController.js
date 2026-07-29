@@ -261,6 +261,39 @@ export async function splitQuiz(req, res) {
   res.json({ message: `Split ${total} questions into ${chunks.length} quizzes.`, quizzes: chunks.length, created: chunks.length - 1 });
 }
 
+// POST /api/quizzes/:id/merge  { sourceIds: [] }
+// Merge other quizzes' questions INTO this quiz (the inverse of split). Every
+// question from each source quiz is moved into the target quiz; the emptied
+// source quizzes are then deleted. Sources must be in the SAME session.
+export async function mergeQuiz(req, res) {
+  const target = await Quiz.findById(req.params.id);
+  if (!target) return res.status(404).json({ message: "Quiz not found" });
+  const ids = (Array.isArray(req.body?.sourceIds) ? req.body.sourceIds : [])
+    .map(String)
+    .filter((s) => s && s !== String(target._id));
+  if (!ids.length) return res.status(400).json({ message: "Pick at least one other quiz to merge in." });
+
+  const sources = await Quiz.find({ _id: { $in: ids }, session: target.session });
+  if (!sources.length) return res.status(404).json({ message: "No matching quizzes to merge (they must be in the same session)." });
+
+  let moved = 0;
+  for (const src of sources) {
+    const r = await Question.updateMany(
+      { quiz: src._id },
+      { $set: { quiz: target._id, session: target.session, subject: target.subject } }
+    );
+    moved += r.modifiedCount || 0;
+    await Quiz.deleteOne({ _id: src._id });
+  }
+  const total = await Question.countDocuments({ quiz: target._id });
+  res.json({
+    message: `Merged ${sources.length} quiz(zes) (${moved} questions) into "${target.title}". It now has ${total} question(s).`,
+    merged: sources.length,
+    moved,
+    total,
+  });
+}
+
 // POST /api/topics/:id/split  { perQuiz }
 // Split ALL questions in a topic (across its sessions/quizzes) into quizzes of
 // `perQuiz` each, named "Quiz 1".."Quiz N", under a single session in the topic.
