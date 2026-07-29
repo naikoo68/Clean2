@@ -3858,10 +3858,34 @@ export async function setAllKeysEnabled(req, res) {
 }
 
 // POST /api/ai/keys/test-all — test every DB key in the caller's pool.
+// Free tiers cap requests-per-minute, and keys created under the SAME Google
+// account/project share that cap — so testing every key back-to-back makes valid
+// keys report "rate-limited". We PACE the tests in small batches with a gap
+// between them (spreading requests across the minute), then give any key that
+// still came back rate-limited ONE more try after a pause — a 429 means the key
+// is VALID but momentarily over quota, so a short wait often lets it turn
+// "Active" instead of leaving a misleading wall of "Rate-limited".
 export async function testAllKeys(req, res) {
   const keys = await AiKey.find({ owner: keyOwner(req) ?? null });
-  for (const doc of keys) await runKeyTest(doc);
-  res.json({ tested: keys.length });
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  const BATCH = 4; // keys tested in parallel per batch
+  const GAP_MS = 1500; // pause between batches so we don't burst the per-minute cap
+  const runBatched = async (list) => {
+    for (let i = 0; i < list.length; i += BATCH) {
+      await Promise.all(list.slice(i, i + BATCH).map((doc) => runKeyTest(doc)));
+      if (i + BATCH < list.length) await sleep(GAP_MS);
+    }
+  };
+  await runBatched(keys);
+  // Second chance for the rate-limited (valid) keys once the per-minute window
+  // has had time to refill. Bounded so the request still returns promptly.
+  const limited = keys.filter((k) => k.lastStatus === "limited");
+  if (limited.length) {
+    await sleep(15000);
+    await runBatched(limited);
+  }
+  const stillLimited = keys.filter((k) => k.lastStatus === "limited").length;
+  res.json({ tested: keys.length, limited: stillLimited });
 }
 
 // POST /api/ai/keys/auto-model-all — like "Test all", but also AUTO-PICKS the
@@ -3870,10 +3894,12 @@ export async function testAllKeys(req, res) {
 // runs in PARALLEL so a large pool finishes quickly. Returns a per-key summary.
 export async function autoDetectAllKeys(req, res) {
   const keys = await AiKey.find({ owner: keyOwner(req) ?? null });
-  // Detect many keys at a time. Each key's own detection is now fast (usually one
-  // call; bad keys bail out immediately on 401/403), so a wider fan-out finishes
-  // a big pool quickly without hammering any single account (keys are independent).
-  const CONCURRENCY = 12;
+  // Detect several keys at a time. A narrower fan-out (vs a big burst) keeps us
+  // under the free per-minute request cap — important when multiple keys share
+  // one Google account/project — so valid keys aren't wrongly flagged
+  // rate-limited. Each key's detection is fast (bad keys bail out on 401/403), so
+  // this still finishes a large pool quickly.
+  const CONCURRENCY = 4;
   const results = [];
   let idx = 0;
   const worker = async () => {
