@@ -6,10 +6,10 @@ import AiPlansManager from "../../components/admin/AiPlansManager";
 
 const GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta/openai";
 const PRESETS = [
-  // gemini-2.5-flash-lite has the most generous FREE tier (15 RPM / 1,000 req-day
-  // vs 10 RPM / 250 for 2.5-flash), so fresh free keys are far less likely to be
-  // rate-limited. Switch to gemini-2.5-flash for higher quality once quota allows.
-  { label: "Google Gemini", baseUrl: GEMINI_BASE, models: "gemini-2.5-flash-lite" },
+  // gemini-3.5-flash-lite is the current default: a newer lite model that returns
+  // cleaner JSON (fewer empty replies) than 2.5-flash-lite while keeping a generous
+  // free tier. If a key ever 404s on it, use "Show models"/Auto-pick to fall back.
+  { label: "Google Gemini", baseUrl: GEMINI_BASE, models: "gemini-3.5-flash-lite" },
   { label: "OpenAI", baseUrl: "https://api.openai.com/v1", models: "gpt-4o-mini" },
   { label: "TokenLab", baseUrl: "https://api.tokenlab.sh/v1", models: "gpt-4o-mini" },
   { label: "Groq", baseUrl: "https://api.groq.com/openai/v1", models: "llama-3.3-70b-versatile" },
@@ -26,15 +26,22 @@ const PRESETS = [
   { label: "Kiro", baseUrl: "https://your-kiro-gateway/v1", models: "claude-sonnet-4" },
 ];
 
-const blank = { label: "", baseUrl: GEMINI_BASE, models: "gemini-2.5-flash-lite", key: "", creditLimit: "", autoDetect: true };
+const blank = { label: "", baseUrl: GEMINI_BASE, models: "gemini-3.5-flash-lite", key: "", creditLimit: "", autoDetect: true };
 // Bulk-add defaults: one shared preset applied to every pasted key.
-const blankBulk = { label: "", baseUrl: GEMINI_BASE, models: "gemini-2.5-flash-lite", creditLimit: "", keysText: "" };
+const blankBulk = { label: "", baseUrl: GEMINI_BASE, models: "gemini-3.5-flash-lite", creditLimit: "", keysText: "" };
 
 const PER_PAGE = 10; // keys shown per page; bulk actions are scoped to the current page
 
-// Built-in Gemini models offered by the per-page "Set model" control. Free-tier
-// limits are noted so you can trade quota vs quality. Ordered best-free-tier first.
+// Built-in Gemini models offered by the per-page "Set model" control. The first
+// entry is the default. gemini-3.5-flash-lite leads: it's the current standard —
+// newer, cleaner JSON and fewer empty replies than 2.5-flash-lite. The 3.6 ids
+// are the newest generation; 3.6-flash is GA, 3.6-flash-lite may not be available
+// on every free key yet, so test it on one key before applying it to all.
 const GEMINI_MODELS = [
+  { id: "gemini-3.5-flash-lite", label: "gemini-3.5-flash-lite — recommended (newer, cleaner JSON)" },
+  { id: "gemini-3.6-flash-lite", label: "gemini-3.6-flash-lite — newest lite (test on one key first)" },
+  { id: "gemini-3.6-flash", label: "gemini-3.6-flash — newest (higher quality)" },
+  { id: "gemini-3.5-flash", label: "gemini-3.5-flash — near-Pro quality" },
   { id: "gemini-2.5-flash-lite", label: "gemini-2.5-flash-lite — free 15 RPM · 1,000/day (best quota)" },
   { id: "gemini-2.5-flash", label: "gemini-2.5-flash — free 10 RPM · 250/day" },
   { id: "gemini-2.5-pro", label: "gemini-2.5-pro — free 5 RPM · 100/day" },
