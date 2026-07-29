@@ -123,6 +123,7 @@ async function resolveModel(requested, scope = SYSTEM_SCOPE) {
 // another key.
 async function callWithFallback({ endpoints, model, userPrompt, maxTokens, owner = null, systemPrompt }) {
   let last = { ok: false, status: 0, detail: "No AI key is configured." };
+  let sawQuota = false; // at least one key failed with a recoverable rate-limit
   for (const ep of endpoints || []) {
     const r = await callProvider({ key: ep.key, baseUrl: ep.baseUrl, model: ep.model || model, userPrompt, maxTokens, systemPrompt });
     if (r.ok) {
@@ -132,8 +133,17 @@ async function callWithFallback({ endpoints, model, userPrompt, maxTokens, owner
       AiKey.updateOne({ key: ep.key, owner: owner ?? null }, { $inc: { usedRequests: 1, usedTokens: r.tokens || 0 } }).catch(() => {});
       return r;
     }
+    if (r.status === 429) sawQuota = true;
     last = r;
     if (![429, 401, 403].includes(r.status)) break;
+  }
+  // Every key failed. If ANY failure was just a rate-limit (429, recoverable) but
+  // the LAST key tried happened to be an unauthorized/disabled one (401/403),
+  // report the error AS a 429 so bulk jobs BACK OFF and retry the remaining
+  // questions instead of flagging the run "keys dead" and aborting after only a
+  // few — a single disabled key must not kill a run that other keys can finish.
+  if (!last.ok && sawQuota && [401, 403].includes(last.status)) {
+    return { ...last, status: 429 };
   }
   return last;
 }
@@ -3026,9 +3036,19 @@ function buildRegenSet(q, parsed) {
   const newOptions = Array.isArray(parsed.options) && parsed.options.length === 4 && parsed.options.every((s) => String(s).trim() !== "")
     ? parsed.options.map((x) => String(x)) : null;
   const canFixOptions = !q.type || ["mcq", "table", "pair", "pairselect", "statement", "matching"].includes(q.type);
-  if (newOptions && newCorrect != null && canFixOptions) set.options = newOptions;
-  if (newCorrect != null) set.correct = newCorrect;
-  const eff = newCorrect != null ? newCorrect : q.correct;
+  if (canFixOptions) {
+    // Move the correct-answer index ONLY together with a fresh, valid 4-option
+    // set, so the marked answer always matches what is shown. Updating "correct"
+    // on its own (when the model didn't return usable options) would point it at
+    // an unrelated OLD option and BREAK the question instead of fixing it — the
+    // reported "regenerate doesn't correct a wrong question" bug.
+    if (newOptions && newCorrect != null) { set.options = newOptions; set.correct = newCorrect; }
+  } else if (newCorrect != null) {
+    // Fixed-phrase types (e.g. assertion/reason) keep their canned options, so
+    // the answer index can safely be corrected on its own.
+    set.correct = newCorrect;
+  }
+  const eff = typeof set.correct === "number" ? set.correct : q.correct;
   if (Array.isArray(parsed.optionExplanations)) {
     const oe = parsed.optionExplanations.slice(0, 4);
     while (oe.length < 4) oe.push("");
