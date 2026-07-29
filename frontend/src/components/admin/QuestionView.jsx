@@ -22,13 +22,21 @@ const toRoman = (n) => ["I", "II", "III", "IV", "V", "VI", "VII", "VIII"][n] || 
 // `onExtend` (optional) shows an "Extend explanation" button that AI-enriches
 // this question's explanation (and can fix off-category options via the popup).
 // `extending` toggles its in-progress spinner.
-export default function QuestionView({ q, index, studentView = false, onRegenerate, regenerating = false, onExtend, extending = false, onSchedule }) {
+export default function QuestionView({ q, index, studentView = false, onRegenerate, regenerating = false, onExtend, extending = false, onSchedule, onPrev, onNext, position }) {
   const [revealed, setRevealed] = useState(false);
   if (!q) return null;
   const showAnswer = !studentView || revealed;
 
   return (
     <div className="rounded-xl border border-slate-200 p-4 dark:border-slate-700">
+      {/* Previous / Next navigation — only shown when the parent wires it up (modal preview), not for inline list rendering. */}
+      {(onPrev || onNext) && (
+        <div className="mb-3 flex items-center justify-between gap-2 border-b border-slate-100 pb-2 dark:border-slate-800">
+          <button type="button" onClick={onPrev} disabled={!onPrev} className="btn-outline px-3 py-1.5 text-xs disabled:cursor-not-allowed disabled:opacity-40">← Previous</button>
+          {position && <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">{position}</span>}
+          <button type="button" onClick={onNext} disabled={!onNext} className="btn-outline px-3 py-1.5 text-xs disabled:cursor-not-allowed disabled:opacity-40">Next →</button>
+        </div>
+      )}
       <div className="mb-2 flex flex-wrap items-center gap-2">
         {index != null && (
           <span className="flex h-6 w-6 items-center justify-center rounded-md bg-slate-100 text-xs font-bold dark:bg-slate-800">{index}</span>
