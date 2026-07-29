@@ -456,7 +456,24 @@ export default function BulkUploadQuestions({ open, onClose, onUpload, title = "
     setMsg("");
     try {
       const res = await onUpload(rows, { replace, section });
-      setMsg(`✓ ${replace ? "Replaced with" : "Uploaded"} ${res?.inserted ?? rows.length} question(s).`);
+      const inserted = res?.inserted ?? rows.length;
+      const skipped = res?.skipped ?? Math.max(0, (res?.requested ?? rows.length) - inserted);
+      if (skipped > 0) {
+        // Some questions passed the paste-time check but were rejected when
+        // saved. Show the count AND the first few reasons, and DON'T auto-close
+        // or clear the box — so you can see which ones failed and re-upload.
+        const why = (res?.errors || [])
+          .slice(0, 4)
+          .map((e) => `#${e.number ?? "?"} ${e.type || ""}: ${e.reason}`)
+          .join("  •  ");
+        setMsg(
+          `⚠ ${replace ? "Replaced with" : "Uploaded"} ${inserted} of ${inserted + skipped} — ${skipped} skipped.` +
+          (why ? `\nReasons: ${why}` : "")
+        );
+        setBusy(false);
+        return; // keep the modal open so nothing is lost silently
+      }
+      setMsg(`✓ ${replace ? "Replaced with" : "Uploaded"} ${inserted} question(s).`);
       setText("");
       setReplace(false);
       setTimeout(onClose, 1000);
@@ -588,7 +605,7 @@ export default function BulkUploadQuestions({ open, onClose, onUpload, title = "
           </span>
         </label>
 
-        {msg && <p className="mt-3 text-sm font-medium">{msg}</p>}
+        {msg && <p className="mt-3 whitespace-pre-line text-sm font-medium">{msg}</p>}
 
         <div className="mt-6 flex justify-end gap-3">
           <button type="button" onClick={onClose} className="btn-outline">Cancel</button>
