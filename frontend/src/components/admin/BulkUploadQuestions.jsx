@@ -327,6 +327,67 @@ export function questionsToCsv(questions) {
 // array/object, and — the big one — escapes stray LaTeX backslashes (e.g. "$\psi$",
 // "$\frac{d}{t}$") that models forget to double, which otherwise throw
 // "Bad escaped character". Returns { data } or { error }.
+// Single-pass, position-aware repair for the messy JSON that AI models emit.
+// A regex can only fix backslashes; the two errors that actually break real
+// pastes are (1) an UNESCAPED double-quote inside a string value (the model
+// writes  6" long  or  the "best" option ) and (2) a RAW newline/tab inside a
+// string — both throw "Expected ',' or ']'" / "Bad control character". This
+// walks the text tracking whether we're inside a string and fixes each case:
+//   • stray LaTeX backslash (\psi, \frac)         -> doubled (\\)
+//   • already-valid escapes (\" \\ \/ \n \uXXXX)  -> kept as-is
+//   • raw newline / carriage-return / tab in a str -> turned into \n \r \t
+//   • a " that is NOT followed (past spaces) by a , ] } : or end-of-input is
+//     treated as an inner quote and escaped; otherwise it's the real closer.
+// The one case no parser can resolve is an unescaped inner quote sitting right
+// before a comma/bracket (…the "best", …) — that stays ambiguous and is left to
+// the error snippet below.
+function repairJson(src) {
+  let out = "";
+  let inStr = false;
+  for (let i = 0; i < src.length; i++) {
+    const ch = src[i];
+    if (!inStr) {
+      out += ch;
+      if (ch === '"') inStr = true;
+      continue;
+    }
+    if (ch === "\\") {
+      const next = src[i + 1];
+      if (next === undefined) { out += "\\\\"; continue; } // trailing lone backslash
+      if ('"\\/bfnrt'.includes(next)) { out += ch + next; i++; continue; } // valid escape — keep
+      if (next === "u" && /^[0-9a-fA-F]{4}$/.test(src.substr(i + 2, 4))) { out += ch + next; i++; continue; } // \uXXXX — keep
+      out += "\\\\"; continue; // stray backslash → double it; reprocess `next` normally
+    }
+    if (ch === '"') {
+      let j = i + 1;
+      while (j < src.length && (src[j] === " " || src[j] === "\t" || src[j] === "\r" || src[j] === "\n")) j++;
+      const after = src[j];
+      if (after === undefined || after === "," || after === "]" || after === "}" || after === ":") {
+        inStr = false; out += ch; // genuine closing quote
+      } else {
+        out += '\\"'; // unescaped inner quote → escape it
+      }
+      continue;
+    }
+    if (ch === "\n") { out += "\\n"; continue; }
+    if (ch === "\r") { out += "\\r"; continue; }
+    if (ch === "\t") { out += "\\t"; continue; }
+    out += ch;
+  }
+  return out;
+}
+
+// Pull a short, readable snippet around the byte offset a JSON error reports, so
+// when auto-repair still can't fix it the user is pointed at the exact spot.
+function nearError(text, err) {
+  const m = /position (\d+)/.exec(err?.message || "");
+  if (!m) return "";
+  const pos = Number(m[1]);
+  const start = Math.max(0, pos - 35);
+  const snippet = text.slice(start, pos + 35).replace(/\s+/g, " ").trim();
+  return snippet ? ` Problem is near: …${snippet}…` : "";
+}
+
 function looseJsonParse(text) {
   let raw = String(text || "").trim();
   const fence = raw.match(/```(?:json)?\s*([\s\S]*?)```/i);
@@ -343,10 +404,17 @@ function looseJsonParse(text) {
   // parse. The old regex re-doubled the pair's 2nd backslash (\\, -> \\\,), which
   // threw "Bad escaped character" whenever any single backslash forced this path.
   const fixBackslashes = (s) => s.replace(/\\\\|\\(?!["/]|u[\da-fA-F]{4})/g, (m) => (m === "\\\\" ? m : "\\\\"));
-  const attempts = [raw, fixBackslashes(raw), fixBackslashes(raw).replace(/,\s*([\]}])/g, "$1")];
-  let err;
-  for (const t of attempts) { try { return { data: JSON.parse(t) }; } catch (e) { err = e; } }
-  return { error: err };
+  const repaired = repairJson(raw); // also fixes inner quotes + raw newlines/tabs
+  const attempts = [
+    raw,
+    fixBackslashes(raw),
+    fixBackslashes(raw).replace(/,\s*([\]}])/g, "$1"),
+    repaired,
+    repaired.replace(/,\s*([\]}])/g, "$1"), // repaired + drop trailing commas
+  ];
+  let err, errText;
+  for (const t of attempts) { try { return { data: JSON.parse(t) }; } catch (e) { err = e; errText = t; } }
+  return { error: err, near: nearError(errText, err) };
 }
 
 function parseQuestionsJson(text) {
@@ -357,7 +425,7 @@ function parseQuestionsJson(text) {
   // which showed a misleading "1 row will be skipped" on the empty modal.
   if (!String(text || "").trim()) return { rows, errors };
   const parsed = looseJsonParse(text);
-  if (parsed.error) return { rows, errors: [`Invalid JSON: ${parsed.error.message || "could not parse"}. (Common cause: unescaped LaTeX backslashes — the importer tries to auto-fix them; check for stray "\\" or unescaped quotes.)`] };
+  if (parsed.error) return { rows, errors: [`Invalid JSON: ${parsed.error.message || "could not parse"}.${parsed.near || ""} (The importer auto-fixes stray LaTeX backslashes, raw line breaks and most inner quotes; a quote sitting right before a comma — like "best", — can't be guessed, so escape it as \\" or remove it.)`] };
   const data = parsed.data;
   const list = Array.isArray(data) ? data : (Array.isArray(data?.questions) ? data.questions : null);
   if (!list) return { rows, errors: ['JSON must be an array of questions, or { "questions": [ ... ] }.'] };
