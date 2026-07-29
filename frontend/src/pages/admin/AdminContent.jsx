@@ -701,6 +701,9 @@ export default function AdminContent() {
             </div>
             <QuestionView q={viewQ} onRegenerate={() => regenerateQ(viewQ)} regenerating={regenId === viewQ._id} onExtend={() => setExtendOneItem(viewQ)} extending={extendingQId === viewQ._id} onSchedule={() => setScheduleQ(viewQ)} />
             <div className="mt-5 flex justify-end gap-2">
+              <button onClick={async () => { if (!window.confirm("Delete this question? This cannot be undone.")) return; await contentService.deleteQuestion(viewQ._id); setViewQ(null); load("questions"); }} className="btn-outline mr-auto text-rose-600">
+                <Trash2 className="h-4 w-4" /> Delete
+              </button>
               <button onClick={() => setAddToTestQ(viewQ)} className="btn-outline">
                 <ClipboardList className="h-4 w-4" /> Add to test
               </button>
