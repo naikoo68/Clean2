@@ -333,12 +333,12 @@ export default function AiGenerate({ open, onClose, onUpload, title = "Generate 
   // Put the ticked subtopics into the "Subtopics to cover" box (merged, deduped).
   const addSelectedToSubtopics = () => {
     const picks = plan.filter((p) => selected.has(p.text.toLowerCase())).map((p) => p.text);
-    if (!picks.length) { setMsg("Tick the subtopics you want first, then click \"Add selected\"."); return; }
-    setSubtopics((cur) => {
-      const existing = cur.split(/[\n,]+/).map((s) => s.trim()).filter(Boolean);
-      return Array.from(new Set([...existing, ...picks])).join(", ");
-    });
-    setMsg(`Added ${picks.length} subtopic(s) to "Subtopics to cover". Set the question mix and Generate.`);
+    if (!picks.length) { setMsg("Tick the subtopics you want first, then click \"Use selected\"."); return; }
+    // REPLACE the box with exactly the ticked subtopics — so generation focuses on
+    // only these. (Appending kept whatever was already there, which is why picking
+    // one still generated across all the subtopics still sitting in the box.)
+    setSubtopics(picks.join(", "));
+    setMsg(`"Subtopics to cover" now holds only your ${picks.length} selected subtopic(s) — Generate will focus on just these.`);
   };
   // Generate a batch focused on ONE saved subtopic (uses the type/difficulty grid).
   const generateSubtopic = (text) => { setSubtopics(text); generate(false, text); };
@@ -514,10 +514,10 @@ export default function AiGenerate({ open, onClose, onUpload, title = "Generate 
                   </p>
                   <div className="flex items-center gap-3 text-xs">
                     <button type="button" onClick={toggleSelectAll} className="font-semibold text-brand-600 hover:underline dark:text-brand-300">{allSelected ? "Clear all" : "Select all"}</button>
-                    <button type="button" onClick={addSelectedToSubtopics} className="inline-flex items-center gap-1 rounded-md bg-brand-600 px-2 py-1 font-semibold text-white transition hover:bg-brand-700"><ListChecks className="h-3.5 w-3.5" /> Add selected ({selected.size})</button>
+                    <button type="button" onClick={addSelectedToSubtopics} className="inline-flex items-center gap-1 rounded-md bg-brand-600 px-2 py-1 font-semibold text-white transition hover:bg-brand-700"><ListChecks className="h-3.5 w-3.5" /> Use selected ({selected.size})</button>
                   </div>
                 </div>
-                <p className="mb-2 text-xs text-slate-500 dark:text-slate-400">Tick the subtopics you need and click <b>Add selected</b> to drop them into "Subtopics to cover", or hit <b>Generate</b> on a single one. Saved on this device.</p>
+                <p className="mb-2 text-xs text-slate-500 dark:text-slate-400">Tick the subtopics you need and click <b>Use selected</b> — this sets "Subtopics to cover" to <b>only</b> those, so Generate focuses on just them (it replaces whatever is in the box). Or hit <b>Generate</b> on a single row to do that one now. Saved on this device.</p>
                 <ul className="max-h-56 space-y-1 overflow-y-auto">
                   {plan.map((p, i) => {
                     const sel = selected.has(p.text.toLowerCase());
