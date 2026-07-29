@@ -979,7 +979,7 @@ export default function AdminPractice({ clientMode = false }) {
         newLeafLabel={kind}
         currentTargetName={aiTarget?.name || qItem?.name || ""}
         existingQuestions={gapPrefill ? gapPrefill.avoid : tq}
-        defaultTopic={gapPrefill ? gapPrefill.topic : (qItem?.aiTopic || "")}
+        defaultTopic={gapPrefill ? gapPrefill.topic : (qItem?.aiTopic || (kind === "quiz" ? topic : subject)?.name || "")}
         defaultSubtopics={gapPrefill ? gapPrefill.subtopics : (qItem?.aiSubtopics || "")}
         defaultDest={gapPrefill ? "new" : "current"}
         coverageQuestions={topicStems}
