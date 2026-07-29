@@ -32,11 +32,13 @@ const blankBulk = { label: "", baseUrl: GEMINI_BASE, models: "gemini-3.5-flash-l
 
 const PER_PAGE = 10; // keys shown per page; bulk actions are scoped to the current page
 
-// Built-in Gemini models offered by the per-page "Set model" control. The first
-// entry is the default. gemini-3.5-flash-lite leads: it's the current standard —
-// newer, cleaner JSON and fewer empty replies than 2.5-flash-lite. The 3.6 ids
-// are the newest generation; 3.6-flash is GA, 3.6-flash-lite may not be available
-// on every free key yet, so test it on one key before applying it to all.
+// Built-in models offered by the "Set model" control, all served on the Gemini
+// base URL (so your existing Google keys can use them — no new key needed). The
+// first entry is the default. gemini-3.5-flash-lite leads: newer, cleaner JSON and
+// fewer empty replies than 2.5-flash-lite. The 3.6 ids are the newest generation;
+// the gemma-3-* ids are Google's open Gemma models on the SAME endpoint. Not every
+// free key/project serves every model, so test a new pick on ONE key first before
+// applying it to all.
 const GEMINI_MODELS = [
   { id: "gemini-3.5-flash-lite", label: "gemini-3.5-flash-lite — recommended (newer, cleaner JSON)" },
   { id: "gemini-3.6-flash-lite", label: "gemini-3.6-flash-lite — newest lite (test on one key first)" },
@@ -47,6 +49,9 @@ const GEMINI_MODELS = [
   { id: "gemini-2.5-pro", label: "gemini-2.5-pro — free 5 RPM · 100/day" },
   { id: "gemini-2.0-flash", label: "gemini-2.0-flash" },
   { id: "gemini-2.0-flash-lite", label: "gemini-2.0-flash-lite" },
+  { id: "gemma-3-27b-it", label: "gemma-3-27b-it — Gemma, best quality (test on one key first)" },
+  { id: "gemma-3-12b-it", label: "gemma-3-12b-it — Gemma, lighter" },
+  { id: "gemma-3-4b-it", label: "gemma-3-4b-it — Gemma, lightest/fastest" },
   { id: "gemini-flash-latest", label: "gemini-flash-latest (alias)" },
   { id: "gemini-flash-lite-latest", label: "gemini-flash-lite-latest (alias)" },
 ];
