@@ -44,6 +44,7 @@ export default function AiGenerate({ open, onClose, onUpload, title = "Generate 
   const [preview, setPreview] = useState([]);
   const [busy, setBusy] = useState(false);
   const [stopping, setStopping] = useState(false); // user asked to stop the current generation
+  const [autoContinue, setAutoContinue] = useState(false); // keep generating in waves until the full count is reached
   const jobIdRef = useRef(null); // id of the running background job (so Stop can cancel it)
   const stopRef = useRef(false); // set when the user clicks Stop — breaks/short-circuits the poll loop
   const [inserting, setInserting] = useState(false);
@@ -188,7 +189,10 @@ export default function AiGenerate({ open, onClose, onUpload, title = "Generate 
   };
 
   // `append` = "Generate more": keep the current preview and add a fresh batch
-  // on the same topic, avoiding everything already generated (via avoidStems).
+  // on the same topic, avoiding everything already generated. With Auto-continue
+  // on, the main Generate runs in WAVES — after a wave is cut short (free-tier
+  // quota / shortfall) it waits ~60s for the limit to reset and generates the
+  // remainder, repeating until the full count is reached or you press Stop.
   const generate = async (append = false, overrideSubtopics = null) => {
     if (!topic.trim() && !url.trim()) { setMsg("Enter a topic/syllabus, or paste a source link (web page or YouTube video)."); return; }
     const plan = buildPlan();
@@ -200,70 +204,96 @@ export default function AiGenerate({ open, onClose, onUpload, title = "Generate 
     jobIdRef.current = null;
     setKeyStats(null);
     if (!append) setPreview([]);
-    setMsg(append ? `Generating ${total} more from this topic (no duplicates)…` : `Starting generation of ${total} question(s)…`);
-    try {
-      const { jobId, requested } = await aiService.generate({
-        topic: topic.trim(),
-        // A per-subtopic "Generate" button passes the single subtopic to focus on;
-        // otherwise use whatever is typed in the Subtopics box.
-        subtopics: (overrideSubtopics != null ? overrideSubtopics : subtopics).trim() || undefined,
-        url: url.trim() || undefined, // optional web page / YouTube link → its text/transcript
-        plan,
-        notes: notes.trim(),
-        model: model || undefined,
-        avoid: avoidStems, // don't repeat anything from earlier batches
-        mode: isClient ? source : undefined, // which key pool to use for this run
-      });
-      if (!jobId) throw new Error("Could not start generation.");
-      jobIdRef.current = jobId; // remember it so the Stop button can cancel this run
 
-      // Poll the background job for progress until it finishes.
-      const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-      let done = false;
+    const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+    // Accumulate the avoid-list LOCALLY across waves — React state updates are
+    // async, so relying on avoidStems would let the next wave repeat this wave's
+    // questions. We still mirror it into state for later manual "Generate more".
+    let avoidLocal = Array.from(new Set([...(avoidStems || [])]));
+
+    // Run ONE wave (start job + poll to completion). Appends its questions to the
+    // preview and returns how it ended so the loop can decide to auto-continue.
+    const runWave = async (isAppend) => {
+      let jobId, requested;
+      try {
+        ({ jobId, requested } = await aiService.generate({
+          topic: topic.trim(),
+          // A per-subtopic "Generate" button passes the single subtopic to focus
+          // on; otherwise use whatever is typed in the Subtopics box.
+          subtopics: (overrideSubtopics != null ? overrideSubtopics : subtopics).trim() || undefined,
+          url: url.trim() || undefined,
+          plan,
+          notes: notes.trim(),
+          model: model || undefined,
+          avoid: avoidLocal, // don't repeat anything from earlier waves/batches
+          mode: isClient ? source : undefined,
+        }));
+      } catch (e) { setMsg(e.message || "Generation failed."); return { produced: 0, errored: true }; }
+      if (!jobId) { setMsg("Could not start generation."); return { produced: 0, errored: true }; }
+      jobIdRef.current = jobId;
+      let done = false, result = { produced: 0, timedOut: true };
       for (let i = 0; i < 300 && !done; i++) {
         await sleep(2000);
         let s;
-        try {
-          s = await aiService.job(jobId);
-        } catch {
-          continue; // transient poll hiccup — keep waiting
-        }
-        if (s.keyStats && Object.keys(s.keyStats).length) setKeyStats(s.keyStats); // live per-key counter
+        try { s = await aiService.job(jobId); } catch { continue; }
+        if (s.keyStats && Object.keys(s.keyStats).length) setKeyStats(s.keyStats);
         if (s.status === "done") {
           const qs = s.questions || [];
-          // Append when "Generate more", otherwise replace the preview.
-          setPreview((prev) => (append ? [...prev, ...qs] : qs));
-          // Remember these stems so the NEXT batch avoids repeating them.
+          setPreview((prev) => (isAppend ? [...prev, ...qs] : qs));
           const batchStems = qs.map((q) => q.text).filter(Boolean);
-          setAvoidStems((prev) => Array.from(new Set([...prev, ...batchStems])));
-          // Refresh the covered/uncovered summary using everything so far.
-          refreshCoverage(Array.from(new Set([...avoidStems, ...batchStems])));
-          const short = qs.length < requested;
-          const quota = s.error === "quota";
-          const cancelled = s.error === "cancelled" || stopRef.current;
-          setMsg(
-            cancelled
-              ? `⏹ Stopped. Kept ${qs.length} question(s) generated so far${s.model ? ` with ${s.model}` : ""} — review & Insert below, or Generate more.`
-              : (append
-                  ? `✓ Added ${qs.length} more question(s)${s.model ? ` with ${s.model}` : ""}.`
-                  : `✓ Generated ${qs.length} of ${requested} question(s)${s.model ? ` with ${s.model}` : ""}.`) +
-                  (short && quota
-                    ? " Stopped early — Gemini free-tier quota was reached. Insert these, then generate the rest in a minute."
-                    : short
-                    ? " (Some couldn't be generated — click “Generate more” to top up.)"
-                    : append
-                    ? " No duplicates of the earlier questions. Review & Insert."
-                    : " Review below, then Insert.")
-          );
+          avoidLocal = Array.from(new Set([...avoidLocal, ...batchStems]));
+          setAvoidStems(avoidLocal);
+          refreshCoverage(avoidLocal);
+          result = { produced: qs.length, requested, model: s.model, short: qs.length < requested, quota: s.error === "quota", cancelled: s.error === "cancelled" || stopRef.current };
           done = true;
         } else if (s.status === "error") {
-          setMsg(s.error || "Generation failed.");
-          done = true;
+          setMsg(s.error || "Generation failed."); result = { produced: 0, errored: true }; done = true;
         } else {
           setMsg(stopRef.current ? `Stopping… keeping the ${s.count || 0} generated so far` : `Generating… ${s.count || 0} of ${requested} ready`);
         }
       }
       if (!done) setMsg("Still generating — this is taking longer than expected. Please try a smaller batch.");
+      return result;
+    };
+
+    // Final summary once the loop ends.
+    const finalize = (res, producedTotal, target) => {
+      if (res?.errored || res?.timedOut) return; // their own message already stands
+      const model = res?.model ? ` with ${res.model}` : "";
+      if (stopRef.current || res?.cancelled) { setMsg(`⏹ Stopped. Kept ${producedTotal} question(s) so far${model} — review & Insert below, or Generate more.`); return; }
+      const short = producedTotal < target;
+      if (append && !autoContinue) {
+        setMsg(`✓ Added ${producedTotal} more question(s)${model}.` + (short ? " (Some couldn't be generated — click “Generate more” to top up.)" : " No duplicates of the earlier questions. Review & Insert."));
+        return;
+      }
+      let tail;
+      if (!short) tail = " Review below, then Insert.";
+      else if (res?.quota) tail = autoContinue ? " The free-tier quota kept limiting it — Insert these, then Generate more later for the rest." : " Stopped early — Gemini free-tier quota was reached. Insert these, then generate the rest in a minute.";
+      else tail = " (Some couldn't be generated — click “Generate more” to top up.)";
+      setMsg(`✓ Generated ${producedTotal} of ${target} question(s)${model}.` + tail);
+    };
+
+    try {
+      const target = total;
+      const autoLoop = autoContinue && !append; // manual "Generate more" stays a single wave
+      setMsg(append ? `Generating ${total} more from this topic (no duplicates)…` : `Starting generation of ${total} question(s)…`);
+      let producedTotal = 0;
+      let firstWave = true;
+      let last;
+      while (true) {
+        last = await runWave(firstWave ? append : true);
+        producedTotal += last.produced || 0;
+        firstWave = false;
+        const reached = producedTotal >= target;
+        const canContinue = autoLoop && !stopRef.current && !reached && (last.produced || 0) > 0 && (last.short || last.quota) && !last.errored && !last.timedOut;
+        if (!canContinue) { finalize(last, producedTotal, target); break; }
+        // Interruptible wait for the per-minute limit to refill.
+        for (let k = 60; k > 0 && !stopRef.current; k--) {
+          setMsg(`Auto-continue: ${producedTotal} of ${target} so far. Waiting ${k}s for the free-tier limit to reset… (press Stop to keep what you have)`);
+          await sleep(1000);
+        }
+        if (stopRef.current) { finalize(last, producedTotal, target); break; }
+      }
     } catch (e) {
       setMsg(e.message || "Generation failed.");
     } finally {
@@ -585,11 +615,16 @@ export default function AiGenerate({ open, onClose, onUpload, title = "Generate 
               Leave empty to use defaults. Anything you write here is treated as a top-priority instruction the AI must follow for every question.
             </p>
 
+            <label className="mt-4 flex items-start gap-2 rounded-lg border border-slate-200 p-2.5 text-xs text-slate-600 dark:border-slate-700 dark:text-slate-300">
+              <input type="checkbox" checked={autoContinue} onChange={(e) => setAutoContinue(e.target.checked)} className="mt-0.5 h-4 w-4 flex-shrink-0 accent-brand-600" />
+              <span><b>Auto-continue</b> until the full count is generated. When the free-tier limit stops a wave, it waits ~60s and keeps going (no duplicates) until it reaches {total || "the"} question(s) — press <b>Stop</b> to end early. Best for big batches.</span>
+            </label>
+
             <button
               type="button"
               onClick={() => generate(false)}
               disabled={busy}
-              className="btn-primary mt-4 w-full"
+              className="btn-primary mt-2 w-full"
             >
               {busy ? <><Loader2 className="h-4 w-4 animate-spin" /> Generating…</> : <><Wand2 className="h-4 w-4" /> Generate</>}
             </button>
