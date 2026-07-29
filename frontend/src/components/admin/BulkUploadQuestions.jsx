@@ -334,10 +334,15 @@ function looseJsonParse(text) {
   const first = raw.search(/[[{]/);
   const last = Math.max(raw.lastIndexOf("]"), raw.lastIndexOf("}"));
   if (first > 0 && last > first) raw = raw.slice(first, last + 1); // drop surrounding prose
-  // Double any backslash that isn't a real JSON escape (only \" \\ \/ \uXXXX are
-  // kept). This turns raw LaTeX like \psi, \frac, \theta, \rightarrow, \, \% into
-  // valid JSON strings while preserving escaped quotes.
-  const fixBackslashes = (s) => s.replace(/\\(?!["\\/]|u[\da-fA-F]{4})/g, "\\\\");
+  // Escape stray LaTeX backslashes (\psi, \frac, \theta, \, \%) that models forget
+  // to double — WITHOUT corrupting ones that are already correctly doubled. We
+  // match an escaped-backslash PAIR (\\) first and keep it intact so its second
+  // backslash is never reprocessed; otherwise we double a lone backslash that
+  // isn't a real JSON escape (\" and \/ and \uXXXX are preserved). This lets a
+  // file MIX doubled and single backslashes (very common in AI output) and still
+  // parse. The old regex re-doubled the pair's 2nd backslash (\\, -> \\\,), which
+  // threw "Bad escaped character" whenever any single backslash forced this path.
+  const fixBackslashes = (s) => s.replace(/\\\\|\\(?!["/]|u[\da-fA-F]{4})/g, (m) => (m === "\\\\" ? m : "\\\\"));
   const attempts = [raw, fixBackslashes(raw), fixBackslashes(raw).replace(/,\s*([\]}])/g, "$1")];
   let err;
   for (const t of attempts) { try { return { data: JSON.parse(t) }; } catch (e) { err = e; } }
