@@ -261,6 +261,39 @@ export async function splitQuiz(req, res) {
   res.json({ message: `Split ${total} questions into ${chunks.length} quizzes.`, quizzes: chunks.length, created: chunks.length - 1 });
 }
 
+// POST /api/quizzes/:id/merge  { sourceIds: [] }
+// Merge other quizzes' questions INTO this quiz (the inverse of split). Every
+// question from each source quiz is moved into the target quiz; the emptied
+// source quizzes are then deleted. Sources must be in the SAME session.
+export async function mergeQuiz(req, res) {
+  const target = await Quiz.findById(req.params.id);
+  if (!target) return res.status(404).json({ message: "Quiz not found" });
+  const ids = (Array.isArray(req.body?.sourceIds) ? req.body.sourceIds : [])
+    .map(String)
+    .filter((s) => s && s !== String(target._id));
+  if (!ids.length) return res.status(400).json({ message: "Pick at least one other quiz to merge in." });
+
+  const sources = await Quiz.find({ _id: { $in: ids }, session: target.session });
+  if (!sources.length) return res.status(404).json({ message: "No matching quizzes to merge (they must be in the same session)." });
+
+  let moved = 0;
+  for (const src of sources) {
+    const r = await Question.updateMany(
+      { quiz: src._id },
+      { $set: { quiz: target._id, session: target.session, subject: target.subject } }
+    );
+    moved += r.modifiedCount || 0;
+    await Quiz.deleteOne({ _id: src._id });
+  }
+  const total = await Question.countDocuments({ quiz: target._id });
+  res.json({
+    message: `Merged ${sources.length} quiz(zes) (${moved} questions) into "${target.title}". It now has ${total} question(s).`,
+    merged: sources.length,
+    moved,
+    total,
+  });
+}
+
 // POST /api/topics/:id/split  { perQuiz }
 // Split ALL questions in a topic (across its sessions/quizzes) into quizzes of
 // `perQuiz` each, named "Quiz 1".."Quiz N", under a single session in the topic.
@@ -379,16 +412,38 @@ export async function bulkCreateQuestions(req, res) {
     }
   }
   const owner = ownerValue(req);
-  const docs = questions.map((q) => ({ status: "published", ...q, ...context, owner }));
 
-  // ordered:false keeps inserting past any invalid row. If some rows fail
-  // validation, Mongoose still inserts the good ones and throws — recover the
-  // inserted docs from the error so a few bad questions never block the add.
+  // Validate each question UP FRONT so we can (a) insert every good one and
+  // (b) tell the client EXACTLY which questions were rejected and why. Before,
+  // insertMany(ordered:false) silently dropped any doc that failed the schema
+  // (e.g. not exactly 4 options), so an upload of 199 could quietly become 179
+  // with no explanation. Now nothing is lost silently — each failure is
+  // reported with its 1-based number, type, a snippet of its text, and the
+  // exact validation reason.
+  const good = [];
+  const errors = [];
+  questions.forEach((q, i) => {
+    const doc = new Question({ status: "published", ...q, ...context, owner });
+    const ve = doc.validateSync();
+    if (ve) {
+      const reason =
+        Object.values(ve.errors || {})
+          .map((e) => e.message)
+          .join("; ") || "Invalid question";
+      errors.push({ number: i + 1, type: q.type || "mcq", text: String(q.text || "").slice(0, 80), reason });
+    } else {
+      good.push(doc);
+    }
+  });
+
+  // ordered:false still guards against any residual write error on the good set.
   let created = [];
-  try {
-    created = await Question.insertMany(docs, { ordered: false });
-  } catch (err) {
-    created = Array.isArray(err?.insertedDocs) ? err.insertedDocs : [];
+  if (good.length) {
+    try {
+      created = await Question.insertMany(good, { ordered: false });
+    } catch (err) {
+      created = Array.isArray(err?.insertedDocs) ? err.insertedDocs : [];
+    }
   }
 
   // Attach to the test series' question list when uploading test questions.
@@ -397,7 +452,12 @@ export async function bulkCreateQuestions(req, res) {
       $push: { questions: { $each: created.map((c) => c._id) } },
     });
   }
-  res.status(201).json({ inserted: created.length, requested: docs.length });
+  res.status(201).json({
+    inserted: created.length,
+    requested: questions.length,
+    skipped: errors.length,
+    errors: errors.slice(0, 50), // cap the payload; enough to diagnose the batch
+  });
 }
 
 export async function updateQuestion(req, res) {

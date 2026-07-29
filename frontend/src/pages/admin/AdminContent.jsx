@@ -16,7 +16,7 @@ import ExtendExplanationsModal from "../../components/admin/ExtendExplanationsMo
 import ExtendOneQuestionModal from "../../components/admin/ExtendOneQuestionModal";
 import RegenerateAllModal from "../../components/admin/RegenerateAllModal";
 import ScheduleQuestionModal from "../../components/admin/ScheduleQuestionModal";
-import { Sparkles, Files, Globe, Wand2, Loader2, ClipboardList, RefreshCw, Scissors } from "lucide-react";
+import { Sparkles, Files, Globe, Wand2, Loader2, ClipboardList, RefreshCw, Scissors, GitMerge } from "lucide-react";
 
 const COLORS = [
   "from-blue-500 to-indigo-600",
@@ -64,6 +64,10 @@ export default function AdminContent() {
   const [splitTarget, setSplitTarget] = useState(null);
   const [splitPer, setSplitPer] = useState(50);
   const [splitting, setSplitting] = useState(false);
+  // Merge sibling quizzes (same session) INTO one target quiz (inverse of split).
+  const [mergeTarget, setMergeTarget] = useState(null);
+  const [mergeIds, setMergeIds] = useState([]);
+  const [merging, setMerging] = useState(false);
   const [saving, setSaving] = useState(false);
   const [viewQ, setViewQ] = useState(null); // single question to preview
   const [addToTestQ, setAddToTestQ] = useState(null); // question being copied into a test
@@ -266,6 +270,25 @@ export default function AdminContent() {
       setError(e.message);
     } finally {
       setSplitting(false);
+    }
+  };
+
+  // Merge the selected sibling quizzes INTO `mergeTarget` (moves their questions
+  // in, then deletes the emptied source quizzes).
+  const doMerge = async () => {
+    if (!mergeTarget || !mergeIds.length) return;
+    setMerging(true);
+    setError("");
+    try {
+      const res = await contentService.mergeQuiz(mergeTarget._id, mergeIds);
+      setMergeTarget(null);
+      setMergeIds([]);
+      window.alert(res?.message || "Merged.");
+      load(view);
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setMerging(false);
     }
   };
 
@@ -546,6 +569,15 @@ export default function AdminContent() {
                     <Scissors className="h-4 w-4" />
                   </button>
                 )}
+                {view === "quizzes" && (
+                  <button
+                    onClick={() => { setMergeIds([]); setMergeTarget(item); }}
+                    title="Merge other quizzes in this session into this one"
+                    className="rounded-lg p-2 text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/30"
+                  >
+                    <GitMerge className="h-4 w-4" />
+                  </button>
+                )}
                 <button onClick={() => openEdit(item)} title="Edit" className="rounded-lg p-2 text-brand-600 hover:bg-brand-50 dark:hover:bg-brand-900/30">
                   <Pencil className="h-4 w-4" />
                 </button>
@@ -659,6 +691,41 @@ export default function AdminContent() {
         </div>
       )}
 
+      {/* Merge sibling quizzes (same session) into one */}
+      {mergeTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={merging ? undefined : () => setMergeTarget(null)}>
+          <div onClick={(e) => e.stopPropagation()} className="w-full max-w-md animate-scale-in card p-6">
+            <div className="mb-3 flex items-center justify-between">
+              <h3 className="flex items-center gap-2 text-lg font-bold"><GitMerge className="h-5 w-5 text-indigo-600" /> Merge into “{mergeTarget.title || mergeTarget.name}”</h3>
+              <button type="button" onClick={() => setMergeTarget(null)} disabled={merging}><X className="h-5 w-5" /></button>
+            </div>
+            <p className="mb-3 text-sm text-slate-500 dark:text-slate-400">
+              Pick other quizzes in this session to merge into <b>“{mergeTarget.title || mergeTarget.name}”</b>. Their questions move in and the emptied quizzes are deleted.
+            </p>
+            {(() => {
+              const others = items.filter((it) => it._id !== mergeTarget._id);
+              if (!others.length) return <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-700 dark:bg-amber-900/20 dark:text-amber-300">There are no other quizzes in this session to merge.</p>;
+              return (
+                <div className="max-h-64 space-y-1 overflow-y-auto rounded-lg border border-slate-200 p-2 dark:border-slate-700">
+                  {others.map((it) => (
+                    <label key={it._id} className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 hover:bg-slate-50 dark:hover:bg-slate-800">
+                      <input type="checkbox" checked={mergeIds.includes(it._id)} onChange={() => setMergeIds((s) => (s.includes(it._id) ? s.filter((x) => x !== it._id) : [...s, it._id]))} />
+                      <span className="text-sm">{it.title || it.name} <span className="text-slate-400">· {it.questions ?? 0} q</span></span>
+                    </label>
+                  ))}
+                </div>
+              );
+            })()}
+            <div className="mt-5 flex justify-end gap-2">
+              <button type="button" onClick={() => setMergeTarget(null)} disabled={merging} className="btn-outline">Cancel</button>
+              <button type="button" onClick={doMerge} disabled={merging || !mergeIds.length} className="btn-primary">
+                {merging ? <><Loader2 className="h-4 w-4 animate-spin" /> Merging…</> : <><GitMerge className="h-4 w-4" /> Merge{mergeIds.length ? ` ${mergeIds.length}` : ""}</>}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <DuplicatesModal
         open={dupOpen}
         onClose={() => setDupOpen(false)}
@@ -699,7 +766,7 @@ export default function AdminContent() {
               <h3 className="text-lg font-bold">Question</h3>
               <button onClick={() => setViewQ(null)}><X className="h-5 w-5" /></button>
             </div>
-            <QuestionView q={viewQ} onRegenerate={() => regenerateQ(viewQ)} regenerating={regenId === viewQ._id} onExtend={() => setExtendOneItem(viewQ)} extending={extendingQId === viewQ._id} onSchedule={() => setScheduleQ(viewQ)} />
+            <QuestionView q={viewQ} {...(() => { const L = shown; const i = L.findIndex((x) => x._id === viewQ._id); return { position: i >= 0 ? `${i + 1} / ${L.length}` : undefined, onPrev: i > 0 ? () => setViewQ(L[i - 1]) : undefined, onNext: i >= 0 && i < L.length - 1 ? () => setViewQ(L[i + 1]) : undefined }; })()} onRegenerate={() => regenerateQ(viewQ)} regenerating={regenId === viewQ._id} onExtend={() => setExtendOneItem(viewQ)} extending={extendingQId === viewQ._id} onSchedule={() => setScheduleQ(viewQ)} />
             <div className="mt-5 flex justify-end gap-2">
               <button onClick={async () => { if (!window.confirm("Delete this question? This cannot be undone.")) return; await contentService.deleteQuestion(viewQ._id); setViewQ(null); load("questions"); }} className="btn-outline mr-auto text-rose-600">
                 <Trash2 className="h-4 w-4" /> Delete
