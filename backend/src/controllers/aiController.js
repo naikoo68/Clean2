@@ -122,11 +122,11 @@ async function resolveModel(requested, scope = SYSTEM_SCOPE) {
 // (429/401/403). Each endpoint uses the model it supports (ep.model), so keys on
 // a different model still work as fallbacks. Other errors aren't retried on
 // another key.
-async function callWithFallback({ endpoints, model, userPrompt, maxTokens, owner = null, systemPrompt }) {
+async function callWithFallback({ endpoints, model, userPrompt, maxTokens, owner = null, systemPrompt, failOnEmpty = false }) {
   let last = { ok: false, status: 0, detail: "No AI key is configured." };
   let sawQuota = false; // at least one key failed with a recoverable rate-limit
   for (const ep of endpoints || []) {
-    const r = await callProvider({ key: ep.key, baseUrl: ep.baseUrl, model: ep.model || model, userPrompt, maxTokens, systemPrompt });
+    const r = await callProvider({ key: ep.key, baseUrl: ep.baseUrl, model: ep.model || model, userPrompt, maxTokens, systemPrompt, failOnEmpty });
     if (r.ok) {
       // Record app-side usage on the matching DB key (env-only keys aren't in
       // the DB, so this is a no-op for them). Scoped by owner so a client key
@@ -136,7 +136,10 @@ async function callWithFallback({ endpoints, model, userPrompt, maxTokens, owner
     }
     if (r.status === 429) sawQuota = true;
     last = r;
-    if (![429, 401, 403].includes(r.status)) break;
+    // 520 = a 200 with EMPTY content (safety filter / thinking-only reply). Like
+    // a rate-limit, it's worth rolling over to the NEXT key/model rather than
+    // giving up — another key on a stronger model may return real content.
+    if (![429, 401, 403, 520].includes(r.status)) break;
   }
   // Every key failed. If ANY failure was just a rate-limit (429, recoverable) but
   // the LAST key tried happened to be an unauthorized/disabled one (401/403),
@@ -834,7 +837,7 @@ function quota429Message(detail = "") {
 }
 
 // One provider call with transient-error retries. Returns { ok, status, content, detail }.
-async function callProvider({ key, baseUrl, model, userPrompt, maxTokens, systemPrompt = SYSTEM_PROMPT, temperature = 0.6, timeoutMs = 90000 }) {
+async function callProvider({ key, baseUrl, model, userPrompt, maxTokens, systemPrompt = SYSTEM_PROMPT, temperature = 0.6, timeoutMs = 90000, failOnEmpty = false }) {
   const payload = {
     model,
     messages: [
@@ -888,7 +891,16 @@ async function callProvider({ key, baseUrl, model, userPrompt, maxTokens, system
           detail: `Provider returned a non-JSON response (looks like an HTML/error page). This usually means the Base URL is wrong or the key's gateway is blocking the request. ${raw.slice(0, 120)}`,
         };
       }
-      return { ok: true, content: extractContent(data), tokens: data?.usage?.total_tokens || 0 };
+      const content = extractContent(data);
+      // A 200 with NO usable text — Gemini does this on a safety block or when a
+      // "thinking" model spends its whole budget reasoning and emits no answer.
+      // For JSON tasks (failOnEmpty) report it as a soft, retriable error (520)
+      // so callWithFallback rolls over to the next key/model instead of treating
+      // an empty reply as success. Key-test / model-detect keep the old behavior.
+      if (failOnEmpty && !String(content || "").trim()) {
+        return { ok: false, status: 520, empty: true, detail: "The model returned an empty response (possible safety filter, or a thinking-only/weak model)." };
+      }
+      return { ok: true, content, tokens: data?.usage?.total_tokens || 0 };
     }
     const detail = await resp.text().catch(() => "");
     // Some Gemini model versions reject the `reasoning_effort` field with a 400.
@@ -2427,7 +2439,7 @@ JSON VALIDITY RULES (follow exactly or the answer is discarded):
 Content rules:
 - "explanation": a THOROUGH, self-contained explanation of the correct answer (3-6 sentences). Include EVERY relevant supporting fact — exact dates/years, historical background, definitions, full formulas WITH the actual calculation, laws/theorems/principles by name, and cause-and-effect reasoning. Teach the concept as if to someone seeing it for the first time; never just restate the option. Put each sentence or distinct point on its OWN line (a real line break between points), not one long paragraph.
 - LOCAL / ALTERNATIVE NAMES: whenever a term/place/concept/person/disease/chemical/unit/law has a common local or vernacular (Hindi/regional) name, synonym, abbreviation's full form or old name, add it in brackets right after it.
-- "optionExplanations": an array of EXACTLY 4 strings, one per option. For EACH option state clearly whether it is correct or incorrect and WHY (for a wrong numeric option, show what mistake produces that value). Keep each to 1-2 short sentences. Leave the truly-CORRECT option's entry an empty string "".
+- "optionExplanations": a real JSON array of EXACTLY 4 SEPARATE strings, in the same order as the options (entry 0 = option A, 1 = B, 2 = C, 3 = D). For EACH option state clearly whether it is correct or incorrect and WHY (for a wrong numeric option, show what mistake produces that value). Keep each to 1-2 short sentences. Do NOT prefix an entry with a label such as "A)", "(A)", "A." or "Option A", and do NOT put more than one option's note inside a single entry. Leave the truly-CORRECT option's entry an empty string "".
 NUMERICAL / QUANTITATIVE QUESTIONS — you MUST verify by SOLVING, not just describe:
 - Solve the problem yourself from scratch. In "explanation" show the working STEP BY STEP: state the formula, substitute the actual values, and show each intermediate result on its OWN line, ending with the final computed value. Every arithmetic step must be correct and lead exactly to the answer you choose.
 - Compare your computed value with the four options and decide which option is TRULY correct.
@@ -2460,7 +2472,7 @@ OPTIONS — MANDATORY, this is the main task:
 - After your fix, ALL FOUR options must be plausible members of the one category. NEVER leave an off-category, unrelated or joke option, and never make a distractor an obvious give-away.
 - "correct": the 0-based index (0-3) of the correct option in the "options" array you return (it must still point to the original correct answer's text).
 
-EXPLANATION — "explanation": thorough and self-contained; put each point on its OWN line; add local/alternative names in brackets. "optionExplanations": EXACTLY 4 short notes saying why each option is right/wrong; leave the correct option's entry "". MATH: wrap any math/number in $...$ (never \\( \\) or \\[ \\]); NEVER use "$" for money. No markdown, no trailing commas. Return ONLY the JSON object.`;
+EXPLANATION — "explanation": thorough and self-contained; put each point on its OWN line; add local/alternative names in brackets. "optionExplanations": a real JSON array of EXACTLY 4 SEPARATE notes, one per option in order (0=A,1=B,2=C,3=D), saying why each option is right/wrong; do NOT prefix entries with labels like "A)"/"Option A" and do NOT pack multiple options into one entry; leave the correct option's entry "". MATH: wrap any math/number in $...$ (never \\( \\) or \\[ \\]); NEVER use "$" for money. No markdown, no trailing commas. Return ONLY the JSON object.`;
 
 const EXT_LETTERS = ["A", "B", "C", "D"];
 const toRomanLite = (n) => { const m = [["X", 10], ["IX", 9], ["V", 5], ["IV", 4], ["I", 1]]; let r = ""; for (const [s, v] of m) while (n >= v) { r += s; n -= v; } return r; };
@@ -2611,6 +2623,51 @@ function salvageExplanation(t) {
   return { explanation, optionExplanations: oe };
 }
 
+// The model sometimes returns the per-option notes malformed: ALL four packed
+// into the first array slot (renders as a blob under option A, nothing on the
+// rest), or each note prefixed with an "A)" / "(B)" / "Option C" label — which
+// leaves the correct option showing a bare stray label like "B)". Normalize into
+// a clean 4-slot array: re-split a packed blob by its option labels, and strip a
+// leading enumerator from each per-option note. Leaves already-correct arrays
+// untouched.
+function normalizeOptionNotes(rawOe) {
+  const arr = (Array.isArray(rawOe) ? rawOe : []).map((x) => (x == null ? "" : String(x)));
+  while (arr.length < 4) arr.push("");
+  const trimmed = arr.slice(0, 4).map((s) => s.trim());
+  const filled = trimmed.filter(Boolean).length;
+  const joined = trimmed.filter(Boolean).join("\n");
+
+  // Find option labels at a line start: "Option A", "(A)", "A)", "A.", "A:", "A-".
+  const findRe = /(?:^|\n)[\t ]*(?:option[\t ]+([A-Da-d])\b|\(([A-Da-d])\)|([A-Da-d])[\).:\u2013-])/gi;
+  const labels = [];
+  let m;
+  while ((m = findRe.exec(joined)) !== null) {
+    labels.push({
+      labelStart: m.index + (/^\n/.test(m[0]) ? 1 : 0),
+      afterLabel: findRe.lastIndex,
+      letter: (m[1] || m[2] || m[3] || "").toUpperCase(),
+      kind: m[1] ? "word" : "enum", // "Option A" keeps the words; "A)" is dropped
+    });
+  }
+  const distinct = new Set(labels.map((l) => l.letter));
+
+  // Packed into one slot but clearly labelled for 2+ options → re-split by label.
+  if (filled <= 1 && distinct.size >= 2) {
+    const bucket = { A: "", B: "", C: "", D: "" };
+    for (let i = 0; i < labels.length; i++) {
+      const from = labels[i].kind === "word" ? labels[i].labelStart : labels[i].afterLabel;
+      const to = i + 1 < labels.length ? labels[i + 1].labelStart : undefined;
+      const seg = joined.slice(from, to).trim();
+      if (seg) bucket[labels[i].letter] = seg;
+    }
+    return [bucket.A, bucket.B, bucket.C, bucket.D];
+  }
+  // Otherwise per-slot already — just strip a leading enumerator ("A)", "(B)", "C.").
+  const out = trimmed.map((s) => s.replace(/^\s*(?:\([A-Da-d]\)|[A-Da-d][\).:\u2013-])\s*/, "").trim());
+  while (out.length < 4) out.push("");
+  return out.slice(0, 4);
+}
+
 // Robustly pull { explanation, optionExplanations } from the model's text.
 function parseExplanationJson(content) {
   let t = String(content || "").trim();
@@ -2628,8 +2685,12 @@ function parseExplanationJson(content) {
 
   if (obj && typeof obj === "object") {
     const explanation = typeof obj.explanation === "string" ? obj.explanation.trim() : "";
-    let oe = Array.isArray(obj.optionExplanations) ? obj.optionExplanations.map((x) => (x == null ? "" : String(x))) : null;
-    if (oe) { oe = oe.slice(0, 4); while (oe.length < 4) oe.push(""); }
+    let oe = Array.isArray(obj.optionExplanations)
+      ? obj.optionExplanations.map((x) => (x == null ? "" : String(x)))
+      : typeof obj.optionExplanations === "string"
+        ? [obj.optionExplanations] // a single blob string — normalizeOptionNotes will split it
+        : null;
+    if (oe) oe = normalizeOptionNotes(oe); // split packed blobs / strip "A)" labels; pads to 4
     // Optional numerical-correction fields: a corrected 0-based answer index and
     // a corrected 4-option array (only present when the AI's working proves the
     // stored answer wrong). Accept a number, a "0".."3" string, or a letter A-D.
@@ -2715,6 +2776,7 @@ async function runExtendJob(id, { endpoints, model, questions, owner = null, not
       userPrompt: buildExtendPrompt(q, notes, fixOptions),
       maxTokens: 8000, // the verified/step-by-step replies are long — avoid truncation
       owner,
+      failOnEmpty: true, // an empty reply → try the next key/model instead of failing this question
     });
     if (!r.ok) {
       lastError = r;
@@ -2779,7 +2841,9 @@ async function runExtendJob(id, { endpoints, model, questions, owner = null, not
         error: lastError
           ? (lastError.status === 429
             ? "AI quota/rate limit reached before any explanation was updated. Wait a minute and try again."
-            : `AI provider error (${lastError.status || 0}). ${(lastError.detail || "").slice(0, 150)}`)
+            : lastError.empty
+              ? `Every key returned an empty reply for all ${total} question(s) — usually a safety filter or a thinking-only/weak model. Try again, or set the key's model to gemini-2.5-flash (or gemini-2.5-pro).`
+              : `AI provider error (${lastError.status || 0}). ${(lastError.detail || "").slice(0, 150)}`)
           : parseFails
             ? (emptyReplies >= parseFails
               ? `The AI returned empty replies for all ${total} question(s) — usually a safety filter or an overloaded/weak model. Try again, or set the key's model to gemini-2.5-flash.`
@@ -3204,6 +3268,7 @@ async function runRegenAllJob(id, { endpoints, model, questions, owner = null, n
       userPrompt: buildRegenPrompt(q, notes),
       maxTokens: 8000,
       owner,
+      failOnEmpty: true, // empty reply → roll over to the next key/model
     });
     if (!r.ok) {
       lastError = r;
