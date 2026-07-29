@@ -323,12 +323,33 @@ export function questionsToCsv(questions) {
 // CSV parser produces, so both feed the identical insert path. Accepts an array
 // or { questions: [...] }. `correct` may be an index (0–3), a number (1–4) or a
 // letter (A–D). Lists come as arrays (columnA/columnB/statements/tableRows).
+// Tolerant JSON parse for AI output: strips code fences, narrows to the outer
+// array/object, and — the big one — escapes stray LaTeX backslashes (e.g. "$\psi$",
+// "$\frac{d}{t}$") that models forget to double, which otherwise throw
+// "Bad escaped character". Returns { data } or { error }.
+function looseJsonParse(text) {
+  let raw = String(text || "").trim();
+  const fence = raw.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  if (fence) raw = fence[1].trim();
+  const first = raw.search(/[[{]/);
+  const last = Math.max(raw.lastIndexOf("]"), raw.lastIndexOf("}"));
+  if (first > 0 && last > first) raw = raw.slice(first, last + 1); // drop surrounding prose
+  // Double any backslash that isn't a real JSON escape (only \" \\ \/ \uXXXX are
+  // kept). This turns raw LaTeX like \psi, \frac, \theta, \rightarrow, \, \% into
+  // valid JSON strings while preserving escaped quotes.
+  const fixBackslashes = (s) => s.replace(/\\(?!["\\/]|u[\da-fA-F]{4})/g, "\\\\");
+  const attempts = [raw, fixBackslashes(raw), fixBackslashes(raw).replace(/,\s*([\]}])/g, "$1")];
+  let err;
+  for (const t of attempts) { try { return { data: JSON.parse(t) }; } catch (e) { err = e; } }
+  return { error: err };
+}
+
 function parseQuestionsJson(text) {
   const rows = [];
   const errors = [];
-  let data;
-  try { data = JSON.parse(String(text || "").trim()); }
-  catch (e) { return { rows, errors: [`Invalid JSON: ${e.message || "could not parse"}`] }; }
+  const parsed = looseJsonParse(text);
+  if (parsed.error) return { rows, errors: [`Invalid JSON: ${parsed.error.message || "could not parse"}. (Common cause: unescaped LaTeX backslashes — the importer tries to auto-fix them; check for stray "\\" or unescaped quotes.)`] };
+  const data = parsed.data;
   const list = Array.isArray(data) ? data : (Array.isArray(data?.questions) ? data.questions : null);
   if (!list) return { rows, errors: ['JSON must be an array of questions, or { "questions": [ ... ] }.'] };
 
