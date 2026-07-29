@@ -319,6 +319,76 @@ export function questionsToCsv(questions) {
     .join("\n");
 }
 
+// Parse a JSON array of question objects into the SAME internal row shape the
+// CSV parser produces, so both feed the identical insert path. Accepts an array
+// or { questions: [...] }. `correct` may be an index (0–3), a number (1–4) or a
+// letter (A–D). Lists come as arrays (columnA/columnB/statements/tableRows).
+function parseQuestionsJson(text) {
+  const rows = [];
+  const errors = [];
+  let data;
+  try { data = JSON.parse(String(text || "").trim()); }
+  catch (e) { return { rows, errors: [`Invalid JSON: ${e.message || "could not parse"}`] }; }
+  const list = Array.isArray(data) ? data : (Array.isArray(data?.questions) ? data.questions : null);
+  if (!list) return { rows, errors: ['JSON must be an array of questions, or { "questions": [ ... ] }.'] };
+
+  const S = (v) => (v == null ? "" : String(v)).trim();
+  const arr = (x) => (Array.isArray(x) ? x.map((v) => (v == null ? "" : String(v))) : []);
+  const normCorrect = (v) => {
+    const s = String(v ?? "").trim().toUpperCase();
+    if (["A", "B", "C", "D"].includes(s)) return "ABCD".indexOf(s);
+    const n = parseInt(s, 10);
+    if (n >= 1 && n <= 4) return n - 1; // 1-based
+    if (n >= 0 && n <= 3) return n;     // 0-based index
+    return 0;
+  };
+  const KNOWN = ["mcq", "matching", "statement", "pair", "pairselect", "assertion", "table", "image"];
+
+  list.forEach((q, i) => {
+    const type = KNOWN.includes(q?.type) ? q.type : "mcq";
+    const options = arr(q?.options);
+    const opts4 = [options[0] || "", options[1] || "", options[2] || "", options[3] || ""];
+    const row = {
+      type,
+      text: S(q?.text ?? q?.question),
+      options: opts4,
+      correct: normCorrect(q?.correct),
+      difficulty: ["Easy", "Medium", "Hard"].includes(q?.difficulty) ? q.difficulty : "Medium",
+      explanation: S(q?.explanation),
+      optionExplanations: arr(q?.optionExplanations ?? q?.whys).slice(0, 4),
+    };
+    const need4 = () => opts4.every((o) => o.trim());
+    if (type === "assertion") {
+      row.assertion = S(q?.assertion); row.reason = S(q?.reason);
+      if (!row.assertion || !row.reason || !need4()) { errors.push(`Question ${i + 1} (assertion): needs assertion, reason and 4 options.`); return; }
+    } else if (type === "image") {
+      row.image = S(q?.image ?? q?.imageUrl);
+      if (!row.image || !row.text || !need4()) { errors.push(`Question ${i + 1} (image): needs image URL, text and 4 options.`); return; }
+    } else if (type === "table") {
+      row.tableRows = Array.isArray(q?.tableRows) ? q.tableRows.map(arr).filter((r) => r.some((c) => c !== "")) : [];
+      if (!row.text || row.tableRows.length < 2 || !need4()) { errors.push(`Question ${i + 1} (table): needs text, ≥2 table rows and 4 options.`); return; }
+    } else if (type === "matching" || type === "pair" || type === "pairselect") {
+      row.columnA = arr(q?.columnA ?? q?.leftList);
+      row.columnB = arr(q?.columnB ?? q?.rightList);
+      if (!row.text || !row.columnA.length || !row.columnB.length || !need4()) { errors.push(`Question ${i + 1} (${type}): needs text, columnA, columnB and 4 options.`); return; }
+    } else if (type === "statement") {
+      row.columnA = arr(q?.columnA ?? q?.statements);
+      if (!row.text || !row.columnA.length || !need4()) { errors.push(`Question ${i + 1} (statement): needs text, statements and 4 options.`); return; }
+    } else { // mcq
+      if (!row.text || !need4()) { errors.push(`Question ${i + 1} (mcq): needs text and 4 options.`); return; }
+    }
+    rows.push(row);
+  });
+  return { rows, errors };
+}
+
+const TEMPLATE_JSON = JSON.stringify([
+  { type: "mcq", text: "What is 2+2?", options: ["3", "4", "5", "6"], correct: "B", difficulty: "Easy", explanation: "2+2 equals 4.", optionExplanations: ["3 is 2+1.", "", "5 is 2+3.", "6 is 2+4."] },
+  { type: "statement", text: "Consider the following statements:", columnA: ["The Sun is a star.", "The Moon is a planet."], options: ["1 only", "2 only", "1 and 2 only", "Neither 1 nor 2"], correct: "A", difficulty: "Medium", explanation: "Only statement 1 is correct; the Moon is a satellite." },
+  { type: "matching", text: "Match the scientist to the discovery:", columnA: ["Newton", "Einstein", "Bohr"], columnB: ["Gravity", "Relativity", "Atom model"], options: ["1-I, 2-II, 3-III", "1-II, 2-I, 3-III", "1-III, 2-II, 3-I", "1-I, 2-III, 3-II"], correct: "A", difficulty: "Medium", explanation: "Newton–Gravity, Einstein–Relativity, Bohr–Atom model." },
+  { type: "assertion", assertion: "Earth is closer to the Sun in January.", reason: "Earth's orbit is elliptical.", options: ["Both A and R are true and R is the correct explanation of A", "Both A and R are true but R is NOT the correct explanation of A", "A is true but R is false", "A is false but R is true"], correct: "A", difficulty: "Medium", explanation: "Perihelion is in early January because the orbit is elliptical." },
+], null, 2);
+
 const TEMPLATE =
   "Question,Option A,Option B,Option C,Option D,Correct,Difficulty,Explanation,WhyA,WhyB,WhyC,WhyD\n" +
   '"What is 2+2?",3,4,5,6,B,Easy,"2+2 equals 4 because you add two and two.","3 is 2+1, not 2+2.",,"5 is 2+3.","6 is 2+4."\n' +
@@ -340,6 +410,7 @@ export default function BulkUploadQuestions({ open, onClose, onUpload, title = "
   const [msg, setMsg] = useState("");
   const [replace, setReplace] = useState(false); // remove existing questions first
   const [section, setSection] = useState(defaultSection || sections[0] || ""); // subject to tag uploaded questions
+  const [mode, setMode] = useState("csv"); // "csv" | "json"
 
   // Re-sync the target subject each time the modal is (re)opened, since the
   // component stays mounted between opens.
@@ -347,7 +418,7 @@ export default function BulkUploadQuestions({ open, onClose, onUpload, title = "
 
   if (!open) return null;
 
-  const { rows, errors } = parseQuestionsCsv(text);
+  const { rows, errors } = mode === "json" ? parseQuestionsJson(text) : parseQuestionsCsv(text);
 
   const onFile = (e) => {
     const file = e.target.files?.[0];
@@ -383,6 +454,33 @@ export default function BulkUploadQuestions({ open, onClose, onUpload, title = "
           <button type="button" onClick={onClose}><X className="h-5 w-5" /></button>
         </div>
 
+        {/* Input format toggle: CSV or JSON */}
+        <div className="mb-3 inline-flex rounded-lg border border-slate-200 p-0.5 dark:border-slate-700">
+          <button type="button" onClick={() => setMode("csv")} className={`rounded-md px-3 py-1 text-sm font-semibold ${mode === "csv" ? "bg-brand-600 text-white" : "text-slate-600 dark:text-slate-300"}`}>CSV</button>
+          <button type="button" onClick={() => setMode("json")} className={`rounded-md px-3 py-1 text-sm font-semibold ${mode === "json" ? "bg-brand-600 text-white" : "text-slate-600 dark:text-slate-300"}`}>JSON</button>
+        </div>
+
+        {mode === "json" && (
+          <div className="mb-4 rounded-xl bg-slate-50 p-4 text-sm dark:bg-slate-800/60">
+            <p className="font-semibold">JSON format:</p>
+            <p className="mt-1 text-slate-500 dark:text-slate-400">Paste an array of question objects (or <code>{`{ "questions": [ ... ] }`}</code>). Each object:</p>
+            <pre className="mt-2 overflow-x-auto rounded-lg bg-white p-2 text-xs dark:bg-slate-900/50">{`{ "type": "mcq", "text": "...", "options": ["A","B","C","D"],
+  "correct": "B", "difficulty": "Easy", "explanation": "...",
+  "optionExplanations": ["","","",""] }`}</pre>
+            <ul className="mt-2 list-disc space-y-0.5 pl-5 text-xs text-slate-500 dark:text-slate-400">
+              <li><b>type</b>: mcq · matching · statement · pair · pairselect · assertion · table · image (default mcq).</li>
+              <li><b>correct</b>: a letter <code>A–D</code>, a number <code>1–4</code>, or a 0-based index <code>0–3</code>.</li>
+              <li><b>Lists as arrays</b>: matching/pair/pairselect use <code>columnA</code> &amp; <code>columnB</code>; statement uses <code>columnA</code> (or <code>statements</code>); table uses <code>tableRows</code> (array of rows, each an array of cells).</li>
+              <li><b>assertion</b>: <code>assertion</code> + <code>reason</code>; <b>image</b>: <code>image</code> (URL) + <code>text</code>.</li>
+              <li><b>optionExplanations</b>: 4 per-option notes (leave the correct one ""). Math in <code>$…$</code>.</li>
+            </ul>
+            <button type="button" onClick={() => setText(TEMPLATE_JSON)} className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-brand-600 hover:underline">
+              <FileText className="h-3.5 w-3.5" /> Load JSON example
+            </button>
+          </div>
+        )}
+
+        {mode === "csv" && (
         <div className="mb-4 rounded-xl bg-slate-50 p-4 text-sm dark:bg-slate-800/60">
           <p className="font-semibold">CSV format (one question per line):</p>
           <p className="mt-1 text-slate-500 dark:text-slate-400">Every row ends with the same tail: <code>…, Correct, Difficulty, Explanation, WhyA, WhyB, WhyC, WhyD</code></p>
@@ -411,6 +509,7 @@ export default function BulkUploadQuestions({ open, onClose, onUpload, title = "
             <FileText className="h-3.5 w-3.5" /> Load example
           </button>
         </div>
+        )}
 
         {sections.length > 0 && (
           <div className="mb-3 flex items-center gap-2">
@@ -424,8 +523,8 @@ export default function BulkUploadQuestions({ open, onClose, onUpload, title = "
 
         <div className="mb-3 flex flex-wrap gap-2">
           <label className="btn-outline cursor-pointer">
-            <FileText className="h-4 w-4" /> Choose CSV file
-            <input type="file" accept=".csv,text/csv,text/plain" className="hidden" onChange={onFile} />
+            <FileText className="h-4 w-4" /> {mode === "json" ? "Choose JSON file" : "Choose CSV file"}
+            <input type="file" accept={mode === "json" ? ".json,application/json,text/plain" : ".csv,text/csv,text/plain"} className="hidden" onChange={onFile} />
           </label>
           {text.trim() && (
             <button type="button" onClick={() => { setText(""); setMsg(""); }} className="btn-outline">
@@ -437,7 +536,7 @@ export default function BulkUploadQuestions({ open, onClose, onUpload, title = "
         <textarea
           rows={9}
           className="input resize-y font-mono text-xs"
-          placeholder="Paste your CSV rows here, or use “Choose CSV file” above…"
+          placeholder={mode === "json" ? 'Paste a JSON array of questions here (or { "questions": [ ... ] }), or use “Choose JSON file” above…' : "Paste your CSV rows here, or use “Choose CSV file” above…"}
           value={text}
           onChange={(e) => setText(e.target.value)}
         />
