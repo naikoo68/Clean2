@@ -122,11 +122,11 @@ async function resolveModel(requested, scope = SYSTEM_SCOPE) {
 // (429/401/403). Each endpoint uses the model it supports (ep.model), so keys on
 // a different model still work as fallbacks. Other errors aren't retried on
 // another key.
-async function callWithFallback({ endpoints, model, userPrompt, maxTokens, owner = null, systemPrompt }) {
+async function callWithFallback({ endpoints, model, userPrompt, maxTokens, owner = null, systemPrompt, failOnEmpty = false }) {
   let last = { ok: false, status: 0, detail: "No AI key is configured." };
   let sawQuota = false; // at least one key failed with a recoverable rate-limit
   for (const ep of endpoints || []) {
-    const r = await callProvider({ key: ep.key, baseUrl: ep.baseUrl, model: ep.model || model, userPrompt, maxTokens, systemPrompt });
+    const r = await callProvider({ key: ep.key, baseUrl: ep.baseUrl, model: ep.model || model, userPrompt, maxTokens, systemPrompt, failOnEmpty });
     if (r.ok) {
       // Record app-side usage on the matching DB key (env-only keys aren't in
       // the DB, so this is a no-op for them). Scoped by owner so a client key
@@ -136,7 +136,10 @@ async function callWithFallback({ endpoints, model, userPrompt, maxTokens, owner
     }
     if (r.status === 429) sawQuota = true;
     last = r;
-    if (![429, 401, 403].includes(r.status)) break;
+    // 520 = a 200 with EMPTY content (safety filter / thinking-only reply). Like
+    // a rate-limit, it's worth rolling over to the NEXT key/model rather than
+    // giving up — another key on a stronger model may return real content.
+    if (![429, 401, 403, 520].includes(r.status)) break;
   }
   // Every key failed. If ANY failure was just a rate-limit (429, recoverable) but
   // the LAST key tried happened to be an unauthorized/disabled one (401/403),
@@ -834,7 +837,7 @@ function quota429Message(detail = "") {
 }
 
 // One provider call with transient-error retries. Returns { ok, status, content, detail }.
-async function callProvider({ key, baseUrl, model, userPrompt, maxTokens, systemPrompt = SYSTEM_PROMPT, temperature = 0.6, timeoutMs = 90000 }) {
+async function callProvider({ key, baseUrl, model, userPrompt, maxTokens, systemPrompt = SYSTEM_PROMPT, temperature = 0.6, timeoutMs = 90000, failOnEmpty = false }) {
   const payload = {
     model,
     messages: [
@@ -888,7 +891,16 @@ async function callProvider({ key, baseUrl, model, userPrompt, maxTokens, system
           detail: `Provider returned a non-JSON response (looks like an HTML/error page). This usually means the Base URL is wrong or the key's gateway is blocking the request. ${raw.slice(0, 120)}`,
         };
       }
-      return { ok: true, content: extractContent(data), tokens: data?.usage?.total_tokens || 0 };
+      const content = extractContent(data);
+      // A 200 with NO usable text — Gemini does this on a safety block or when a
+      // "thinking" model spends its whole budget reasoning and emits no answer.
+      // For JSON tasks (failOnEmpty) report it as a soft, retriable error (520)
+      // so callWithFallback rolls over to the next key/model instead of treating
+      // an empty reply as success. Key-test / model-detect keep the old behavior.
+      if (failOnEmpty && !String(content || "").trim()) {
+        return { ok: false, status: 520, empty: true, detail: "The model returned an empty response (possible safety filter, or a thinking-only/weak model)." };
+      }
+      return { ok: true, content, tokens: data?.usage?.total_tokens || 0 };
     }
     const detail = await resp.text().catch(() => "");
     // Some Gemini model versions reject the `reasoning_effort` field with a 400.
@@ -2764,6 +2776,7 @@ async function runExtendJob(id, { endpoints, model, questions, owner = null, not
       userPrompt: buildExtendPrompt(q, notes, fixOptions),
       maxTokens: 8000, // the verified/step-by-step replies are long — avoid truncation
       owner,
+      failOnEmpty: true, // an empty reply → try the next key/model instead of failing this question
     });
     if (!r.ok) {
       lastError = r;
@@ -2828,7 +2841,9 @@ async function runExtendJob(id, { endpoints, model, questions, owner = null, not
         error: lastError
           ? (lastError.status === 429
             ? "AI quota/rate limit reached before any explanation was updated. Wait a minute and try again."
-            : `AI provider error (${lastError.status || 0}). ${(lastError.detail || "").slice(0, 150)}`)
+            : lastError.empty
+              ? `Every key returned an empty reply for all ${total} question(s) — usually a safety filter or a thinking-only/weak model. Try again, or set the key's model to gemini-2.5-flash (or gemini-2.5-pro).`
+              : `AI provider error (${lastError.status || 0}). ${(lastError.detail || "").slice(0, 150)}`)
           : parseFails
             ? (emptyReplies >= parseFails
               ? `The AI returned empty replies for all ${total} question(s) — usually a safety filter or an overloaded/weak model. Try again, or set the key's model to gemini-2.5-flash.`
@@ -3253,6 +3268,7 @@ async function runRegenAllJob(id, { endpoints, model, questions, owner = null, n
       userPrompt: buildRegenPrompt(q, notes),
       maxTokens: 8000,
       owner,
+      failOnEmpty: true, // empty reply → roll over to the next key/model
     });
     if (!r.ok) {
       lastError = r;
