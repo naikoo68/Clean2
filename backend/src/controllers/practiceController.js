@@ -319,6 +319,47 @@ export async function splitItem(req, res) {
   res.json({ message: `Split ${total} questions into ${chunks.length} quizzes.`, quizzes: chunks.length, created: chunks.length - 1 });
 }
 
+// POST /api/practice/items/:id/merge  { sourceIds: [] }
+// Merge other My-Quiz items' questions INTO this one (the inverse of split).
+// Each source item's questions are appended to the target and their `testSeries`
+// pointer is repointed; the emptied source items are then deleted. Owner-scoped
+// (covers client quizzes). Sources must be under the SAME topic.
+export async function mergeItem(req, res) {
+  const target = await TestSeries.findOne({ _id: req.params.id, practice: true, practiceKind: "quiz", ...ownerFilter(req) });
+  if (!target) return res.status(404).json({ message: "Quiz not found" });
+  const ids = (Array.isArray(req.body?.sourceIds) ? req.body.sourceIds : [])
+    .map(String)
+    .filter((s) => s && s !== String(target._id));
+  if (!ids.length) return res.status(400).json({ message: "Pick at least one other quiz to merge in." });
+
+  const sources = await TestSeries.find({
+    _id: { $in: ids },
+    practice: true,
+    practiceKind: "quiz",
+    practiceTopic: target.practiceTopic,
+    ...ownerFilter(req),
+  });
+  if (!sources.length) return res.status(404).json({ message: "No matching quizzes to merge (they must be under the same topic)." });
+
+  const have = new Set((target.questions || []).map((q) => String(q)));
+  let moved = 0;
+  for (const src of sources) {
+    for (const qid of src.questions || []) {
+      if (!have.has(String(qid))) { target.questions.push(qid); have.add(String(qid)); }
+    }
+    const r = await Question.updateMany({ _id: { $in: src.questions || [] } }, { $set: { testSeries: target._id } });
+    moved += r.modifiedCount || 0;
+    await TestSeries.deleteOne({ _id: src._id });
+  }
+  await target.save();
+  res.json({
+    message: `Merged ${sources.length} quiz(zes) (${moved} questions) into "${target.name}". It now has ${target.questions.length} question(s).`,
+    merged: sources.length,
+    moved,
+    total: target.questions.length,
+  });
+}
+
 // POST /api/practice/topics/:id/split  { perQuiz }
 // Split ALL questions in a My-Quiz topic (across its quiz items) into quiz items
 // of `perQuiz` each, named "Quiz 1".."Quiz N". The topic's old items are replaced

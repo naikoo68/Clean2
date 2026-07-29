@@ -21,7 +21,7 @@ import RegenerateAllModal from "../../components/admin/RegenerateAllModal";
 import ScheduleQuestionModal from "../../components/admin/ScheduleQuestionModal";
 import MigrateQuizModal from "../../components/admin/MigrateQuizModal";
 import MigrateTopicsModal from "../../components/admin/MigrateTopicsModal";
-import { Files, ScanSearch, Loader2, Sparkles, Scissors, Maximize2, Minimize2 } from "lucide-react";
+import { Files, ScanSearch, Loader2, Sparkles, Scissors, GitMerge, Maximize2, Minimize2 } from "lucide-react";
 
 // Question types offered per subtopic in the "Missing areas" sequential generator.
 const GEN_TYPES = [
@@ -70,6 +70,10 @@ export default function AdminPractice({ clientMode = false }) {
   const [splitTarget, setSplitTarget] = useState(null);
   const [splitPer, setSplitPer] = useState(50);
   const [splitting, setSplitting] = useState(false);
+  // Merge sibling My-Quiz items INTO one target item (inverse of split).
+  const [mergeTarget, setMergeTarget] = useState(null); // the quiz item others merge into
+  const [mergeIds, setMergeIds] = useState([]); // selected sibling quiz ids
+  const [merging, setMerging] = useState(false);
 
   // Question management for one item
   const [qItem, setQItem] = useState(null);
@@ -203,6 +207,25 @@ export default function AdminPractice({ clientMode = false }) {
       setError(e.message);
     } finally {
       setSplitting(false);
+    }
+  };
+
+  // Merge the selected sibling quizzes INTO `mergeTarget` (moves their questions
+  // in, then deletes the emptied source quizzes).
+  const doMerge = async () => {
+    if (!mergeTarget || !mergeIds.length) return;
+    setMerging(true);
+    setError("");
+    try {
+      const res = await practiceService.mergeItem(mergeTarget._id, mergeIds);
+      setMergeTarget(null);
+      setMergeIds([]);
+      window.alert(res?.message || "Merged.");
+      load(view);
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setMerging(false);
     }
   };
 
@@ -713,6 +736,9 @@ export default function AdminPractice({ clientMode = false }) {
                   {kind === "quiz" && (
                     <button onClick={() => { setSplitPer(50); setSplitTarget({ kind: "quiz", id: item._id, name: item.name, count: item.questionCount ?? null }); }} className="btn-outline py-1.5 text-xs text-indigo-600" title="Split this quiz into quizzes of N (Quiz 1, Quiz 2, …)"><Scissors className="h-3.5 w-3.5" /> Split</button>
                   )}
+                  {kind === "quiz" && (
+                    <button onClick={() => { setMergeIds([]); setMergeTarget(item); }} className="btn-outline py-1.5 text-xs text-indigo-600" title="Merge other quizzes in this topic into this one"><GitMerge className="h-3.5 w-3.5" /> Merge</button>
+                  )}
                   {/* Public share link (no login needed) — for My Quiz AND My Test */}
                   <button onClick={() => setShareItem(item)} className={`btn-outline py-1.5 text-xs ${item.publicShare ? "text-emerald-600" : ""}`} title="Share a public link (anyone with the link can take this — no login/account needed)"><Share2 className="h-3.5 w-3.5" /> Share</button>
                   {!clientMode && (
@@ -756,6 +782,41 @@ export default function AdminPractice({ clientMode = false }) {
               <button type="button" onClick={() => setSplitTarget(null)} disabled={splitting} className="btn-outline">Cancel</button>
               <button type="button" onClick={doSplit} disabled={splitting} className="btn-primary">
                 {splitting ? <><Loader2 className="h-4 w-4 animate-spin" /> Splitting…</> : <><Scissors className="h-4 w-4" /> Split</>}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Merge sibling My-Quiz items into one */}
+      {mergeTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={merging ? undefined : () => setMergeTarget(null)}>
+          <div onClick={(e) => e.stopPropagation()} className="w-full max-w-md animate-scale-in card p-6">
+            <div className="mb-3 flex items-center justify-between">
+              <h3 className="flex items-center gap-2 text-lg font-bold"><GitMerge className="h-5 w-5 text-indigo-600" /> Merge into “{mergeTarget.name}”</h3>
+              <button type="button" onClick={() => setMergeTarget(null)} disabled={merging}><X className="h-5 w-5" /></button>
+            </div>
+            <p className="mb-3 text-sm text-slate-500 dark:text-slate-400">
+              Pick other quizzes in this topic to merge into <b>“{mergeTarget.name}”</b>. Their questions move in and the emptied quizzes are deleted.
+            </p>
+            {(() => {
+              const others = items.filter((it) => it._id !== mergeTarget._id);
+              if (!others.length) return <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-700 dark:bg-amber-900/20 dark:text-amber-300">There are no other quizzes in this topic to merge.</p>;
+              return (
+                <div className="max-h-64 space-y-1 overflow-y-auto rounded-lg border border-slate-200 p-2 dark:border-slate-700">
+                  {others.map((it) => (
+                    <label key={it._id} className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 hover:bg-slate-50 dark:hover:bg-slate-800">
+                      <input type="checkbox" checked={mergeIds.includes(it._id)} onChange={() => setMergeIds((s) => (s.includes(it._id) ? s.filter((x) => x !== it._id) : [...s, it._id]))} />
+                      <span className="text-sm">{it.name} <span className="text-slate-400">· {it.questionCount ?? 0} q</span></span>
+                    </label>
+                  ))}
+                </div>
+              );
+            })()}
+            <div className="mt-5 flex justify-end gap-2">
+              <button type="button" onClick={() => setMergeTarget(null)} disabled={merging} className="btn-outline">Cancel</button>
+              <button type="button" onClick={doMerge} disabled={merging || !mergeIds.length} className="btn-primary">
+                {merging ? <><Loader2 className="h-4 w-4 animate-spin" /> Merging…</> : <><GitMerge className="h-4 w-4" /> Merge{mergeIds.length ? ` ${mergeIds.length}` : ""}</>}
               </button>
             </div>
           </div>
