@@ -21,7 +21,7 @@ import RegenerateAllModal from "../../components/admin/RegenerateAllModal";
 import ScheduleQuestionModal from "../../components/admin/ScheduleQuestionModal";
 import MigrateQuizModal from "../../components/admin/MigrateQuizModal";
 import MigrateTopicsModal from "../../components/admin/MigrateTopicsModal";
-import { Files, ScanSearch, Loader2, Sparkles, Scissors, GitMerge, Maximize2, Minimize2 } from "lucide-react";
+import { Files, ScanSearch, Loader2, Sparkles, Scissors, GitMerge, Maximize2, Minimize2, Save } from "lucide-react";
 
 // Question types offered per subtopic in the "Missing areas" sequential generator.
 const GEN_TYPES = [
@@ -93,6 +93,7 @@ export default function AdminPractice({ clientMode = false }) {
   const [scanMissing, setScanMissing] = useState([]);
   const [scanTopic, setScanTopic] = useState("");
   const [scanStems, setScanStems] = useState([]);
+  const [scanResumed, setScanResumed] = useState(false); // showing a saved plan (not a fresh scan)
   // Per-subtopic sequential generation from the "missing areas" scan.
   const [scanCounts, setScanCounts] = useState({}); // subtopic index -> total question count
   const [scanTypes, setScanTypes] = useState({});   // subtopic index -> { type: { level: count } }
@@ -237,26 +238,88 @@ export default function AdminPractice({ clientMode = false }) {
   };
   const reloadTq = () => testService.getQuestions(qItem._id).then(setTq).catch(() => {});
 
-  // Scan every quiz/test in the current topic for syllabus areas not yet covered.
-  const scanMissingAreas = async () => {
-    const topicName = (kind === "quiz" ? topic : subject)?.name || "";
-    setScanOpen(true); setScanning(true); setScanErr(""); setScanMissing([]); setScanTopic(topicName); setScanStems([]);
-    setScanCounts({}); setScanTypes({}); setOpenTypeRows(new Set()); setGlobalMix({}); setMixOpen(false); setSeqProgress({}); setSeqMsg(""); seqStopRef.current = false;
+  // Saved "missing areas" plan — kept in the browser per topic so you can scan
+  // once, close, and come back later to finish generating the subtopics (your
+  // per-subtopic progress is remembered too). No re-scan / AI cost on resume.
+  const scanStorageKey = (name) => `mstg.missingAreas:${name || scanTopic || "global"}`;
+  const persistScan = (name, extra) => {
+    const missing = extra?.missing || scanMissing;
+    if (!missing.length) return;
+    try {
+      localStorage.setItem(scanStorageKey(name), JSON.stringify({
+        topic: name || scanTopic,
+        missing,
+        counts: extra?.counts || scanCounts,
+        types: scanTypes,
+        globalMix,
+        progress: seqProgress,
+        savedAt: Date.now(),
+      }));
+    } catch { /* storage blocked/full — the in-memory plan still works this session */ }
+  };
+
+  // Fetch every quiz/test's stems (used so generation avoids existing questions).
+  const gatherScanStems = async () => {
     try {
       const lists = await Promise.all((items || []).map((it) => testService.getQuestions(it._id).catch(() => [])));
-      const stems = lists.flat().map((q) => q?.text).filter(Boolean);
+      return lists.flat().map((q) => q?.text).filter(Boolean);
+    } catch { return []; }
+  };
+
+  // The actual AI scan (also used by the "Re-scan" button).
+  const runScan = async (topicName) => {
+    setScanning(true); setScanErr(""); setScanMissing([]); setScanTopic(topicName); setScanStems([]);
+    setScanCounts({}); setScanTypes({}); setOpenTypeRows(new Set()); setGlobalMix({}); setMixOpen(false); setSeqProgress({}); setSeqMsg(""); seqStopRef.current = false;
+    setScanResumed(false);
+    try {
+      const stems = await gatherScanStems();
       setScanStems(stems);
       const r = await aiService.coverageGaps({ topic: topicName, questions: stems });
       const missing = Array.isArray(r?.missing) ? r.missing : [];
       setScanMissing(missing);
       // Default 10 questions per missing subtopic.
-      setScanCounts(Object.fromEntries(missing.map((_, i) => [i, 10])));
+      const counts = Object.fromEntries(missing.map((_, i) => [i, 10]));
+      setScanCounts(counts);
+      persistScan(topicName, { missing, counts }); // save the fresh scan right away
     } catch (e) {
       setScanErr(e.message || "Scan failed.");
     } finally {
       setScanning(false);
     }
   };
+
+  // Open "Missing areas": resume a saved plan for this topic if one exists (no AI
+  // call), otherwise run a fresh scan.
+  const scanMissingAreas = async () => {
+    const topicName = (kind === "quiz" ? topic : subject)?.name || "";
+    setScanOpen(true); setScanFull(false); setScanErr(""); setSeqMsg(""); seqStopRef.current = false;
+    let saved = null;
+    try { const raw = localStorage.getItem(scanStorageKey(topicName)); saved = raw ? JSON.parse(raw) : null; } catch { saved = null; }
+    if (saved && Array.isArray(saved.missing) && saved.missing.length) {
+      setScanning(false);
+      setScanResumed(true);
+      setScanTopic(saved.topic || topicName);
+      setScanMissing(saved.missing);
+      setScanCounts(saved.counts || {});
+      setScanTypes(saved.types || {});
+      setGlobalMix(saved.globalMix || {});
+      setSeqProgress(saved.progress || {});
+      setOpenTypeRows(new Set()); setMixOpen(false);
+      // Re-gather stems in the background so generation still avoids duplicates
+      // (stems aren't persisted — they can be large).
+      gatherScanStems().then(setScanStems);
+      return;
+    }
+    await runScan(topicName);
+  };
+
+  // Keep the saved plan in sync as you tweak counts/types or generate subtopics,
+  // so your progress survives closing the modal or reloading the page.
+  useEffect(() => {
+    if (!scanOpen || !scanMissing.length) return;
+    persistScan(scanTopic);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scanOpen, scanMissing, scanCounts, scanTypes, globalMix, seqProgress]);
 
   // Fetch the stems of every quiz/test in the current topic so the generator's
   // coverage panel reflects the WHOLE topic (all quizzes), not just this one.
@@ -1024,8 +1087,14 @@ export default function AdminPractice({ clientMode = false }) {
               <p className="text-sm text-slate-500">No obvious gaps found — the {scanStems.length} question(s) here already cover the topic broadly.</p>
             ) : (
               <>
+                {scanResumed && (
+                  <div className="mb-2 flex items-center gap-2 rounded-lg bg-emerald-50 px-3 py-2 text-xs text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-300">
+                    <Save className="h-3.5 w-3.5 flex-shrink-0" />
+                    <span>Resumed your <b>saved plan</b> for this topic — your list and progress were kept. Use <b>Re-scan</b> below to refresh the gaps.</span>
+                  </div>
+                )}
                 <p className="mb-2 text-sm text-slate-500">
-                  These subtopics are <b>not yet covered</b> (in study order). Set the question mix <b>once</b> below and apply it to every subtopic — they're generated <b>one subtopic at a time</b> into a new {kind}:
+                  These subtopics are <b>not yet covered</b> (in study order). Set the question mix <b>once</b> below and apply it to every subtopic — they're generated <b>one subtopic at a time</b> into a new {kind}. This list is <b>saved automatically</b>, so you can close it and finish later.
                 </p>
 
                 {/* Shared question mix — set the type × level counts once, apply to all subtopics. */}
@@ -1140,6 +1209,8 @@ export default function AdminPractice({ clientMode = false }) {
                     <button onClick={cancelSequential} className="btn-outline !text-rose-600 dark:!text-rose-400"><X className="h-4 w-4" /> Cancel &amp; keep</button>
                   ) : (
                     <>
+                      <button onClick={() => { persistScan(scanTopic); setSeqMsg("Saved — you can close this and reopen \u201cMissing areas\u201d for this topic any time to resume the list and your progress."); }} className="btn-outline" title="Save this list & progress so you can finish it later"><Save className="h-4 w-4" /> Save</button>
+                      <button onClick={() => runScan(scanTopic)} className="btn-outline" title="Scan again for fresh gaps (replaces the saved list)"><ScanSearch className="h-4 w-4" /> Re-scan</button>
                       <button onClick={() => setScanCounts(Object.fromEntries(scanMissing.map((_, i) => [i, 10])))} className="btn-outline">Set all to 10</button>
                       <button onClick={() => { try { navigator.clipboard?.writeText(scanMissing.join(", ")); } catch { /* ignore */ } }} className="btn-outline">Copy list</button>
                       <button onClick={generateFromGaps} className="btn-outline"><Sparkles className="h-4 w-4" /> All-in-one</button>
