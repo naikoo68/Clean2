@@ -325,7 +325,11 @@ export default function AdminPractice({ clientMode = false }) {
       setScanCounts(saved.counts || {});
       setScanTypes(saved.types || {});
       setGlobalMix(saved.globalMix || {});
-      setSeqProgress(saved.progress || {});
+      // A subtopic saved mid-generation ("working") is NOT running after a resume —
+      // reset it to pending so it doesn't show a phantom, un-stoppable "generating…".
+      const restored = {};
+      Object.entries(saved.progress || {}).forEach(([k, v]) => { restored[k] = v && v.status === "working" ? { ...v, status: "pending" } : v; });
+      setSeqProgress(restored);
       setOpenTypeRows(new Set()); setMixOpen(false);
       // Re-gather stems in the background so generation still avoids duplicates
       // (stems aren't persisted — they can be large).
