@@ -250,7 +250,7 @@ export default function AiGenerate({ open, onClose, onUpload, title = "Generate 
 
     // Run ONE wave (start job + poll to completion). Appends its questions to the
     // preview and returns how it ended so the loop can decide to auto-continue.
-    const runWave = async (isAppend) => {
+    const runWave = async (isAppend, priorTotal = 0, target = 0) => {
       let jobId, requested;
       try {
         ({ jobId, requested } = await aiService.generate({
@@ -286,7 +286,11 @@ export default function AiGenerate({ open, onClose, onUpload, title = "Generate 
         } else if (s.status === "error") {
           setMsg(s.error || "Generation failed."); result = { produced: 0, errored: true }; done = true;
         } else {
-          setMsg(stopRef.current ? `Stopping… keeping the ${s.count || 0} generated so far` : `Generating… ${s.count || 0} of ${requested} ready`);
+          // Show the CUMULATIVE progress toward the overall target (prior waves +
+          // this wave's live count), so it climbs 71 → … → target instead of
+          // resetting to "0 of 500" each wave.
+          const soFar = priorTotal + (s.count || 0);
+          setMsg(stopRef.current ? `Stopping… keeping the ${soFar} generated so far` : `Generating… ${soFar} of ${target || requested} ready (${Math.max(0, (target || requested) - soFar)} to go)`);
         }
       }
       if (!done) setMsg("Still generating — this is taking longer than expected. Please try a smaller batch.");
@@ -322,7 +326,7 @@ export default function AiGenerate({ open, onClose, onUpload, title = "Generate 
       let zeroWaves = 0; // consecutive waves that produced nothing (rate-limited)
       let last;
       while (true) {
-        last = await runWave(firstWave ? append : true);
+        last = await runWave(firstWave ? append : true, producedTotal, target);
         producedTotal += last.produced || 0;
         firstWave = false;
         wave += 1;
