@@ -313,20 +313,39 @@ export default function AiGenerate({ open, onClose, onUpload, title = "Generate 
     try {
       const target = total;
       const autoLoop = autoContinue && !append; // manual "Generate more" stays a single wave
+      const MAX_WAVES = 60; // very high cap so a big target can grind through many quota windows
+      const MAX_ZERO = 8;   // consecutive EMPTY waves before we conclude the quota is truly dead
       setMsg(append ? `Generating ${total} more from this topic (no duplicates)…` : `Starting generation of ${total} question(s)…`);
       let producedTotal = 0;
       let firstWave = true;
+      let wave = 0;
+      let zeroWaves = 0; // consecutive waves that produced nothing (rate-limited)
       let last;
       while (true) {
         last = await runWave(firstWave ? append : true);
         producedTotal += last.produced || 0;
         firstWave = false;
+        wave += 1;
+        zeroWaves = (last.produced || 0) === 0 ? zeroWaves + 1 : 0; // reset the moment a wave produces anything
         const reached = producedTotal >= target;
-        const canContinue = autoLoop && !stopRef.current && !reached && (last.produced || 0) > 0 && (last.short || last.quota) && !last.errored && !last.timedOut;
-        if (!canContinue) { finalize(last, producedTotal, target); break; }
-        // Interruptible wait for the per-minute limit to refill.
-        for (let k = 60; k > 0 && !stopRef.current; k--) {
-          setMsg(`Auto-continue: ${producedTotal} of ${target} so far. Waiting ${k}s for the free-tier limit to reset… (press Stop to keep what you have)`);
+        // Keep going through empty/small waves (waiting out the per-minute limit).
+        // Only give up when the quota is clearly dead (many empty waves in a row)
+        // or we hit the safety cap — otherwise persist until the target or Stop.
+        const dead = zeroWaves >= MAX_ZERO;
+        const canContinue = autoLoop && !stopRef.current && !reached && !last.errored && !last.timedOut && !dead && wave < MAX_WAVES;
+        if (!canContinue) {
+          if (autoLoop && !reached && !stopRef.current && !last.errored && !last.timedOut && (dead || wave >= MAX_WAVES)) {
+            setMsg(`⏸ Auto-continue stopped at ${producedTotal} of ${target}. The free-tier quota looks exhausted right now (many empty tries in a row) — Insert these, then Generate more later (the daily quota resets), or add keys from other Google accounts for more.`);
+          } else {
+            finalize(last, producedTotal, target);
+          }
+          break;
+        }
+        // Interruptible wait for the per-minute limit to refill (a touch longer
+        // after an empty wave so the window has time to reset).
+        const waitSec = (last.produced || 0) === 0 ? 60 : 40;
+        for (let k = waitSec; k > 0 && !stopRef.current; k--) {
+          setMsg(`Auto-continue: ${producedTotal} of ${target} so far${zeroWaves ? ` · ${zeroWaves} empty wave(s)` : ""}. Waiting ${k}s for the free-tier limit to reset… (press Stop to keep what you have)`);
           await sleep(1000);
         }
         if (stopRef.current) { finalize(last, producedTotal, target); break; }
