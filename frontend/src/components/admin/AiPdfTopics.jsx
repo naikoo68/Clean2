@@ -378,6 +378,52 @@ export default function AiPdfTopics({ open, onClose, adapter, sel, subjectName =
     }
   };
 
+  // Regenerate the missing questions for ONE topic (the per-row button), e.g. a
+  // topic short by 30. Same persistent fill loop as Top-up, scoped to one unit.
+  const topUpOne = async (idx) => {
+    const out = results.slice();
+    const r = out[idx];
+    if (!r || r.status === "working" || generating || inserting) return;
+    const requested = r.requested || 0;
+    if (requested && r.count >= requested) { setMsg(`“${r.unit}” is already at its target.`); return; }
+    setGenerating(true); setStopping(false); stopRef.current = false; setMsg("");
+    const MAX_TOPUP_ROUNDS = 6;
+    const MAX_EMPTY = 6;
+    try {
+      const collected = r.questions.slice();
+      out[idx].status = "working"; setResults(out.slice());
+      let round = 0;
+      let emptyWaits = 0;
+      while (collected.length < requested && round < MAX_TOPUP_ROUNDS && !stopRef.current) {
+        const shortfall = requested - collected.length;
+        setMsg(`Regenerating missing for “${r.unit}” — ${collected.length}/${requested} (round ${round + 1})…`);
+        const before = collected.length;
+        let more = [];
+        try { more = await genOnce(r.unit, { count: shortfall, avoid: collected.map((q) => q.text).filter(Boolean) }); } catch { /* keep what we have */ }
+        mergeUnique(collected, more);
+        out[idx].questions = collected; out[idx].count = collected.length; setResults(out.slice());
+        if (collected.length <= before) {
+          if (lastJobErrorRef.current === "quota" && emptyWaits < MAX_EMPTY && !stopRef.current) {
+            emptyWaits += 1;
+            for (let k = 60; k > 0 && !stopRef.current; k--) { setMsg(`“${r.unit}” hit the per-minute limit — waiting ${k}s, then retrying (${collected.length}/${requested})…`); await new Promise((res) => setTimeout(res, 1000)); }
+            continue;
+          }
+          break;
+        }
+        emptyWaits = 0;
+        round += 1;
+      }
+      out[idx].status = "done"; setResults(out.slice());
+      const got = out[idx].count;
+      setMsg(got >= requested ? `✓ “${r.unit}” reached ${got}/${requested}.` : `“${r.unit}” is now ${got}/${requested} — still short (the AI may be out of distinct questions, or the quota is spent).`);
+    } catch (err) {
+      setMsg(err.message || "Regenerate failed.");
+      out[idx].status = "done"; setResults(out.slice());
+    } finally {
+      setGenerating(false); setStopping(false); stopRef.current = false; jobIdRef.current = null;
+    }
+  };
+
   const refreshCoverage = async (stems) => {
     if (!stems.length) { setCoverage(null); return; }
     try {
@@ -595,6 +641,17 @@ export default function AiPdfTopics({ open, onClose, adapter, sel, subjectName =
                   )}
                   {r.status === "inserted" && <span className="text-emerald-600">✓ {r.count} in {r.quizzes || 1} quiz{(r.quizzes || 1) > 1 ? "zes" : ""}</span>}
                   {r.status === "error" && <span className="text-rose-600">{r.error || "failed"}</span>}
+                  {r.status === "done" && r.requested && r.count < r.requested && (
+                    <button
+                      type="button"
+                      onClick={() => topUpOne(i)}
+                      disabled={generating || inserting}
+                      title={`Regenerate the missing ${r.requested - r.count} question(s) for “${r.unit}”`}
+                      className="ml-2 inline-flex items-center gap-1 rounded-md border border-amber-300 px-1.5 py-0.5 text-xs font-semibold text-amber-600 hover:bg-amber-50 disabled:opacity-50 dark:border-amber-800 dark:hover:bg-amber-900/20"
+                    >
+                      <Sparkles className="h-3 w-3" /> +{r.requested - r.count}
+                    </button>
+                  )}
                 </span>
               </div>
             ))}
