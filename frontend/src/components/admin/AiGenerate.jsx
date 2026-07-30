@@ -275,7 +275,12 @@ export default function AiGenerate({ open, onClose, onUpload, title = "Generate 
         try { s = await aiService.job(jobId); } catch { continue; }
         if (s.keyStats && Object.keys(s.keyStats).length) setKeyStats(s.keyStats);
         if (s.status === "done") {
-          const qs = s.questions || [];
+          const qsAll = s.questions || [];
+          // Cap this wave to the REMAINING needed so the total lands on the target
+          // exactly — each wave requests the full plan, so without this the last
+          // wave overshoots (e.g. 472 for a target of 400).
+          const room = target > 0 ? Math.max(0, target - priorTotal) : qsAll.length;
+          const qs = qsAll.slice(0, room);
           setPreview((prev) => (isAppend ? [...prev, ...qs] : qs));
           const batchStems = qs.map((q) => q.text).filter(Boolean);
           avoidLocal = Array.from(new Set([...avoidLocal, ...batchStems]));
