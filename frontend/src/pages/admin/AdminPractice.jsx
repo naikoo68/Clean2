@@ -439,6 +439,7 @@ export default function AdminPractice({ clientMode = false }) {
     const cnt = scanTypes[i] ? mixTotal(scanTypes[i]) : (parseInt(scanCounts[i], 10) || 0);
     if (cnt <= 0) { setSeqMsg(`Set a question count for “${name}” first.`); return; }
     seqStopRef.current = false;
+    setSeqRunning(true); // shows the "Cancel & keep" button while this single subtopic generates
     setSeqProgress((p) => ({ ...p, [name]: { status: "working", count: 0 } }));
     setSeqMsg("");
     try {
@@ -446,12 +447,14 @@ export default function AdminPractice({ clientMode = false }) {
       if (collected.length) {
         await saveAiBatch(collected, { newTarget: aiTarget ? undefined : { name: `${scanTopic} — gaps` }, topic: scanTopic, subtopics: name });
         setSeqProgress((p) => ({ ...p, [name]: { status: "done", count: collected.length } }));
-        setSeqMsg(`Generated ${collected.length} question(s) for “${name}”.`);
+        setSeqMsg(seqStopRef.current ? `Stopped — kept ${collected.length} question(s) for “${name}”.` : `Generated ${collected.length} question(s) for “${name}”.`);
       } else {
         setSeqProgress((p) => ({ ...p, [name]: { status: "failed", count: 0, err: lastErr || "No questions returned — rate-limited/quota, or mix too large." } }));
       }
     } catch (e) {
       setSeqProgress((p) => ({ ...p, [name]: { status: "failed", count: 0, err: e.message || "Generation failed." } }));
+    } finally {
+      setSeqRunning(false);
     }
   };
 
