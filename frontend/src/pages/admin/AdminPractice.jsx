@@ -113,6 +113,9 @@ export default function AdminPractice({ clientMode = false }) {
   const [addToTestQ, setAddToTestQ] = useState(null); // question being copied into a test
   const [viewAll, setViewAll] = useState(false);
   const [studentView, setStudentView] = useState(true); // View All: defaults to student view (answers hidden)
+  const [selQ, setSelQ] = useState(() => new Set()); // ticked questions to move (full-quiz view)
+  const [moveTargetId, setMoveTargetId] = useState(""); // destination quiz for the move
+  const [movingQ, setMovingQ] = useState(false);
   const [shareItem, setShareItem] = useState(null); // public share-link modal target (tests)
   const [migrateItem, setMigrateItem] = useState(null); // per-quiz migrate modal target (My Quiz)
   const [selTopics, setSelTopics] = useState({}); // checkbox selection in the topics view (id -> true)
@@ -233,10 +236,29 @@ export default function AdminPractice({ clientMode = false }) {
   // ---- Questions ----
   const openQuestions = (item) => {
     setQItem(item);
+    setSelQ(new Set()); setMoveTargetId(""); // fresh selection per quiz
     setTqLoading(true);
     testService.getQuestions(item._id).then(setTq).catch((e) => setError(e.message)).finally(() => setTqLoading(false));
   };
   const reloadTq = () => testService.getQuestions(qItem._id).then(setTq).catch(() => {});
+
+  // ---- Move ticked questions to another quiz in the same topic --------------
+  const toggleSelQ = (qid) => setSelQ((s) => { const n = new Set(s); if (n.has(qid)) n.delete(qid); else n.add(qid); return n; });
+  const doMoveQuestions = async () => {
+    const ids = [...selQ];
+    const dest = (items || []).find((it) => it._id === moveTargetId);
+    if (!ids.length || !dest) return;
+    if (!window.confirm(`Move ${ids.length} question(s) to “${dest.name}”?`)) return;
+    setMovingQ(true); setError("");
+    try {
+      const res = await practiceService.moveQuestions(qItem._id, ids, moveTargetId);
+      setSelQ(new Set()); setMoveTargetId("");
+      await reloadTq();
+      load(view); // refresh the sibling quizzes' question counts
+      window.alert(res?.message || "Moved.");
+    } catch (e) { setError(e.message); }
+    finally { setMovingQ(false); }
+  };
 
   // Saved "missing areas" plan — kept in the browser per topic so you can scan
   // once, close, and come back later to finish generating the subtopics (your
@@ -981,10 +1003,35 @@ export default function AdminPractice({ clientMode = false }) {
                 Student view — answers &amp; explanations are hidden. Use “Reveal answer” on any question to expose it.
               </p>
             )}
+            {/* Tick questions (Admin view) and move them into another quiz in this topic. */}
+            {!studentView && tq.length > 0 && (() => {
+              const siblings = (items || []).filter((it) => it._id !== qItem._id);
+              const allSel = selQ.size > 0 && tq.every((it) => selQ.has(it._id));
+              return (
+                <div className="mb-3 flex flex-wrap items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 p-2 text-xs dark:border-slate-700 dark:bg-slate-800/60">
+                  <button type="button" onClick={() => setSelQ(allSel ? new Set() : new Set(tq.map((it) => it._id)))} className="font-semibold text-brand-600 hover:underline dark:text-brand-300">{allSel ? "Clear all" : "Select all"}</button>
+                  <span className="text-slate-500 dark:text-slate-400">{selQ.size} selected</span>
+                  <span className="ml-auto flex items-center gap-2">
+                    {siblings.length ? (
+                      <>
+                        <select value={moveTargetId} onChange={(e) => setMoveTargetId(e.target.value)} className="input max-w-[11rem] py-1 text-xs">
+                          <option value="">Move selected to…</option>
+                          {siblings.map((it) => <option key={it._id} value={it._id}>{it.name} ({it.questionCount ?? 0})</option>)}
+                        </select>
+                        <button type="button" onClick={doMoveQuestions} disabled={!selQ.size || !moveTargetId || movingQ} className="btn-primary py-1 text-xs disabled:opacity-50">
+                          {movingQ ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Moving…</> : <><ArrowRightLeft className="h-3.5 w-3.5" /> Move</>}
+                        </button>
+                      </>
+                    ) : <span className="text-slate-400">No other quiz in this topic to move to</span>}
+                  </span>
+                </div>
+              );
+            })()}
             <div className="max-h-[70vh] space-y-4 overflow-y-auto pr-1">
               {tq.map((it, i) => (
                 <div key={(studentView ? "s" : "a") + it._id} className="relative rounded-lg border border-slate-200 p-3 dark:border-slate-700">
-                  <div className="absolute right-2 top-2 z-10 flex gap-1">
+                  <div className="absolute right-2 top-2 z-10 flex items-center gap-1">
+                    {!studentView && <input type="checkbox" checked={selQ.has(it._id)} onChange={() => toggleSelQ(it._id)} title="Select to move" className="mr-1 h-4 w-4 accent-brand-600" />}
                     <button onClick={() => setAddToTestQ(it)} title="Add to test" className="rounded-lg bg-white p-1.5 text-emerald-600 shadow hover:bg-emerald-50 dark:bg-slate-800 dark:hover:bg-emerald-900/30"><ClipboardList className="h-4 w-4" /></button>
                     {!studentView && (
                       <>

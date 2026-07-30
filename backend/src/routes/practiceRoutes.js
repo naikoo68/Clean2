@@ -5,7 +5,7 @@ import {
   listTopics, createTopic, updateTopic, deleteTopic, moveTopic, listTopicItems,
   listItems, createItem,
   browseStreams, browseSubjects, browseTopics, browseItems, browseTopicItems,
-  playQuiz, allSubjects, myItems, moveItem, updateItem, splitItem, splitTopic, mergeItem,
+  playQuiz, allSubjects, myItems, moveItem, updateItem, splitItem, splitTopic, mergeItem, moveQuestions,
 } from "../controllers/practiceController.js";
 import { protect, authorize, optionalAuth } from "../middleware/auth.js";
 
@@ -56,6 +56,7 @@ router.get("/all-subjects", ...admin, allSubjects);
 router.post("/items", ...admin, createItem);
 router.post("/items/:id/split", ...admin, splitItem); // split a practice quiz into quizzes of N
 router.post("/items/:id/merge", ...admin, mergeItem); // merge other My-Quiz items (same topic) into this one
+router.post("/items/:id/move-questions", ...admin, moveQuestions); // move SELECTED questions to another quiz (same topic)
 router.patch("/items/:id/move", ...admin, moveItem); // relocate a practice item
 router.patch("/items/:id", ...admin, updateItem); // update name / remembered AI topic
 
