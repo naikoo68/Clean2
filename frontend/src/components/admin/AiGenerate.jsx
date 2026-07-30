@@ -77,6 +77,10 @@ export default function AiGenerate({ open, onClose, onUpload, title = "Generate 
       const k = t.toLowerCase(); if (seen.has(k) || doneSet.has(k)) return; seen.add(k);
       out.push({ text: t, done: !!done, src });
     };
+    // Only show subtopics for the CURRENT topic — this target's own saved plan
+    // plus any Missing-areas scan whose topic matches — so saving a new topic's
+    // subtopics never leaves the previous topic's subtopics showing here.
+    const wantTopic = String(topic || defaultTopic || "").trim().toLowerCase();
     try {
       const keys = [];
       for (let i = 0; i < localStorage.length; i++) { const kk = localStorage.key(i); if (kk && (kk.startsWith("mstg.subtopicPlan:") || kk.startsWith("mstg.missingAreas:"))) keys.push(kk); }
@@ -84,9 +88,13 @@ export default function AiGenerate({ open, onClose, onUpload, title = "Generate 
       for (const key of keys) {
         const rawV = localStorage.getItem(key); if (!rawV) continue;
         if (key.startsWith("mstg.subtopicPlan:")) {
+          if (key !== planKey) continue; // only THIS quiz/test's own saved plan
           const arr = JSON.parse(rawV); if (Array.isArray(arr)) arr.forEach((p) => add(p?.text, p?.done, key));
         } else {
-          const obj = JSON.parse(rawV); const prog = obj?.progress || {};
+          const obj = JSON.parse(rawV);
+          const t = String(obj?.topic || key.slice("mstg.missingAreas:".length)).trim().toLowerCase();
+          if (!wantTopic || t !== wantTopic) continue; // only the CURRENT topic's scan, never other topics
+          const prog = obj?.progress || {};
           (obj?.missing || []).forEach((m) => add(m, prog?.[m]?.status === "done", key));
         }
       }
@@ -105,6 +113,17 @@ export default function AiGenerate({ open, onClose, onUpload, title = "Generate 
     try { localStorage.setItem(key, JSON.stringify([...set])); } catch { /* storage blocked/full */ }
     setSelected((sel) => { const n = new Set(sel); (texts || []).forEach((t) => n.delete(String(t || "").toLowerCase())); return n; });
     setPlan(readAllSaved());
+  };
+
+  // Clear the whole saved-subtopics list for this view: drop this target's own
+  // plan and hide the current topic's Missing-areas subtopics (via the done
+  // overlay, so the Missing-areas modal's own data isn't destroyed).
+  const clearAllSubtopics = () => {
+    if (!plan.length) return;
+    if (!window.confirm(`Clear all ${plan.length} saved subtopic(s) from this list?`)) return;
+    try { localStorage.removeItem(planKey); } catch { /* ignore */ }
+    markSubtopicsDone(plan.map((p) => p.text)); // hides Missing-areas-sourced ones too + refreshes
+    setMsg("Cleared the saved subtopics for this topic.");
   };
 
   useEffect(() => {
@@ -160,7 +179,7 @@ export default function AiGenerate({ open, onClose, onUpload, title = "Generate 
     setPlan(readAllSaved());
     setSelected(new Set());
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open]);
+  }, [open, topic]);
 
   if (!open) return null;
 
@@ -539,7 +558,8 @@ export default function AiGenerate({ open, onClose, onUpload, title = "Generate 
                     <span className="rounded-full bg-brand-100 px-2 py-0.5 text-xs font-bold text-brand-700 dark:bg-brand-900/40 dark:text-brand-300">{plan.length}</span>
                   </p>
                   <div className="flex items-center gap-3 text-xs">
-                    <button type="button" onClick={toggleSelectAll} className="font-semibold text-brand-600 hover:underline dark:text-brand-300">{allSelected ? "Clear all" : "Select all"}</button>
+                    <button type="button" onClick={clearAllSubtopics} className="font-semibold text-rose-600 hover:underline dark:text-rose-400">Clear list</button>
+                    <button type="button" onClick={toggleSelectAll} className="font-semibold text-brand-600 hover:underline dark:text-brand-300">{allSelected ? "Untick all" : "Select all"}</button>
                     <button type="button" onClick={addSelectedToSubtopics} className="inline-flex items-center gap-1 rounded-md bg-brand-600 px-2 py-1 font-semibold text-white transition hover:bg-brand-700"><ListChecks className="h-3.5 w-3.5" /> Use selected ({selected.size})</button>
                   </div>
                 </div>
