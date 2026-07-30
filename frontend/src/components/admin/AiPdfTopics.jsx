@@ -54,6 +54,7 @@ export default function AiPdfTopics({ open, onClose, adapter, sel, subjectName =
   const [stopping, setStopping] = useState(false); // user asked to cancel the current run
   const stopRef = useRef(false);                   // set on Cancel — breaks the per-topic loop
   const jobIdRef = useRef(null);                   // current background job, so Cancel can stop it
+  const lastJobErrorRef = useRef("");              // last job's error code (e.g. "quota") — drives wait-and-retry
   const [results, setResults] = useState([]);     // [{ unit, questions:[], status, count }]
   const [coverage, setCoverage] = useState(null); // { covered:[], missing:[] }
   const [inserting, setInserting] = useState(false);
@@ -152,7 +153,7 @@ export default function AiPdfTopics({ open, onClose, adapter, sel, subjectName =
       }
       let s;
       try { s = await aiService.job(jobId); } catch { continue; }
-      if (s.status === "done") return s.questions || [];
+      if (s.status === "done") { lastJobErrorRef.current = s.error || ""; return s.questions || []; }
       if (s.status === "error") throw new Error(s.error || "Generation failed.");
     }
     throw new Error("Generation timed out.");
@@ -218,7 +219,7 @@ export default function AiPdfTopics({ open, onClose, adapter, sel, subjectName =
     const wantGenerate = plan.length > 0;
     if (!wantGenerate && !includeExisting) { setMsg("Set question counts above, or tick “Also copy questions already in the PDF”."); return; }
     if (wantGenerate && perTopicTotal > maxPerBatch) { setMsg(`Keep each topic to ${maxPerBatch} questions or fewer.`); return; }
-    const MAX_TOPUP_ROUNDS = 4; // extra passes to fill any shortfall per topic
+    const MAX_TOPUP_ROUNDS = 6; // extra passes to fill any shortfall per topic
     setGenerating(true); setStopping(false); stopRef.current = false; setMsg(""); setCoverage(null);
     // A topic is auto-CREATED under the subject for each unit as we go, so the
     // topics appear immediately (even before questions are inserted).
@@ -259,6 +260,8 @@ export default function AiPdfTopics({ open, onClose, adapter, sel, subjectName =
               out[i].count = collected.length; setResults(out.slice());
             }
             let round = 0;
+            let emptyWaits = 0;
+            const MAX_EMPTY = 6; // per-minute rate-limit waits before giving up on this topic
             while (collected.length < requested && round < MAX_TOPUP_ROUNDS && !stopRef.current) {
               const shortfall = requested - collected.length;
               setMsg(`Topping up “${unit}” — ${collected.length}/${requested} (round ${round + 1})…`);
@@ -269,7 +272,18 @@ export default function AiPdfTopics({ open, onClose, adapter, sel, subjectName =
               } catch { /* keep what we have */ }
               mergeUnique(collected, more);
               out[i].count = collected.length; setResults(out.slice());
-              if (collected.length <= before) break; // no new distinct questions — stop
+              if (collected.length <= before) {
+                // No new questions this round. If it was a per-minute rate limit,
+                // wait ~60s for the window to reset and retry (don't burn a round);
+                // otherwise the unit is out of distinct questions — stop.
+                if (lastJobErrorRef.current === "quota" && emptyWaits < MAX_EMPTY && !stopRef.current) {
+                  emptyWaits += 1;
+                  for (let k = 60; k > 0 && !stopRef.current; k--) { setMsg(`“${unit}” hit the per-minute limit — waiting ${k}s, then retrying (${collected.length}/${requested})…`); await new Promise((res) => setTimeout(res, 1000)); }
+                  continue;
+                }
+                break;
+              }
+              emptyWaits = 0;
               round += 1;
             }
           }
@@ -313,7 +327,7 @@ export default function AiPdfTopics({ open, onClose, adapter, sel, subjectName =
     const shortIdx = out.map((r, i) => (r.status === "done" && r.count < (r.requested || 0) ? i : -1)).filter((i) => i >= 0);
     if (!shortIdx.length) { setMsg("All topics are already at their target."); return; }
     setGenerating(true); setStopping(false); stopRef.current = false; setMsg("");
-    const MAX_TOPUP_ROUNDS = 4;
+    const MAX_TOPUP_ROUNDS = 6;
     try {
       for (const i of shortIdx) {
         if (stopRef.current) break; // cancelled — keep what's collected
@@ -322,6 +336,8 @@ export default function AiPdfTopics({ open, onClose, adapter, sel, subjectName =
         const collected = r.questions.slice();
         out[i].status = "working"; setResults(out.slice());
         let round = 0;
+        let emptyWaits = 0;
+        const MAX_EMPTY = 6;
         while (collected.length < requested && round < MAX_TOPUP_ROUNDS && !stopRef.current) {
           const shortfall = requested - collected.length;
           setMsg(`Topping up “${r.unit}” — ${collected.length}/${requested} (round ${round + 1})…`);
@@ -332,7 +348,16 @@ export default function AiPdfTopics({ open, onClose, adapter, sel, subjectName =
           } catch { /* keep what we have */ }
           mergeUnique(collected, more);
           out[i].questions = collected; out[i].count = collected.length; setResults(out.slice());
-          if (collected.length <= before) break;
+          if (collected.length <= before) {
+            // Rate-limited? wait ~60s and retry; otherwise the unit is exhausted — stop.
+            if (lastJobErrorRef.current === "quota" && emptyWaits < MAX_EMPTY && !stopRef.current) {
+              emptyWaits += 1;
+              for (let k = 60; k > 0 && !stopRef.current; k--) { setMsg(`“${r.unit}” hit the per-minute limit — waiting ${k}s, then retrying (${collected.length}/${requested})…`); await new Promise((res) => setTimeout(res, 1000)); }
+              continue;
+            }
+            break;
+          }
+          emptyWaits = 0;
           round += 1;
         }
         out[i].status = "done"; setResults(out.slice());
