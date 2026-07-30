@@ -360,6 +360,40 @@ export async function mergeItem(req, res) {
   });
 }
 
+// POST /api/practice/items/:id/move-questions  { questionIds, targetId }
+// Move only the SELECTED questions from this quiz (:id) into another quiz
+// (targetId) in the SAME topic — repoints each Question.testSeries and updates
+// both quizzes' denormalized questions[] arrays. Owner-scoped. Powers the
+// "tick questions & move them to another quiz" action in the full-quiz view.
+export async function moveQuestions(req, res) {
+  const source = await TestSeries.findOne({ _id: req.params.id, practice: true, practiceKind: "quiz", ...ownerFilter(req) });
+  if (!source) return res.status(404).json({ message: "Source quiz not found" });
+  const targetId = String(req.body?.targetId || "");
+  if (!targetId || targetId === String(source._id)) return res.status(400).json({ message: "Pick a different destination quiz." });
+  const target = await TestSeries.findOne({ _id: targetId, practice: true, practiceKind: "quiz", practiceTopic: source.practiceTopic, ...ownerFilter(req) });
+  if (!target) return res.status(404).json({ message: "Destination quiz not found (it must be under the same topic)." });
+
+  const sourceSet = new Set((source.questions || []).map((q) => String(q)));
+  const ids = (Array.isArray(req.body?.questionIds) ? req.body.questionIds : [])
+    .map(String)
+    .filter((qid) => sourceSet.has(qid)); // only questions that really belong to this quiz
+  if (!ids.length) return res.status(400).json({ message: "Select at least one question in this quiz to move." });
+
+  const idSet = new Set(ids);
+  const r = await Question.updateMany({ _id: { $in: ids } }, { $set: { testSeries: target._id } });
+  source.questions = (source.questions || []).filter((q) => !idSet.has(String(q)));
+  const have = new Set((target.questions || []).map((q) => String(q)));
+  for (const qid of ids) { if (!have.has(qid)) { target.questions.push(qid); have.add(qid); } }
+  await source.save();
+  await target.save();
+  res.json({
+    message: `Moved ${r.modifiedCount || ids.length} question(s) to "${target.name}". This quiz now has ${source.questions.length}; "${target.name}" has ${target.questions.length}.`,
+    moved: r.modifiedCount || ids.length,
+    sourceTotal: source.questions.length,
+    targetTotal: target.questions.length,
+  });
+}
+
 // POST /api/practice/topics/:id/split  { perQuiz }
 // Split ALL questions in a My-Quiz topic (across its quiz items) into quiz items
 // of `perQuiz` each, named "Quiz 1".."Quiz N". The topic's old items are replaced
