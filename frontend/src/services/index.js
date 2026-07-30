@@ -161,6 +161,7 @@ export const practiceService = {
   splitItem: (id, perQuiz) => api.post(`/practice/items/${id}/split`, { perQuiz }), // split one My-Quiz item into quizzes of N
   splitTopic: (id, perQuiz) => api.post(`/practice/topics/${id}/split`, { perQuiz }), // split all a topic's questions into quizzes of N
   mergeItem: (id, sourceIds) => api.post(`/practice/items/${id}/merge`, { sourceIds }), // merge other My-Quiz items (same topic) into this one
+  moveQuestions: (id, questionIds, targetId) => api.post(`/practice/items/${id}/move-questions`, { questionIds, targetId }), // move selected questions to another quiz (same topic)
 };
 
 // ---- CBT online exams (single public portal; name+email sign-in; deferred results) ----
