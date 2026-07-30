@@ -47,6 +47,7 @@ export default function AiGenerate({ open, onClose, onUpload, title = "Generate 
   const [autoContinue, setAutoContinue] = useState(false); // keep generating in waves until the full count is reached
   const jobIdRef = useRef(null); // id of the running background job (so Stop can cancel it)
   const stopRef = useRef(false); // set when the user clicks Stop — breaks/short-circuits the poll loop
+  const pendingDoneRef = useRef([]); // subtopics queued (via "Use selected") to hide after the next Generate
   const [inserting, setInserting] = useState(false);
   const [msg, setMsg] = useState("");
   const [keyStats, setKeyStats] = useState(null); // live per-key activity this run { label: {requests,ok,limited,error,questions} }
@@ -67,9 +68,13 @@ export default function AiGenerate({ open, onClose, onUpload, title = "Generate 
   // text; each item remembers which store it came from (src) for removal.
   const readAllSaved = () => {
     const out = []; const seen = new Set();
+    // Subtopics already generated HERE are hidden — they "disappear" from the list
+    // once their questions are made. Tracked per target in localStorage.
+    let doneSet = new Set();
+    try { const d = JSON.parse(localStorage.getItem(`mstg.doneSubtopics:${planKey}`) || "[]"); if (Array.isArray(d)) doneSet = new Set(d.map((t) => String(t).toLowerCase())); } catch { /* ignore */ }
     const add = (text, done, src) => {
       const t = String(text || "").trim(); if (!t) return;
-      const k = t.toLowerCase(); if (seen.has(k)) return; seen.add(k);
+      const k = t.toLowerCase(); if (seen.has(k) || doneSet.has(k)) return; seen.add(k);
       out.push({ text: t, done: !!done, src });
     };
     try {
@@ -87,6 +92,19 @@ export default function AiGenerate({ open, onClose, onUpload, title = "Generate 
       }
     } catch { /* ignore malformed entries */ }
     return out;
+  };
+
+  // Mark subtopics as done so they DISAPPEAR from the Saved-subtopics list (per
+  // target). Called after their questions have been generated.
+  const markSubtopicsDone = (texts) => {
+    const key = `mstg.doneSubtopics:${planKey}`;
+    let done = [];
+    try { done = JSON.parse(localStorage.getItem(key) || "[]"); if (!Array.isArray(done)) done = []; } catch { done = []; }
+    const set = new Set(done.map((t) => String(t).toLowerCase()));
+    (texts || []).forEach((t) => { const s = String(t || "").trim().toLowerCase(); if (s) set.add(s); });
+    try { localStorage.setItem(key, JSON.stringify([...set])); } catch { /* storage blocked/full */ }
+    setSelected((sel) => { const n = new Set(sel); (texts || []).forEach((t) => n.delete(String(t || "").toLowerCase())); return n; });
+    setPlan(readAllSaved());
   };
 
   useEffect(() => {
@@ -294,6 +312,13 @@ export default function AiGenerate({ open, onClose, onUpload, title = "Generate 
         }
         if (stopRef.current) { finalize(last, producedTotal, target); break; }
       }
+      // Once a subtopic's questions are made, hide it from the Saved list. A
+      // per-subtopic Generate marks that one; "Use selected" + Generate marks the
+      // ticked set. (Nothing is hidden if the topic box was typed manually.)
+      if (producedTotal > 0 && !stopRef.current) {
+        if (overrideSubtopics != null) markSubtopicsDone([overrideSubtopics]);
+        else if (!append && pendingDoneRef.current.length) { markSubtopicsDone(pendingDoneRef.current); pendingDoneRef.current = []; }
+      }
     } catch (e) {
       setMsg(e.message || "Generation failed.");
     } finally {
@@ -338,7 +363,8 @@ export default function AiGenerate({ open, onClose, onUpload, title = "Generate 
     // only these. (Appending kept whatever was already there, which is why picking
     // one still generated across all the subtopics still sitting in the box.)
     setSubtopics(picks.join(", "));
-    setMsg(`"Subtopics to cover" now holds only your ${picks.length} selected subtopic(s) — Generate will focus on just these.`);
+    pendingDoneRef.current = picks; // hide these from the list once the next Generate finishes
+    setMsg(`"Subtopics to cover" now holds only your ${picks.length} selected subtopic(s) — Generate will focus on just these, and they'll drop off the list once done.`);
   };
   // Generate a batch focused on ONE saved subtopic (uses the type/difficulty grid).
   const generateSubtopic = (text) => { setSubtopics(text); generate(false, text); };
