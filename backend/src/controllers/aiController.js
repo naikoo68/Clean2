@@ -2163,7 +2163,7 @@ export async function parseSyllabus(req, res) {
     '{ "subject": "overall subject/paper name", "topics": [ { "title": "topic or section name", "subtopics": ["point 1","point 2"] } ] }',
     "Rules:",
     "- Base everything ONLY on what is present in this syllabus — do NOT invent outside topics.",
-    "- \"subject\" is the single overall subject/paper title (e.g. \"Anatomy and Physiology\"). If none is stated, infer a concise one from the content.",
+    "- \"subject\" MUST NEVER be blank. Use the syllabus's stated subject/paper title if present; otherwise INFER a concise, standard subject name from the topics — e.g. content about cells, tissues, and the cardiovascular/digestive/respiratory/nervous systems → \"Anatomy and Physiology\". Ignore page numbers, annexure labels and \"Semester\" lines; give the real subject.",
     "- Each \"topics\" entry is a distinct section/chapter/system the syllabus lists (short title, 2-10 words), in the order they appear.",
     "- \"subtopics\" are the specific points listed under that topic. Split long comma/semicolon lists into separate short items (3-12 words each). If a topic lists no explicit points, use [].",
     "- Stay faithful to the wording; do not add explanations.",
