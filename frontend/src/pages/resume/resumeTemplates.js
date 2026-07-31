@@ -30,6 +30,7 @@ export const fontCss = (id) => (FONTS.find((f) => f.id === id) || FONTS[0]).css;
 //   showPhoto    boolean           — render the profile photo when provided
 export const TEMPLATES = [
   { id: "classic",      name: "Classic",              style: { columns: 1, headerAlign: "left",   titleStyle: "underline", accent: "#1f2937", serif: true,  density: "cozy",    uppercaseName: false, showPhoto: false } },
+  { id: "boxed-pro",    name: "Professional Boxed",   style: { variant: "boxed", columns: 1, headerAlign: "left", titleStyle: "plain", accent: "#2563eb", serif: false, density: "cozy", uppercaseName: false, showPhoto: true } },
   { id: "modern",       name: "Modern",               style: { columns: 1, headerAlign: "left",   titleStyle: "bar",       accent: "#2563eb", serif: false, density: "cozy",    uppercaseName: true,  showPhoto: false } },
   { id: "professional", name: "Professional",         style: { columns: 2, sidebar: "left",  headerAlign: "left", titleStyle: "caps", accent: "#0f766e", serif: false, density: "cozy",    uppercaseName: true,  showPhoto: true } },
   { id: "creative",     name: "Creative",             style: { columns: 2, sidebar: "left",  headerAlign: "left", titleStyle: "bar",  accent: "#7c3aed", serif: false, density: "cozy",    uppercaseName: true,  showPhoto: true } },
