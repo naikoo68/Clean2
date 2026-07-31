@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { X, Loader2, FileText, Save, Trash2, BookOpen, Sparkles } from "lucide-react";
 import { aiService, practiceService } from "../../services";
 import { useAuth } from "../../context/AuthContext";
@@ -17,6 +17,7 @@ export default function AiSyllabusImport({ open, onClose }) {
   const [text, setText] = useState("");
   const [pdfBusy, setPdfBusy] = useState(false);
   const [parsing, setParsing] = useState(false);
+  const stopParseRef = useRef(false); // Stop button during a rate-limit wait
   const [subject, setSubject] = useState("");
   const [topics, setTopics] = useState([]); // [{ title, subtopics:[...], keep }]
   const [streams, setStreams] = useState([]);
@@ -59,14 +60,27 @@ export default function AiSyllabusImport({ open, onClose }) {
 
   const parse = async () => {
     if (!text.trim()) { setMsg("Paste or upload the syllabus first."); return; }
-    setParsing(true); setMsg("");
+    setParsing(true); setMsg(""); stopParseRef.current = false;
+    const MAX_TRIES = 5; // on a per-minute rate limit, wait 60s and retry a few times
     try {
-      const r = await aiService.parseSyllabus({ source: text.trim(), mode });
-      setSubject(r?.subject || "");
-      setTopics((r?.topics || []).map((t) => ({ title: t.title || "", subtopics: Array.isArray(t.subtopics) ? t.subtopics : [], keep: true })));
-      setMsg((r?.topics || []).length ? "Review the tree below, tidy it up, then Save." : "No topics detected — paste more of the syllabus and try again.");
-    } catch (e) {
-      setMsg(e.message || "Couldn't parse the syllabus.");
+      for (let attempt = 1; attempt <= MAX_TRIES; attempt++) {
+        try {
+          const r = await aiService.parseSyllabus({ source: text.trim(), mode });
+          setSubject(r?.subject || "");
+          setTopics((r?.topics || []).map((t) => ({ title: t.title || "", subtopics: Array.isArray(t.subtopics) ? t.subtopics : [], keep: true })));
+          setMsg((r?.topics || []).length ? "Review the tree below, tidy it up, then Save." : "No topics detected — paste more of the syllabus and try again.");
+          return;
+        } catch (e) {
+          const rateLimited = /rate.?limit|quota|429|per-minute|try again|exhaust/i.test(e?.message || "");
+          if (!rateLimited || attempt >= MAX_TRIES || stopParseRef.current) { setMsg(e?.message || "Couldn't parse the syllabus."); return; }
+          // Wait ~60s for the per-minute window to reset, then retry (cancellable).
+          for (let k = 60; k > 0 && !stopParseRef.current; k--) {
+            setMsg(`Rate-limited — waiting ${k}s, then retry ${attempt + 1}/${MAX_TRIES}… (Stop to cancel)`);
+            await new Promise((res) => setTimeout(res, 1000));
+          }
+          if (stopParseRef.current) { setMsg("Stopped. If keys are out of DAILY quota, waiting won't help — use a key from another account or try after the daily reset."); return; }
+        }
+      }
     } finally { setParsing(false); }
   };
 
@@ -139,6 +153,11 @@ export default function AiSyllabusImport({ open, onClose }) {
         <button type="button" onClick={parse} disabled={parsing || pdfBusy || !text.trim()} className="btn-primary mt-3 w-full">
           {parsing ? <><Loader2 className="h-4 w-4 animate-spin" /> Parsing syllabus…</> : <><Sparkles className="h-4 w-4" /> Parse into Subject → Topics → Subtopics</>}
         </button>
+        {parsing && (
+          <button type="button" onClick={() => { stopParseRef.current = true; }} className="mt-2 flex w-full items-center justify-center gap-2 rounded-lg border border-rose-300 px-4 py-2 text-sm font-semibold text-rose-600 hover:bg-rose-50 dark:border-rose-900/50 dark:text-rose-400 dark:hover:bg-rose-900/20">
+            <X className="h-4 w-4" /> Stop
+          </button>
+        )}
 
         {topics.length > 0 && (
           <div className="mt-4 space-y-3">
