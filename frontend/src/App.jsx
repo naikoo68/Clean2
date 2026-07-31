@@ -80,6 +80,9 @@ const AdminVisualize = lazy(() => import("./pages/admin/AdminVisualize"));
 const CbtResult = lazy(() => import("./pages/cbt/CbtResult"));
 const CbtPortal = lazy(() => import("./pages/cbt/CbtPortal"));
 
+// Standalone Resume Builder (self-contained; no dependency on other features)
+const ResumeBuilder = lazy(() => import("./pages/resume/ResumeBuilder"));
+
 // Wraps a lazily-loaded page in a Suspense boundary with a loading fallback.
 const S = (Comp) => (
   <Suspense fallback={<div className="container-page"><Loading label="Loading…" /></div>}>
@@ -130,6 +133,12 @@ const router = createHashRouter([
         element: <ProtectedRoute>{S(Dashboard)}</ProtectedRoute>,
       },
     ],
+  },
+
+  // Standalone Resume Builder — full-screen, public, self-contained
+  {
+    path: "/resume",
+    element: S(ResumeBuilder),
   },
 
   // Full-screen test interface (outside main layout)
