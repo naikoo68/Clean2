@@ -2141,6 +2141,84 @@ export async function outlineUnits(req, res) {
   res.json({ units });
 }
 
+// POST /api/ai/parse-syllabus — read a FULL syllabus (pasted text / extracted
+// PDF / OCR) and return the structure to save in one go:
+//   { subject, topics: [ { title, subtopics: [ ... ] } ] }
+// Powers the standalone "Import syllabus" flow (create Subject → Topics, with
+// each topic's subtopics saved for generate-now-or-later).
+export async function parseSyllabus(req, res) {
+  const scope = resolveScope(req.user, req.body?.mode);
+  if (scope.denied) return res.status(403).json({ message: "AI access is not enabled for your account." });
+  const chosen = await resolveModel(String(req.body?.model || "").trim(), scope);
+  if (!chosen || !chosen.endpoints.length) {
+    return res.status(400).json({ message: scope.mode === "self" ? "No API keys added yet." : "AI is not configured. Add an API key in Admin → AI Keys." });
+  }
+  let source = String(req.body?.source || "").trim();
+  if (!source) return res.status(400).json({ message: "Paste or upload the syllabus text first." });
+  source = source.slice(0, 24000);
+
+  const userPrompt = [
+    "You are a curriculum analyst. Read the SYLLABUS below and extract its structure for an exam-prep app.",
+    "Return STRICT JSON of EXACTLY this shape (no markdown, no commentary):",
+    '{ "subject": "overall subject/paper name", "topics": [ { "title": "topic or section name", "subtopics": ["point 1","point 2"] } ] }',
+    "Rules:",
+    "- Base everything ONLY on what is present in this syllabus — do NOT invent outside topics.",
+    "- \"subject\" is the single overall subject/paper title (e.g. \"Anatomy and Physiology\"). If none is stated, infer a concise one from the content.",
+    "- Each \"topics\" entry is a distinct section/chapter/system the syllabus lists (short title, 2-10 words), in the order they appear.",
+    "- \"subtopics\" are the specific points listed under that topic. Split long comma/semicolon lists into separate short items (3-12 words each). If a topic lists no explicit points, use [].",
+    "- Stay faithful to the wording; do not add explanations.",
+    "",
+    "SYLLABUS:",
+    source,
+    "",
+    "Return ONLY the JSON object.",
+  ].join("\n");
+
+  const r = await callWithFallback({
+    endpoints: chosen.endpoints,
+    model: chosen.model,
+    userPrompt,
+    maxTokens: 6000,
+    owner: scope.owner,
+    failOnEmpty: true,
+    systemPrompt: 'You output ONLY a strict JSON object {"subject":"...","topics":[{"title":"...","subtopics":["..."]}]} — no markdown, no commentary.',
+  });
+  if (!r.ok) {
+    return res.status(502).json({ message: r.status === 429 ? quota429Message(r.detail) : `AI provider error (${r.status}). ${(r.detail || "").slice(0, 160)}` });
+  }
+
+  // Tolerant parse: strip code fences, narrow to the outer { ... } object.
+  let data = null;
+  try {
+    let t = String(r.content || "").trim();
+    const fence = t.match(/```(?:json)?\s*([\s\S]*?)```/i);
+    if (fence) t = fence[1].trim();
+    const a = t.indexOf("{"); const b = t.lastIndexOf("}");
+    if (a >= 0 && b > a) t = t.slice(a, b + 1);
+    data = JSON.parse(t);
+  } catch { data = null; }
+  if (!data || typeof data !== "object") return res.status(502).json({ message: "Could not read the syllabus structure — try again, or paste cleaner text." });
+
+  const clean = (s) => String(s == null ? "" : s).replace(/\s+/g, " ").trim();
+  const subject = clean(data.subject).slice(0, 120);
+  const seenT = new Set();
+  const topics = (Array.isArray(data.topics) ? data.topics : [])
+    .map((t) => {
+      const title = clean(t?.title).slice(0, 120);
+      const seenS = new Set();
+      const subtopics = (Array.isArray(t?.subtopics) ? t.subtopics : [])
+        .map((s) => clean(s).slice(0, 160))
+        .filter((s) => { const k = s.toLowerCase(); if (s.length < 2 || seenS.has(k)) return false; seenS.add(k); return true; })
+        .slice(0, 80);
+      return { title, subtopics };
+    })
+    .filter((t) => { const k = t.title.toLowerCase(); if (!t.title || seenT.has(k)) return false; seenT.add(k); return true; })
+    .slice(0, 80);
+
+  if (!topics.length) return res.status(502).json({ message: "No topics found in the syllabus — paste more of it, or try again." });
+  res.json({ subject, topics });
+}
+
 // POST /api/ai/classify-units — given a UNIT list and a set of question stems,
 // return which unit each question belongs to (so extracted PDF questions can be
 // filed under the right topic). Returns { assign: [unitIndex per question] }

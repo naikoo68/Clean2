@@ -316,6 +316,7 @@ export const aiService = {
   inferTopic: (data) => api.post("/ai/infer-topic", data), // name the topic a quiz's existing questions belong to → { topic }
   coverageGaps: (data) => api.post("/ai/coverage-gaps", data), // list uncovered syllabus areas → { topic, coveredCount, missing } → { notes }
   outlineUnits: (data) => api.post("/ai/outline-units", data), // detect units/chapters/topics in a PDF/source → { units: [...] }
+  parseSyllabus: (data) => api.post("/ai/parse-syllabus", data, { timeout: 180000 }), // full syllabus → { subject, topics:[{title,subtopics}] }
   classifyUnits: (data) => api.post("/ai/classify-units", data), // file question stems under units → { assign: [...] }
   extendExplanations: (data) => api.post("/ai/extend-explanations", data), // enrich all explanations in a quiz/test → { jobId, requested }
   extendOne: (data) => api.post("/ai/extend-explanation", data), // enrich ONE question's explanation → { explanation, optionExplanations }
