@@ -98,9 +98,13 @@ export default function PickFromBank({ open, onClose, testId, plan = [], title =
       const n = res?.inserted ?? 0;
       const skipped = (res?.requested ?? payload.length) - n;
       if (n > 0) {
-        setMsg(`✓ Added ${n} question(s) to the test${skipped > 0 ? ` (${skipped} skipped)` : ""}.`);
-        onDone?.(n);
-        setTimeout(onClose, 1000);
+        // Keep the picker OPEN so you can keep adding — clear only the ticked
+        // set while preserving the current drill-down. This lets you add a
+        // batch, then switch to another Topic/Subject/Quiz and add more into
+        // the same test, instead of being kicked back to the test screen.
+        setMsg(`✓ Added ${n} question(s) to the test${skipped > 0 ? ` (${skipped} skipped)` : ""}. Pick more (any topic/subject) and add again, or Close when done.`);
+        setChosen({});
+        onDone?.(n); // refresh the test's question count in the background
       } else {
         setMsg("No questions could be added — please try different questions.");
       }
@@ -255,7 +259,14 @@ export default function PickFromBank({ open, onClose, testId, plan = [], title =
             <h3 className="text-lg font-bold">Question preview</h3>
             <button type="button" onClick={() => setViewQ(null)}><X className="h-5 w-5" /></button>
           </div>
-          <QuestionView q={viewQ} />
+          <QuestionView q={viewQ} {...(() => {
+            const i = questions.findIndex((x) => x._id === viewQ._id);
+            return {
+              position: i >= 0 ? `${i + 1} / ${questions.length}` : undefined,
+              onPrev: i > 0 ? () => setViewQ(questions[i - 1]) : undefined,
+              onNext: i >= 0 && i < questions.length - 1 ? () => setViewQ(questions[i + 1]) : undefined,
+            };
+          })()} />
           <div className="mt-4 flex items-center justify-end gap-2">
             <button type="button" onClick={() => toggle(viewQ)} className={chosen[viewQ._id] ? "btn-primary" : "btn-outline"}>
               {chosen[viewQ._id] ? "✓ Selected — deselect" : "Select this question"}
