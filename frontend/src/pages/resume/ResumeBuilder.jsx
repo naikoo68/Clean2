@@ -1,26 +1,36 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Download, Upload, Plus, Trash2, ArrowUp, ArrowDown, Eye, EyeOff, FileText, ZoomIn, ZoomOut, Sparkles, RotateCcw, Copy } from "lucide-react";
+import { Download, Upload, Plus, Trash2, ArrowUp, ArrowDown, Eye, EyeOff, FileText, ZoomIn, ZoomOut, Sparkles, RotateCcw, Copy, Mail, Globe, Menu, Sun, Moon } from "lucide-react";
 import ResumeDocument from "./ResumeDocument";
+import CoverLetterDocument from "./CoverLetterDocument";
 import { TEMPLATES, FONTS, fontCss, templateById } from "./resumeTemplates";
-import { emptyResume, sampleResume, loadResume, saveResume, exportJson, importJson, atsScore, factories, SECTIONS } from "./resumeData";
+import { emptyResume, sampleResume, exportJson, importJson, atsScore, factories, SECTIONS, LANGS, listDocs, getCurrentId, loadDoc, saveDoc, createDoc, duplicateDoc, deleteDoc, keywordAnalysis, writingSuggestions } from "./resumeData";
 
 // Standalone Resume Builder (route: /resume). Self-contained — its own shell,
 // no app chrome. Data is a single JSON object autosaved to localStorage.
 export default function ResumeBuilder() {
-  const [resume, setResume] = useState(() => loadResume() || sampleResume());
+  // Initialise from the multi-document store (migrates the old single draft).
+  const [docId, setDocId] = useState(() => getCurrentId() || createDoc(sampleResume(), "Sample Resume").id);
+  const [resume, setResume] = useState(() => loadDoc(docId) || sampleResume());
+  const [docs, setDocs] = useState(() => listDocs());
   const [zoom, setZoom] = useState(0.75);
   const [savedAt, setSavedAt] = useState(null);
-  const [tab, setTab] = useState("content"); // content | design | ats
+  const [tab, setTab] = useState("content"); // content | design | cover | ats
+  const [preview, setPreview] = useState("resume"); // which document the preview shows: resume | cover
+  const [dark, setDark] = useState(() => typeof document !== "undefined" && document.documentElement.classList.contains("dark"));
+  const [jdText, setJdText] = useState(""); // pasted job description for keyword matching
   const fileRef = useRef(null);
+  const dragFrom = useRef(null); // index being dragged in the Sections reorder list
 
-  // Autosave (debounced) — offline draft in localStorage.
+  // Autosave (debounced) into the current document.
   useEffect(() => {
-    const t = setTimeout(() => { if (saveResume(resume)) setSavedAt(Date.now()); }, 600);
+    const t = setTimeout(() => { if (saveDoc(docId, resume)) { setSavedAt(Date.now()); setDocs(listDocs()); } }, 600);
     return () => clearTimeout(t);
-  }, [resume]);
+  }, [resume, docId]);
 
   const tpl = templateById(resume.theme?.templateId);
   const ats = useMemo(() => atsScore(resume), [resume]);
+  const writing = useMemo(() => writingSuggestions(resume), [resume]);
+  const kw = useMemo(() => keywordAnalysis(resume, jdText), [resume, jdText]);
 
   // ---- update helpers ----------------------------------------------------
   const patch = (updater) => setResume((r) => { const n = structuredCloneSafe(r); updater(n); return n; });
@@ -55,6 +65,28 @@ export default function ResumeBuilder() {
     try { setResume(await importJson(file)); } catch (err) { alert(err.message); } finally { e.target.value = ""; }
   };
   const printPdf = () => window.print();
+
+  // ---- documents (create / switch / duplicate / delete) ------------------
+  const switchDoc = (id) => { const r = loadDoc(id); if (r) { setDocId(id); setResume(r); setPreview("resume"); } };
+  const newDoc = () => { const { id, resume: r } = createDoc(emptyResume(), "Untitled"); setDocId(id); setResume(r); setDocs(listDocs()); setPreview("resume"); };
+  const duplicateCurrent = () => { const { id, resume: r } = duplicateDoc(resume); setDocId(id); setResume(r); setDocs(listDocs()); };
+  const removeDoc = () => {
+    if (!window.confirm("Delete this resume? This can't be undone.")) return;
+    const next = deleteDoc(docId);
+    const id = next || createDoc(emptyResume(), "Untitled").id;
+    setDocId(id); setResume(loadDoc(id) || emptyResume()); setDocs(listDocs());
+  };
+
+  // ---- dark / light toggle (this page is outside the app shell) ----------
+  const toggleDark = () => setDark((d) => { const nd = !d; document.documentElement.classList.toggle("dark", nd); return nd; });
+
+  // ---- drag-and-drop reordering of sections ------------------------------
+  const onSectionDrop = (toKey) => patch((n) => {
+    const arr = n.layout.order.slice();
+    const from = dragFrom.current; const to = arr.indexOf(toKey);
+    if (from == null || from < 0 || to < 0 || from === to) return;
+    const [moved] = arr.splice(from, 1); arr.splice(to, 0, moved); n.layout.order = arr;
+  });
 
   // Config-driven editors for the repeatable sections (keeps this file lean).
   const ARRAY_UI = {
@@ -123,15 +155,21 @@ export default function ResumeBuilder() {
       {/* Top toolbar */}
       <header className="no-print sticky top-0 z-20 flex flex-wrap items-center gap-2 border-b border-slate-200 bg-white px-3 py-2 dark:border-slate-800 dark:bg-slate-900">
         <span className="flex items-center gap-2 font-extrabold text-slate-800 dark:text-slate-100"><FileText className="h-5 w-5 text-brand-600" /> Resume Builder</span>
+        <select value={docId} onChange={(e) => switchDoc(e.target.value)} className="input !w-auto !py-1 text-xs" title="Switch resume">
+          {docs.map((d) => <option key={d.id} value={d.id}>{d.name || "Untitled"}</option>)}
+        </select>
+        <button onClick={duplicateCurrent} className="btn-outline !p-2" title="Duplicate this resume"><Copy className="h-4 w-4" /></button>
+        <button onClick={removeDoc} className="btn-outline !p-2" title="Delete this resume"><Trash2 className="h-4 w-4" /></button>
         <span className="text-xs text-slate-400">{savedAt ? "Saved" : "Autosaving…"}</span>
         <div className="ml-auto flex flex-wrap items-center gap-1.5">
           <button onClick={() => setZoom((z) => Math.max(0.4, +(z - 0.1).toFixed(2)))} className="btn-outline !p-2" title="Zoom out"><ZoomOut className="h-4 w-4" /></button>
           <span className="w-10 text-center text-xs text-slate-500">{Math.round(zoom * 100)}%</span>
           <button onClick={() => setZoom((z) => Math.min(1.5, +(z + 0.1).toFixed(2)))} className="btn-outline !p-2" title="Zoom in"><ZoomIn className="h-4 w-4" /></button>
+          <button onClick={toggleDark} className="btn-outline !p-2" title="Toggle dark / light">{dark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}</button>
           <button onClick={() => fileRef.current?.click()} className="btn-outline text-sm"><Upload className="h-4 w-4" /> Import</button>
           <input ref={fileRef} type="file" accept="application/json,.json" className="hidden" onChange={onImport} />
           <button onClick={() => exportJson(resume)} className="btn-outline text-sm"><Download className="h-4 w-4" /> JSON</button>
-          <button onClick={() => { if (window.confirm("Start a blank resume? Your current draft stays exported only if you saved JSON.")) setResume(emptyResume()); }} className="btn-outline text-sm"><RotateCcw className="h-4 w-4" /> New</button>
+          <button onClick={newDoc} className="btn-outline text-sm" title="Create a new blank resume"><Plus className="h-4 w-4" /> New</button>
           <button onClick={printPdf} className="btn-primary text-sm"><Download className="h-4 w-4" /> Download PDF</button>
         </div>
       </header>
@@ -140,7 +178,7 @@ export default function ResumeBuilder() {
         {/* Left: editor */}
         <div className="no-print space-y-3">
           <div className="inline-flex rounded-lg border border-slate-200 p-0.5 text-sm dark:border-slate-700">
-            {["content", "design", "ats"].map((t) => (
+            {["content", "design", "cover", "ats"].map((t) => (
               <button key={t} onClick={() => setTab(t)} className={`rounded-md px-3 py-1 font-semibold capitalize ${tab === t ? "bg-brand-600 text-white" : "text-slate-600 dark:text-slate-300"}`}>{t === "ats" ? "ATS" : t}</button>
             ))}
           </div>
@@ -202,6 +240,12 @@ export default function ResumeBuilder() {
                   {FONTS.map((f) => <option key={f.id} value={f.id}>{f.label}</option>)}
                 </select>
               </label>
+              <label className="block text-sm font-semibold"><span className="inline-flex items-center gap-1"><Globe className="h-4 w-4" /> Resume language</span>
+                <select className="input mt-1" value={resume.theme.language || "en"} onChange={(e) => setTheme("language", e.target.value)}>
+                  {LANGS.map((l) => <option key={l.id} value={l.id}>{l.label}</option>)}
+                </select>
+                <span className="mt-1 block text-xs font-normal text-slate-400">Translates section headings on the resume &amp; cover letter (right-to-left supported).</span>
+              </label>
               <label className="block text-sm font-semibold">Text size
                 <input type="range" min="0.85" max="1.2" step="0.05" value={resume.theme.fontScale} onChange={(e) => setTheme("fontScale", parseFloat(e.target.value))} className="w-full accent-brand-600" />
               </label>
@@ -213,7 +257,8 @@ export default function ResumeBuilder() {
                     const label = (SECTIONS.find((s) => s.key === key) || {}).label || key;
                     const hiddenNow = resume.layout.hidden?.[key];
                     return (
-                      <div key={key} className="flex items-center gap-2 rounded-lg border border-slate-200 px-2 py-1 text-sm dark:border-slate-700">
+                      <div key={key} draggable onDragStart={() => { dragFrom.current = i; }} onDragOver={(e) => e.preventDefault()} onDrop={() => onSectionDrop(key)} className="flex items-center gap-2 rounded-lg border border-slate-200 px-2 py-1 text-sm dark:border-slate-700">
+                        <Menu className="h-4 w-4 cursor-grab text-slate-300" title="Drag to reorder" />
                         <span className={`flex-1 ${hiddenNow ? "text-slate-400 line-through" : ""}`}>{label}</span>
                         <button onClick={() => moveSection(key, -1)} disabled={i === 0} className="rounded p-1 text-slate-400 hover:text-slate-700 disabled:opacity-30"><ArrowUp className="h-3.5 w-3.5" /></button>
                         <button onClick={() => moveSection(key, 1)} disabled={i === resume.layout.order.length - 1} className="rounded p-1 text-slate-400 hover:text-slate-700 disabled:opacity-30"><ArrowDown className="h-3.5 w-3.5" /></button>
@@ -223,6 +268,25 @@ export default function ResumeBuilder() {
                   })}
                 </div>
               </div>
+            </div>
+          )}
+
+          {tab === "cover" && (
+            <div className="card space-y-3 p-4">
+              <h3 className="font-bold">Cover Letter</h3>
+              <label className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300">
+                <input type="checkbox" checked={!!resume.coverLetter?.enabled} onChange={(e) => patch((n) => { n.coverLetter = { ...n.coverLetter, enabled: e.target.checked }; })} className="h-4 w-4 accent-brand-600" />
+                Include a cover letter
+              </label>
+              <div className="grid grid-cols-2 gap-2">
+                <Field label="Recipient name" value={resume.coverLetter?.recipient} onChange={(v) => patch((n) => { n.coverLetter = { ...n.coverLetter, recipient: v }; })} />
+                <Field label="Company" value={resume.coverLetter?.company} onChange={(v) => patch((n) => { n.coverLetter = { ...n.coverLetter, company: v }; })} />
+              </div>
+              <label className="block">
+                <span className="mb-0.5 block text-xs font-semibold text-slate-600 dark:text-slate-300">Body (blank lines separate paragraphs)</span>
+                <textarea rows={12} className="input resize-y text-sm" value={resume.coverLetter?.body || ""} onChange={(e) => patch((n) => { n.coverLetter = { ...n.coverLetter, body: e.target.value }; })} placeholder={"I'm excited to apply for the [role] at [company]...\n\nIn my current role I [achievement with a number]...\n\nI'd welcome the chance to discuss how I can contribute."} />
+              </label>
+              <button onClick={() => setPreview("cover")} className="btn-outline text-sm"><Mail className="h-4 w-4" /> Preview cover letter</button>
             </div>
           )}
 
@@ -242,16 +306,50 @@ export default function ResumeBuilder() {
                   {ats.tips.map((t, i) => <li key={i} className="flex gap-2"><Sparkles className="mt-0.5 h-4 w-4 flex-shrink-0 text-amber-500" />{t}</li>)}
                 </ul>
               ) : <p className="text-sm font-medium text-emerald-600">Looks great — no obvious gaps! \ud83c\udf89</p>}
-              <p className="text-xs text-slate-400">AI keyword matching &amp; grammar checking are planned next.</p>
+
+              <div className="border-t border-slate-200 pt-3 dark:border-slate-700">
+                <h4 className="mb-1 font-bold">Writing suggestions</h4>
+                {writing.length ? (
+                  <ul className="space-y-1 text-sm">
+                    {writing.map((t, i) => <li key={i} className="flex gap-2"><Sparkles className="mt-0.5 h-4 w-4 flex-shrink-0 text-sky-500" />{t}</li>)}
+                  </ul>
+                ) : <p className="text-sm text-emerald-600">No common writing issues spotted.</p>}
+              </div>
+
+              <div className="border-t border-slate-200 pt-3 dark:border-slate-700">
+                <h4 className="mb-1 font-bold">Match to a job description</h4>
+                <p className="mb-2 text-xs text-slate-400">Paste a job description to see which of its keywords already appear in your resume.</p>
+                <textarea rows={5} className="input resize-y text-sm" value={jdText} onChange={(e) => setJdText(e.target.value)} placeholder="Paste the job description here…" />
+                {kw.total > 0 && (
+                  <div className="mt-2 space-y-2">
+                    <p className="text-sm font-semibold">Keyword match: <span className={kw.pct >= 60 ? "text-emerald-600" : "text-amber-600"}>{kw.pct}%</span> <span className="font-normal text-slate-400">({kw.matched.length}/{kw.total})</span></p>
+                    {kw.missing.length ? (
+                      <div>
+                        <p className="text-xs font-semibold text-slate-600 dark:text-slate-300">Missing keywords — weave in the relevant ones:</p>
+                        <div className="mt-1 flex flex-wrap gap-1">
+                          {kw.missing.map((k) => <span key={k} className="rounded bg-amber-100 px-2 py-0.5 text-xs text-amber-800 dark:bg-amber-900/40 dark:text-amber-200">{k}</span>)}
+                        </div>
+                      </div>
+                    ) : <p className="text-sm text-emerald-600">Great — all detected keywords are present!</p>}
+                  </div>
+                )}
+              </div>
             </div>
           )}
         </div>
 
         {/* Right: live A4 preview */}
         <div className="overflow-auto">
+          <div className="no-print mb-2 inline-flex rounded-lg border border-slate-200 p-0.5 text-sm dark:border-slate-700">
+            {["resume", "cover"].map((v) => (
+              <button key={v} onClick={() => setPreview(v)} className={`rounded-md px-3 py-1 font-semibold ${preview === v ? "bg-brand-600 text-white" : "text-slate-600 dark:text-slate-300"}`}>{v === "resume" ? "Resume" : "Cover letter"}</button>
+            ))}
+          </div>
           <div id="resume-print-area">
             <div style={{ transform: `scale(${zoom})`, transformOrigin: "top center", width: "210mm", margin: "0 auto" }}>
-              <ResumeDocument resume={resume} style={tpl.style} accent={resume.theme.accent} fontFamily={fontCss(resume.theme.font)} fontScale={resume.theme.fontScale} />
+              {preview === "cover"
+                ? <CoverLetterDocument resume={resume} accent={resume.theme.accent} fontFamily={fontCss(resume.theme.font)} fontScale={resume.theme.fontScale} lang={resume.theme.language} />
+                : <ResumeDocument resume={resume} style={tpl.style} accent={resume.theme.accent} fontFamily={fontCss(resume.theme.font)} fontScale={resume.theme.fontScale} lang={resume.theme.language} />}
             </div>
           </div>
         </div>
