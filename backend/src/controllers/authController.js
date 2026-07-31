@@ -4,6 +4,7 @@ import Coupon from "../models/Coupon.js";
 import generateToken from "../utils/generateToken.js";
 import { razorpayConfigured, verifyPaymentSignature } from "../config/razorpay.js";
 import { sendMail } from "../config/mailer.js";
+import { clientBaseFromReq } from "../config/clientUrl.js";
 import { notifyNewUser } from "../utils/notify.js";
 import { getClientPlans } from "../utils/plans.js";
 
@@ -404,9 +405,9 @@ export async function forgotPassword(req, res) {
     user.resetPasswordExpires = Date.now() + 60 * 60 * 1000;
     await user.save();
 
-    // Send the reset link via email. CLIENT_URL is the frontend base URL.
-    const clientUrl = (process.env.CLIENT_URL || "http://localhost:5173").replace(/\/$/, "");
-    const resetLink = `${clientUrl}/#/reset-password/${user.resetPasswordToken}`;
+    // Build the reset link from the site the request came from (falls back to
+    // CLIENT_URL, then localhost), so it works even if CLIENT_URL isn't set.
+    const resetLink = `${clientBaseFromReq(req)}/#/reset-password/${user.resetPasswordToken}`;
     await sendMail({
       to: user.email,
       subject: "Reset your My Study Guide password",

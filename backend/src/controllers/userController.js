@@ -8,6 +8,7 @@ import PracticeSubject from "../models/PracticeSubject.js";
 import PracticeTopic from "../models/PracticeTopic.js";
 import { findAccessEntry } from "../utils/accessControl.js";
 import { sendMail } from "../config/mailer.js";
+import { clientBaseFromReq } from "../config/clientUrl.js";
 
 const norm = (e) => String(e || "").toLowerCase().trim();
 
@@ -295,9 +296,9 @@ export async function adminResetPassword(req, res) {
   user.resetPasswordExpires = Date.now() + 60 * 60 * 1000;
   await user.save();
 
-  // Send the reset link to the user's email.
-  const clientUrl = (process.env.CLIENT_URL || "http://localhost:5173").replace(/\/$/, "");
-  const resetLink = `${clientUrl}/#/reset-password/${user.resetPasswordToken}`;
+  // Build the reset link from the site the request came from (falls back to
+  // CLIENT_URL, then localhost), so it works even if CLIENT_URL isn't set.
+  const resetLink = `${clientBaseFromReq(req)}/#/reset-password/${user.resetPasswordToken}`;
   await sendMail({
     to: user.email,
     subject: "Password reset requested by admin — My Study Guide",
