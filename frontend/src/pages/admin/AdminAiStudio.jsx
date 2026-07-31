@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
-import { Sparkles, Wand2, Globe, ArrowRight, Layers, Plus } from "lucide-react";
+import { Sparkles, Wand2, Globe, ArrowRight, Layers, Plus, BookOpen } from "lucide-react";
 import { practiceService, contentService, examService, testService } from "../../services";
 import AiGenerate from "../../components/admin/AiGenerate";
 import AiImport from "../../components/admin/AiImport";
 import AiPdfTopics from "../../components/admin/AiPdfTopics";
+import AiSyllabusImport from "../../components/admin/AiSyllabusImport";
 
 // A standalone home for AI question generation / import. Pick a destination
 // (like the Migration tool), then Generate or Import questions straight into it.
@@ -190,6 +191,7 @@ export default function AdminAiStudio({ clientMode = false }) {
   const [aiOpen, setAiOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [pdfTopicsOpen, setPdfTopicsOpen] = useState(false);
+  const [syllabusOpen, setSyllabusOpen] = useState(false);
   const [msg, setMsg] = useState("");
 
   const cfg = DESTS[dest];
@@ -277,6 +279,11 @@ export default function AdminAiStudio({ clientMode = false }) {
               <Layers className="h-4 w-4" /> PDF → Topics (auto-split)
             </button>
           )}
+          {/* Standalone: upload a whole syllabus → save the Subject → Topics →
+              Subtopics tree in one go (no destination selection needed). */}
+          <button onClick={() => { setMsg(""); setSyllabusOpen(true); }} className="btn-outline" title="Upload a full syllabus → auto-create the Subject, its Topics and their subtopics; generate now or later">
+            <BookOpen className="h-4 w-4" /> Import full syllabus
+          </button>
           {!ready && !subjectReady && <span className="flex items-center gap-1 text-sm text-slate-400"><ArrowRight className="h-4 w-4" /> pick a destination first</span>}
         </div>
         {cfg.topicAdapter && subjectReady && !ready && (
@@ -313,6 +320,7 @@ export default function AdminAiStudio({ clientMode = false }) {
           label={cfg.newLabel}
         />
       )}
+      <AiSyllabusImport open={syllabusOpen} onClose={() => setSyllabusOpen(false)} />
     </div>
   );
 }
