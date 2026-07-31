@@ -5,22 +5,18 @@
 // text stays selectable — no rasterizing). Add a new template by adding a preset
 // in resumeTemplates.js; no changes needed here.
 // ---------------------------------------------------------------------------
+import { sectionLabel, tr, isRtl } from "./resumeData";
+
 const SIDEBAR_KEYS = ["skills", "languages", "interests", "references"];
 const MAIN_KEYS = ["summary", "experience", "education", "projects", "certifications"];
 
-const SECTION_LABEL = {
-  summary: "Profile", experience: "Experience", education: "Education", skills: "Skills",
-  projects: "Projects", certifications: "Certifications", languages: "Languages",
-  references: "References", interests: "Interests",
-};
-
-const dateRange = (a, b, current) => {
-  const end = current ? "Present" : (b || "");
+const dateRange = (a, b, current, present = "Present") => {
+  const end = current ? present : (b || "");
   if (a && end) return `${a} \u2013 ${end}`;
   return a || end || "";
 };
 
-export default function ResumeDocument({ resume, style = {}, accent, fontFamily, fontScale = 1 }) {
+export default function ResumeDocument({ resume, style = {}, accent, fontFamily, fontScale = 1, lang = "en" }) {
   const s = { headerAlign: "left", titleStyle: "underline", density: "cozy", columns: 1, sidebar: "left", uppercaseName: false, showPhoto: false, ...style };
   const ac = accent || s.accent || "#2563eb";
   const font = fontFamily || "Inter, 'Segoe UI', Roboto, Arial, sans-serif";
@@ -30,6 +26,9 @@ export default function ResumeDocument({ resume, style = {}, accent, fontFamily,
   const hidden = resume.layout?.hidden || {};
   const order = (resume.layout?.order && resume.layout.order.length ? resume.layout.order : MAIN_KEYS.concat(SIDEBAR_KEYS));
   const show = (k) => !hidden[k];
+  const L = (k) => sectionLabel(k, lang);          // translated section heading
+  const present = tr(lang, "present");             // "Present" in chosen language
+  const rtl = isRtl(lang);
 
   // ---- shared bits -------------------------------------------------------
   const SectionTitle = ({ children }) => {
@@ -55,7 +54,7 @@ export default function ResumeDocument({ resume, style = {}, accent, fontFamily,
       case "summary":
         return resume.summary?.trim() ? (
           <section key={key} style={{ marginBottom: gap }}>
-            <SectionTitle>{SECTION_LABEL.summary}</SectionTitle>
+            <SectionTitle>{L("summary")}</SectionTitle>
             <p style={{ margin: 0, lineHeight: 1.4 }}>{resume.summary}</p>
           </section>
         ) : null;
@@ -64,12 +63,12 @@ export default function ResumeDocument({ resume, style = {}, accent, fontFamily,
         if (!list.length) return null;
         return (
           <section key={key} style={{ marginBottom: gap }}>
-            <SectionTitle>{SECTION_LABEL.experience}</SectionTitle>
+            <SectionTitle>{L("experience")}</SectionTitle>
             {list.map((e) => (
               <div key={e.id} style={{ marginBottom: gap * 0.55 }}>
                 <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
                   <strong style={{ fontSize: base * 1.02 }}>{e.role}{e.company ? `, ${e.company}` : ""}</strong>
-                  <span style={{ color: "#555", whiteSpace: "nowrap" }}>{dateRange(e.start, e.end, e.current)}</span>
+                  <span style={{ color: "#555", whiteSpace: "nowrap" }}>{dateRange(e.start, e.end, e.current, present)}</span>
                 </div>
                 {e.location ? <div style={{ color: "#666", fontStyle: "italic" }}>{e.location}</div> : null}
                 {bulletList(e.bullets)}
@@ -83,7 +82,7 @@ export default function ResumeDocument({ resume, style = {}, accent, fontFamily,
         if (!list.length) return null;
         return (
           <section key={key} style={{ marginBottom: gap }}>
-            <SectionTitle>{SECTION_LABEL.education}</SectionTitle>
+            <SectionTitle>{L("education")}</SectionTitle>
             {list.map((e) => (
               <div key={e.id} style={{ marginBottom: gap * 0.5 }}>
                 <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
@@ -102,7 +101,7 @@ export default function ResumeDocument({ resume, style = {}, accent, fontFamily,
         if (!list.length) return null;
         return (
           <section key={key} style={{ marginBottom: gap }}>
-            <SectionTitle>{SECTION_LABEL.skills}</SectionTitle>
+            <SectionTitle>{L("skills")}</SectionTitle>
             {inSidebar ? (
               <ul style={{ margin: 0, paddingLeft: 16 }}>{list.map((x) => <li key={x.id} style={{ marginBottom: 2 }}>{x.name}{x.level ? ` \u2014 ${x.level}` : ""}</li>)}</ul>
             ) : (
@@ -118,7 +117,7 @@ export default function ResumeDocument({ resume, style = {}, accent, fontFamily,
         if (!list.length) return null;
         return (
           <section key={key} style={{ marginBottom: gap }}>
-            <SectionTitle>{SECTION_LABEL.projects}</SectionTitle>
+            <SectionTitle>{L("projects")}</SectionTitle>
             {list.map((x) => (
               <div key={x.id} style={{ marginBottom: gap * 0.5 }}>
                 <strong>{x.name}</strong>{x.link ? <span style={{ color: ac }}> \u00b7 {x.link}</span> : null}
@@ -134,7 +133,7 @@ export default function ResumeDocument({ resume, style = {}, accent, fontFamily,
         if (!list.length) return null;
         return (
           <section key={key} style={{ marginBottom: gap }}>
-            <SectionTitle>{SECTION_LABEL.certifications}</SectionTitle>
+            <SectionTitle>{L("certifications")}</SectionTitle>
             <ul style={{ margin: 0, paddingLeft: 16 }}>
               {list.map((x) => <li key={x.id} style={{ marginBottom: 2 }}>{x.name}{x.issuer ? `, ${x.issuer}` : ""}{x.date ? ` (${x.date})` : ""}</li>)}
             </ul>
@@ -146,7 +145,7 @@ export default function ResumeDocument({ resume, style = {}, accent, fontFamily,
         if (!list.length) return null;
         return (
           <section key={key} style={{ marginBottom: gap }}>
-            <SectionTitle>{SECTION_LABEL.languages}</SectionTitle>
+            <SectionTitle>{L("languages")}</SectionTitle>
             <ul style={{ margin: 0, paddingLeft: 16 }}>{list.map((x) => <li key={x.id} style={{ marginBottom: 2 }}>{x.name}{x.level ? ` \u2014 ${x.level}` : ""}</li>)}</ul>
           </section>
         );
@@ -156,7 +155,7 @@ export default function ResumeDocument({ resume, style = {}, accent, fontFamily,
         if (!list.length) return null;
         return (
           <section key={key} style={{ marginBottom: gap }}>
-            <SectionTitle>{SECTION_LABEL.references}</SectionTitle>
+            <SectionTitle>{L("references")}</SectionTitle>
             {list.map((x) => (
               <div key={x.id} style={{ marginBottom: 4 }}>
                 <strong>{x.name}</strong>{x.relation ? ` \u2014 ${x.relation}` : ""}
@@ -171,7 +170,7 @@ export default function ResumeDocument({ resume, style = {}, accent, fontFamily,
         if (!list.length) return null;
         return (
           <section key={key} style={{ marginBottom: gap }}>
-            <SectionTitle>{SECTION_LABEL.interests}</SectionTitle>
+            <SectionTitle>{L("interests")}</SectionTitle>
             <div style={{ color: "#444" }}>{list.map((x) => x.name).join(" \u00b7 ")}</div>
           </section>
         );
@@ -188,7 +187,7 @@ export default function ResumeDocument({ resume, style = {}, accent, fontFamily,
 
   const Header = ({ center }) => (
     <header style={{ textAlign: center ? "center" : "left", marginBottom: gap, borderBottom: `1px solid #e5e7eb`, paddingBottom: gap * 0.5 }}>
-      <h1 style={{ margin: 0, fontSize: base * 2, color: "#111", letterSpacing: s.uppercaseName ? "0.04em" : 0, textTransform: s.uppercaseName ? "uppercase" : "none" }}>{p.fullName || "Your Name"}</h1>
+      <h1 style={{ margin: 0, fontSize: base * 2, color: "#111", letterSpacing: s.uppercaseName ? "0.04em" : 0, textTransform: s.uppercaseName ? "uppercase" : "none" }}>{p.fullName || tr(lang, "yourName")}</h1>
       {p.title ? <div style={{ color: ac, fontSize: base * 1.15, fontWeight: 600, marginTop: 2 }}>{p.title}</div> : null}
       {contactLine()}
     </header>
@@ -198,6 +197,7 @@ export default function ResumeDocument({ resume, style = {}, accent, fontFamily,
   const sheet = {
     width: "210mm", minHeight: "297mm", background: "#fff", color: "#1f2937",
     fontFamily: font, fontSize: base, boxSizing: "border-box", margin: "0 auto",
+    direction: rtl ? "rtl" : "ltr", textAlign: rtl ? "right" : "left",
     boxShadow: "0 1px 8px rgba(0,0,0,0.12)",
   };
 
@@ -210,7 +210,7 @@ export default function ResumeDocument({ resume, style = {}, accent, fontFamily,
           <img src={p.photo} alt="" style={{ width: 96, height: 96, borderRadius: "50%", objectFit: "cover", display: "block", margin: "0 auto 12px", border: `3px solid ${ac}` }} />
         ) : null}
         <div style={{ marginBottom: gap }}>
-          <SectionTitle>Contact</SectionTitle>
+          <SectionTitle>{tr(lang, "contact")}</SectionTitle>
           <div style={{ lineHeight: 1.5, wordBreak: "break-word" }}>
             {[["Email", p.email], ["Phone", p.phone], ["Location", p.location], ["Web", p.website], ["LinkedIn", p.linkedin], ["GitHub", p.github]].filter(([, v]) => v).map(([k, v]) => (
               <div key={k} style={{ marginBottom: 2 }}><span style={{ color: ac, fontWeight: 600 }}>{k}: </span>{v}</div>
@@ -222,7 +222,7 @@ export default function ResumeDocument({ resume, style = {}, accent, fontFamily,
     );
     const main = (
       <div style={{ flex: 1, padding: "16mm 12mm", boxSizing: "border-box" }}>
-        <h1 style={{ margin: 0, fontSize: base * 2, color: "#111", textTransform: s.uppercaseName ? "uppercase" : "none" }}>{p.fullName || "Your Name"}</h1>
+        <h1 style={{ margin: 0, fontSize: base * 2, color: "#111", textTransform: s.uppercaseName ? "uppercase" : "none" }}>{p.fullName || tr(lang, "yourName")}</h1>
         {p.title ? <div style={{ color: ac, fontSize: base * 1.2, fontWeight: 600, margin: "2px 0 12px" }}>{p.title}</div> : null}
         {order.filter((k) => MAIN_KEYS.includes(k)).map((k) => renderSection(k))}
       </div>
