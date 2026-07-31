@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { X, Library, Loader2, CheckCircle2, Eye } from "lucide-react";
+import { X, Library, Loader2, CheckCircle2, Eye, Maximize2, Minimize2 } from "lucide-react";
 import { contentService, practiceService, testService } from "../../services";
 import MathText from "../ui/MathText";
 import QuestionView from "./QuestionView";
@@ -25,6 +25,7 @@ export default function PickFromBank({ open, onClose, testId, plan = [], title =
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState("");
   const [viewQ, setViewQ] = useState(null); // preview a question before picking
+  const [full, setFull] = useState(false); // full-screen the picker (more room to browse/select)
 
   // Quiz drill
   const [subjects, setSubjects] = useState([]);
@@ -120,11 +121,16 @@ export default function PickFromBank({ open, onClose, testId, plan = [], title =
 
   return (
     <>
-    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/50 p-4">
-      <div className="my-8 w-full max-w-2xl animate-scale-in card p-6">
+    <div className={`fixed inset-0 z-50 flex justify-center overflow-y-auto bg-black/50 ${full ? "items-stretch p-2 sm:p-4" : "items-start p-4"}`}>
+      <div className={`card flex flex-col animate-scale-in p-6 ${full ? "m-0 h-full w-full max-w-none" : "my-8 w-full max-w-2xl"}`}>
         <div className="mb-4 flex items-center justify-between">
           <h3 className="flex items-center gap-2 text-lg font-bold"><Library className="h-5 w-5 text-brand-600" /> {title}</h3>
-          <button type="button" onClick={onClose}><X className="h-5 w-5" /></button>
+          <div className="flex items-center gap-1">
+            <button type="button" onClick={() => setFull((v) => !v)} title={full ? "Exit full screen" : "Full screen"} className="rounded-lg p-1.5 text-slate-500 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800">
+              {full ? <Minimize2 className="h-5 w-5" /> : <Maximize2 className="h-5 w-5" />}
+            </button>
+            <button type="button" onClick={onClose}><X className="h-5 w-5" /></button>
+          </div>
         </div>
 
         {/* Assign picked questions to a subject-section of this test */}
@@ -202,12 +208,12 @@ export default function PickFromBank({ open, onClose, testId, plan = [], title =
         )}
 
         {/* Questions with checkboxes */}
-        <div className="rounded-xl border border-slate-200 dark:border-slate-700">
+        <div className={`rounded-xl border border-slate-200 dark:border-slate-700 ${full ? "flex min-h-0 flex-1 flex-col" : ""}`}>
           <div className="flex items-center justify-between border-b border-slate-200 px-3 py-2 text-xs dark:border-slate-700">
             <span className="font-semibold text-slate-500">{questions.length} question(s) here</span>
             {questions.length > 0 && <button onClick={selectAllVisible} className="font-semibold text-brand-600 hover:underline">Select all here</button>}
           </div>
-          <div className="max-h-64 space-y-1.5 overflow-y-auto p-2">
+          <div className={`space-y-1.5 overflow-y-auto p-2 ${full ? "min-h-0 flex-1" : "max-h-64"}`}>
             {loadingQ ? (
               <div className="py-8 text-center"><Loader2 className="mx-auto h-5 w-5 animate-spin text-slate-400" /></div>
             ) : questions.length === 0 ? (
