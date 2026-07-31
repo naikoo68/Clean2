@@ -159,6 +159,51 @@ export default function AdminPractice({ clientMode = false }) {
   const openTopic = (t) => { setTopic(t); setView("items"); };
   const goTo = (v) => setView(v);
 
+  // ---- Device / browser "Back" steps UP one level -------------------------
+  // The drill-down (stream → subject → topic → quiz) lives in React state, so
+  // by default the device Back button leaves the whole page. Here we mirror the
+  // drill depth into the browser history: each level down pushes a sentinel
+  // entry, and Back pops one — going up a level (quiz-questions → quizzes →
+  // topics → subjects → streams) instead of exiting. At the top level, Back
+  // leaves the page as usual.
+  const levelOrder = kind === "quiz" ? ["streams", "subjects", "topics", "items"] : ["streams", "subjects", "items"];
+  const backDepth = Math.max(0, levelOrder.indexOf(view)) + (qItem ? 1 : 0);
+  const goUpOneLevel = () => {
+    if (qItem) { setQItem(null); return; }              // close the quiz-questions modal
+    if (view === "items") { if (kind === "quiz") { setTopic(null); setView("topics"); } else { setSubject(null); setView("subjects"); } }
+    else if (view === "topics") { setSubject(null); setView("subjects"); }
+    else if (view === "subjects") { setStream(null); setView("streams"); }
+  };
+  const goUpRef = useRef(goUpOneLevel);
+  goUpRef.current = goUpOneLevel;
+  const sentinelsRef = useRef(0);      // # of history sentinels we've pushed (kept == backDepth)
+  const suppressPopRef = useRef(false); // ignore the popstate our own history.go() triggers
+
+  // Keep the number of history sentinels in sync with the current drill depth.
+  useEffect(() => {
+    const have = sentinelsRef.current;
+    if (backDepth > have) {
+      for (let i = 0; i < backDepth - have; i++) window.history.pushState({ __mpDrill: true }, "");
+      sentinelsRef.current = backDepth;
+    } else if (backDepth < have) {
+      // Went up via the breadcrumb / a Close button — drop the extra sentinels.
+      suppressPopRef.current = true;
+      sentinelsRef.current = backDepth;
+      window.history.go(backDepth - have);
+    }
+  }, [backDepth]);
+
+  // Back button: consume one sentinel and step up a level (unless it's ours).
+  useEffect(() => {
+    const onPop = () => {
+      if (suppressPopRef.current) { suppressPopRef.current = false; return; }
+      if (sentinelsRef.current > 0) { sentinelsRef.current -= 1; goUpRef.current(); }
+      // else: no sentinel left → let the browser leave the page normally.
+    };
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, []);
+
   // Clear topic multi-select whenever we navigate.
   useEffect(() => { setSelTopics({}); }, [view, subject?._id, stream?._id, kind]);
   const toggleTopicSel = (id) => setSelTopics((s) => ({ ...s, [id]: !s[id] }));
