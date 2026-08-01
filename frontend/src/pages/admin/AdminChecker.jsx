@@ -1,7 +1,8 @@
 import { useState } from "react";
-import { SearchCheck, Upload, Loader2, Trash2, CheckCircle2, AlertTriangle, FileText } from "lucide-react";
+import { SearchCheck, Upload, Loader2, Trash2, CheckCircle2, AlertTriangle, ChevronDown, ChevronRight } from "lucide-react";
 import { contentService } from "../../services";
 import MathText from "../../components/ui/MathText";
+import QuestionView from "../../components/admin/QuestionView";
 
 // Standalone "Question Checker": paste questions (bulk or single) or upload a
 // file/image, and see — for each question — whether it already exists in YOUR
@@ -28,6 +29,8 @@ export default function AdminChecker() {
   const [checking, setChecking] = useState(false); // running the match
   const [msg, setMsg] = useState("");
   const [report, setReport] = useState(null);      // { total, found, summary, results }
+  const [expanded, setExpanded] = useState(() => new Set()); // which result rows are open
+  const toggle = (i) => setExpanded((prev) => { const n = new Set(prev); n.has(i) ? n.delete(i) : n.add(i); return n; });
 
   // Read an uploaded file into the text box. PDFs use pdf.js (OCR fallback for
   // scans); images use OCR; Word/PPT/Excel/CSV/text use lib/docs.
@@ -76,6 +79,7 @@ export default function AdminChecker() {
     setMsg("Checking your question bank…");
     try {
       const r = await contentService.checkQuestions({ content: text });
+      setExpanded(new Set());
       setReport(r);
       setMsg("");
     } catch (e) {
@@ -148,24 +152,39 @@ export default function AdminChecker() {
           <div className="space-y-3">
             {report.results.map((r, i) => {
               const s = STATUS[r.status] || STATUS.none;
+              const open = expanded.has(i);
               return (
-                <div key={i} className="rounded-xl border border-slate-200 p-3 dark:border-slate-700">
-                  <div className="mb-1 flex flex-wrap items-start justify-between gap-2">
-                    <div className="flex-1 text-sm font-medium">
-                      <span className="mr-1 text-slate-400">Q{i + 1}.</span> <MathText>{r.question}</MathText>
+                <div key={i} className="overflow-hidden rounded-xl border border-slate-200 dark:border-slate-700">
+                  {/* Tap the row to expand and compare both questions. */}
+                  <button type="button" onClick={() => toggle(i)} className="flex w-full items-start justify-between gap-2 p-3 text-left hover:bg-slate-50 dark:hover:bg-slate-800/40">
+                    <div className="flex flex-1 items-start gap-2">
+                      {open ? <ChevronDown className="mt-0.5 h-4 w-4 flex-shrink-0 text-slate-400" /> : <ChevronRight className="mt-0.5 h-4 w-4 flex-shrink-0 text-slate-400" />}
+                      <div className="flex-1 text-sm font-medium">
+                        <span className="mr-1 text-slate-400">Q{i + 1}.</span> <MathText>{r.question}</MathText>
+                        <span className="mt-0.5 block text-xs font-normal text-slate-500 dark:text-slate-400">
+                          {r.match
+                            ? <>Matched in <b className="font-semibold">{r.match.location}</b>{r.status !== "exact" ? ` · ${r.similarity}% word overlap` : ""} — tap to compare both</>
+                            : "Tap to view your question"}
+                        </span>
+                      </div>
                     </div>
                     <span className={`flex-shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold ${s.cls}`}>{s.label}</span>
-                  </div>
-                  {r.match ? (
-                    <div className="mt-1 rounded-lg bg-slate-50 p-2 text-xs dark:bg-slate-800/60">
-                      <p className="mb-0.5 flex items-center gap-1 text-slate-500 dark:text-slate-400">
-                        <FileText className="h-3.5 w-3.5" /> Matched in <b className="font-semibold">{r.match.location}</b>
-                        {r.status !== "exact" && <span className="ml-1">· {r.similarity}% word overlap</span>}
-                      </p>
-                      <div className="text-slate-700 dark:text-slate-200"><MathText>{r.match.text}</MathText></div>
+                  </button>
+                  {open && (
+                    <div className="grid gap-3 border-t border-slate-100 p-3 dark:border-slate-800 md:grid-cols-2">
+                      <div>
+                        <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Your question</p>
+                        <div className="whitespace-pre-line rounded-lg bg-slate-50 p-3 text-sm dark:bg-slate-800/60"><MathText>{r.yourQuestion || r.question}</MathText></div>
+                      </div>
+                      <div>
+                        <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                          In your bank{r.match ? <span className="font-normal normal-case"> · {r.match.location}</span> : ""}
+                        </p>
+                        {r.match
+                          ? <QuestionView q={r.match} />
+                          : <div className="rounded-lg bg-emerald-50 p-3 text-sm text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-300">No matching question found in your bank — looks original.</div>}
+                      </div>
                     </div>
-                  ) : (
-                    <p className="mt-1 text-xs text-emerald-600 dark:text-emerald-400">No matching question found in your bank.</p>
                   )}
                 </div>
               );
