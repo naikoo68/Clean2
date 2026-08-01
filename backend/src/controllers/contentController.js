@@ -740,7 +740,7 @@ export async function checkQuestions(req, res) {
       candidates = await Question.find(
         { $text: { $search: searchText }, ...own },
         { score: { $meta: "textScore" }, text: 1, type: 1, options: 1, columnA: 1, columnB: 1, assertion: 1, reason: 1 }
-      ).sort({ score: { $meta: "textScore" } }).limit(15).lean();
+      ).sort({ score: { $meta: "textScore" } }).limit(25).lean();
     } catch {
       candidates = [];
     }
@@ -749,7 +749,7 @@ export async function checkQuestions(req, res) {
       const words = [...(fullTokens.size ? fullTokens : stemTokens)].slice(0, 10).map(escapeRe);
       if (words.length) {
         candidates = await Question.find({ text: new RegExp(words.join("|"), "i"), ...own })
-          .select("text type options columnA columnB assertion reason").limit(15).lean();
+          .select("text type options columnA columnB assertion reason").limit(25).lean();
       }
     }
     const cand = [];
@@ -771,16 +771,19 @@ export async function checkQuestions(req, res) {
       // (so two different pair questions that share the generic intro aren't
       // wrongly called "exact").
       const exact = normStem.length > 0 && normalizeText(c.text) === normStem && fullSim >= 0.6;
+      // Only surface matches with a meaningful overlap: hide anything below 40%
+      // (weak/noise). exact = 100, strong >= 60%, related = 40-60%.
       let st = "none";
       if (exact) st = "exact";
       else if (sim >= 0.6) st = "strong";
-      else if (sim >= 0.3) st = "related";
+      else if (sim >= 0.4) st = "related";
       if (st !== "none") cand.push({ id: String(c._id), status: st, similarity: exact ? 100 : Math.round(sim * 100), sim, exact });
     }
     // Best first (exact, then strongest overlap), keep the top few so the user
-    // sees EVERY place this question appears in the bank, not just one.
+    // sees EVERY place this question appears in the bank (incl. matching / pair /
+    // assertion versions of the same content), not just one.
     cand.sort((a, b) => (Number(b.exact) - Number(a.exact)) || (b.sim - a.sim));
-    const matches = cand.slice(0, 6);
+    const matches = cand.slice(0, 10);
     const status = matches[0]?.status || "none";
     summary[status] += 1;
     scored.push({ question: stem, yourQuestion: block, status, similarity: matches[0]?.similarity || 0, matches });
