@@ -692,7 +692,10 @@ function splitIntoStems(content) {
     const byBlank = raw.split(/\n\s*\n+/).map((s) => s.trim()).filter(Boolean);
     blocks = byBlank.length >= 2 ? byBlank : [raw];
   }
-  return blocks.map(stemOfBlock).map((s) => s.trim()).filter((s) => s.length >= 8).slice(0, 200);
+  return blocks
+    .map((block) => ({ stem: stemOfBlock(block).trim(), block: String(block).trim() }))
+    .filter((it) => it.stem.length >= 8)
+    .slice(0, 200);
 }
 
 // POST /api/questions/check  { content? , stems?[] }
@@ -700,16 +703,16 @@ function splitIntoStems(content) {
 export async function checkQuestions(req, res) {
   const own = ownerFilter(req);
   const provided = Array.isArray(req.body?.stems)
-    ? req.body.stems.map((s) => String(s || "").trim()).filter((s) => s.length >= 8)
+    ? req.body.stems.map((s) => String(s || "").trim()).filter((s) => s.length >= 8).map((s) => ({ stem: s, block: s }))
     : null;
-  const stems = (provided && provided.length ? provided : splitIntoStems(req.body?.content)).slice(0, 200);
-  if (!stems.length) {
+  const items = (provided && provided.length ? provided : splitIntoStems(req.body?.content)).slice(0, 200);
+  if (!items.length) {
     return res.status(400).json({ message: "Paste at least one question (or upload a file) to check." });
   }
 
   const summary = { exact: 0, strong: 0, related: 0, none: 0 };
   const scored = [];
-  for (const stem of stems) {
+  for (const { stem, block } of items) {
     const stemTokens = checkTokens(stem);
     const normStem = normalizeText(stem);
     let candidates = [];
@@ -748,7 +751,7 @@ export async function checkQuestions(req, res) {
       if (status !== "none") { matchId = best.id; if (best.exact) similarity = 100; }
     }
     summary[status] += 1;
-    scored.push({ question: stem, status, similarity, matchId });
+    scored.push({ question: stem, yourQuestion: block, status, similarity, matchId });
   }
 
   // Resolve human-readable locations for the matched questions in one query.
@@ -756,7 +759,7 @@ export async function checkQuestions(req, res) {
   const locMap = new Map();
   if (ids.length) {
     const docs = await Question.find({ _id: { $in: ids } })
-      .select("text type subject quiz session testSeries topic")
+      .select("text type options correct columnA columnB assertion reason tableRows image explanation difficulty subject quiz session testSeries topic")
       .populate({ path: "subject", select: "name stream", populate: { path: "stream", select: "name" } })
       .populate({ path: "session", select: "title topic", populate: { path: "topic", select: "title" } })
       .populate("quiz", "title")
@@ -766,16 +769,30 @@ export async function checkQuestions(req, res) {
   }
 
   const results = scored.map((s) => {
-    if (!s.matchId) return { question: s.question, status: s.status, similarity: s.similarity, match: null };
+    const base = { question: s.question, yourQuestion: s.yourQuestion, status: s.status, similarity: s.similarity };
+    if (!s.matchId) return { ...base, match: null };
     const d = locMap.get(String(s.matchId));
     return {
-      question: s.question,
-      status: s.status,
-      similarity: s.similarity,
-      match: d ? { id: String(d._id), text: d.text, type: d.type, location: questionLocation(d) } : null,
+      ...base,
+      match: d ? {
+        id: String(d._id),
+        text: d.text,
+        type: d.type,
+        options: d.options || [],
+        correct: d.correct,
+        columnA: d.columnA || [],
+        columnB: d.columnB || [],
+        assertion: d.assertion,
+        reason: d.reason,
+        tableRows: d.tableRows,
+        image: d.image,
+        explanation: d.explanation,
+        difficulty: d.difficulty,
+        location: questionLocation(d),
+      } : null,
     };
   });
 
   const found = summary.exact + summary.strong + summary.related;
-  res.json({ total: stems.length, found, summary, results });
+  res.json({ total: items.length, found, summary, results });
 }
