@@ -2967,7 +2967,7 @@ async function runExtendJob(id, { endpoints, model, questions, owner = null, not
   // Multiple passes: any question that fails (bad/truncated JSON, transient
   // error, or a momentary quota blip) is retried on the next pass, so NO
   // question is left un-extended unless every attempt genuinely fails.
-  const MAX_PASSES = 4;
+  const MAX_PASSES = 6;
   let pending = [...questions];
   try {
     for (let pass = 0; pass < MAX_PASSES && pending.length && !keyDead && Date.now() < deadline && !job.cancelled; pass++) {
@@ -2995,7 +2995,7 @@ async function runExtendJob(id, { endpoints, model, questions, owner = null, not
       // enough for the per-minute limit to recover, so a single run gets through
       // more before giving up; otherwise just a brief transient-error pause.
       if (pending.length && pass < MAX_PASSES - 1 && !keyDead && Date.now() < deadline) {
-        const wait = lastError?.status === 429 ? 40000 : 2000;
+        const wait = lastError?.status === 429 ? 60000 : 2000;
         if (Date.now() + wait < deadline) await new Promise((r) => setTimeout(r, wait));
       }
     }
@@ -3456,7 +3456,7 @@ async function runRegenAllJob(id, { endpoints, model, questions, owner = null, n
     return true;
   };
 
-  const MAX_PASSES = 4;
+  const MAX_PASSES = 6;
   let pending = [...questions];
   try {
     for (let pass = 0; pass < MAX_PASSES && pending.length && !keyDead && Date.now() < deadline && !job.cancelled; pass++) {
@@ -3477,7 +3477,7 @@ async function runRegenAllJob(id, { endpoints, model, questions, owner = null, n
       await Promise.all(Array.from({ length: WORKERS }, (_, wi) => worker(wi)));
       pending = failed;
       if (pending.length && pass < MAX_PASSES - 1 && !keyDead && Date.now() < deadline) {
-        const wait = lastError?.status === 429 ? 40000 : 2000;
+        const wait = lastError?.status === 429 ? 60000 : 2000;
         if (Date.now() + wait < deadline) await new Promise((r) => setTimeout(r, wait));
       }
     }
