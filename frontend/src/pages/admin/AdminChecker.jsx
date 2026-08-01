@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { SearchCheck, Upload, Loader2, Trash2, CheckCircle2, AlertTriangle, ChevronDown, ChevronRight } from "lucide-react";
-import { contentService } from "../../services";
+import { contentService, aiService } from "../../services";
 import MathText from "../../components/ui/MathText";
 import QuestionView from "../../components/admin/QuestionView";
 
@@ -27,6 +27,7 @@ export default function AdminChecker() {
   const [text, setText] = useState("");
   const [reading, setReading] = useState(false);   // reading an uploaded file
   const [checking, setChecking] = useState(false); // running the match
+  const [deep, setDeep] = useState(false);          // opt-in AI "deep check" (match by meaning across formats)
   const [msg, setMsg] = useState("");
   const [report, setReport] = useState(null);      // { total, found, summary, results }
   const [expanded, setExpanded] = useState(() => new Set()); // which result rows are open
@@ -76,12 +77,20 @@ export default function AdminChecker() {
     if (!text.trim()) { setMsg("Paste some questions, or upload a file/image first."); return; }
     setChecking(true);
     setReport(null);
-    setMsg("Checking your question bank…");
+    setMsg(deep
+      ? "Deep-checking with AI — matching by meaning across formats (this can take a little longer)…"
+      : "Checking your question bank…");
     try {
-      const r = await contentService.checkQuestions({ content: text });
+      // Deep check = AI decides which bank questions test the SAME content, even
+      // if the wording/options/format differ. Plain check = fast word overlap.
+      const r = deep
+        ? await aiService.checkSemantic({ content: text })
+        : await contentService.checkQuestions({ content: text });
       setExpanded(new Set());
       setReport(r);
-      setMsg("");
+      setMsg(deep && r.total >= 25
+        ? "Note: deep check looks at the first 25 pasted questions per run to stay within AI limits."
+        : "");
     } catch (e) {
       setMsg(e.message || "Couldn't check the questions.");
     } finally {
@@ -125,10 +134,24 @@ export default function AdminChecker() {
           onChange={(e) => setText(e.target.value)}
           disabled={busy}
         />
+        {/* Opt-in AI "deep check": matches by MEANING even when the wording,
+            options or whole format (matching / pair / assertion, etc.) differ —
+            catches reworded questions a plain word-overlap check would miss. */}
+        <label className={`flex items-start gap-2 rounded-lg border p-3 text-sm ${deep ? "border-brand-400 bg-brand-50/60 dark:border-brand-500/50 dark:bg-brand-900/20" : "border-slate-200 dark:border-slate-700"} ${busy ? "opacity-60" : "cursor-pointer"}`}>
+          <input type="checkbox" className="mt-0.5 h-4 w-4 accent-brand-600" checked={deep} onChange={(e) => setDeep(e.target.checked)} disabled={busy} />
+          <span>
+            <span className="font-semibold">Deep check with AI</span> — match by <b>meaning</b>, across formats
+            <span className="mt-0.5 block text-xs font-normal text-slate-500 dark:text-slate-400">
+              Finds the same content even when it's stored as a different question type (matching, pair,
+              assertion–reason, statement…) or reworded with different options. Uses AI (slower, spends AI
+              quota) and checks up to 25 pasted questions per run. Leave off for a fast word-overlap check.
+            </span>
+          </span>
+        </label>
         <button type="button" onClick={run} disabled={busy || !text.trim()} className="btn-primary">
-          {checking ? <><Loader2 className="h-4 w-4 animate-spin" /> Checking…</>
+          {checking ? <><Loader2 className="h-4 w-4 animate-spin" /> {deep ? "Deep-checking…" : "Checking…"}</>
             : reading ? <><Loader2 className="h-4 w-4 animate-spin" /> Reading file…</>
-            : <><SearchCheck className="h-4 w-4" /> Check my bank</>}
+            : <><SearchCheck className="h-4 w-4" /> {deep ? "Deep check with AI" : "Check my bank"}</>}
         </button>
         {msg && (
           <p className="inline-flex items-center gap-1 text-sm font-medium">
@@ -210,8 +233,8 @@ export default function AdminChecker() {
             <AlertTriangle className="mt-0.5 h-3.5 w-3.5 flex-shrink-0" />
             Matching compares each question's full content, so the same question stored in a different form
             (matching / pair / assertion, etc.) is still found as "related". Only matches with 40%+ overlap
-            are shown; very heavily reworded questions using different words may read as "not found" — always
-            eyeball the closest match.
+            are shown; very heavily reworded questions using different words may read as "not found" — for
+            those, tick <b>“Deep check with AI”</b> above to match by meaning instead of shared words.
           </p>
         </div>
       )}

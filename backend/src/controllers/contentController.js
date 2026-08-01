@@ -652,7 +652,7 @@ const escapeRe = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 // Human-readable location of a matched bank question (Stream › Subject › Topic ›
 // Quiz, or the Test/Practice item name).
-function questionLocation(q) {
+export function questionLocation(q) {
   if (q.testSeries) {
     const ts = q.testSeries;
     const cat = ts.practice ? (ts.practiceKind === "quiz" ? "Practice Quiz" : "Practice Test") : "Test Series";
@@ -683,7 +683,7 @@ function stemOfBlock(block) {
 // the matching/pair columns, the statement list AND the Reason line, so
 // structured questions (matching, pair, statement, assertion & reason) are
 // compared on their real content, not just their short/generic stem.
-function contentOfBlock(block) {
+export function contentOfBlock(block) {
   return String(block || "")
     .split(/\n/)
     .map((l) => l.trim())
@@ -694,7 +694,7 @@ function contentOfBlock(block) {
 // Split pasted text into individual question stems. Prefers explicit numbering
 // ("1." / "Q2)" / "3 -"); falls back to blank-line separation; else treats the
 // whole text as a single question.
-function splitIntoStems(content) {
+export function splitIntoStems(content) {
   const raw = String(content || "").replace(/\r/g, "").trim();
   if (!raw) return [];
   let blocks = raw

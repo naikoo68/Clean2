@@ -340,6 +340,7 @@ export const aiService = {
   extendOne: (data) => withRateLimitRetry(() => api.post("/ai/extend-explanation", data)), // enrich ONE question's explanation → { explanation, optionExplanations }; waits 60s & retries on a rate limit
   regenerate: (data) => withRateLimitRetry(() => api.post("/ai/regenerate-question", data)), // analyse ONE question → rebuild options/answer → { options, correct, explanation }; waits 60s & retries on a rate limit
   regenerateAll: (data) => api.post("/ai/regenerate-all", data), // regenerate EVERY question in a quiz/test → { jobId, requested }
+  checkSemantic: (data) => api.post("/ai/check-semantic", data, { timeout: 120000 }), // AI "deep check": match pasted questions to the bank BY MEANING, across formats → same shape as contentService.checkQuestions
   // Client AI access + pool selection (built-in vs own keys)
   access: () => api.get("/ai/access"), // { access, mode, allowInbuilt, allowSelf, ownKeys, inbuiltAvailable }
   setMode: (mode) => api.put("/ai/mode", { mode }), // "inbuilt" | "self"
