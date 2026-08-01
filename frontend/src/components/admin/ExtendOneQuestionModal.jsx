@@ -3,19 +3,20 @@ import { X, Wand2, Loader2 } from "lucide-react";
 
 /**
  * ExtendOneQuestionModal — in-app popup (replaces the native window.confirm)
- * asking whether AI should also fix off-category / wrong options while it
- * extends a SINGLE question's explanation.
+ * asking whether AI should also fix off-category / wrong options and/or extend
+ * the question length while it extends a SINGLE question's explanation.
  *
  * Props:
  *  - open: boolean
  *  - busy: boolean          — true while the extend request is running
  *  - onCancel()             — close without doing anything
- *  - onConfirm(fixOptions)  — run the extend; fixOptions = checkbox value
+ *  - onConfirm({ fixOptions, extendQuestion })  — run the extend; checkbox values
  */
 export default function ExtendOneQuestionModal({ open, busy, onCancel, onConfirm }) {
   const [fixOptions, setFixOptions] = useState(false);
+  const [extendQuestion, setExtendQuestion] = useState(false);
 
-  useEffect(() => { if (open) setFixOptions(false); }, [open]);
+  useEffect(() => { if (open) { setFixOptions(false); setExtendQuestion(false); } }, [open]);
 
   if (!open) return null;
 
@@ -50,9 +51,23 @@ export default function ExtendOneQuestionModal({ open, busy, onCancel, onConfirm
           </span>
         </label>
 
+        <label className="mt-3 flex items-start gap-2 rounded-lg bg-slate-50 px-3 py-2 text-sm dark:bg-slate-800/60">
+          <input
+            type="checkbox"
+            className="mt-0.5 h-4 w-4 accent-brand-600"
+            checked={extendQuestion}
+            onChange={(e) => setExtendQuestion(e.target.checked)}
+            disabled={busy}
+          />
+          <span>
+            Also <b>extend the question length</b> — rewrite the short stem into a longer, clearer, more
+            descriptive question. The <b>meaning</b>, options and correct answer stay the same.
+          </span>
+        </label>
+
         <div className="mt-6 flex justify-end gap-2">
           <button type="button" onClick={onCancel} disabled={busy} className="btn-outline">Cancel</button>
-          <button type="button" onClick={() => onConfirm(fixOptions)} disabled={busy} className="btn-primary">
+          <button type="button" onClick={() => onConfirm({ fixOptions, extendQuestion })} disabled={busy} className="btn-primary">
             {busy ? <><Loader2 className="h-4 w-4 animate-spin" /> Extending…</> : <><Wand2 className="h-4 w-4" /> Extend</>}
           </button>
         </div>
