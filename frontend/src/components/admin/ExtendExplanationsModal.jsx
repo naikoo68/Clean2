@@ -3,6 +3,18 @@ import { X, Wand2, Loader2, CheckCircle2, AlertTriangle, Server, KeyRound } from
 import { aiService } from "../../services";
 import { useAuth } from "../../context/AuthContext";
 
+// Which question types the bulk action can be limited to. "all" = every type.
+const Q_TYPE_OPTIONS = [
+  { value: "all", label: "All question types" },
+  { value: "mcq", label: "Only MCQ" },
+  { value: "matching", label: "Only Matching" },
+  { value: "statement", label: "Only Statement" },
+  { value: "pair", label: "Only Pair" },
+  { value: "pairselect", label: "Only Pair-select" },
+  { value: "assertion", label: "Only Assertion" },
+  { value: "table", label: "Only Table" },
+];
+
 /**
  * ExtendExplanationsModal — AI-rewrites the explanation + per-option notes of
  * EVERY question in one quiz or test, in place (nothing is added or removed;
@@ -25,6 +37,7 @@ export default function ExtendExplanationsModal({ open, target, title, onClose, 
   const [notes, setNotes] = useState("");
   const [fixOptions, setFixOptions] = useState(false); // also rewrite off-category / wrong options
   const [extendQuestion, setExtendQuestion] = useState(false); // also make the question stem longer/more detailed
+  const [qType, setQType] = useState("all"); // limit to one question type, or "all"
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState(null); // { done, total }
   const [msg, setMsg] = useState("");
@@ -37,6 +50,7 @@ export default function ExtendExplanationsModal({ open, target, title, onClose, 
     setNotes("");
     setFixOptions(false);
     setExtendQuestion(false);
+    setQType("all");
   }, [open]);
 
   useEffect(() => {
@@ -61,6 +75,7 @@ export default function ExtendExplanationsModal({ open, target, title, onClose, 
         mode: isClient ? srcMode : undefined,
         fixOptions: fixOptions || undefined,
         extendQuestion: extendQuestion || undefined,
+        type: qType !== "all" ? qType : undefined,
       });
       if (!jobId) throw new Error("Could not start.");
       setProgress({ done: 0, total: requested });
@@ -136,6 +151,14 @@ export default function ExtendExplanationsModal({ open, target, title, onClose, 
               This rewrites the explanation and per-option notes for <b>every question</b> in this{" "}
               {target?.testSeries ? "test" : "quiz"}, making them detailed and complete. The questions,
               options and correct answers are <b>not</b> changed.
+            </div>
+
+            <div className="mb-3">
+              <label className="mb-1 block text-sm font-semibold">Apply to</label>
+              <select className="input" value={qType} onChange={(e) => setQType(e.target.value)} disabled={busy}>
+                {Q_TYPE_OPTIONS.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+              </select>
+              <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">Choose a single question type to update only those (e.g. only Matching or only Pair), or leave on "All question types".</p>
             </div>
 
             {status?.models && status.models.length > 1 && (
