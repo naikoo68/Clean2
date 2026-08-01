@@ -2598,7 +2598,7 @@ EXPLANATION — "explanation": thorough and self-contained; put each point on it
 const EXT_LETTERS = ["A", "B", "C", "D"];
 const toRomanLite = (n) => { const m = [["X", 10], ["IX", 9], ["V", 5], ["IV", 4], ["I", 1]]; let r = ""; for (const [s, v] of m) while (n >= v) { r += s; n -= v; } return r; };
 
-function buildExtendPrompt(q, notes, fixOptions = false) {
+function buildExtendPrompt(q, notes, fixOptions = false, extendQuestion = false) {
   const lines = [`Question type: ${q.type || "mcq"}`];
   if (q.text) lines.push(`Question: ${q.text}`);
   if (q.assertion) lines.push(`Assertion (A): ${q.assertion}`);
@@ -2613,6 +2613,9 @@ function buildExtendPrompt(q, notes, fixOptions = false) {
   lines.push(`Write a THOROUGH "explanation" and verify EACH of the 4 "optionExplanations" (state whether each option is correct or wrong and why). If this is a numerical/quantitative question, SOLVE it yourself step by step — put each calculation step on its own line in the explanation — then check which option is truly correct. If this is a matching / "how many pairs are correctly matched" / statement question, evaluate EACH pair or statement one by one and COUNT the correct ones. In either case, if the marked CORRECT answer is wrong, return the corrected "correct" index (0-3); if a value is wrong or no option matches the true answer (e.g. zero pairs match but there is no "None" option), return a fixed "options" array of 4 that includes the right choice. Do NOT change the question's wording. Write any math as inline LaTeX between $...$ (never \\( \\) or \\[ \\]). Return ONLY one valid JSON object.`);
   if (fixOptions && (!q.type || q.type === "mcq")) {
     lines.push(`ALSO FIX THE OPTIONS (do this in addition): keep the question stem and the CORRECT option EXACTLY as given, but make sure all four options belong to the SAME real-world category/type as the correct answer. If any option is off-category, unrelated or an obvious give-away (for example a bird or a flower listed among tree names), REPLACE only those wrong options with real, closely-related same-category distractors that match their language, form, length and specificity. Return the full corrected "options" array of EXACTLY 4 (the correct option's text unchanged) plus the 0-based "correct" index for it. Do NOT change the stem or which answer is correct.`);
+  }
+  if (extendQuestion) {
+    lines.push(`ALSO EXTEND THE QUESTION LENGTH (this OVERRIDES the "do not change the wording" rule for the STEM ONLY): rewrite the question stem into a LONGER, clearer, more descriptive version and return it as "text". You MUST keep the EXACT SAME meaning, the same thing being asked, the same options and the same correct answer — only make the phrasing fuller (add helpful context, expand abbreviations, turn a bare label like "Lateral means:" into a proper full sentence such as "In anatomical terminology, the directional term 'lateral' refers to which of the following?"). Do NOT make the question harder, do NOT change the topic, do NOT add or reveal the answer, and do NOT turn it into a different question. Keep any real math/values wrapped in $...$ but never wrap ordinary words in $...$. For matching/assertion/statement/table questions, extend ONLY the intro sentence in "text" and leave the columns/assertion/reason/table untouched.`);
   }
   return lines.join("\n");
 }
@@ -2849,8 +2852,15 @@ function parseExplanationJson(content) {
 // (+ per-option notes). For NUMERICAL corrections, when the AI returned a valid
 // corrected answer index it also updates `correct`; option VALUES are replaced
 // only together with a corrected index (so options and answer stay in sync).
-function buildExtendSet(q, parsed) {
+function buildExtendSet(q, parsed, extendQuestion = false) {
   const set = { explanation: parsed.explanation };
+  // When the caller asked to extend the question length, apply the AI's longer
+  // rewrite of the stem (same meaning/answer) — sanitising any $...$ the model
+  // wrongly wrapped around plain words. Ignored otherwise so Extend never
+  // touches the question wording.
+  if (extendQuestion && typeof parsed?.text === "string" && parsed.text.trim()) {
+    set.text = unwrapWordMath(parsed.text.trim());
+  }
   const newCorrect =
     Number.isInteger(parsed?.correct) && parsed.correct >= 0 && parsed.correct <= 3 ? parsed.correct : null;
   const newOptions =
@@ -2876,7 +2886,7 @@ function buildExtendSet(q, parsed) {
   return set;
 }
 
-async function runExtendJob(id, { endpoints, model, questions, owner = null, notes = "", fixOptions = false }) {
+async function runExtendJob(id, { endpoints, model, questions, owner = null, notes = "", fixOptions = false, extendQuestion = false }) {
   const job = genJobs.get(id);
   const deadline = Date.now() + 12 * 60 * 1000; // overall time budget
   const save = (patch) => Object.assign(job, patch, { updatedAt: Date.now() });
@@ -2894,7 +2904,7 @@ async function runExtendJob(id, { endpoints, model, questions, owner = null, not
       endpoints: eps && eps.length ? eps : endpoints,
       model,
       systemPrompt: fixOptions ? EXTEND_FIXOPTS_SYSTEM_PROMPT : EXTEND_SYSTEM_PROMPT,
-      userPrompt: buildExtendPrompt(q, notes, fixOptions),
+      userPrompt: buildExtendPrompt(q, notes, fixOptions, extendQuestion),
       maxTokens: 8000, // the verified/step-by-step replies are long — avoid truncation
       owner,
       failOnEmpty: true, // an empty reply → try the next key/model instead of failing this question
@@ -2912,7 +2922,7 @@ async function runExtendJob(id, { endpoints, model, questions, owner = null, not
       if (!String(r.content || "").trim()) emptyReplies += 1;
       return false; // require a real explanation
     }
-    const set = buildExtendSet(q, parsed); // may also fix a wrong numerical answer/options
+    const set = buildExtendSet(q, parsed, extendQuestion); // may also fix a wrong numerical answer/options + lengthen the stem
     await Question.updateOne({ _id: q._id }, { $set: set }).catch(() => {});
     updated += 1;
     job.questions.push(1); // progress = actual successes (jobStatus reports count)
@@ -3024,7 +3034,7 @@ export async function extendExplanations(req, res) {
   cleanupJobs();
   const id = newJobId();
   genJobs.set(id, { status: "pending", questions: [], requested: questions.length, error: null, model: chosen.model, updatedAt: Date.now() });
-  guardJob(id, runExtendJob(id, { endpoints: chosen.endpoints, model: chosen.model, questions, owner: scope.owner, notes, fixOptions: !!req.body?.fixOptions }));
+  guardJob(id, runExtendJob(id, { endpoints: chosen.endpoints, model: chosen.model, questions, owner: scope.owner, notes, fixOptions: !!req.body?.fixOptions, extendQuestion: !!req.body?.extendQuestion }));
   res.json({ jobId: id, requested: questions.length, model: chosen.model });
 }
 
@@ -3060,7 +3070,7 @@ export async function extendOneExplanation(req, res) {
       endpoints: chosen.endpoints,
       model: chosen.model,
       systemPrompt: req.body?.fixOptions ? EXTEND_FIXOPTS_SYSTEM_PROMPT : EXTEND_SYSTEM_PROMPT,
-      userPrompt: buildExtendPrompt(q, notes, !!req.body?.fixOptions),
+      userPrompt: buildExtendPrompt(q, notes, !!req.body?.fixOptions, !!req.body?.extendQuestion),
       maxTokens: 8000,
       owner: scope.owner,
     });
@@ -3080,7 +3090,7 @@ export async function extendOneExplanation(req, res) {
     return res.status(502).json({ message: msg });
   }
 
-  const set = buildExtendSet(q, parsed); // may also fix a wrong numerical answer/options
+  const set = buildExtendSet(q, parsed, !!req.body?.extendQuestion); // may also fix a wrong numerical answer/options + lengthen the stem
   await Question.updateOne({ _id: q._id }, { $set: set });
   res.json({
     _id: q._id,
@@ -3088,6 +3098,7 @@ export async function extendOneExplanation(req, res) {
     optionExplanations: set.optionExplanations || q.optionExplanations,
     correct: set.correct ?? q.correct, // reflect any answer correction so the UI updates
     options: set.options || q.options,
+    text: set.text ?? q.text, // reflect any extended/longer stem so the UI updates
   });
 }
 
