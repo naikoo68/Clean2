@@ -208,9 +208,10 @@ export default function AdminChecker() {
 
           <p className="mt-4 flex items-start gap-1.5 rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-500 dark:bg-slate-800/60 dark:text-slate-400">
             <AlertTriangle className="mt-0.5 h-3.5 w-3.5 flex-shrink-0" />
-            Matching compares each question's wording (ignoring the options), so reworded questions with
-            different options are still caught as "related". Very heavily reworded questions using different
-            words may still read as "not found" — always eyeball the closest match.
+            Matching compares each question's full content, so the same question stored in a different form
+            (matching / pair / assertion, etc.) is still found as "related". Only matches with 40%+ overlap
+            are shown; very heavily reworded questions using different words may read as "not found" — always
+            eyeball the closest match.
           </p>
         </div>
       )}
