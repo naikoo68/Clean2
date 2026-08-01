@@ -1490,6 +1490,7 @@ export function jobStatus(req, res) {
     error: job.error,
     cancelled: !!job.cancelled,
     keyStats: job.keyStats || {}, // live per-key activity this run
+    waitUntil: job.waitUntil || null, // epoch ms until an auto-retry after a rate limit → UI shows a countdown
     questions: job.status === "done" ? job.questions : undefined,
   });
 }
@@ -2996,7 +2997,13 @@ async function runExtendJob(id, { endpoints, model, questions, owner = null, not
       // more before giving up; otherwise just a brief transient-error pause.
       if (pending.length && pass < MAX_PASSES - 1 && !keyDead && Date.now() < deadline) {
         const wait = lastError?.status === 429 ? 60000 : 2000;
-        if (Date.now() + wait < deadline) await new Promise((r) => setTimeout(r, wait));
+        if (Date.now() + wait < deadline) {
+          // On a rate limit, expose the wait so the UI can show a live
+          // "auto-continuing in Ns…" countdown instead of looking frozen.
+          if (lastError?.status === 429) save({ waitUntil: Date.now() + wait });
+          await new Promise((r) => setTimeout(r, wait));
+          save({ waitUntil: null });
+        }
       }
     }
 
@@ -3478,7 +3485,13 @@ async function runRegenAllJob(id, { endpoints, model, questions, owner = null, n
       pending = failed;
       if (pending.length && pass < MAX_PASSES - 1 && !keyDead && Date.now() < deadline) {
         const wait = lastError?.status === 429 ? 60000 : 2000;
-        if (Date.now() + wait < deadline) await new Promise((r) => setTimeout(r, wait));
+        if (Date.now() + wait < deadline) {
+          // On a rate limit, expose the wait so the UI can show a live
+          // "auto-continuing in Ns…" countdown instead of looking frozen.
+          if (lastError?.status === 429) save({ waitUntil: Date.now() + wait });
+          await new Promise((r) => setTimeout(r, wait));
+          save({ waitUntil: null });
+        }
       }
     }
     if (updated === 0) {
