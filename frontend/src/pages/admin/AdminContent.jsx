@@ -659,7 +659,7 @@ export default function AdminContent() {
             <p className="mb-4 text-sm text-slate-500 dark:text-slate-400">
               {splitTarget.kind === "topic"
                 ? <>Split all questions in the topic <b>“{splitTarget.name}”</b> into quizzes named Quiz 1, Quiz 2, …</>
-                : <>Split the quiz <b>“{splitTarget.name}”</b>{splitTarget.count != null ? <> ({splitTarget.count} questions)</> : null} into quizzes named Quiz 1, Quiz 2, …</>}
+                : <>Split the quiz <b>“{splitTarget.name}”</b>{splitTarget.count != null ? <> ({splitTarget.count} questions)</> : null} — it keeps its name and first chunk; the rest go into new quizzes numbered after your existing ones (e.g. splitting “Quiz 2” adds Quiz 3, Quiz 4, …).</>}
             </p>
             <label className="mb-1 block text-sm font-semibold">Questions per quiz</label>
             <input

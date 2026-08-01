@@ -248,14 +248,25 @@ export async function splitQuiz(req, res) {
   const chunks = [];
   for (let i = 0; i < total; i += per) chunks.push(questions.slice(i, i + per).map((q) => q._id));
 
-  // Original quiz becomes "Quiz 1" and keeps the first chunk (no move needed).
-  quiz.title = "Quiz 1";
-  await quiz.save();
+  // Keep the original quiz's OWN title and its first chunk (no move needed).
+  // Name the NEW chunks "Quiz N" continuing AFTER the highest existing quiz
+  // number in this session, so splitting e.g. "Quiz 2" (with a "Quiz 1" already
+  // present) yields Quiz 3, Quiz 4, … instead of restarting at "Quiz 1" and
+  // clobbering the existing one.
+  const siblings = await Quiz.find({ session: quiz.session }).select("title").lean();
+  const usedNums = new Set();
+  let maxNum = 0;
+  for (const s of siblings) {
+    const m = String(s.title || "").match(/\bQuiz\s+(\d+)\b/i);
+    if (m) { const n = parseInt(m[1], 10); usedNums.add(n); if (n > maxNum) maxNum = n; }
+  }
+  let nextNum = maxNum + 1;
+  const nextQuizTitle = () => { while (usedNums.has(nextNum)) nextNum++; usedNums.add(nextNum); return `Quiz ${nextNum++}`; };
 
   // New quizzes for the remaining chunks, appended after existing quizzes.
   let index = await Quiz.countDocuments({ session: quiz.session });
   for (let k = 1; k < chunks.length; k++) {
-    const newQuiz = await Quiz.create({ title: `Quiz ${k + 1}`, subject: quiz.subject, session: quiz.session, index: index++ });
+    const newQuiz = await Quiz.create({ title: nextQuizTitle(), subject: quiz.subject, session: quiz.session, index: index++ });
     await Question.updateMany({ _id: { $in: chunks[k] } }, { $set: { quiz: newQuiz._id, session: quiz.session, subject: quiz.subject } });
   }
   res.json({ message: `Split ${total} questions into ${chunks.length} quizzes.`, quizzes: chunks.length, created: chunks.length - 1 });
