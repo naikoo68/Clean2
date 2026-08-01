@@ -3,6 +3,18 @@ import { X, RefreshCw, Loader2, CheckCircle2, AlertTriangle, Server, KeyRound } 
 import { aiService } from "../../services";
 import { useAuth } from "../../context/AuthContext";
 
+// Which question types the bulk action can be limited to. "all" = every type.
+const Q_TYPE_OPTIONS = [
+  { value: "all", label: "All question types" },
+  { value: "mcq", label: "Only MCQ" },
+  { value: "matching", label: "Only Matching" },
+  { value: "statement", label: "Only Statement" },
+  { value: "pair", label: "Only Pair" },
+  { value: "pairselect", label: "Only Pair-select" },
+  { value: "assertion", label: "Only Assertion" },
+  { value: "table", label: "Only Table" },
+];
+
 /**
  * RegenerateAllModal — AI-regenerates EVERY question in one quiz or test in
  * place: rebuilds the options, correct answer, explanation and per-option notes
@@ -25,6 +37,7 @@ export default function RegenerateAllModal({ open, target, title, onClose, onDon
   const [status, setStatus] = useState(null);
   const [model, setModel] = useState("");
   const [notes, setNotes] = useState("");
+  const [qType, setQType] = useState("all"); // limit to one question type, or "all"
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState(null); // { done, total }
   const [msg, setMsg] = useState("");
@@ -35,6 +48,7 @@ export default function RegenerateAllModal({ open, target, title, onClose, onDon
     setProgress(null);
     setBusy(false);
     setNotes("");
+    setQType("all");
   }, [open]);
 
   useEffect(() => {
@@ -57,6 +71,7 @@ export default function RegenerateAllModal({ open, target, title, onClose, onDon
         model: model || undefined,
         notes: notes.trim() || undefined,
         mode: isClient ? srcMode : undefined,
+        type: qType !== "all" ? qType : undefined,
       });
       if (!jobId) throw new Error("Could not start.");
       setProgress({ done: 0, total: requested });
@@ -133,6 +148,14 @@ export default function RegenerateAllModal({ open, target, title, onClose, onDon
               <b>every question</b> in this {target?.testSeries ? "test" : "quiz"} to fit each stem, and
               reshuffles the <b>Column B order</b> of pair/matching questions (recomputing the correct answer).
               The question wording &amp; meaning are kept.
+            </div>
+
+            <div className="mb-3">
+              <label className="mb-1 block text-sm font-semibold">Apply to</label>
+              <select className="input" value={qType} onChange={(e) => setQType(e.target.value)} disabled={busy}>
+                {Q_TYPE_OPTIONS.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+              </select>
+              <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">Choose a single question type to regenerate only those (e.g. only Matching or only Pair), or leave on "All question types".</p>
             </div>
 
             {status?.models && status.models.length > 1 && (
