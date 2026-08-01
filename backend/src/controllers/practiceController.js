@@ -291,14 +291,28 @@ export async function splitItem(req, res) {
   const chunks = [];
   for (let i = 0; i < total; i += per) chunks.push(qids.slice(i, i + per));
 
-  // Original item becomes "Quiz 1" and keeps the first chunk.
-  item.name = "Quiz 1";
-  item.questions = chunks[0];
+  // Keep the original quiz's OWN name and its first chunk. Name the NEW chunks
+  // "Quiz N" continuing AFTER the highest existing quiz number in this topic, so
+  // splitting e.g. "Quiz 2" (with a "Quiz 1" already present) yields Quiz 3,
+  // Quiz 4, … instead of restarting at "Quiz 1" and clobbering the existing one.
+  const siblings = await TestSeries.find({
+    practice: true, practiceKind: "quiz", practiceTopic: item.practiceTopic, ...ownerFilter(req),
+  }).select("name").lean();
+  const usedNums = new Set();
+  let maxNum = 0;
+  for (const s of [...siblings, item]) {
+    const m = String(s.name || "").match(/\bQuiz\s+(\d+)\b/i);
+    if (m) { const n = parseInt(m[1], 10); usedNums.add(n); if (n > maxNum) maxNum = n; }
+  }
+  let nextNum = maxNum + 1;
+  const nextQuizName = () => { while (usedNums.has(nextNum)) nextNum++; usedNums.add(nextNum); return `Quiz ${nextNum++}`; };
+
+  item.questions = chunks[0]; // original keeps its name; just trim to the first chunk
   await item.save();
 
   for (let k = 1; k < chunks.length; k++) {
     const newItem = await TestSeries.create({
-      name: `Quiz ${k + 1}`,
+      name: nextQuizName(),
       owner: ownerValue(req),
       practice: true,
       practiceKind: "quiz",
