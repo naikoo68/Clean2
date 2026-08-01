@@ -2884,11 +2884,42 @@ function parseExplanationJson(content) {
   return salvaged ? deepReviveLatex(salvaged) : salvaged;
 }
 
+// Randomly REORDER a question's answer options while keeping the SAME correct
+// answer — moves the `correct` index and reorders `optionExplanations` to follow
+// their options, so the answer's POSITION changes but nothing becomes wrong.
+// Used by Extend when the caller ticks "Reshuffle options" (e.g. so the right
+// answer isn't always option B, or after two quizzes end up in the same order).
+// Skips assertion (its four options are a fixed A/R rubric whose order carries
+// meaning) and anything with fewer than 2 options. Works on the EFFECTIVE
+// options — a freshly fixed set from the AI if present, otherwise the stored
+// ones — so it composes correctly with "fix options"/numerical corrections.
+function applyOptionShuffle(set, q) {
+  if (q.type === "assertion") return; // fixed rubric — order is meaningful
+  const options = (Array.isArray(set.options) && set.options.length
+    ? set.options
+    : Array.isArray(q.options) ? q.options : []).map((x) => String(x));
+  const n = options.length;
+  if (n < 2) return;
+  const correct = Number.isInteger(set.correct) ? set.correct
+    : (Number.isInteger(q.correct) ? q.correct : null);
+  const oe = Array.isArray(set.optionExplanations) ? set.optionExplanations.slice()
+    : (Array.isArray(q.optionExplanations) ? q.optionExplanations.slice() : null);
+  // A permutation guaranteed to differ from the current order (so it visibly
+  // reshuffles); perm[newIndex] = oldIndex.
+  let perm = [...Array(n).keys()];
+  do { shuffleInPlace(perm); } while (perm.every((p, i) => p === i));
+  set.options = perm.map((p) => options[p]);
+  if (correct != null && correct >= 0 && correct < n) set.correct = perm.indexOf(correct);
+  if (oe) { while (oe.length < n) oe.push(""); set.optionExplanations = perm.map((p) => oe[p] ?? ""); }
+}
+
 // Build the Mongo $set for an extended question. Always updates the explanation
 // (+ per-option notes). For NUMERICAL corrections, when the AI returned a valid
 // corrected answer index it also updates `correct`; option VALUES are replaced
 // only together with a corrected index (so options and answer stay in sync).
-function buildExtendSet(q, parsed, extendQuestion = false) {
+// When `shuffleOptions` is set, the final options are also reordered (answer
+// position changes, correctness preserved) as the LAST step.
+function buildExtendSet(q, parsed, extendQuestion = false, shuffleOptions = false) {
   const set = { explanation: parsed.explanation };
   // When the caller asked to extend the question length, apply the AI's longer
   // rewrite of the stem (same meaning/answer) — sanitising any $...$ the model
@@ -2919,10 +2950,13 @@ function buildExtendSet(q, parsed, extendQuestion = false) {
     if (typeof effectiveCorrect === "number" && effectiveCorrect >= 0 && effectiveCorrect < 4) oe[effectiveCorrect] = "";
     set.optionExplanations = oe;
   }
+  // LAST: optionally reorder the (possibly just-fixed) options, keeping the same
+  // correct answer — so the answer's position is shuffled without breaking it.
+  if (shuffleOptions) applyOptionShuffle(set, q);
   return set;
 }
 
-async function runExtendJob(id, { endpoints, model, questions, owner = null, notes = "", fixOptions = false, extendQuestion = false }) {
+async function runExtendJob(id, { endpoints, model, questions, owner = null, notes = "", fixOptions = false, extendQuestion = false, shuffleOptions = false }) {
   const job = genJobs.get(id);
   const deadline = Date.now() + 12 * 60 * 1000; // overall time budget
   const save = (patch) => Object.assign(job, patch, { updatedAt: Date.now() });
@@ -2958,7 +2992,7 @@ async function runExtendJob(id, { endpoints, model, questions, owner = null, not
       if (!String(r.content || "").trim()) emptyReplies += 1;
       return false; // require a real explanation
     }
-    const set = buildExtendSet(q, parsed, extendQuestion); // may also fix a wrong numerical answer/options + lengthen the stem
+    const set = buildExtendSet(q, parsed, extendQuestion, shuffleOptions); // may fix a wrong numerical answer/options, lengthen the stem, and/or reshuffle options
     await Question.updateOne({ _id: q._id }, { $set: set }).catch(() => {});
     updated += 1;
     job.questions.push(1); // progress = actual successes (jobStatus reports count)
@@ -3073,14 +3107,14 @@ export async function extendExplanations(req, res) {
   // updatedAt, so when a run stops early on quota, clicking "Extend" again
   // starts with the questions that were NOT reached last time — so repeated runs
   // actually finish the whole quiz instead of re-doing the first few each time.
-  const questions = await Question.find(filter).sort("updatedAt").select("_id type text options correct columnA columnB tableRows assertion reason explanation").lean();
+  const questions = await Question.find(filter).sort("updatedAt").select("_id type text options correct columnA columnB tableRows assertion reason explanation optionExplanations").lean();
   if (!questions.length) return res.status(400).json({ message: filter.type ? `No "${filter.type}" questions found here (try "All question types").` : "No questions found to update (or not your content)." });
 
   const notes = String(req.body?.notes || "").trim();
   cleanupJobs();
   const id = newJobId();
   genJobs.set(id, { status: "pending", questions: [], requested: questions.length, error: null, model: chosen.model, updatedAt: Date.now() });
-  guardJob(id, runExtendJob(id, { endpoints: chosen.endpoints, model: chosen.model, questions, owner: scope.owner, notes, fixOptions: !!req.body?.fixOptions, extendQuestion: !!req.body?.extendQuestion }));
+  guardJob(id, runExtendJob(id, { endpoints: chosen.endpoints, model: chosen.model, questions, owner: scope.owner, notes, fixOptions: !!req.body?.fixOptions, extendQuestion: !!req.body?.extendQuestion, shuffleOptions: !!req.body?.shuffleOptions }));
   res.json({ jobId: id, requested: questions.length, model: chosen.model });
 }
 
@@ -3136,7 +3170,7 @@ export async function extendOneExplanation(req, res) {
     return res.status(502).json({ message: msg });
   }
 
-  const set = buildExtendSet(q, parsed, !!req.body?.extendQuestion); // may also fix a wrong numerical answer/options + lengthen the stem
+  const set = buildExtendSet(q, parsed, !!req.body?.extendQuestion, !!req.body?.shuffleOptions); // may fix a wrong numerical answer/options, lengthen the stem, and/or reshuffle options
   await Question.updateOne({ _id: q._id }, { $set: set });
   res.json({
     _id: q._id,

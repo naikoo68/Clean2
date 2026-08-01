@@ -37,6 +37,7 @@ export default function ExtendExplanationsModal({ open, target, title, onClose, 
   const [notes, setNotes] = useState("");
   const [fixOptions, setFixOptions] = useState(false); // also rewrite off-category / wrong options
   const [extendQuestion, setExtendQuestion] = useState(false); // also make the question stem longer/more detailed
+  const [shuffleOptions, setShuffleOptions] = useState(false); // also reorder options (answer position changes, stays correct)
   const [qType, setQType] = useState("all"); // limit to one question type, or "all"
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState(null); // { done, total }
@@ -52,6 +53,7 @@ export default function ExtendExplanationsModal({ open, target, title, onClose, 
     setNotes("");
     setFixOptions(false);
     setExtendQuestion(false);
+    setShuffleOptions(false);
     setQType("all");
   }, [open]);
 
@@ -84,6 +86,7 @@ export default function ExtendExplanationsModal({ open, target, title, onClose, 
         mode: isClient ? srcMode : undefined,
         fixOptions: fixOptions || undefined,
         extendQuestion: extendQuestion || undefined,
+        shuffleOptions: shuffleOptions || undefined,
         type: qType !== "all" ? qType : undefined,
       });
       if (!jobId) throw new Error("Could not start.");
@@ -209,6 +212,11 @@ export default function ExtendExplanationsModal({ open, target, title, onClose, 
             <label className="mt-3 flex items-start gap-2 rounded-lg bg-slate-50 px-3 py-2 text-sm dark:bg-slate-800/60">
               <input type="checkbox" className="mt-0.5 h-4 w-4 accent-brand-600" checked={extendQuestion} onChange={(e) => setExtendQuestion(e.target.checked)} disabled={busy} />
               <span>Also <b>extend the question length</b> — rewrite each short stem into a longer, clearer, more descriptive question. The <b>meaning</b>, options and correct answer stay the same.</span>
+            </label>
+
+            <label className="mt-3 flex items-start gap-2 rounded-lg bg-slate-50 px-3 py-2 text-sm dark:bg-slate-800/60">
+              <input type="checkbox" className="mt-0.5 h-4 w-4 accent-brand-600" checked={shuffleOptions} onChange={(e) => setShuffleOptions(e.target.checked)} disabled={busy} />
+              <span>Also <b>reshuffle the options</b> — move each answer to a new position so it isn't always in the same place. The <b>same</b> option stays correct (assertion questions are left as-is).</span>
             </label>
 
             {progress && (
