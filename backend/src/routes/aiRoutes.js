@@ -3,6 +3,7 @@ import {
   aiStatus, generateQuestions, jobStatus, cancelJob, extractQuestions, generateNotes, visualizeSpec, extendExplanations, extendOneExplanation, regenerateQuestion, regenerateAll,
   listKeys, createKey, bulkCreateKeys, updateKey, deleteKey, testKey, importEnvKeys, testAllKeys, listKeyModels, autoDetectKeyModel,
   getAiAccess, setAiMode, inferTopic, coverageGaps, outlineUnits, classifyUnits, parseSyllabus, autoDetectAllKeys, setAllKeysEnabled,
+  checkQuestionsSemantic,
 } from "../controllers/aiController.js";
 import { protect, authorize } from "../middleware/auth.js";
 
@@ -29,6 +30,7 @@ router.post("/extend-explanations", ...manage, extendExplanations); // AI-enrich
 router.post("/extend-explanation", ...manage, extendOneExplanation); // AI-enrich ONE question's explanation
 router.post("/regenerate-question", ...manage, regenerateQuestion); // analyse ONE question and rebuild its options/answer
 router.post("/regenerate-all", ...manage, regenerateAll); // regenerate EVERY question in a quiz/test (background job)
+router.post("/check-semantic", ...manage, checkQuestionsSemantic); // AI "deep check": match pasted questions to the bank BY MEANING, across formats
 
 // Client AI access + pool selection (admin allowed too; setMode is client-only).
 router.get("/access", ...manage, getAiAccess);

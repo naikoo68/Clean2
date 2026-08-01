@@ -4,6 +4,7 @@ import Question from "../models/Question.js";
 import Settings from "../models/Settings.js";
 import { ownerFilter } from "../utils/ownership.js";
 import { DEFAULT_CLIENT_PLANS } from "../utils/plans.js";
+import { splitIntoStems, contentOfBlock, questionLocation } from "./contentController.js";
 
 // Works with any OpenAI-compatible provider (Gemini, TokenLab, OpenAI, Groq,
 // DeepSeek, …). Keys come from TWO places, both used together:
@@ -4178,4 +4179,213 @@ export async function setAiMode(req, res) {
   user.aiMode = mode;
   await user.save();
   res.json({ mode: user.aiMode });
+}
+
+
+// ---------------------------------------------------------------------------
+// AI "deep check" — match pasted questions to the bank by MEANING, not words.
+// The lexical checker (POST /api/questions/check) finds questions that share
+// key words. This endpoint asks the model whether a candidate tests the SAME
+// underlying fact/concept as the pasted question EVEN WHEN the wording, the
+// options, or the whole FORMAT differs (a plain MCQ vs. a matching / pair /
+// assertion–reason / statement version of the same content). It is opt-in
+// (the admin ticks "Deep check with AI") because it spends AI quota.
+// ---------------------------------------------------------------------------
+const SEMANTIC_CHECK_SYSTEM =
+  "You are a strict exam-question matcher. You are given ONE question a teacher pasted and a numbered list of CANDIDATE questions taken from their question bank. Candidates may be in ANY format: plain MCQ, matching (two columns), pair / pair-count, assertion–reason, statement-based, or table. " +
+  "For EACH candidate decide whether it tests the SAME underlying fact, concept or answer as the pasted question — even if the wording, the options, or the entire FORMAT is different. Ignore phrasing, option order and question type; judge ONLY the knowledge being tested. " +
+  "Verdicts: \"same\" = it tests the same specific fact/answer (a genuine duplicate of the CONTENT, in any format); \"related\" = same topic and closely connected but a different specific fact; \"different\" = unrelated or only superficially similar. " +
+  "Reply with ONLY minified JSON — no prose, no markdown, no code fences — in exactly this shape: {\"matches\":[{\"i\":<candidate number>,\"verdict\":\"same|related|different\"}]}. Include an entry for every candidate you judge \"same\" or \"related\"; you may omit the \"different\" ones.";
+
+// One-line searchable/AI-readable rendering of a bank question's FULL content
+// (stem + assertion/reason + both columns + options), truncated for the prompt.
+function candidateContent(c) {
+  const parts = [
+    c.text,
+    c.assertion ? `Assertion: ${c.assertion}` : "",
+    c.reason ? `Reason: ${c.reason}` : "",
+    Array.isArray(c.columnA) && c.columnA.length ? `Column A: ${c.columnA.join("; ")}` : "",
+    Array.isArray(c.columnB) && c.columnB.length ? `Column B: ${c.columnB.join("; ")}` : "",
+    Array.isArray(c.options) && c.options.length ? `Options: ${c.options.join(" | ")}` : "",
+  ].filter(Boolean);
+  return parts.join(" ").replace(/\s+/g, " ").trim().slice(0, 500);
+}
+
+// Parse the model's verdict JSON robustly (tolerates code fences / stray prose).
+// Returns [{ i, verdict }] with i in range and verdict in {same, related}.
+function parseSemanticVerdicts(content, maxIndex) {
+  if (!content) return [];
+  let txt = String(content).trim().replace(/^```(?:json)?/i, "").replace(/```$/, "").trim();
+  let obj = null;
+  try { obj = JSON.parse(txt); } catch { /* fall through */ }
+  if (!obj) {
+    const s = txt.indexOf("{");
+    const e = txt.lastIndexOf("}");
+    if (s !== -1 && e > s) { try { obj = JSON.parse(txt.slice(s, e + 1)); } catch { /* ignore */ } }
+  }
+  const arr = obj && Array.isArray(obj.matches) ? obj.matches : [];
+  const out = [];
+  const seen = new Set();
+  for (const m of arr) {
+    const i = Number(m && m.i);
+    const v = String((m && m.verdict) || "").toLowerCase();
+    if (!Number.isInteger(i) || i < 0 || i >= maxIndex || seen.has(i)) continue;
+    if (v !== "same" && v !== "related") continue;
+    seen.add(i);
+    out.push({ i, verdict: v });
+  }
+  return out;
+}
+
+const semNorm = (s) => String(s || "").toLowerCase().replace(/\s+/g, " ").trim();
+
+// POST /api/ai/check-semantic  { content? , stems?[] , model? , mode? }
+// Same response shape as POST /api/questions/check, but matches are decided by
+// the AI (by meaning, across formats) instead of by shared words.
+export async function checkQuestionsSemantic(req, res) {
+  const scope = resolveScope(req.user, req.body?.mode);
+  if (scope.denied) {
+    return res.status(403).json({ message: "AI access is not enabled for your account. Please contact the administrator." });
+  }
+  const chosen = await resolveModel(String(req.body?.model || "").trim(), scope);
+  if (!chosen || !chosen.endpoints.length) {
+    return res.status(400).json({
+      message: scope.mode === "self"
+        ? "No API keys added yet. Add at least one key in the AI tab."
+        : "AI is not configured. Add an API key in Admin → AI Keys.",
+    });
+  }
+
+  const own = ownerFilter(req);
+  const provided = Array.isArray(req.body?.stems)
+    ? req.body.stems.map((s) => String(s || "").trim()).filter((s) => s.length >= 8).map((s) => ({ stem: s, block: s }))
+    : null;
+  // AI mode is capped tighter than the lexical checker (each item costs one AI
+  // call) so a huge paste can't blow the request timeout or the quota.
+  const items = (provided && provided.length ? provided : splitIntoStems(req.body?.content)).slice(0, 25);
+  if (!items.length) {
+    return res.status(400).json({ message: "Paste at least one question (or upload a file) to check." });
+  }
+
+  // For each pasted question: shortlist candidates from the bank with the text
+  // index, then let the AI decide which of them are the SAME content.
+  const perItem = async ({ stem, block }) => {
+    const fullContent = contentOfBlock(block);
+    const searchText = (fullContent || stem).slice(0, 400);
+    let candidates = [];
+    try {
+      candidates = await Question.find(
+        { $text: { $search: searchText }, ...own },
+        { score: { $meta: "textScore" }, text: 1, type: 1, options: 1, columnA: 1, columnB: 1, assertion: 1, reason: 1 }
+      ).sort({ score: { $meta: "textScore" } }).limit(12).lean();
+    } catch {
+      candidates = [];
+    }
+    if (!candidates.length) {
+      // Keyword fallback so a paste still finds candidates when the text index
+      // scores nothing (e.g. very short stems).
+      const words = [...contentTokens(fullContent || stem)].slice(0, 10).map((w) => w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+      if (words.length) {
+        candidates = await Question.find({ text: new RegExp(words.join("|"), "i"), ...own })
+          .select("text type options columnA columnB assertion reason").limit(12).lean();
+      }
+    }
+    if (!candidates.length) return { stem, block, matches: [] };
+
+    const list = candidates.map((c, i) => `[${i}] (${c.type || "mcq"}) ${candidateContent(c)}`).join("\n");
+    const userPrompt =
+      `PASTED QUESTION:\n${String(block || stem).slice(0, 900)}\n\n` +
+      `CANDIDATES:\n${list}\n\n` +
+      "Return JSON only, using the candidate numbers in [brackets].";
+    const r = await callWithFallback({
+      endpoints: chosen.endpoints,
+      model: chosen.model,
+      systemPrompt: SEMANTIC_CHECK_SYSTEM,
+      userPrompt,
+      maxTokens: 900,
+      owner: scope.owner,
+    });
+    if (!r.ok) return { stem, block, matches: [], error: r.status || 0 };
+
+    const verdicts = parseSemanticVerdicts(r.content, candidates.length);
+    const normStem = semNorm(stem);
+    const matches = verdicts.map(({ i, verdict }) => {
+      const c = candidates[i];
+      const isExact = verdict === "same" && normStem.length > 0 && semNorm(c.text) === normStem;
+      const status = isExact ? "exact" : verdict === "same" ? "strong" : "related";
+      const similarity = isExact ? 100 : verdict === "same" ? 90 : 60;
+      return { id: String(c._id), status, similarity };
+    });
+    // Best first: exact, then same/strong, then related.
+    matches.sort((a, b) => b.similarity - a.similarity);
+    return { stem, block, matches };
+  };
+
+  // Bounded concurrency so we don't fire 25 AI calls at once.
+  const CONCURRENCY = 4;
+  const scored = new Array(items.length);
+  let next = 0;
+  const worker = async () => {
+    for (;;) {
+      const idx = next++;
+      if (idx >= items.length) break;
+      scored[idx] = await perItem(items[idx]);
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(CONCURRENCY, items.length) }, worker));
+
+  // Resolve human-readable locations for every matched question in one query.
+  const ids = [...new Set(scored.flatMap((s) => s.matches.map((m) => m.id)))];
+  const locMap = new Map();
+  if (ids.length) {
+    const docs = await Question.find({ _id: { $in: ids } })
+      .select("text type options correct columnA columnB assertion reason tableRows image explanation difficulty subject quiz session testSeries topic")
+      .populate({ path: "subject", select: "name stream", populate: { path: "stream", select: "name" } })
+      .populate({ path: "session", select: "title topic", populate: { path: "topic", select: "title" } })
+      .populate("quiz", "title")
+      .populate("testSeries", "name practice practiceKind")
+      .lean();
+    for (const d of docs) locMap.set(String(d._id), d);
+  }
+
+  const buildMatch = (m) => {
+    const d = locMap.get(String(m.id));
+    if (!d) return null;
+    return {
+      id: String(d._id),
+      text: d.text,
+      type: d.type,
+      options: d.options || [],
+      correct: d.correct,
+      columnA: d.columnA || [],
+      columnB: d.columnB || [],
+      assertion: d.assertion,
+      reason: d.reason,
+      tableRows: d.tableRows,
+      image: d.image,
+      explanation: d.explanation,
+      difficulty: d.difficulty,
+      location: questionLocation(d),
+      status: m.status,
+      similarity: m.similarity,
+    };
+  };
+
+  const summary = { exact: 0, strong: 0, related: 0, none: 0 };
+  const results = scored.map((s) => {
+    const matches = s.matches.map(buildMatch).filter(Boolean);
+    const status = matches[0]?.status || "none";
+    summary[status] += 1;
+    return {
+      question: s.stem,
+      yourQuestion: s.block,
+      status,
+      similarity: matches[0]?.similarity || 0,
+      matches,
+      match: matches[0] || null,
+    };
+  });
+
+  const found = summary.exact + summary.strong + summary.related;
+  res.json({ total: items.length, found, summary, results, deep: true });
 }
