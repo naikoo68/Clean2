@@ -86,7 +86,7 @@ export default function RegenerateAllModal({ open, target, title, onClose, onDon
           const doneCount = s.updatedCount ?? s.count ?? total;
           setProgress({ done: doneCount, total });
           const note = s.error === "quota"
-            ? " — stopped early (AI quota reached). Click again to finish the rest."
+            ? " — the AI kept hitting its rate/quota limit even after waiting (often a DAILY free-tier limit). Add another API key or try later, then click “Regenerate all questions” to resume."
             : s.error === "partial" || doneCount < total
             ? ` — ${total - doneCount} couldn't be regenerated. Click “Regenerate all” again to finish them.`
             : "";
@@ -98,7 +98,10 @@ export default function RegenerateAllModal({ open, target, title, onClose, onDon
           done = true;
         } else {
           setProgress({ done: s.count || 0, total });
-          setMsg(`Regenerating… ${s.count || 0} of ${total}`);
+          const waitLeft = s.waitUntil ? Math.ceil((s.waitUntil - Date.now()) / 1000) : 0;
+          setMsg(waitLeft > 0
+            ? `⏳ AI rate limit reached at ${s.count || 0} of ${total} — auto-continuing in ${waitLeft}s…`
+            : `Regenerating… ${s.count || 0} of ${total}`);
         }
       }
       if (!done) setMsg("Still working — this is taking longer than expected. It keeps running in the background; reopen later.");
