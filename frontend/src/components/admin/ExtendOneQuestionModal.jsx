@@ -10,13 +10,14 @@ import { X, Wand2, Loader2 } from "lucide-react";
  *  - open: boolean
  *  - busy: boolean          — true while the extend request is running
  *  - onCancel()             — close without doing anything
- *  - onConfirm({ fixOptions, extendQuestion })  — run the extend; checkbox values
+ *  - onConfirm({ fixOptions, extendQuestion, shuffleOptions })  — run the extend; checkbox values
  */
 export default function ExtendOneQuestionModal({ open, busy, onCancel, onConfirm }) {
   const [fixOptions, setFixOptions] = useState(false);
   const [extendQuestion, setExtendQuestion] = useState(false);
+  const [shuffleOptions, setShuffleOptions] = useState(false);
 
-  useEffect(() => { if (open) { setFixOptions(false); setExtendQuestion(false); } }, [open]);
+  useEffect(() => { if (open) { setFixOptions(false); setExtendQuestion(false); setShuffleOptions(false); } }, [open]);
 
   if (!open) return null;
 
@@ -65,9 +66,23 @@ export default function ExtendOneQuestionModal({ open, busy, onCancel, onConfirm
           </span>
         </label>
 
+        <label className="mt-3 flex items-start gap-2 rounded-lg bg-slate-50 px-3 py-2 text-sm dark:bg-slate-800/60">
+          <input
+            type="checkbox"
+            className="mt-0.5 h-4 w-4 accent-brand-600"
+            checked={shuffleOptions}
+            onChange={(e) => setShuffleOptions(e.target.checked)}
+            disabled={busy}
+          />
+          <span>
+            Also <b>reshuffle the options</b> — move the answer to a new position so it isn't always in the
+            same place. The <b>same</b> option stays correct (assertion questions are left as-is).
+          </span>
+        </label>
+
         <div className="mt-6 flex justify-end gap-2">
           <button type="button" onClick={onCancel} disabled={busy} className="btn-outline">Cancel</button>
-          <button type="button" onClick={() => onConfirm({ fixOptions, extendQuestion })} disabled={busy} className="btn-primary">
+          <button type="button" onClick={() => onConfirm({ fixOptions, extendQuestion, shuffleOptions })} disabled={busy} className="btn-primary">
             {busy ? <><Loader2 className="h-4 w-4 animate-spin" /> Extending…</> : <><Wand2 className="h-4 w-4" /> Extend</>}
           </button>
         </div>
