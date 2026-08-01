@@ -103,12 +103,12 @@ export default function AdminTests() {
     try { setTq(await testService.getQuestions(qTest._id)); } catch { /* ignore */ }
   };
   // Run the per-question extend once confirmed in the modal.
-  const runExtendOne = async ({ fixOptions, extendQuestion } = {}) => {
+  const runExtendOne = async ({ fixOptions, extendQuestion, shuffleOptions } = {}) => {
     const item = extendOneItem;
     if (!item) return;
     setExtendingQId(item._id);
     try {
-      const updated = await aiService.extendOne({ questionId: item._id, fixOptions, extendQuestion });
+      const updated = await aiService.extendOne({ questionId: item._id, fixOptions, extendQuestion, shuffleOptions });
       setViewQ((prev) => (prev && prev._id === item._id ? { ...prev, ...updated } : prev));
       setExtendOneItem(null);
       await reloadTq();
