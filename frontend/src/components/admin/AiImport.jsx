@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { X, Globe, Download, CheckCircle2, AlertTriangle, Loader2, Server, KeyRound, FileText, Upload, Files, ScanText, Maximize2, Minimize2, Plus, Sparkles, ListChecks, Circle } from "lucide-react";
+import { X, Globe, Download, CheckCircle2, AlertTriangle, Loader2, Server, KeyRound, FileText, Upload, Files, ScanText, Maximize2, Minimize2, Plus, Sparkles, ListChecks, Circle, Trash2 } from "lucide-react";
 import { aiService, documentService } from "../../services";
 import { useAuth } from "../../context/AuthContext";
 import GraphView from "../ui/GraphView";
@@ -452,9 +452,16 @@ export default function AiImport({ open, onClose, onUpload, title = "Import Ques
         <div className="fixed inset-0 z-[60] flex flex-col bg-white p-4 dark:bg-slate-900">
           <div className="mb-2 flex items-center justify-between gap-2">
             <h3 className="flex items-center gap-2 text-lg font-bold"><FileText className="h-5 w-5 text-brand-600" /> Extracted or pasted text</h3>
-            <button type="button" onClick={() => setTextFull(false)} className="btn-outline !py-1 !text-xs">
-              <Minimize2 className="h-3.5 w-3.5" /> Exit full screen
-            </button>
+            <div className="flex items-center gap-2">
+              {text.trim() && (
+                <button type="button" onClick={() => setText("")} disabled={busy} className="btn-outline !py-1 !text-xs text-rose-600">
+                  <Trash2 className="h-3.5 w-3.5" /> Clear text
+                </button>
+              )}
+              <button type="button" onClick={() => setTextFull(false)} className="btn-outline !py-1 !text-xs">
+                <Minimize2 className="h-3.5 w-3.5" /> Exit full screen
+              </button>
+            </div>
           </div>
           <textarea
             className="input min-h-0 flex-1 resize-none font-mono text-sm"
@@ -607,9 +614,16 @@ export default function AiImport({ open, onClose, onUpload, title = "Import Ques
 
             <div className="mb-1 mt-3 flex items-center justify-between gap-2">
               <label className="block text-sm font-semibold">{task === "generate" ? "Paragraph / source text" : "Extracted or pasted text"}</label>
-              <button type="button" onClick={() => setTextFull(true)} className="btn-outline !py-1 !text-xs">
-                <Maximize2 className="h-3.5 w-3.5" /> Full screen
-              </button>
+              <div className="flex items-center gap-2">
+                {text.trim() && (
+                  <button type="button" onClick={() => setText("")} disabled={busy} className="btn-outline !py-1 !text-xs text-rose-600">
+                    <Trash2 className="h-3.5 w-3.5" /> Clear text
+                  </button>
+                )}
+                <button type="button" onClick={() => setTextFull(true)} className="btn-outline !py-1 !text-xs">
+                  <Maximize2 className="h-3.5 w-3.5" /> Full screen
+                </button>
+              </div>
             </div>
             <textarea
               rows={8}
