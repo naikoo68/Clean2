@@ -1,4 +1,5 @@
 import { useEffect, useState, useRef, Fragment } from "react";
+import { useSearchParams } from "react-router-dom";
 import { Plus, Pencil, Trash2, X, ChevronRight, GraduationCap, FolderOpen, ListChecks, FileStack, HelpCircle, Users, Search, Share2, ClipboardList, ArrowRightLeft } from "lucide-react";
 import { practiceService, testService, contentService, aiService } from "../../services";
 import { loadNav, saveNav } from "../../lib/navState";
@@ -56,8 +57,21 @@ export default function AdminPractice({ clientMode = false }) {
   // Remember drill-down position across refreshes (separate keys for the admin
   // panel and the client workspace so they never clash).
   const NAV_KEY = clientMode ? "mpm-client-practice-nav" : "mpm-admin-practice-nav";
+  // The drill-down level lives in the URL (?v=subjects|topics|items) so the
+  // phone/browser BACK button steps UP one level (Streams > Subject > Topic >
+  // Quizzes) instead of leaving the page — each level is its own history entry.
+  // (Mirrors the ?tab= pattern used in the client workspace.)
+  const [searchParams, setSearchParams] = useSearchParams();
+  const view = searchParams.get("v") || "streams"; // streams | subjects | topics | items
+  // Update ONLY the `v` param, preserving any others (e.g. the client
+  // workspace's ?tab=build, which shares this URL) so we don't kick the client
+  // back to another tab.
+  const setView = (v, opts) => {
+    const next = new URLSearchParams(searchParams);
+    if (v && v !== "streams") next.set("v", v); else next.delete("v");
+    setSearchParams(next, opts);
+  };
   const [kind, setKind] = useState(() => loadNav(NAV_KEY).kind || "quiz");
-  const [view, setView] = useState(() => loadNav(NAV_KEY).view || "streams"); // streams | subjects | topics | items
   const [stream, setStream] = useState(() => loadNav(NAV_KEY).stream || null);
   const [subject, setSubject] = useState(() => loadNav(NAV_KEY).subject || null);
   const [topic, setTopic] = useState(() => loadNav(NAV_KEY).topic || null);
@@ -136,6 +150,19 @@ export default function AdminPractice({ clientMode = false }) {
   const [accessSearch, setAccessSearch] = useState("");
 
   const load = (which) => {
+    // The level (`view`) now comes from the URL, but the stream/subject/topic
+    // objects come from state/sessionStorage. If a deep URL (e.g. ?v=items) is
+    // opened without that context in memory — a fresh tab with empty
+    // sessionStorage — fall back to the streams list instead of dereferencing a
+    // null ._id.
+    const missingContext =
+      (which === "subjects" && !stream) ||
+      (which === "topics" && !subject) ||
+      (which === "items" && (kind === "quiz" ? !topic : !subject));
+    if (missingContext) {
+      if (view !== "streams") setView("streams", { replace: true });
+      which = "streams";
+    }
     setLoading(true);
     setError("");
     const p =
@@ -152,6 +179,21 @@ export default function AdminPractice({ clientMode = false }) {
   useEffect(() => {
     saveNav(NAV_KEY, { kind, view, stream, subject, topic });
   }, [NAV_KEY, kind, view, stream, subject, topic]);
+
+  // On first mount, restore the saved drill-down level into the URL (the
+  // stream/subject/topic objects above are already restored from navState), so
+  // a plain page refresh reopens where you were. `replace` avoids adding a
+  // spurious history entry.
+  const didRestore = useRef(false);
+  useEffect(() => {
+    if (didRestore.current) return;
+    didRestore.current = true;
+    const saved = loadNav(NAV_KEY);
+    if (!searchParams.get("v") && saved.view && saved.view !== "streams") {
+      setView(saved.view, { replace: true });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const openStream = (s) => { setStream(s); setSubject(null); setTopic(null); setView("subjects"); };
   // My Quiz drills into Topics; My Test Series goes straight to items.
