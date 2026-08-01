@@ -305,6 +305,23 @@ export const documentService = {
 };
 
 // ---- AI question generator (admin) ----
+// Retry a one-shot AI call after ~60s when the server reports a per-minute rate
+// limit / quota (429, or a 5xx whose message mentions quota/rate-limit) — so a
+// single "extend explanation" / "regenerate question" rides out the limit and
+// finishes instead of failing immediately (mirrors the syllabus-parse wait). The
+// bulk jobs already wait & retry server-side.
+const isRateLimit = (e) =>
+  e?.status === 429 || /\b(quota|rate[\s-]?limit|429|too many requests)\b/i.test(e?.message || "");
+const withRateLimitRetry = async (fn, { waitMs = 60000, tries = 2 } = {}) => {
+  for (let i = 0; i < tries; i++) {
+    try { return await fn(); }
+    catch (e) {
+      if (!isRateLimit(e) || i === tries - 1) throw e;
+      await new Promise((r) => setTimeout(r, waitMs)); // wait for the per-minute limit to reset, then retry
+    }
+  }
+};
+
 export const aiService = {
   status: (mode) => api.get(`/ai/status${mode ? `?mode=${encodeURIComponent(mode)}` : ""}`),
   generate: (data) => api.post("/ai/generate", data), // returns { jobId, requested }
@@ -319,8 +336,8 @@ export const aiService = {
   parseSyllabus: (data) => api.post("/ai/parse-syllabus", data, { timeout: 180000 }), // full syllabus → { subject, topics:[{title,subtopics}] }
   classifyUnits: (data) => api.post("/ai/classify-units", data), // file question stems under units → { assign: [...] }
   extendExplanations: (data) => api.post("/ai/extend-explanations", data), // enrich all explanations in a quiz/test → { jobId, requested }
-  extendOne: (data) => api.post("/ai/extend-explanation", data), // enrich ONE question's explanation → { explanation, optionExplanations }
-  regenerate: (data) => api.post("/ai/regenerate-question", data), // analyse ONE question → rebuild options/answer → { options, correct, explanation }
+  extendOne: (data) => withRateLimitRetry(() => api.post("/ai/extend-explanation", data)), // enrich ONE question's explanation → { explanation, optionExplanations }; waits 60s & retries on a rate limit
+  regenerate: (data) => withRateLimitRetry(() => api.post("/ai/regenerate-question", data)), // analyse ONE question → rebuild options/answer → { options, correct, explanation }; waits 60s & retries on a rate limit
   regenerateAll: (data) => api.post("/ai/regenerate-all", data), // regenerate EVERY question in a quiz/test → { jobId, requested }
   // Client AI access + pool selection (built-in vs own keys)
   access: () => api.get("/ai/access"), // { access, mode, allowInbuilt, allowSelf, ownKeys, inbuiltAvailable }
