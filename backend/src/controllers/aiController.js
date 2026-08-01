@@ -337,7 +337,7 @@ Type-specific rules — each type needs specific extra fields AND a specific sty
 - "statement": REQUIRED — put the individual statements in "columnA" as an array of 2-4 complete statement SENTENCES (e.g. ["The carbon cycle involves photosynthesis and respiration.","Nitrogen fixation is performed only by plants."]). "columnA" must NEVER be empty. "text" is ONLY the intro line ending with a colon (e.g. "Consider the following statements regarding the nitrogen cycle:") — do NOT put the numbered statements inside "text", and do NOT rely on the explanation alone to describe them. The 4 "options" are COMBINATIONS like "1 only", "2 only", "1 and 2 only", "Neither 1 nor 2". In "explanation", evaluate EACH statement (1, 2, …) as true/false with the reason.
 - "pair": include "columnA" (left items) and "columnB" (right items); item i is paired with item i. "text" is ONLY the intro line (e.g. "Consider the following pairs:") — the pairs themselves MUST be the arrays "columnA" and "columnB", each with 3-4 items and the SAME length. NEVER put the pair items inside "text", and NEVER use a different key such as "pairs"/"matches". The 4 "options" state HOW MANY pairs are correctly matched, e.g. "Only one pair", "Only two pairs", "Only three pairs", "All four pairs". In "explanation", go through EACH pair stating whether it is correctly matched and the fact behind it.
 - "pairselect": include "columnA" and "columnB" (candidate pairs), each with 3-4 items of the SAME length; put them ONLY in these arrays (NOT inside "text", NOT under any other key). "text" is only the intro line. The 4 "options" state WHICH pairs are correct, e.g. "1 and 2 only", "2 and 3 only", "1, 3 and 4 only", "All of the above". In "explanation", go through EACH pair stating whether it is correct or wrong and why.
-- "assertion": include "assertion" (Assertion A text) and "reason" (Reason R text); "text" may be empty. The 4 "options" MUST be exactly: "Both A and R are true and R is the correct explanation of A", "Both A and R are true but R is NOT the correct explanation of A", "A is true but R is false", "A is false but R is true". In "explanation", separately evaluate Assertion (A) — state true/false and WHY with supporting facts — then separately evaluate Reason (R) — true/false and WHY — and finally explain the RELATIONSHIP: whether R correctly explains A and why.
+- "assertion": REQUIRED — you MUST include BOTH "assertion" (the full Assertion A statement) and "reason" (the full Reason R statement) as NON-EMPTY, complete standalone sentences. NEVER leave "assertion" or "reason" blank, and NEVER put the A/R statements only inside "explanation" or "text" — the actual statements MUST be in the "assertion" and "reason" fields ("text" may be empty). The 4 "options" MUST be exactly: "Both A and R are true and R is the correct explanation of A", "Both A and R are true but R is NOT the correct explanation of A", "A is true but R is false", "A is false but R is true". In "explanation", separately evaluate Assertion (A) — state true/false and WHY with supporting facts — then separately evaluate Reason (R) — true/false and WHY — and finally explain the RELATIONSHIP: whether R correctly explains A and why.
 - "table": put the data table in "tableRows" (a 2D array; the first inner array is the header row) — NEVER write it as a markdown/pipe ("| a | b |") table inside "text". "text" is ONLY the question sentence. Wrap any math in a cell in $...$. 4 normal options that match a calculation done from the table.
 Do NOT prefix columnA / columnB / statement items with numbers or roman numerals (no "1.", "I.") — the app numbers Column A (1,2,3,4), Column B (I,II,III,IV) and statements (1,2,3) automatically.
 OPTIONAL DIAGRAM ("graph"): ONLY when a question genuinely needs a diagram to be answered or understood — e.g. an ECONOMICS supply/demand curve, a shift, an equilibrium, a cost curve, or any simple straight-line/curve relationship — include a "graph" object. The app DRAWS it as a labelled chart, so provide DATA, not prose. Shape: {"xLabel":"Quantity","yLabel":"Price","lines":[{"label":"Demand","points":[[0,100],[100,0]]},{"label":"Supply","points":[[0,0],[100,100]]}],"points":[{"label":"E (equilibrium)","x":50,"y":50}]}. Rules for "graph": use a consistent numeric scale for all points; each line needs a short "label" and at least two [x,y] points (use 3-6 points for a curve); put key intersections/equilibria in "points" with a short label; keep values simple (0-100 is ideal). If the question also refers to the diagram in words, keep "text" as the question itself (e.g. "In the diagram, the equilibrium price is:"). OMIT "graph" entirely for questions that don't need a visual (most questions) — never add a decorative or irrelevant graph.
@@ -630,6 +630,36 @@ function unwrapWordMath(s) {
   });
 }
 
+// Assertion–Reason questions MUST carry both the Assertion (A) and the Reason
+// (R) as their own statements. Models sometimes leave "reason" (or both) blank
+// and either pack "Assertion: … Reason: …" into a single field or dump them into
+// the stem, putting the real content only in "explanation". Such a question
+// renders as a broken A/R and later fails CSV re-import ("assertion needs an
+// Assertion, a Reason and 4 options"). Recover A and R from a packed field or
+// the stem so a complete pair is stored; whatever is still missing is dropped by
+// normalize() rather than saved broken.
+function recoverAssertionReason(assertion, reason, text) {
+  let a = String(assertion == null ? "" : assertion).trim();
+  let r = String(reason == null ? "" : reason).trim();
+  const splitOnReason = (s) => {
+    const str = String(s || "");
+    const m = str.match(/\bReason\b\s*(?:\([Rr]\))?\s*[:\-]/);
+    if (m && m.index > 0) return [str.slice(0, m.index).trim(), str.slice(m.index + m[0].length).trim()];
+    return null;
+  };
+  // Both packed into the assertion field ("Assertion (A): … Reason (R): …").
+  if (a && !r) { const p = splitOnReason(a); if (p) { a = p[0]; r = p[1]; } }
+  // Both dumped into the stem instead of the dedicated keys.
+  if ((!a || !r) && /\bReason\b\s*(?:\([Rr]\))?\s*[:\-]/.test(text || "")) {
+    const p = splitOnReason(text);
+    if (p) { if (!a) a = p[0]; if (!r) r = p[1]; }
+  }
+  // Strip any leading "Assertion (A):" / "Reason (R):" label.
+  a = a.replace(/^\s*Assertion\b\s*(?:\([Aa]\))?\s*[:\-]\s*/, "").trim();
+  r = r.replace(/^\s*Reason\b\s*(?:\([Rr]\))?\s*[:\-]\s*/, "").trim();
+  return { assertion: a, reason: r };
+}
+
 // Coerce anything the model returned into a valid Question document shape.
 function normalize(list) {
   const clampIdx = (n) => Math.min(3, Math.max(0, parseInt(n, 10) || 0));
@@ -692,8 +722,9 @@ function normalize(list) {
         if (!out.text) out.text = "Consider the following statements:";
       }
       if (type === "assertion") {
-        out.assertion = asStr(q?.assertion).trim();
-        out.reason = asStr(q?.reason).trim();
+        const ar = recoverAssertionReason(q?.assertion, q?.reason, q?.text);
+        out.assertion = ar.assertion;
+        out.reason = ar.reason;
         if (!out.text) out.text = "Consider the following Assertion (A) and Reason (R):";
       }
       if (type === "table") {
@@ -719,7 +750,10 @@ function normalize(list) {
       if (Array.isArray(out.tableRows)) out.tableRows = out.tableRows.map((r) => (Array.isArray(r) ? r.map(unwrapWordMath) : r));
       return out;
     })
-    .filter((q) => q.text); // drop empty questions
+    // Drop empty questions, and drop assertion questions still missing their
+    // Assertion or Reason (they render broken and fail CSV re-import) rather
+    // than saving them incomplete.
+    .filter((q) => q.text && (q.type !== "assertion" || (q.assertion && q.reason)));
 }
 
 // Spread the correct answer evenly + randomly across A/B/C/D so it isn't always
