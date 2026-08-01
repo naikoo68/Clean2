@@ -3056,13 +3056,17 @@ export async function extendExplanations(req, res) {
   if (req.body?.testSeries) filter = { testSeries: req.body.testSeries, ...own };
   else if (req.body?.quiz) filter = { quiz: req.body.quiz, ...own };
   if (!filter) return res.status(400).json({ message: "Provide a quiz or test to update." });
+  // Optional: restrict to ONE question type (e.g. only "matching" / only "pair").
+  // "all" (or any unknown value) means every type.
+  const onlyType = String(req.body?.type || "").trim();
+  if (onlyType && onlyType !== "all" && TYPES.includes(onlyType)) filter.type = onlyType;
 
   // Process LEAST-RECENTLY-UPDATED first. Extending a question bumps its
   // updatedAt, so when a run stops early on quota, clicking "Extend" again
   // starts with the questions that were NOT reached last time — so repeated runs
   // actually finish the whole quiz instead of re-doing the first few each time.
   const questions = await Question.find(filter).sort("updatedAt").select("_id type text options correct columnA columnB tableRows assertion reason explanation").lean();
-  if (!questions.length) return res.status(400).json({ message: "No questions found to update (or not your content)." });
+  if (!questions.length) return res.status(400).json({ message: filter.type ? `No "${filter.type}" questions found here (try "All question types").` : "No questions found to update (or not your content)." });
 
   const notes = String(req.body?.notes || "").trim();
   cleanupJobs();
@@ -3524,10 +3528,14 @@ export async function regenerateAll(req, res) {
   if (req.body?.testSeries) filter = { testSeries: req.body.testSeries, ...own };
   else if (req.body?.quiz) filter = { quiz: req.body.quiz, ...own };
   if (!filter) return res.status(400).json({ message: "Provide a quiz or test to update." });
+  // Optional: restrict to ONE question type (e.g. only "matching" / only "pair").
+  // "all" (or any unknown value) means every type.
+  const onlyType = String(req.body?.type || "").trim();
+  if (onlyType && onlyType !== "all" && TYPES.includes(onlyType)) filter.type = onlyType;
 
   // Least-recently-updated first so repeated runs finish the whole set.
   const questions = await Question.find(filter).sort("updatedAt").select("_id type text options correct columnA columnB tableRows assertion reason explanation optionExplanations").lean();
-  if (!questions.length) return res.status(400).json({ message: "No questions found to update (or not your content)." });
+  if (!questions.length) return res.status(400).json({ message: filter.type ? `No "${filter.type}" questions found here (try "All question types").` : "No questions found to update (or not your content)." });
 
   const notes = String(req.body?.notes || "").trim();
   cleanupJobs();
