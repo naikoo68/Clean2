@@ -679,12 +679,12 @@ export default function AdminPractice({ clientMode = false }) {
     return res;
   };
   // Run the per-question extend once confirmed in the modal.
-  const runExtendOne = async (fixOptions) => {
+  const runExtendOne = async ({ fixOptions, extendQuestion } = {}) => {
     const item = extendOneItem;
     if (!item) return;
     setExtendingQId(item._id);
     try {
-      const updated = await aiService.extendOne({ questionId: item._id, fixOptions });
+      const updated = await aiService.extendOne({ questionId: item._id, fixOptions, extendQuestion });
       setViewQ((prev) => (prev && prev._id === item._id ? { ...prev, ...updated } : prev));
       setExtendOneItem(null);
       await reloadTq();
