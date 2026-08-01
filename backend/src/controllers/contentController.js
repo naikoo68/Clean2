@@ -614,3 +614,168 @@ export async function deleteQuestion(req, res) {
   await Question.findByIdAndDelete(req.params.id);
   res.json({ message: "Question deleted" });
 }
+
+
+/* ------------------------- Question Checker -------------------------------
+   "Did this question come from my bank?" — given pasted text (bulk or single
+   questions) or an explicit list of stems, report for EACH input question
+   whether the caller's OWN bank already contains it: an exact copy, a very
+   similar (near-duplicate) question, or a related one (same topic/terms, e.g.
+   the same question reworded with different options). Owner-scoped, so a client
+   only searches their own content and an admin only platform content. Pure DB +
+   lexical matching (Mongo full-text index + token overlap) — no AI/quota. */
+
+// Meaningful words in a stem (lowercased, length >= 4, minus filler words) used
+// to measure topical overlap between two questions independent of their options.
+const CHECK_STOPWORDS = new Set(
+  ("the a an of to in on at for and or but is are was were be been being do does did which what who whom whose when where why how " +
+   "that this these those with without into from by as it its their his her they them following consider statement statements " +
+   "correct incorrect true false not all none only both about above given below choose select mark identify option options " +
+   "question answer regarding respectively context term following which specific").split(/\s+/)
+);
+const checkTokens = (t) =>
+  new Set(
+    String(t || "")
+      .toLowerCase()
+      .replace(/\$[^$]*\$/g, " ") // ignore LaTeX so wording, not symbols, is compared
+      .replace(/[^a-z0-9\s]/g, " ")
+      .split(/\s+/)
+      .filter((w) => w.length >= 4 && !CHECK_STOPWORDS.has(w))
+  );
+const checkJaccard = (a, b) => {
+  if (!a.size || !b.size) return 0;
+  let inter = 0;
+  for (const x of a) if (b.has(x)) inter += 1;
+  return inter / (a.size + b.size - inter);
+};
+const escapeRe = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+// Human-readable location of a matched bank question (Stream › Subject › Topic ›
+// Quiz, or the Test/Practice item name).
+function questionLocation(q) {
+  if (q.testSeries) {
+    const ts = q.testSeries;
+    const cat = ts.practice ? (ts.practiceKind === "quiz" ? "Practice Quiz" : "Practice Test") : "Test Series";
+    return `${cat}: ${ts.name || "Untitled"}`;
+  }
+  const parts = [q.subject?.stream?.name, q.subject?.name, q.session?.topic?.title || q.topic, q.quiz?.title].filter(Boolean);
+  return parts.length ? parts.join(" › ") : "Quiz";
+}
+
+// Strip a leading question number ("1.", "Q2)", "12 -") and keep only the STEM
+// of a pasted block — drop trailing option lines ("A) …", "(b) …", "1. …") and
+// answer/explanation lines so we compare the question, not its options.
+function stemOfBlock(block) {
+  const lines = String(block || "").split(/\n/).map((l) => l.trim()).filter(Boolean);
+  const stemLines = [];
+  for (const l of lines) {
+    if (/^\(?\s*[a-dA-D1-4]\s*[).\]]\s+\S/.test(l)) break;                 // option line: "A) …" / "(b) …" / "1. …"
+    if (/^(ans(wer)?|correct(\s+answer)?|explanation|sol(ution)?|reason)\b/i.test(l)) break; // answer/explanation
+    stemLines.push(l);
+  }
+  let stem = (stemLines.join(" ") || lines.join(" ")).trim();
+  stem = stem.replace(/^\s*(?:Q(?:uestion)?\s*)?\.?\s*\d{1,3}\s*[.)\-:]\s*/i, "").trim(); // leading number
+  return stem;
+}
+
+// Split pasted text into individual question stems. Prefers explicit numbering
+// ("1." / "Q2)" / "3 -"); falls back to blank-line separation; else treats the
+// whole text as a single question.
+function splitIntoStems(content) {
+  const raw = String(content || "").replace(/\r/g, "").trim();
+  if (!raw) return [];
+  let blocks = raw
+    .split(/\n(?=\s*(?:Q(?:uestion)?\s*)?\.?\s*\d{1,3}\s*[.)\-:]\s)/i)
+    .map((s) => s.trim())
+    .filter(Boolean);
+  if (blocks.length < 2) {
+    const byBlank = raw.split(/\n\s*\n+/).map((s) => s.trim()).filter(Boolean);
+    blocks = byBlank.length >= 2 ? byBlank : [raw];
+  }
+  return blocks.map(stemOfBlock).map((s) => s.trim()).filter((s) => s.length >= 8).slice(0, 200);
+}
+
+// POST /api/questions/check  { content? , stems?[] }
+// Returns per-question match status against the caller's own bank.
+export async function checkQuestions(req, res) {
+  const own = ownerFilter(req);
+  const provided = Array.isArray(req.body?.stems)
+    ? req.body.stems.map((s) => String(s || "").trim()).filter((s) => s.length >= 8)
+    : null;
+  const stems = (provided && provided.length ? provided : splitIntoStems(req.body?.content)).slice(0, 200);
+  if (!stems.length) {
+    return res.status(400).json({ message: "Paste at least one question (or upload a file) to check." });
+  }
+
+  const summary = { exact: 0, strong: 0, related: 0, none: 0 };
+  const scored = [];
+  for (const stem of stems) {
+    const stemTokens = checkTokens(stem);
+    const normStem = normalizeText(stem);
+    let candidates = [];
+    try {
+      candidates = await Question.find(
+        { $text: { $search: stem }, ...own },
+        { score: { $meta: "textScore" }, text: 1, type: 1 }
+      ).sort({ score: { $meta: "textScore" } }).limit(12).lean();
+    } catch {
+      candidates = [];
+    }
+    // Fallback keyword search when the text index returns nothing (very short or
+    // symbol-heavy stems).
+    if (!candidates.length && stemTokens.size) {
+      const words = [...stemTokens].slice(0, 8).map(escapeRe);
+      if (words.length) {
+        candidates = await Question.find({ text: new RegExp(words.join("|"), "i"), ...own })
+          .select("text type").limit(12).lean();
+      }
+    }
+    let best = null;
+    for (const c of candidates) {
+      const exact = normStem.length > 0 && normalizeText(c.text) === normStem;
+      const sim = checkJaccard(stemTokens, checkTokens(c.text));
+      if (!best || (exact && !best.exact) || (exact === best.exact && sim > best.sim)) best = { id: c._id, exact, sim };
+    }
+    let status = "none";
+    let similarity = 0;
+    let matchId = null;
+    if (best) {
+      similarity = Math.round(best.sim * 100);
+      if (best.exact) status = "exact";
+      else if (best.sim >= 0.6) status = "strong";
+      else if (best.sim >= 0.3) status = "related";
+      else status = "none";
+      if (status !== "none") { matchId = best.id; if (best.exact) similarity = 100; }
+    }
+    summary[status] += 1;
+    scored.push({ question: stem, status, similarity, matchId });
+  }
+
+  // Resolve human-readable locations for the matched questions in one query.
+  const ids = scored.map((s) => s.matchId).filter(Boolean);
+  const locMap = new Map();
+  if (ids.length) {
+    const docs = await Question.find({ _id: { $in: ids } })
+      .select("text type subject quiz session testSeries topic")
+      .populate({ path: "subject", select: "name stream", populate: { path: "stream", select: "name" } })
+      .populate({ path: "session", select: "title topic", populate: { path: "topic", select: "title" } })
+      .populate("quiz", "title")
+      .populate("testSeries", "name practice practiceKind")
+      .lean();
+    for (const d of docs) locMap.set(String(d._id), d);
+  }
+
+  const results = scored.map((s) => {
+    if (!s.matchId) return { question: s.question, status: s.status, similarity: s.similarity, match: null };
+    const d = locMap.get(String(s.matchId));
+    return {
+      question: s.question,
+      status: s.status,
+      similarity: s.similarity,
+      match: d ? { id: String(d._id), text: d.text, type: d.type, location: questionLocation(d) } : null,
+    };
+  });
+
+  const found = summary.exact + summary.strong + summary.related;
+  res.json({ total: stems.length, found, summary, results });
+}
