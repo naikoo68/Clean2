@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { X, RefreshCw, Loader2, CheckCircle2, AlertTriangle, Server, KeyRound } from "lucide-react";
 import { aiService } from "../../services";
 import { useAuth } from "../../context/AuthContext";
@@ -41,6 +41,8 @@ export default function RegenerateAllModal({ open, target, title, onClose, onDon
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState(null); // { done, total }
   const [msg, setMsg] = useState("");
+  const jobRef = useRef(null);      // current background job id (for Cancel)
+  const cancelRef = useRef(false);  // set true when the user cancels → stops polling
 
   useEffect(() => {
     if (!open) return;
@@ -61,10 +63,17 @@ export default function RegenerateAllModal({ open, target, title, onClose, onDon
 
   if (!open) return null;
 
+  const cancel = async () => {
+    cancelRef.current = true;
+    setMsg("Cancelling…");
+    try { if (jobRef.current) await aiService.cancelJob(jobRef.current); } catch { /* ignore */ }
+  };
+
   const run = async () => {
     setBusy(true);
     setMsg("Starting…");
     setProgress(null);
+    cancelRef.current = false;
     try {
       const { jobId, requested } = await aiService.regenerateAll({
         ...target,
@@ -74,14 +83,22 @@ export default function RegenerateAllModal({ open, target, title, onClose, onDon
         type: qType !== "all" ? qType : undefined,
       });
       if (!jobId) throw new Error("Could not start.");
+      jobRef.current = jobId;
       setProgress({ done: 0, total: requested });
       const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
       let done = false;
+      let lastCount = 0;
       for (let i = 0; i < 400 && !done; i++) {
         await sleep(2000);
+        if (cancelRef.current) {
+          setMsg(`✓ Cancelled — kept the ${lastCount} question(s) already regenerated.`);
+          onDone?.();
+          break;
+        }
         let s;
         try { s = await aiService.job(jobId); } catch { continue; }
         const total = s.requested || requested;
+        lastCount = s.count ?? lastCount;
         if (s.status === "done") {
           const doneCount = s.updatedCount ?? s.count ?? total;
           setProgress({ done: doneCount, total });
@@ -108,6 +125,7 @@ export default function RegenerateAllModal({ open, target, title, onClose, onDon
     } catch (e) {
       setMsg(e.message || "Failed.");
     } finally {
+      jobRef.current = null;
       setBusy(false);
     }
   };
@@ -195,6 +213,11 @@ export default function RegenerateAllModal({ open, target, title, onClose, onDon
             <button type="button" onClick={run} disabled={busy} className="btn-primary mt-4 w-full">
               {busy ? <><Loader2 className="h-4 w-4 animate-spin" /> Regenerating…</> : <><RefreshCw className="h-4 w-4" /> Regenerate all questions</>}
             </button>
+            {busy && (
+              <button type="button" onClick={cancel} className="btn-outline mt-2 w-full text-rose-600">
+                <X className="h-4 w-4" /> Cancel (keep what's done)
+              </button>
+            )}
           </>
         )}
 
