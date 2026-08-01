@@ -678,6 +678,19 @@ function stemOfBlock(block) {
   return stem;
 }
 
+// FULL content of a pasted block for comparison — every line EXCEPT the trailing
+// answer-key / explanation lines. Unlike stemOfBlock this KEEPS the options,
+// the matching/pair columns, the statement list AND the Reason line, so
+// structured questions (matching, pair, statement, assertion & reason) are
+// compared on their real content, not just their short/generic stem.
+function contentOfBlock(block) {
+  return String(block || "")
+    .split(/\n/)
+    .map((l) => l.trim())
+    .filter((l) => l && !/^(ans(wer)?|correct(\s+answer)?|explanation|sol(ution)?)\b/i.test(l))
+    .join(" ");
+}
+
 // Split pasted text into individual question stems. Prefers explicit numbering
 // ("1." / "Q2)" / "3 -"); falls back to blank-line separation; else treats the
 // whole text as a single question.
@@ -713,30 +726,51 @@ export async function checkQuestions(req, res) {
   const summary = { exact: 0, strong: 0, related: 0, none: 0 };
   const scored = [];
   for (const { stem, block } of items) {
-    const stemTokens = checkTokens(stem);
+    const fullContent = contentOfBlock(block);
+    const stemTokens = checkTokens(stem);              // stem only — catches reworded MCQs (options ignored)
+    const fullTokens = checkTokens(fullContent);       // stem + columns/pairs/statements/assertion/reason/options
     const normStem = normalizeText(stem);
+    // Search the full-text index with the WHOLE content (it indexes text,
+    // options, assertion, reason, columnA & columnB), so a matching/pair/
+    // assertion question is found by its columns/pairs/reason, not just a
+    // generic intro like "Consider the following pairs:".
+    const searchText = (fullContent || stem).slice(0, 400);
     let candidates = [];
     try {
       candidates = await Question.find(
-        { $text: { $search: stem }, ...own },
-        { score: { $meta: "textScore" }, text: 1, type: 1 }
-      ).sort({ score: { $meta: "textScore" } }).limit(12).lean();
+        { $text: { $search: searchText }, ...own },
+        { score: { $meta: "textScore" }, text: 1, type: 1, options: 1, columnA: 1, columnB: 1, assertion: 1, reason: 1 }
+      ).sort({ score: { $meta: "textScore" } }).limit(15).lean();
     } catch {
       candidates = [];
     }
-    // Fallback keyword search when the text index returns nothing (very short or
-    // symbol-heavy stems).
-    if (!candidates.length && stemTokens.size) {
-      const words = [...stemTokens].slice(0, 8).map(escapeRe);
+    // Fallback keyword search when the text index returns nothing.
+    if (!candidates.length && (fullTokens.size || stemTokens.size)) {
+      const words = [...(fullTokens.size ? fullTokens : stemTokens)].slice(0, 10).map(escapeRe);
       if (words.length) {
         candidates = await Question.find({ text: new RegExp(words.join("|"), "i"), ...own })
-          .select("text type").limit(12).lean();
+          .select("text type options columnA columnB assertion reason").limit(15).lean();
       }
     }
     let best = null;
     for (const c of candidates) {
-      const exact = normStem.length > 0 && normalizeText(c.text) === normStem;
-      const sim = checkJaccard(stemTokens, checkTokens(c.text));
+      // Compare on BOTH the stem alone and the full content; take the stronger
+      // signal. So plain MCQs match on the stem (reworded options still count),
+      // while matching/pair/statement/assertion questions match on their
+      // columns/pairs/statements/assertion/reason content.
+      const bankFull = [
+        c.text, c.assertion, c.reason,
+        ...(Array.isArray(c.columnA) ? c.columnA : []),
+        ...(Array.isArray(c.columnB) ? c.columnB : []),
+        ...(Array.isArray(c.options) ? c.options : []),
+      ].filter(Boolean).join(" ");
+      const stemSim = checkJaccard(stemTokens, checkTokens(c.text));
+      const fullSim = checkJaccard(fullTokens, checkTokens(bankFull));
+      const sim = Math.max(stemSim, fullSim);
+      // A true exact copy: identical stem AND its overall content matches too
+      // (so two different pair questions that share the generic intro aren't
+      // wrongly called "exact").
+      const exact = normStem.length > 0 && normalizeText(c.text) === normStem && fullSim >= 0.6;
       if (!best || (exact && !best.exact) || (exact === best.exact && sim > best.sim)) best = { id: c._id, exact, sim };
     }
     let status = "none";
@@ -744,11 +778,11 @@ export async function checkQuestions(req, res) {
     let matchId = null;
     if (best) {
       similarity = Math.round(best.sim * 100);
-      if (best.exact) status = "exact";
+      if (best.exact) { status = "exact"; similarity = 100; }
       else if (best.sim >= 0.6) status = "strong";
       else if (best.sim >= 0.3) status = "related";
       else status = "none";
-      if (status !== "none") { matchId = best.id; if (best.exact) similarity = 100; }
+      if (status !== "none") matchId = best.id;
     }
     summary[status] += 1;
     scored.push({ question: stem, yourQuestion: block, status, similarity, matchId });
