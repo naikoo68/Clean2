@@ -30,6 +30,7 @@ export const contentService = {
   allQuestions: () => api.get("/questions"),
   moveQuiz: (id, data) => api.patch(`/quizzes/${id}/move`, data), // { session, copy }
   splitQuiz: (id, perQuiz) => api.post(`/quizzes/${id}/split`, { perQuiz }), // split one quiz into quizzes of N
+  checkQuestions: (data) => api.post("/questions/check", data, { timeout: 120000 }), // "did this question come from my bank?" → { total, found, summary, results }
   splitTopic: (id, perQuiz) => api.post(`/topics/${id}/split`, { perQuiz }), // split all a topic's questions into quizzes of N
   mergeQuiz: (id, sourceIds) => api.post(`/quizzes/${id}/merge`, { sourceIds }), // merge other quizzes (same session) into this one
   // streams (admin)
