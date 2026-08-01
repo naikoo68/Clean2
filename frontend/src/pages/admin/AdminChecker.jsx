@@ -153,6 +153,7 @@ export default function AdminChecker() {
             {report.results.map((r, i) => {
               const s = STATUS[r.status] || STATUS.none;
               const open = expanded.has(i);
+              const matches = r.matches || (r.match ? [r.match] : []); // fallback for older API shape
               return (
                 <div key={i} className="overflow-hidden rounded-xl border border-slate-200 dark:border-slate-700">
                   {/* Tap the row to expand and compare both questions. */}
@@ -162,8 +163,8 @@ export default function AdminChecker() {
                       <div className="flex-1 text-sm font-medium">
                         <span className="mr-1 text-slate-400">Q{i + 1}.</span> <MathText>{r.question}</MathText>
                         <span className="mt-0.5 block text-xs font-normal text-slate-500 dark:text-slate-400">
-                          {r.match
-                            ? <>Matched in <b className="font-semibold">{r.match.location}</b>{r.status !== "exact" ? ` · ${r.similarity}% word overlap` : ""} — tap to compare both</>
+                          {matches.length
+                            ? <>Found in <b className="font-semibold">{matches.length}</b> place{matches.length > 1 ? "s" : ""} — best: {matches[0].location}{r.status !== "exact" ? ` · ${r.similarity}% overlap` : ""} — tap to compare</>
                             : "Tap to view your question"}
                         </span>
                       </div>
@@ -178,11 +179,25 @@ export default function AdminChecker() {
                       </div>
                       <div>
                         <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
-                          In your bank{r.match ? <span className="font-normal normal-case"> · {r.match.location}</span> : ""}
+                          In your bank{matches.length ? <span className="font-normal normal-case"> · {matches.length} match{matches.length > 1 ? "es" : ""}</span> : ""}
                         </p>
-                        {r.match
-                          ? <QuestionView q={r.match} />
-                          : <div className="rounded-lg bg-emerald-50 p-3 text-sm text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-300">No matching question found in your bank — looks original.</div>}
+                        {matches.length ? (
+                          <div className="space-y-3">
+                            {matches.map((m, k) => {
+                              const ms = STATUS[m.status] || STATUS.none;
+                              return (
+                                <div key={k}>
+                                  <p className="mb-1 flex flex-wrap items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400">
+                                    <b className="font-semibold">{m.location}</b>
+                                    <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${ms.cls}`}>{ms.label}</span>
+                                    {m.status !== "exact" && <span>· {m.similarity}% overlap</span>}
+                                  </p>
+                                  <QuestionView q={m} />
+                                </div>
+                              );
+                            })}
+                          </div>
+                        ) : <div className="rounded-lg bg-emerald-50 p-3 text-sm text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-300">No matching question found in your bank — looks original.</div>}
                       </div>
                     </div>
                   )}

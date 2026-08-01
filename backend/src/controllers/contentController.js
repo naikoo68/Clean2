@@ -752,7 +752,7 @@ export async function checkQuestions(req, res) {
           .select("text type options columnA columnB assertion reason").limit(15).lean();
       }
     }
-    let best = null;
+    const cand = [];
     for (const c of candidates) {
       // Compare on BOTH the stem alone and the full content; take the stronger
       // signal. So plain MCQs match on the stem (reworded options still count),
@@ -771,25 +771,23 @@ export async function checkQuestions(req, res) {
       // (so two different pair questions that share the generic intro aren't
       // wrongly called "exact").
       const exact = normStem.length > 0 && normalizeText(c.text) === normStem && fullSim >= 0.6;
-      if (!best || (exact && !best.exact) || (exact === best.exact && sim > best.sim)) best = { id: c._id, exact, sim };
+      let st = "none";
+      if (exact) st = "exact";
+      else if (sim >= 0.6) st = "strong";
+      else if (sim >= 0.3) st = "related";
+      if (st !== "none") cand.push({ id: String(c._id), status: st, similarity: exact ? 100 : Math.round(sim * 100), sim, exact });
     }
-    let status = "none";
-    let similarity = 0;
-    let matchId = null;
-    if (best) {
-      similarity = Math.round(best.sim * 100);
-      if (best.exact) { status = "exact"; similarity = 100; }
-      else if (best.sim >= 0.6) status = "strong";
-      else if (best.sim >= 0.3) status = "related";
-      else status = "none";
-      if (status !== "none") matchId = best.id;
-    }
+    // Best first (exact, then strongest overlap), keep the top few so the user
+    // sees EVERY place this question appears in the bank, not just one.
+    cand.sort((a, b) => (Number(b.exact) - Number(a.exact)) || (b.sim - a.sim));
+    const matches = cand.slice(0, 6);
+    const status = matches[0]?.status || "none";
     summary[status] += 1;
-    scored.push({ question: stem, yourQuestion: block, status, similarity, matchId });
+    scored.push({ question: stem, yourQuestion: block, status, similarity: matches[0]?.similarity || 0, matches });
   }
 
   // Resolve human-readable locations for the matched questions in one query.
-  const ids = scored.map((s) => s.matchId).filter(Boolean);
+  const ids = [...new Set(scored.flatMap((s) => s.matches.map((m) => m.id)))];
   const locMap = new Map();
   if (ids.length) {
     const docs = await Question.find({ _id: { $in: ids } })
@@ -802,28 +800,37 @@ export async function checkQuestions(req, res) {
     for (const d of docs) locMap.set(String(d._id), d);
   }
 
-  const results = scored.map((s) => {
-    const base = { question: s.question, yourQuestion: s.yourQuestion, status: s.status, similarity: s.similarity };
-    if (!s.matchId) return { ...base, match: null };
-    const d = locMap.get(String(s.matchId));
+  const buildMatch = (m) => {
+    const d = locMap.get(String(m.id));
+    if (!d) return null;
     return {
-      ...base,
-      match: d ? {
-        id: String(d._id),
-        text: d.text,
-        type: d.type,
-        options: d.options || [],
-        correct: d.correct,
-        columnA: d.columnA || [],
-        columnB: d.columnB || [],
-        assertion: d.assertion,
-        reason: d.reason,
-        tableRows: d.tableRows,
-        image: d.image,
-        explanation: d.explanation,
-        difficulty: d.difficulty,
-        location: questionLocation(d),
-      } : null,
+      id: String(d._id),
+      text: d.text,
+      type: d.type,
+      options: d.options || [],
+      correct: d.correct,
+      columnA: d.columnA || [],
+      columnB: d.columnB || [],
+      assertion: d.assertion,
+      reason: d.reason,
+      tableRows: d.tableRows,
+      image: d.image,
+      explanation: d.explanation,
+      difficulty: d.difficulty,
+      location: questionLocation(d),
+      status: m.status,
+      similarity: m.similarity,
+    };
+  };
+  const results = scored.map((s) => {
+    const matches = s.matches.map(buildMatch).filter(Boolean);
+    return {
+      question: s.question,
+      yourQuestion: s.yourQuestion,
+      status: s.status,
+      similarity: s.similarity,
+      matches,
+      match: matches[0] || null, // first/best match (kept for compatibility)
     };
   });
 
