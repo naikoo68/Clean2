@@ -259,9 +259,13 @@ export default function AiImport({ open, onClose, onUpload, title = "Import Ques
             );
           } else {
             setPreview(qs);
+            const shortNote =
+              s.error === "quota" ? " (stopped early — quota reached; insert these, then click “Extract remaining”)"
+              : s.error === "partial" ? " (a few couldn’t be read this pass — insert these, then click “Extract remaining”)"
+              : "";
             setMsg(
               qs.length
-                ? `✓ Extracted ${qs.length}${questionsDetected ? ` of ~${questionsDetected} detected` : ""} question(s)${s.error === "quota" ? " (stopped early — quota reached; insert these, then run again)" : ""}. Review below, then insert.`
+                ? `✓ Extracted ${qs.length}${questionsDetected ? ` of ~${questionsDetected} detected` : ""} question(s)${shortNote}. Review below, then insert.`
                 : "No questions found — try pasting the text, or use OCR for scanned PDFs."
             );
           }
