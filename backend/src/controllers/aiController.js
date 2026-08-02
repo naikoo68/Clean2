@@ -1958,35 +1958,61 @@ async function runExtractionJob(id, { endpoints, model, chunks, owner = null, ha
   let lastError = null;
 
   const save = (patch) => Object.assign(job, patch, { updatedAt: Date.now() });
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+  // Process every chunk, but treat a failed / empty / quota-blocked chunk as
+  // RETRYABLE rather than losing it. The old loop dropped a whole chunk (~20
+  // questions) whenever ONE call had a transient error (it just `continue`d),
+  // and ABORTED the entire job on the first 429 (`break`) — both left the import
+  // far short of the detected total. Now we make several passes: any chunk that
+  // errors, is rate-limited, or parses to zero questions is retried on a later
+  // pass, and a 429 makes us WAIT for the per-minute limit to reset (surfaced via
+  // `waitUntil` for a live countdown) instead of giving up on the rest.
+  const MAX_ROUNDS = 4;
+  const doneIdx = new Set(); // chunks that returned a usable (parseable) reply
+  let pending = chunks.map((text, idx) => ({ text, idx }));
   try {
-    for (let c = 0; c < chunks.length; c++) {
-      if (Date.now() > deadline || job.cancelled) break;
-      const r = await callWithFallback({
-        endpoints,
-        model,
-        userPrompt: buildExtractPrompt(chunks[c], notes),
-        maxTokens: 16000,
-        owner,
-      });
-      save({ chunksDone: c + 1 });
-      if (!r.ok) {
-        lastError = r;
-        if (r.status === 429) break; // quota exhausted — stop, keep what we have
-        continue;
+    for (let round = 0; round < MAX_ROUNDS && pending.length && Date.now() < deadline && !job.cancelled; round++) {
+      const failed = [];
+      for (const item of pending) {
+        if (Date.now() > deadline || job.cancelled) { failed.push(item); continue; }
+        const r = await callWithFallback({
+          endpoints,
+          model,
+          userPrompt: buildExtractPrompt(item.text, notes),
+          maxTokens: 16000,
+          owner,
+        });
+        if (!r.ok) {
+          lastError = r;
+          failed.push(item); // retry this chunk on a later pass
+          if (r.status === 429) {
+            // Quota/rate limit — wait for it to reset, then keep going instead of
+            // abandoning every remaining chunk. Expose the wait for a countdown.
+            const wait = 60000;
+            if (Date.now() + wait < deadline) { save({ waitUntil: Date.now() + wait }); await sleep(wait); save({ waitUntil: null }); }
+          }
+          continue;
+        }
+        const parsed = normalize(parseQuestions(r.content));
+        if (!parsed.length) { failed.push(item); continue; } // parse failed / empty / truncated to nothing — retry
+        for (const q of parsed) {
+          if (!isRealQuestion(q)) continue; // keep ONLY genuine questions — drop headers/instructions/etc.
+          // De-duplicate by the STABLE CONTENT SIGNATURE (same key on every pass and
+          // section) so a re-run adds only the genuinely-missed questions and never
+          // re-piles ones we already have. (Source numbers are unreliable: they can
+          // restart per section and may be present in one pass but absent in another.)
+          const key = extractSig(q);
+          if (seen.has(key)) continue; // skip duplicates across chunks / re-runs
+          seen.add(key);
+          collected.push(q);
+        }
+        doneIdx.add(item.idx);
+        save({ questions: collected.slice(), chunksDone: doneIdx.size });
       }
-      for (const q of normalize(parseQuestions(r.content))) {
-        if (!isRealQuestion(q)) continue; // keep ONLY genuine questions — drop headers/instructions/etc.
-        // De-duplicate by the STABLE CONTENT SIGNATURE (same key on every pass and
-        // section) so a re-run adds only the genuinely-missed questions and never
-        // re-piles ones we already have. (Source numbers are unreliable: they can
-        // restart per section and may be present in one pass but absent in another.)
-        const key = extractSig(q);
-        if (seen.has(key)) continue; // skip duplicates across chunks / re-runs
-        seen.add(key);
-        collected.push(q);
-      }
-      save({ questions: collected.slice() });
+      pending = failed;
+      // Brief pause before retrying stragglers left by transient (non-quota) errors.
+      if (pending.length && round < MAX_ROUNDS - 1 && Date.now() < deadline && !job.cancelled) await sleep(1500);
     }
 
     if (job.cancelled) {
@@ -2000,7 +2026,10 @@ async function runExtractionJob(id, { endpoints, model, chunks, owner = null, ha
           : "No questions could be extracted. Make sure the source actually contains questions.";
       save({ status: "error", error: msg });
     } else {
-      save({ status: "done", questions: collected, error: lastError?.status === 429 ? "quota" : null });
+      // If any chunk is still unfinished (ran out of rounds/time), flag it so the
+      // UI nudges the user to click "Extract remaining" for the last few.
+      const incomplete = pending.length > 0;
+      save({ status: "done", questions: collected, error: incomplete ? (lastError?.status === 429 ? "quota" : "partial") : null });
     }
   } catch (err) {
     save(collected.length ? { status: "done", questions: collected } : { status: "error", error: err?.message || "Import failed." });
