@@ -1944,11 +1944,17 @@ async function runExtractionJob(id, { endpoints, model, chunks, owner = null, ha
   const deadline = Date.now() + 8 * 60 * 1000; // 8-minute budget (smaller chunks = more calls)
   const collected = [];
   const seen = new Set();
-  // Seed the de-dup set with the already-extracted questions so they are skipped.
-  // Numbered papers de-dup by source number (n:<num>) — stable across re-runs;
-  // otherwise by the fuzzy content signature.
+  // Seed the de-dup set with the already-extracted questions so they are skipped
+  // on a re-run ("Extract remaining"). Key by the STABLE CONTENT SIGNATURE, never
+  // the source number: (1) the same question can come back with or without an
+  // "n" between passes, and an n-key seeded from the first pass then fails to
+  // match a signature-keyed re-extraction — so the duplicates slip through and a
+  // re-run balloons far past the detected total (the "extract remaining 20 →
+  // 140" bug); (2) multi-section papers reuse numbers (Section A "1.", Section B
+  // "1."), so an n-key wrongly collapses two DISTINCT questions into one. The
+  // signature is identical across passes and unique per real question.
   for (const nq of normalize(Array.isArray(have) ? have : [])) {
-    seen.add(nq.n != null ? `n:${nq.n}` : extractSig(nq));
+    seen.add(extractSig(nq));
   }
   let lastError = null;
 
@@ -1972,11 +1978,12 @@ async function runExtractionJob(id, { endpoints, model, chunks, owner = null, ha
       }
       for (const q of normalize(parseQuestions(r.content))) {
         if (!isRealQuestion(q)) continue; // keep ONLY genuine questions — drop headers/instructions/etc.
-        // For numbered papers, de-duplicate by the SOURCE question number so the
-        // count matches exactly (no duplicate/split inflation). Fall back to the
-        // fuzzy text signature when there's no reliable number.
-        const key = q.n != null ? `n:${q.n}` : extractSig(q);
-        if (seen.has(key)) continue; // skip duplicates across chunks
+        // De-duplicate by the STABLE CONTENT SIGNATURE (same key on every pass and
+        // section) so a re-run adds only the genuinely-missed questions and never
+        // re-piles ones we already have. (Source numbers are unreliable: they can
+        // restart per section and may be present in one pass but absent in another.)
+        const key = extractSig(q);
+        if (seen.has(key)) continue; // skip duplicates across chunks / re-runs
         seen.add(key);
         collected.push(q);
       }

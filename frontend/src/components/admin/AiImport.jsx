@@ -200,12 +200,19 @@ export default function AiImport({ open, onClose, onUpload, title = "Import Ques
     }
   };
 
-  // De-dup key for merging a second pass — prefer the source question number
-  // (stable across re-runs), else a normalised stem. Mirrors the backend.
-  const dedupKey = (q) =>
-    q?.n != null
-      ? `n:${q.n}`
-      : String(q?.text || "").toLowerCase().replace(/[^a-z0-9]+/g, "").slice(0, 200);
+  // De-dup key for merging a second ("Extract remaining") pass. Mirrors the
+  // backend's content signature EXACTLY (normalised stem + sorted options +
+  // sorted columns). We deliberately do NOT key on the source number: papers can
+  // restart numbering per section, and a question can come back with/without a
+  // number between passes — both let duplicates through and inflated a re-run
+  // (e.g. 80 + re-added copies → 140). The signature is identical across passes.
+  const dedupKey = (q) => {
+    const norm = (s) => String(s || "").toLowerCase().replace(/[^a-z0-9]+/g, "");
+    const stem = norm(q?.text).slice(0, 200);
+    const opts = (Array.isArray(q?.options) ? q.options : []).map(norm).filter(Boolean).sort().join("|");
+    const cols = [...(q?.columnA || []), ...(q?.columnB || [])].map(norm).filter(Boolean).sort().join("|");
+    return `${stem}##${opts}##${cols}`;
+  };
 
   // Run extraction. `append` = a "get the missed ones" pass: we send the
   // questions we already have so the AI skips them and returns ONLY the missing
