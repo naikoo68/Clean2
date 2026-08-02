@@ -3464,6 +3464,26 @@ function buildRegenSet(q, parsed) {
   if (q.type === "pair") applyPairReshuffle(set, q, parsed);
   else if (q.type === "matching") applyMatchingReshuffle(set, q, parsed);
   else if (q.type === "pairselect") applyPairSelectReshuffle(set, q, parsed);
+  else if (q.type !== "assertion") {
+    // PLAIN types (mcq / table / statement / untyped): the column types above
+    // already reshuffle, and assertion keeps its fixed A/R rubric — but a plain
+    // question's freshly rebuilt options can still come back with the answer in
+    // a predictable slot. Reorder them here so the correct answer lands in a
+    // random position, moving the `correct` index and the per-option notes with
+    // it (correctness preserved).
+    const opts = Array.isArray(set.options) && set.options.length ? set.options : null;
+    if (opts && opts.length >= 2 && Number.isInteger(set.correct) && set.correct >= 0 && set.correct < opts.length) {
+      let perm = [...Array(opts.length).keys()];
+      do { shuffleInPlace(perm); } while (perm.every((p, i) => p === i)); // guarantee a real move
+      set.options = perm.map((p) => opts[p]);
+      set.correct = perm.indexOf(set.correct);
+      if (Array.isArray(set.optionExplanations)) {
+        const oe = set.optionExplanations.slice();
+        while (oe.length < opts.length) oe.push("");
+        set.optionExplanations = perm.map((p) => oe[p] ?? "");
+      }
+    }
+  }
   return set;
 }
 
