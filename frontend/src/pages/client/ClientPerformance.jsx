@@ -33,16 +33,35 @@ const pctTone = (p) =>
   p >= 70 ? "text-emerald-600 dark:text-emerald-400" : p >= 40 ? "text-amber-600 dark:text-amber-400" : "text-rose-600 dark:text-rose-400";
 const barTone = (p) => (p >= 70 ? "bg-emerald-500" : p >= 40 ? "bg-amber-500" : "bg-rose-500");
 
-function StatCard({ Icon, label, value, sub, tone = "text-brand-600" }) {
-  return (
-    <div className="rounded-xl border border-slate-200 p-4 dark:border-slate-700">
-      <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
-        <Icon className={`h-4 w-4 ${tone}`} /> {label}
+function StatCard({ Icon, label, value, sub, tone = "text-brand-600", onClick, open }) {
+  const body = (
+    <>
+      <div className="flex items-center justify-between gap-2">
+        <span className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
+          <Icon className={`h-4 w-4 ${tone}`} /> {label}
+        </span>
+        {onClick && (open
+          ? <ChevronDown className="h-4 w-4 flex-shrink-0 text-slate-400" />
+          : <ChevronRight className="h-4 w-4 flex-shrink-0 text-slate-400" />)}
       </div>
       <p className="mt-1 text-2xl font-bold">{value}</p>
       {sub && <p className="text-xs text-slate-400">{sub}</p>}
-    </div>
+    </>
   );
+  if (onClick) {
+    return (
+      <button
+        type="button"
+        onClick={onClick}
+        className={`rounded-xl border p-4 text-left transition ${open
+          ? "border-brand-400 bg-brand-50/50 dark:border-brand-500/50 dark:bg-brand-900/15"
+          : "border-slate-200 hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800/40"}`}
+      >
+        {body}
+      </button>
+    );
+  }
+  return <div className="rounded-xl border border-slate-200 p-4 dark:border-slate-700">{body}</div>;
 }
 
 // A single weak-area row (subject or topic) with an accuracy bar.
@@ -79,6 +98,7 @@ export default function ClientPerformance() {
   const [error, setError] = useState("");
   const [refreshing, setRefreshing] = useState(false);
   const [openId, setOpenId] = useState(null); // which item's attempt history is expanded
+  const [showAttempts, setShowAttempts] = useState(false); // reveal the quizzes/tests list on tapping the Attempts card
 
   const fetchData = useCallback(async (isRefresh = false) => {
     if (isRefresh) setRefreshing(true);
@@ -139,7 +159,7 @@ export default function ClientPerformance() {
 
       {/* Summary */}
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        <StatCard Icon={ListChecks} label="Attempts" value={s.totalAttempts} sub={`${s.itemsAttempted} quiz/test`} />
+        <StatCard Icon={ListChecks} label="Attempts" value={s.totalAttempts} sub={`${s.itemsAttempted} quiz/test · tap to view`} onClick={() => setShowAttempts((v) => !v)} open={showAttempts} />
         <StatCard Icon={Target} label="Accuracy" value={`${s.overallAccuracy}%`} sub={`${s.totalCorrect}/${s.totalAnswered} correct`} tone="text-emerald-600" />
         <StatCard Icon={BarChart3} label="Avg score" value={`${s.avgPct}%`} sub="across attempts" tone="text-violet-600" />
         <StatCard Icon={Trophy} label="Best" value={`${s.best}%`} sub={`${s.quizzesTaken} quizzes · ${s.testsTaken} tests`} tone="text-amber-500" />
@@ -179,7 +199,8 @@ export default function ClientPerformance() {
         </p>
       </div>
 
-      {/* Attempted quizzes & tests, with per-item history */}
+      {/* Attempted quizzes & tests — revealed by tapping the Attempts card above */}
+      {showAttempts && (
       <div>
         <h3 className="mb-2 flex items-center gap-1.5 text-sm font-bold">
           <BarChart3 className="h-4 w-4 text-brand-600" /> Your quizzes & tests ({items.length})
@@ -235,6 +256,7 @@ export default function ClientPerformance() {
           })}
         </div>
       </div>
+      )}
     </div>
   );
 }
