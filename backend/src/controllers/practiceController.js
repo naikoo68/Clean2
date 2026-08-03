@@ -670,7 +670,10 @@ export async function acceptShare(req, res) {
     return res.status(410).json({ message: "The sender no longer has this content, so there's nothing to save." });
   }
 
-  const recipient = req.user._id;
+  // Where the saved copy lives: a client keeps it under their own id; an admin
+  // saves it into the shared PLATFORM space (owner:null) so it shows up in the
+  // normal admin practice lists (which are all scoped to owner:null).
+  const copyOwner = req.user?.role === "admin" ? null : req.user._id;
   const cache = new Map();
   let saved = 0;
   for (const src of items) {
@@ -679,25 +682,25 @@ export async function acceptShare(req, res) {
     const streamId = await ensureContainer(
       PracticeStream,
       { name: src.practiceStream?.name || "Shared", kind, icon: src.practiceStream?.icon, color: src.practiceStream?.color },
-      recipient, cache
+      copyOwner, cache
     );
     const subjectId = await ensureContainer(
       PracticeSubject,
       { name: src.practiceSubject?.name || "Shared", parentKey: "stream", parentId: streamId, icon: src.practiceSubject?.icon, color: src.practiceSubject?.color },
-      recipient, cache
+      copyOwner, cache
     );
     let topicId;
     if (kind === "quiz") {
       topicId = await ensureContainer(
         PracticeTopic,
         { name: src.practiceTopic?.name || "Shared", parentKey: "subject", parentId: subjectId, icon: src.practiceTopic?.icon, color: src.practiceTopic?.color },
-        recipient, cache
+        copyOwner, cache
       );
     }
     // Create the recipient-owned copy, then duplicate its questions.
     const copy = await TestSeries.create({
       name: src.name,
-      owner: recipient,
+      owner: copyOwner,
       practice: true,
       practiceKind: kind,
       practiceStream: streamId,
@@ -712,7 +715,7 @@ export async function acceptShare(req, res) {
       status: "published",
       visibleToAll: false,
     });
-    const created = await duplicateQuestions({ testSeries: src._id }, { testSeries: copy._id, owner: recipient });
+    const created = await duplicateQuestions({ testSeries: src._id }, { testSeries: copy._id, owner: copyOwner });
     if (created.length) await TestSeries.findByIdAndUpdate(copy._id, { $push: { questions: { $each: created.map((c) => c._id) } } });
     saved += 1;
   }
