@@ -135,6 +135,7 @@ export const practiceService = {
   quizPlay: (id) => api.get(`/practice/quiz/${id}/play`),
   // The caller's own practice items (client dashboard) — flat quiz + test list
   myItems: () => api.get("/practice/my-items"),
+  share: (data) => api.post("/practice/share", data), // { level:"stream"|"subject"|"topic"|"item", id, email } → share to a registered user
   // flat list of all practice subjects (for composing a test from practice)
   allSubjects: () => api.get("/practice/all-subjects"),
   // admin — streams (kind-scoped so My Quiz & My Test Series stay separate)

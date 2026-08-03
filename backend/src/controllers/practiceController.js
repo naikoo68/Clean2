@@ -3,8 +3,11 @@ import PracticeSubject from "../models/PracticeSubject.js";
 import PracticeTopic from "../models/PracticeTopic.js";
 import TestSeries from "../models/TestSeries.js";
 import Question from "../models/Question.js";
-import { isTestVisibleToUser } from "../utils/accessControl.js";
+import User from "../models/User.js";
+import { isTestVisibleToUser, isSharedWithUser } from "../utils/accessControl.js";
 import { ownerFilter, ownerValue } from "../utils/ownership.js";
+import { sendMail, isMailConfigured } from "../config/mailer.js";
+import { clientBaseFromReq } from "../config/clientUrl.js";
 import { duplicateQuestions } from "../utils/duplicateQuestions.js";
 import { byNatural } from "../utils/naturalSort.js";
 
@@ -468,7 +471,7 @@ export async function playQuiz(req, res) {
   }
   // Admin, the owning client, a student the item is shared with, OR a user with
   // the My-Quiz master grant may play it.
-  if (req.user?.role !== "admin" && !owns(req, item) && req.user?.myQuizAccess !== true && !isTestVisibleToUser(item.toObject(), req.user?._id)) {
+  if (req.user?.role !== "admin" && !owns(req, item) && req.user?.myQuizAccess !== true && !isTestVisibleToUser(item.toObject(), req.user?._id) && !isSharedWithUser(item, req.user?._id)) {
     return res.status(403).json({ message: "You don't have access to this quiz." });
   }
   const obj = item.toObject();
@@ -489,7 +492,13 @@ export async function playQuiz(req, res) {
 //   My Test : Stream → Test
 const nodeInfo = (n) => (n ? { _id: n._id, name: n.name, icon: n.icon, color: n.color } : null);
 export async function myItems(req, res) {
-  const items = await TestSeries.find({ practice: true, ...ownerFilter(req) })
+  // The caller's OWN items PLUS any shared with them (account-to-account). Shared
+  // items carry the same Stream › Subject › Topic context, so the dashboard shows
+  // them in the same hierarchy. Admins keep the ownerless space.
+  const filter = req.user?.role === "client"
+    ? { practice: true, $or: [{ owner: req.user._id }, { sharedWith: req.user._id }] }
+    : { practice: true, ...ownerFilter(req) };
+  const items = await TestSeries.find(filter)
     .populate("practiceStream", "name icon color")
     .populate("practiceSubject", "name icon color")
     .populate("practiceTopic", "name icon color")
@@ -510,8 +519,61 @@ export async function myItems(req, res) {
       stream: nodeInfo(t.practiceStream),
       subject: nodeInfo(t.practiceSubject),
       topic: nodeInfo(t.practiceTopic),
+      // Flag items someone else shared with this user (vs their own).
+      sharedByOther: String(t.owner || "") !== String(req.user._id),
     }))
   );
+}
+
+// POST /api/practice/share  (admin or client) — share practice content with
+// ANOTHER REGISTERED user by email. Body: { level: "stream"|"subject"|"topic"|
+// "item", id, email }. Only works if the email belongs to an existing account
+// (else 404 "user has no account"). Adds the recipient to sharedWith on EVERY
+// practice item under the chosen node (so they see the whole hierarchy), scoped
+// to the caller's OWN content only. Best-effort emails the recipient.
+export async function shareContent(req, res) {
+  const level = String(req.body?.level || "").trim();
+  const id = String(req.body?.id || "").trim();
+  const email = String(req.body?.email || "").toLowerCase().trim();
+  if (!["stream", "subject", "topic", "item"].includes(level)) return res.status(400).json({ message: "Invalid share level." });
+  if (!id) return res.status(400).json({ message: "Nothing selected to share." });
+  if (!email) return res.status(400).json({ message: "Enter the recipient's email." });
+
+  // Recipient MUST have an account.
+  const recipient = await User.findOne({ email }).select("_id name email").lean();
+  if (!recipient) return res.status(404).json({ message: "This user doesn't have an account, so nothing was shared." });
+  if (String(recipient._id) === String(req.user._id)) return res.status(400).json({ message: "That's your own account." });
+
+  // Scope to the caller's OWN practice content, and to the chosen node.
+  const base = { practice: true, ...ownerFilter(req) };
+  if (level === "item") base._id = id;
+  else if (level === "topic") base.practiceTopic = id;
+  else if (level === "subject") base.practiceSubject = id;
+  else if (level === "stream") base.practiceStream = id;
+
+  const matches = await TestSeries.find(base).select("_id name practiceKind").lean();
+  if (!matches.length) return res.status(404).json({ message: "No quizzes/tests found here to share (or not your content)." });
+
+  await TestSeries.updateMany({ _id: { $in: matches.map((m) => m._id) } }, { $addToSet: { sharedWith: recipient._id } });
+
+  // Notify the recipient (best-effort — sharing still succeeds if mail is off).
+  let emailed = false;
+  if (isMailConfigured()) {
+    try {
+      const appBase = clientBaseFromReq(req);
+      const link = `${appBase}#/client`;
+      const label = level === "item" ? `"${matches[0].name}"` : `${matches.length} ${matches[0].practiceKind === "test" ? "test" : "quiz"}(s)`;
+      await sendMail({
+        to: recipient.email,
+        subject: `${req.user?.name || "Someone"} shared study content with you`,
+        text: `${req.user?.name || "A teacher"} has shared ${label} with you on the study app. Open your dashboard to practise: ${link}`,
+        html: `<p><b>${req.user?.name || "A teacher"}</b> has shared ${label} with you.</p><p>Open your dashboard to practise it: <a href="${link}">${link}</a></p>`,
+      });
+      emailed = true;
+    } catch { /* ignore mail errors — the share is already saved */ }
+  }
+
+  res.json({ shared: matches.length, recipient: { name: recipient.name, email: recipient.email }, emailed });
 }
 
 /* ---------------- Student browse (visibility-filtered) ---------------- */
