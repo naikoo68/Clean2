@@ -263,3 +263,136 @@ export async function leaderboard(req, res) {
   }));
   res.json(rows);
 }
+
+
+// GET /api/me/performance  (any logged-in user — client or student)
+// A personal, real-time performance view scoped to req.user._id:
+//   • every attempted quiz AND test, grouped by item, with the full per-attempt
+//     history (score, %, correct/incorrect, time, timestamp) — a quiz/test can
+//     be attempted many times, so each submission is its own row;
+//   • weak areas derived from the questions the user got WRONG, aggregated by
+//     subject (Question.section) and topic (Question.topic).
+// Client "My Quiz" / "My Test" practice items are stored as Attempt{type:"test"}
+// with a TestSeries ref, so we read the quiz-vs-test kind from the test series'
+// practiceKind. Attempts are scoped by `user` (Attempt has no owner field).
+export async function myPerformance(req, res) {
+  const list = await Attempt.find({ user: req.user._id })
+    .sort("-createdAt")
+    .limit(2000) // generous cap so a huge history can't blow up the response
+    .populate("testSeries", "name practiceKind practice")
+    .populate("quiz", "title")
+    .lean();
+
+  // Group attempts by the item they belong to (newest attempt first, because the
+  // list is already sorted -createdAt, so the first time we meet an item is its
+  // most recent attempt → items end up ordered by most-recent activity).
+  const itemsMap = new Map();
+  for (const a of list) {
+    const ts = a.testSeries;
+    const isTest = a.type === "test";
+    // Kind: platform quiz → "quiz"; client practice → the test series' practiceKind.
+    const kind = isTest ? (ts?.practiceKind === "test" ? "test" : "quiz") : "quiz";
+    const itemId = String(ts?._id || a.quiz?._id || a._id);
+    const title = isTest ? ts?.name || "Untitled test" : a.quiz?.title || "Untitled quiz";
+    if (!itemsMap.has(itemId)) itemsMap.set(itemId, { id: itemId, title, kind, attempts: [] });
+    itemsMap.get(itemId).attempts.push({
+      _id: a._id,
+      score: a.score,
+      percentage: a.percentage,
+      correct: a.correct,
+      incorrect: a.incorrect,
+      attempted: a.attempted,
+      total: a.total,
+      timeTaken: a.timeTaken,
+      createdAt: a.createdAt,
+    });
+  }
+  const items = [...itemsMap.values()].map((it) => {
+    const best = it.attempts.reduce((m, x) => Math.max(m, x.percentage || 0), 0);
+    const latest = it.attempts[0]; // attempts are newest-first
+    return {
+      ...it,
+      count: it.attempts.length,
+      best,
+      lastAt: latest?.createdAt || null,
+      lastPct: latest?.percentage ?? null,
+    };
+  });
+
+  // ---- Weak areas: tally attempted vs wrong PER QUESTION, then join each
+  // question to its subject (section) / topic so we can group and rank areas by
+  // accuracy. Only answered questions (chosen != null) count toward accuracy.
+  const perQ = new Map(); // questionId -> { attempted, wrong }
+  for (const a of list) {
+    for (const r of a.responses || []) {
+      if (!r?.question || r.chosen == null) continue;
+      const id = String(r.question);
+      const e = perQ.get(id) || { attempted: 0, wrong: 0 };
+      e.attempted += 1;
+      if (r.isCorrect === false) e.wrong += 1;
+      perQ.set(id, e);
+    }
+  }
+  const qIds = [...perQ.keys()];
+  const qDocs = qIds.length
+    ? await Question.find({ _id: { $in: qIds } }).select("section topic subject").populate("subject", "name").lean()
+    : [];
+
+  const subjAgg = new Map(); // subject name -> { name, attempted, wrong }
+  const topicAgg = new Map(); // "subject › topic" -> { name, subject, attempted, wrong }
+  for (const q of qDocs) {
+    const e = perQ.get(String(q._id));
+    if (!e) continue;
+    const subjName = (q.section && q.section.trim()) || q.subject?.name || "General";
+    const topicName = (q.topic && String(q.topic).trim()) || "";
+    const sa = subjAgg.get(subjName) || { name: subjName, attempted: 0, wrong: 0 };
+    sa.attempted += e.attempted;
+    sa.wrong += e.wrong;
+    subjAgg.set(subjName, sa);
+    if (topicName) {
+      const key = `${subjName} › ${topicName}`;
+      const ta = topicAgg.get(key) || { name: topicName, subject: subjName, attempted: 0, wrong: 0 };
+      ta.attempted += e.attempted;
+      ta.wrong += e.wrong;
+      topicAgg.set(key, ta);
+    }
+  }
+  // Rank weakest first: lowest accuracy, then most wrong answers.
+  const toAreas = (m) =>
+    [...m.values()]
+      .map((x) => ({ ...x, accuracy: x.attempted ? Math.round(((x.attempted - x.wrong) / x.attempted) * 100) : 0 }))
+      .sort((a, b) => a.accuracy - b.accuracy || b.wrong - a.wrong);
+  const subjects = toAreas(subjAgg);
+  const topics = toAreas(topicAgg);
+  const weakSubjects = subjects.filter((s) => s.wrong > 0 && s.accuracy < 70);
+  const weakTopics = topics.filter((t) => t.wrong > 0 && t.accuracy < 70);
+
+  // ---- Overall summary
+  const totalAttempts = list.length;
+  const quizzesTaken = items.filter((i) => i.kind === "quiz").length;
+  const testsTaken = items.filter((i) => i.kind === "test").length;
+  const avgPct = totalAttempts ? Math.round(list.reduce((s, a) => s + (a.percentage || 0), 0) / totalAttempts) : 0;
+  const totalAnswered = list.reduce((s, a) => s + (a.attempted || 0), 0);
+  const totalCorrect = list.reduce((s, a) => s + (a.correct || 0), 0);
+  const overallAccuracy = totalAnswered ? Math.round((totalCorrect / totalAnswered) * 100) : 0;
+  const best = list.reduce((m, a) => Math.max(m, a.percentage || 0), 0);
+
+  res.json({
+    summary: {
+      totalAttempts,
+      itemsAttempted: items.length,
+      quizzesTaken,
+      testsTaken,
+      avgPct,
+      overallAccuracy,
+      best,
+      totalAnswered,
+      totalCorrect,
+    },
+    items,
+    subjects,
+    topics,
+    weakSubjects,
+    weakTopics,
+  });
+}
