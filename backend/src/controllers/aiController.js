@@ -425,7 +425,7 @@ async function outlineSubtopics({ endpoints, model, topic, notes, source, want }
   return [];
 }
 
-function buildUserPrompt({ topic, count, difficulty, types, notes, plan, avoid, source, focus }) {
+function buildUserPrompt({ topic, count, difficulty, types, notes, plan, avoid, source, focus, numerical = false }) {
   const lines = [];
   if (source) {
     lines.push(`Create the questions BASED ON the source material given at the end. Draw the facts and content from that material (you may use closely-related general knowledge to complete a question, but stay on the material's topics).`);
@@ -461,6 +461,14 @@ function buildUserPrompt({ topic, count, difficulty, types, notes, plan, avoid, 
         : `Mix the difficulty across Easy, Medium and Hard.`
     );
   }
+
+  // Numerical/calculation questions are OPT-IN. By default keep the set purely
+  // conceptual/factual; only when the caller asks do we allow quantitative ones.
+  lines.push(
+    numerical
+      ? `You MAY include NUMERICAL / CALCULATION questions (problems solved with a formula or arithmetic to compute a numeric value) alongside conceptual ones, where they fit the topic.`
+      : `Do NOT create NUMERICAL / CALCULATION questions: no problems that require arithmetic, solving equations, applying a formula to compute a value, or any quantitative working-out. Keep EVERY question conceptual/factual/theoretical (definitions, facts, causes/effects, reasoning, matching) — not quantitative. (Genuine dates/years/quantities that are simply RECALLED facts are fine; questions that require the student to CALCULATE are not.)`
+  );
 
   if (notes) {
     lines.push(
@@ -1059,7 +1067,7 @@ function planGaps(planArr, collected, reserved) {
 }
 
 async function runGenerationJob(id, ctx) {
-  const { workers, fallbackWorkers = [], model, topic, notes, plan, count, difficulty, types, target, avoid, owner = null, source = "", userSubtopics = [] } = ctx;
+  const { workers, fallbackWorkers = [], model, topic, notes, plan, count, difficulty, types, target, avoid, owner = null, source = "", userSubtopics = [], numerical = false } = ctx;
   const job = genJobs.get(id);
   const deadline = Date.now() + 8 * 60 * 1000; // overall time budget
   if (!job.keyStats) job.keyStats = {}; // live per-key activity for THIS run
@@ -1181,8 +1189,8 @@ async function runGenerationJob(id, ctx) {
       const res = reserveChunk();
       if (!res) break; // nothing left to generate
       const prompt = plan
-        ? buildUserPrompt({ topic, notes, plan: res.chunk, avoid: avoidNow(), source, focus: res.focus })
-        : buildUserPrompt({ topic, notes, count: res.n, difficulty, types, avoid: avoidNow(), source, focus: res.focus });
+        ? buildUserPrompt({ topic, notes, plan: res.chunk, avoid: avoidNow(), source, focus: res.focus, numerical })
+        : buildUserPrompt({ topic, notes, count: res.n, difficulty, types, avoid: avoidNow(), source, focus: res.focus, numerical });
       const maxTokens = Math.min(16000, 1800 + res.n * 1000);
       attempts += 1;
       // Live per-key activity for this run (surfaced via jobStatus.keyStats).
@@ -1472,7 +1480,7 @@ export async function generateQuestions(req, res) {
     : [];
 
   // Fire-and-forget — the client polls /api/ai/job/:id for progress.
-  guardJob(id, runGenerationJob(id, { workers, fallbackWorkers, model, topic, notes, plan, count, difficulty, types, target, avoid, owner: jobOwner, source, userSubtopics }));
+  guardJob(id, runGenerationJob(id, { workers, fallbackWorkers, model, topic, notes, plan, count, difficulty, types, target, avoid, owner: jobOwner, source, userSubtopics, numerical: !!req.body?.numerical }));
 
   res.json({ jobId: id, requested: target, model });
 }
