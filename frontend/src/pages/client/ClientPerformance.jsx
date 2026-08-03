@@ -1,0 +1,240 @@
+import { useCallback, useEffect, useState } from "react";
+import {
+  BarChart3,
+  Trophy,
+  Target,
+  TrendingDown,
+  RefreshCw,
+  ChevronDown,
+  ChevronRight,
+  Clock,
+  CheckCircle2,
+  XCircle,
+  ListChecks,
+  FileStack,
+  Sparkles,
+} from "lucide-react";
+import { analyticsService } from "../../services";
+import { Loading, ErrorState } from "../../components/ui/AsyncState";
+
+const fmtDate = (d) =>
+  new Date(d).toLocaleString(undefined, { day: "2-digit", month: "short", year: "numeric", hour: "numeric", minute: "2-digit" });
+
+// seconds -> "1m 05s" / "45s"
+const fmtTime = (s) => {
+  const secs = Math.max(0, Math.round(s || 0));
+  const m = Math.floor(secs / 60);
+  const r = secs % 60;
+  return m ? `${m}m ${String(r).padStart(2, "0")}s` : `${r}s`;
+};
+
+// Colour a percentage: red (weak) → amber → emerald (strong).
+const pctTone = (p) =>
+  p >= 70 ? "text-emerald-600 dark:text-emerald-400" : p >= 40 ? "text-amber-600 dark:text-amber-400" : "text-rose-600 dark:text-rose-400";
+const barTone = (p) => (p >= 70 ? "bg-emerald-500" : p >= 40 ? "bg-amber-500" : "bg-rose-500");
+
+function StatCard({ Icon, label, value, sub, tone = "text-brand-600" }) {
+  return (
+    <div className="rounded-xl border border-slate-200 p-4 dark:border-slate-700">
+      <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
+        <Icon className={`h-4 w-4 ${tone}`} /> {label}
+      </div>
+      <p className="mt-1 text-2xl font-bold">{value}</p>
+      {sub && <p className="text-xs text-slate-400">{sub}</p>}
+    </div>
+  );
+}
+
+// A single weak-area row (subject or topic) with an accuracy bar.
+function AreaRow({ area, showSubject = false }) {
+  const attempted = area.attempted || 0;
+  return (
+    <div className="flex items-center gap-3 rounded-lg border border-slate-100 p-2.5 dark:border-slate-800">
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-sm font-semibold">
+          {area.name}
+          {showSubject && area.subject ? <span className="font-normal text-slate-400"> · {area.subject}</span> : null}
+        </p>
+        <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
+          <div className={`h-full ${barTone(area.accuracy)}`} style={{ width: `${area.accuracy}%` }} />
+        </div>
+      </div>
+      <div className="flex-shrink-0 text-right">
+        <p className={`text-sm font-bold ${pctTone(area.accuracy)}`}>{area.accuracy}%</p>
+        <p className="text-[11px] text-slate-400">
+          {area.wrong} wrong / {attempted}
+        </p>
+      </div>
+    </div>
+  );
+}
+
+// The client's personal, real-time performance view: every attempted quiz &
+// test with its full attempt history, plus weak areas from wrong answers.
+// Refetches on mount, on a manual refresh, and whenever the tab regains focus
+// so a freshly-finished attempt shows up without a full reload.
+export default function ClientPerformance() {
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [refreshing, setRefreshing] = useState(false);
+  const [openId, setOpenId] = useState(null); // which item's attempt history is expanded
+
+  const fetchData = useCallback(async (isRefresh = false) => {
+    if (isRefresh) setRefreshing(true);
+    try {
+      const r = await analyticsService.myPerformance();
+      setData(r);
+      setError("");
+    } catch (e) {
+      setError(e.message || "Couldn't load your performance.");
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchData();
+    const onFocus = () => fetchData(true); // near real-time: refresh when returning to the tab
+    window.addEventListener("focus", onFocus);
+    return () => window.removeEventListener("focus", onFocus);
+  }, [fetchData]);
+
+  if (loading) return <div className="mt-6"><Loading label="Loading your performance…" /></div>;
+  if (error) return <div className="mt-6"><ErrorState message={error} onRetry={() => fetchData()} /></div>;
+
+  const s = data?.summary || {};
+  const items = data?.items || [];
+  const weakSubjects = data?.weakSubjects || [];
+  const weakTopics = data?.weakTopics || [];
+
+  if (!s.totalAttempts) {
+    return (
+      <div className="mt-6 rounded-xl border border-dashed border-slate-200 p-8 text-center dark:border-slate-700">
+        <BarChart3 className="mx-auto h-8 w-8 text-slate-300" />
+        <p className="mt-2 text-sm font-medium">No attempts yet</p>
+        <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+          Practise a quiz or take a test and your scores, history and weak areas will appear here.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-5 space-y-6">
+      {/* Refresh */}
+      <div className="flex items-center justify-between">
+        <p className="text-sm text-slate-500 dark:text-slate-400">
+          Your results update automatically as you practise.
+        </p>
+        <button
+          onClick={() => fetchData(true)}
+          disabled={refreshing}
+          className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-2.5 py-1 text-xs font-semibold hover:bg-slate-100 disabled:opacity-50 dark:border-slate-700 dark:hover:bg-slate-800"
+        >
+          <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? "animate-spin" : ""}`} /> Refresh
+        </button>
+      </div>
+
+      {/* Summary */}
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+        <StatCard Icon={ListChecks} label="Attempts" value={s.totalAttempts} sub={`${s.itemsAttempted} quiz/test`} />
+        <StatCard Icon={Target} label="Accuracy" value={`${s.overallAccuracy}%`} sub={`${s.totalCorrect}/${s.totalAnswered} correct`} tone="text-emerald-600" />
+        <StatCard Icon={BarChart3} label="Avg score" value={`${s.avgPct}%`} sub="across attempts" tone="text-violet-600" />
+        <StatCard Icon={Trophy} label="Best" value={`${s.best}%`} sub={`${s.quizzesTaken} quizzes · ${s.testsTaken} tests`} tone="text-amber-500" />
+      </div>
+
+      {/* Weak areas */}
+      <div>
+        <h3 className="mb-2 flex items-center gap-1.5 text-sm font-bold">
+          <TrendingDown className="h-4 w-4 text-rose-500" /> Weak areas
+        </h3>
+        {weakSubjects.length === 0 && weakTopics.length === 0 ? (
+          <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-700 dark:border-emerald-900/40 dark:bg-emerald-900/20 dark:text-emerald-300">
+            <Sparkles className="mr-1 inline h-4 w-4" /> No weak areas yet — you're scoring above 70% everywhere. Keep it up!
+          </div>
+        ) : (
+          <div className="grid gap-4 md:grid-cols-2">
+            {weakSubjects.length > 0 && (
+              <div>
+                <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-slate-400">By subject</p>
+                <div className="space-y-2">
+                  {weakSubjects.map((a) => <AreaRow key={a.name} area={a} />)}
+                </div>
+              </div>
+            )}
+            {weakTopics.length > 0 && (
+              <div>
+                <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-slate-400">By topic</p>
+                <div className="space-y-2">
+                  {weakTopics.slice(0, 12).map((a) => <AreaRow key={`${a.subject}-${a.name}`} area={a} showSubject />)}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+        <p className="mt-2 text-xs text-slate-400">
+          Weak areas are the subjects/topics where you answered below 70% correctly. Revise these, then re-attempt to improve.
+        </p>
+      </div>
+
+      {/* Attempted quizzes & tests, with per-item history */}
+      <div>
+        <h3 className="mb-2 flex items-center gap-1.5 text-sm font-bold">
+          <BarChart3 className="h-4 w-4 text-brand-600" /> Your quizzes & tests ({items.length})
+        </h3>
+        <div className="space-y-2">
+          {items.map((it) => {
+            const open = openId === it.id;
+            const KindIcon = it.kind === "test" ? FileStack : ListChecks;
+            return (
+              <div key={it.id} className="overflow-hidden rounded-xl border border-slate-200 dark:border-slate-700">
+                <button
+                  onClick={() => setOpenId(open ? null : it.id)}
+                  className="flex w-full items-center gap-2 p-3 text-left hover:bg-slate-50 dark:hover:bg-slate-800/40"
+                >
+                  {open ? <ChevronDown className="h-4 w-4 flex-shrink-0 text-slate-400" /> : <ChevronRight className="h-4 w-4 flex-shrink-0 text-slate-400" />}
+                  <KindIcon className={`h-4 w-4 flex-shrink-0 ${it.kind === "test" ? "text-brand-600" : "text-violet-600"}`} />
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-semibold">{it.title}</p>
+                    <p className="text-xs text-slate-400">
+                      {it.kind === "test" ? "Test" : "Quiz"} · attempted {it.count} time{it.count === 1 ? "" : "s"}
+                      {it.lastAt ? ` · last ${fmtDate(it.lastAt)}` : ""}
+                    </p>
+                  </div>
+                  <div className="flex-shrink-0 text-right">
+                    <p className={`text-sm font-bold ${pctTone(it.best)}`}>{it.best}%</p>
+                    <p className="text-[11px] text-slate-400">best</p>
+                  </div>
+                </button>
+                {open && (
+                  <div className="border-t border-slate-100 dark:border-slate-800">
+                    {it.attempts.map((a, i) => (
+                      <div key={a._id} className="flex flex-wrap items-center gap-x-4 gap-y-1 px-4 py-2.5 text-xs sm:text-sm">
+                        <span className="w-6 flex-shrink-0 font-semibold text-slate-400">#{it.attempts.length - i}</span>
+                        <span className="min-w-[9rem] flex-1 text-slate-500 dark:text-slate-400">{fmtDate(a.createdAt)}</span>
+                        <span className={`font-bold ${pctTone(a.percentage)}`}>{a.percentage}%</span>
+                        <span className="inline-flex items-center gap-1 text-emerald-600 dark:text-emerald-400">
+                          <CheckCircle2 className="h-3.5 w-3.5" /> {a.correct}
+                        </span>
+                        <span className="inline-flex items-center gap-1 text-rose-600 dark:text-rose-400">
+                          <XCircle className="h-3.5 w-3.5" /> {a.incorrect}
+                        </span>
+                        <span className="text-slate-400">of {a.total}</span>
+                        <span className="inline-flex items-center gap-1 text-slate-400">
+                          <Clock className="h-3.5 w-3.5" /> {fmtTime(a.timeTaken)}
+                        </span>
+                        <span className="text-slate-400">Score {a.score}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
