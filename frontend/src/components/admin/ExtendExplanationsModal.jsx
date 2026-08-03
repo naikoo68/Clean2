@@ -211,7 +211,7 @@ export default function ExtendExplanationsModal({ open, target, title, onClose, 
 
             <label className="mt-3 flex items-start gap-2 rounded-lg bg-slate-50 px-3 py-2 text-sm dark:bg-slate-800/60">
               <input type="checkbox" className="mt-0.5 h-4 w-4 accent-brand-600" checked={extendQuestion} onChange={(e) => setExtendQuestion(e.target.checked)} disabled={busy} />
-              <span>Also <b>extend the question length</b> — rewrite each short stem into a clearer, more descriptive question (kept to <b>at most 3 lines</b>). The <b>meaning</b>, options and correct answer stay the same.</span>
+              <span>Also <b>extend the question length</b> — only questions that genuinely need it (a bare/terse stem) are rewritten into a clearer question (kept to <b>at most 3 lines</b>); already-clear ones like "full form of…" or "SI unit of…" are left unchanged. The <b>meaning</b>, options and correct answer stay the same.</span>
             </label>
 
             <label className="mt-3 flex items-start gap-2 rounded-lg bg-slate-50 px-3 py-2 text-sm dark:bg-slate-800/60">
