@@ -101,7 +101,14 @@ export default function ClientDashboard({ onBuild, onUpgrade }) {
   // topic define how deep we've navigated. Switching kind resets the path.
   // Restored from sessionStorage so a refresh — or returning after finishing a
   // practice — keeps you where you were instead of jumping back to the top.
-  const [kind, setKind] = useState(() => loadNav(DASH_NAV_KEY).kind || "quiz");
+  // Restore the saved tab, but only if it's still a valid kind. A stale value
+  // (e.g. "performance" saved before that tab was removed) must NOT survive, or
+  // KINDS.find(...) below returns undefined and the whole dashboard crashes on
+  // `.label`. Fall back to "quiz".
+  const [kind, setKind] = useState(() => {
+    const saved = loadNav(DASH_NAV_KEY).kind;
+    return KINDS.some((k) => k.key === saved) ? saved : "quiz";
+  });
   const [stream, setStream] = useState(() => loadNav(DASH_NAV_KEY).stream || null);
   const [subject, setSubject] = useState(() => loadNav(DASH_NAV_KEY).subject || null);
   const [topic, setTopic] = useState(() => loadNav(DASH_NAV_KEY).topic || null);
@@ -230,7 +237,7 @@ export default function ClientDashboard({ onBuild, onUpgrade }) {
   const isItems = level === "items";
 
   // Breadcrumb trail for the active kind.
-  const crumbs = [{ label: KINDS.find((k) => k.key === kind).label, onClick: resetPath }];
+  const crumbs = [{ label: (KINDS.find((k) => k.key === kind) || KINDS[0]).label, onClick: resetPath }];
   if (stream) crumbs.push({ label: stream.name, onClick: () => { setSubject(null); setTopic(null); } });
   if (subject) crumbs.push({ label: subject.name, onClick: () => setTopic(null) });
   if (topic) crumbs.push({ label: topic.name, onClick: null });
