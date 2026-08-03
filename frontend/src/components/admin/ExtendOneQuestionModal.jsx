@@ -61,8 +61,9 @@ export default function ExtendOneQuestionModal({ open, busy, onCancel, onConfirm
             disabled={busy}
           />
           <span>
-            Also <b>extend the question length</b> — rewrite the short stem into a clearer, more
-            descriptive question (kept to <b>at most 3 lines</b>). The <b>meaning</b>, options and correct answer stay the same.
+            Also <b>extend the question length</b> — only if the stem genuinely needs it (a bare/terse
+            stem) it's rewritten into a clearer question (kept to <b>at most 3 lines</b>); an already-clear
+            one like "full form of…" or "SI unit of…" is left unchanged. The <b>meaning</b>, options and correct answer stay the same.
           </span>
         </label>
 
