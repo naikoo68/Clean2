@@ -748,12 +748,26 @@ async function uniqueItemName(baseName, scope) {
 
 // POST /api/practice/shares/:id/accept — DUPLICATE the shared content into the
 // recipient's own account (owned by them) and mark the share accepted.
+// The owner space the SENDER's content lives in: a client owns content under
+// their user id; an admin/staff sender's content is platform (owner:null).
+// ContentShare.from is the sender's user id, which only equals the owner for
+// client senders — so derive it from the sender's role.
+async function senderContentOwner(fromUserId) {
+  const sender = await User.findById(fromUserId).select("role").lean();
+  return sender?.role === "client" ? fromUserId : null;
+}
+
 export async function acceptShare(req, res) {
   const share = await ContentShare.findOne({ _id: req.params.id, to: req.user._id, status: "pending" });
   if (!share) return res.status(404).json({ message: "Share not found." });
 
-  // Load the sender's source items (they must still exist).
-  const items = await TestSeries.find(nodeItemFilter(share.level, String(share.sourceId), share.from))
+  // Load the sender's source items (they must still exist). NOTE: the share
+  // stores `from` = the sender's USER id, but that is NOT the content owner for
+  // an admin sender (whose practice content is platform, owner:null). Resolve
+  // the sender's real owner space from their role, else admin-sent shares find
+  // no items and save nothing.
+  const fromOwner = await senderContentOwner(share.from);
+  const items = await TestSeries.find(nodeItemFilter(share.level, String(share.sourceId), fromOwner))
     .populate("practiceStream", "name kind icon color")
     .populate("practiceSubject", "name icon color")
     .populate("practiceTopic", "name icon color")
@@ -855,7 +869,7 @@ export async function sharePlacement(req, res) {
   const levels = placementChain(share.level, kind);
   let names = {};
   if (levels.length) {
-    const src = await TestSeries.findOne(nodeItemFilter(share.level, String(share.sourceId), share.from))
+    const src = await TestSeries.findOne(nodeItemFilter(share.level, String(share.sourceId), await senderContentOwner(share.from)))
       .populate("practiceStream", "name")
       .populate("practiceSubject", "name")
       .populate("practiceTopic", "name")
