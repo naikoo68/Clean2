@@ -252,9 +252,11 @@ export default function ClientDashboard({ onBuild, onUpgrade }) {
 
   return (
     <div className="space-y-6">
-      {/* Profile + validity — side by side (name left, validity right) from md up */}
-      <div className="grid gap-4 md:grid-cols-3">
-        <div className="card p-5 md:col-span-2">
+      {/* Profile + validity — side by side (name left, validity right) from the
+          sm breakpoint (640px) up, so it's beside the name on tablets too; only
+          stacks on small phones. */}
+      <div className="grid gap-4 sm:grid-cols-3">
+        <div className="card p-5 sm:col-span-2">
           <p className="text-sm text-slate-500 dark:text-slate-400">Welcome back,</p>
           <h1 className="text-2xl font-extrabold">{user?.name || "there"}</h1>
           <p className="mt-0.5 text-sm text-slate-400">{user?.email}</p>
