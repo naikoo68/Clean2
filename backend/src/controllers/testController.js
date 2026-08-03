@@ -5,7 +5,7 @@ import Question from "../models/Question.js";
 import Attempt from "../models/Attempt.js";
 import PublicAttempt from "../models/PublicAttempt.js";
 import User from "../models/User.js";
-import { isTestVisibleToUser, findAccessEntry } from "../utils/accessControl.js";
+import { isTestVisibleToUser, findAccessEntry, isSharedWithUser } from "../utils/accessControl.js";
 import { notifyNewContent } from "../utils/notify.js";
 import { ownerValue, ownerFilter } from "../utils/ownership.js";
 import PracticeStream from "../models/PracticeStream.js";
@@ -150,7 +150,7 @@ export async function getTest(req, res) {
   // Additive master grant for practice content: myQuizAccess unlocks all My-Quiz
   // items, myTestAccess unlocks all My-Test items.
   const masterGrant = test.practice === true && (test.practiceKind === "quiz" ? req.user?.myQuizAccess === true : req.user?.myTestAccess === true);
-  if (req.user?.role !== "admin" && !isOwner && !masterGrant && !isTestVisibleToUser(test.toObject(), req.user?._id)) {
+  if (req.user?.role !== "admin" && !isOwner && !masterGrant && !isTestVisibleToUser(test.toObject(), req.user?._id) && !isSharedWithUser(test, req.user?._id)) {
     return res.status(403).json({ message: "You don't have access to this test, or your access has expired." });
   }
   const obj = test.toObject();

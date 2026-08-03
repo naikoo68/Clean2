@@ -18,3 +18,10 @@ export function isTestVisibleToUser(test, userId) {
   // No explicit entry: hidden by default unless the test is marked public.
   return test.visibleToAll === true;
 }
+
+// True when this item has been account-to-account shared with the given user
+// (used to let a recipient see and play/take a shared practice quiz/test).
+export function isSharedWithUser(doc, userId) {
+  if (!userId) return false;
+  return (doc?.sharedWith || []).some((u) => String(u) === String(userId));
+}

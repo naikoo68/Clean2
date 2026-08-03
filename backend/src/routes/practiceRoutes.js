@@ -5,7 +5,7 @@ import {
   listTopics, createTopic, updateTopic, deleteTopic, moveTopic, listTopicItems,
   listItems, createItem,
   browseStreams, browseSubjects, browseTopics, browseItems, browseTopicItems,
-  playQuiz, allSubjects, myItems, moveItem, updateItem, splitItem, splitTopic, mergeItem, moveQuestions,
+  playQuiz, allSubjects, myItems, moveItem, updateItem, splitItem, splitTopic, mergeItem, moveQuestions, shareContent,
 } from "../controllers/practiceController.js";
 import { protect, authorize, optionalAuth } from "../middleware/auth.js";
 
@@ -26,6 +26,10 @@ router.get("/quiz/:id/play", protect, playQuiz);
 
 // The caller's own practice items (client dashboard).
 router.get("/my-items", ...admin, myItems);
+
+// Share practice content (stream/subject/topic/quiz/test) with another
+// REGISTERED user by email (account-to-account).
+router.post("/share", ...admin, shareContent);
 
 // Admin — streams
 router.get("/streams", ...admin, listStreams);
