@@ -216,6 +216,15 @@ export default function ClientDashboard({ onBuild, onUpgrade }) {
     else rows = tests.filter((t) => eq(t.stream?._id, stream._id));
   }
 
+  // Order EVERY level alphabetically/naturally by name so subjects, streams,
+  // topics and the quizzes/tests read A, B, C… (and "Quiz 2" before "Quiz 10")
+  // instead of the order they happened to be created in — which is why the
+  // "Choose a subject" list showed B, E, A, C, D. `numeric` keeps embedded
+  // numbers in human order; `sensitivity:"base"` makes it case-insensitive.
+  rows = [...rows].sort((a, b) =>
+    String(a?.name || "").localeCompare(String(b?.name || ""), undefined, { numeric: true, sensitivity: "base" })
+  );
+
   const isItems = level === "items";
 
   // Breadcrumb trail for the active kind.
