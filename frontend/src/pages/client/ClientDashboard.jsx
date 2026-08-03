@@ -22,8 +22,6 @@ import {
   X,
   BarChart3,
   Share2,
-  Inbox,
-  Check,
 } from "lucide-react";
 import { authService, practiceService, searchService, testService } from "../../services";
 import { loadNav, saveNav } from "../../lib/navState";
@@ -33,6 +31,7 @@ import QuestionView from "../../components/admin/QuestionView";
 import PaperExport from "../../components/admin/PaperExport";
 import { Loading, ErrorState } from "../../components/ui/AsyncState";
 import ClientPerformance from "./ClientPerformance";
+import IncomingSharesInbox from "../../components/client/IncomingSharesInbox";
 import ShareByEmailModal from "../../components/client/ShareByEmailModal";
 
 const previewText = (t, n = 100) => {
@@ -122,8 +121,6 @@ export default function ClientDashboard({ onBuild, onUpgrade }) {
   const [qLoading, setQLoading] = useState(false);
   const [detail, setDetail] = useState(null); // question shown in the detail panel
   const [shareTarget, setShareTarget] = useState(null); // { level, id, name } for the Share-by-email modal
-  const [incoming, setIncoming] = useState([]); // pending shares others sent me
-  const [busyShare, setBusyShare] = useState(""); // share id currently being accepted/declined
 
   const copyReferral = () => {
     if (!user?.referralCode) return;
@@ -143,30 +140,6 @@ export default function ClientDashboard({ onBuild, onUpgrade }) {
       .finally(() => setLoading(false));
   };
   useEffect(load, []);
-
-  // Incoming shares (content other users sent me, awaiting accept/decline).
-  const loadIncoming = () => {
-    practiceService.incomingShares().then(setIncoming).catch(() => {});
-  };
-  useEffect(loadIncoming, []);
-
-  const acceptIncoming = async (s) => {
-    setBusyShare(s._id);
-    try {
-      await practiceService.acceptShare(s._id);
-      setIncoming((list) => list.filter((x) => x._id !== s._id));
-      load(); // the saved copy now appears in the dashboard
-    } catch (e) { setError(e.message); }
-    finally { setBusyShare(""); }
-  };
-  const declineIncoming = async (s) => {
-    setBusyShare(s._id);
-    try {
-      await practiceService.declineShare(s._id);
-      setIncoming((list) => list.filter((x) => x._id !== s._id));
-    } catch (e) { setError(e.message); }
-    finally { setBusyShare(""); }
-  };
 
   // Remember the current drill-down position so a refresh or a return trip from
   // a quiz/test restores it instead of dropping back to the top.
@@ -386,36 +359,9 @@ export default function ClientDashboard({ onBuild, onUpgrade }) {
         </div>
       )}
 
-      {/* Incoming — content other users sent you; Accept to save your own copy */}
-      {incoming.length > 0 && (
-        <div className="card border-brand-200 p-5 dark:border-brand-900/50">
-          <h2 className="flex items-center gap-2 text-lg font-bold">
-            <Inbox className="h-5 w-5 text-brand-600" /> Incoming
-            <span className="rounded-full bg-brand-100 px-2 py-0.5 text-xs font-semibold text-brand-700 dark:bg-brand-900/40 dark:text-brand-300">{incoming.length}</span>
-          </h2>
-          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-            Content other users sent you. <b>Accept</b> to save your own copy (you can then practise, edit and keep it); <b>Decline</b> to remove it.
-          </p>
-          <div className="mt-3 divide-y divide-slate-100 dark:divide-slate-800">
-            {incoming.map((s) => (
-              <div key={s._id} className="flex flex-wrap items-center justify-between gap-3 py-3">
-                <div className="min-w-0">
-                  <p className="font-medium">{s.title}</p>
-                  <p className="text-xs text-slate-400">
-                    from <b className="text-slate-500 dark:text-slate-300">{s.from}</b> · {s.level === "item" ? (s.kind === "test" ? "1 test" : "1 quiz") : `${s.itemCount} ${s.kind === "test" ? "test" : "quiz"}(s) · whole ${s.level}`}
-                  </p>
-                </div>
-                <div className="flex flex-shrink-0 items-center gap-2">
-                  <button onClick={() => acceptIncoming(s)} disabled={busyShare === s._id} className="btn-primary py-1.5 text-xs disabled:opacity-50">
-                    <Check className="h-3.5 w-3.5" /> {busyShare === s._id ? "Saving…" : "Accept & save"}
-                  </button>
-                  <button onClick={() => declineIncoming(s)} disabled={busyShare === s._id} className="btn-outline py-1.5 text-xs text-rose-600">Decline</button>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
+      {/* Incoming — content other users sent you; Accept to save your own copy
+          (whole-stream saves directly; smaller shares ask where to save). */}
+      <IncomingSharesInbox onAccepted={load} />
 
       {/* Performance — always visible, right below the profile */}
       <div className="card p-5">
