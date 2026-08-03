@@ -61,8 +61,8 @@ export default function ExtendOneQuestionModal({ open, busy, onCancel, onConfirm
             disabled={busy}
           />
           <span>
-            Also <b>extend the question length</b> — rewrite the short stem into a longer, clearer, more
-            descriptive question. The <b>meaning</b>, options and correct answer stay the same.
+            Also <b>extend the question length</b> — rewrite the short stem into a clearer, more
+            descriptive question (kept to <b>at most 3 lines</b>). The <b>meaning</b>, options and correct answer stay the same.
           </span>
         </label>
 
