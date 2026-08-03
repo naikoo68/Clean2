@@ -51,6 +51,7 @@ const ForgotPassword = lazy(() => import("./pages/auth/ForgotPassword"));
 const ResetPassword = lazy(() => import("./pages/auth/ResetPassword"));
 
 const ClientWorkspace = lazy(() => import("./pages/client/ClientWorkspace"));
+const ClientPerformanceDetails = lazy(() => import("./pages/client/ClientPerformanceDetails"));
 
 const AdminLogin = lazy(() => import("./pages/admin/AdminLogin"));
 const AdminLayout = lazy(() => import("./pages/admin/AdminLayout"));
@@ -180,6 +181,15 @@ const router = createHashRouter([
     element: (
       <ProtectedRoute role="client">
         {S(ClientWorkspace)}
+      </ProtectedRoute>
+    ),
+  },
+  // Full-page performance details (opened from the dashboard's Attempts card)
+  {
+    path: "/client/performance",
+    element: (
+      <ProtectedRoute role="client">
+        {S(ClientPerformanceDetails)}
       </ProtectedRoute>
     ),
   },
