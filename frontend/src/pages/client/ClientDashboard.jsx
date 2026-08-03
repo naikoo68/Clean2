@@ -58,7 +58,6 @@ const isExpired = (d) => d && new Date(d).getTime() < Date.now();
 const KINDS = [
   { key: "quiz", label: "My Quiz", Icon: ListChecks, tone: "bg-violet-100 text-violet-600 dark:bg-violet-900/40 dark:text-violet-300" },
   { key: "test", label: "My Test", Icon: FileStack, tone: "bg-brand-100 text-brand-600 dark:bg-brand-900/40 dark:text-brand-300" },
-  { key: "performance", label: "Performance", Icon: BarChart3, tone: "bg-emerald-100 text-emerald-600 dark:bg-emerald-900/40 dark:text-emerald-300" },
 ];
 
 const eq = (a, b) => String(a || "") === String(b || "");
@@ -253,9 +252,9 @@ export default function ClientDashboard({ onBuild, onUpgrade }) {
 
   return (
     <div className="space-y-6">
-      {/* Profile + validity */}
-      <div className="grid gap-4 lg:grid-cols-3">
-        <div className="card p-5 lg:col-span-2">
+      {/* Profile + validity — side by side (name left, validity right) from md up */}
+      <div className="grid gap-4 md:grid-cols-3">
+        <div className="card p-5 md:col-span-2">
           <p className="text-sm text-slate-500 dark:text-slate-400">Welcome back,</p>
           <h1 className="text-2xl font-extrabold">{user?.name || "there"}</h1>
           <p className="mt-0.5 text-sm text-slate-400">{user?.email}</p>
@@ -347,6 +346,14 @@ export default function ClientDashboard({ onBuild, onUpgrade }) {
         </div>
       )}
 
+      {/* Performance — always visible, right below the profile */}
+      <div className="card p-5">
+        <h2 className="flex items-center gap-2 text-lg font-bold">
+          <BarChart3 className="h-5 w-5 text-emerald-600" /> Performance
+        </h2>
+        <ClientPerformance />
+      </div>
+
       {/* Practice browser */}
       <div className="card p-5">
         {/* Search across everything you've built */}
@@ -385,8 +392,7 @@ export default function ClientDashboard({ onBuild, onUpgrade }) {
           ))}
         </div>
 
-        {/* Breadcrumb + level hint — only for the browse tabs, not Performance */}
-        {kind !== "performance" && (<>
+        {/* Breadcrumb */}
         <nav className="mt-4 flex flex-wrap items-center gap-1 text-sm">
           {crumbs.map((c, i) => (
             <span key={i} className="flex items-center gap-1">
@@ -401,7 +407,6 @@ export default function ClientDashboard({ onBuild, onUpgrade }) {
         </nav>
 
         <h2 className="mt-2 text-lg font-bold">{levelHint}</h2>
-        </>)}
         </>)}
 
         {loading ? (
@@ -483,8 +488,6 @@ export default function ClientDashboard({ onBuild, onUpgrade }) {
               </div>
             )}
           </div>
-        ) : kind === "performance" ? (
-          <ClientPerformance />
         ) : rows.length === 0 ? (
           <div className="mt-6 rounded-xl border border-dashed border-slate-200 p-8 text-center dark:border-slate-700">
             <p className="text-sm text-slate-500 dark:text-slate-400">
