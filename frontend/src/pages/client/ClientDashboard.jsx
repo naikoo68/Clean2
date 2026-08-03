@@ -21,6 +21,7 @@ import {
   Search,
   X,
   BarChart3,
+  Share2,
 } from "lucide-react";
 import { authService, practiceService, searchService, testService } from "../../services";
 import { loadNav, saveNav } from "../../lib/navState";
@@ -30,6 +31,7 @@ import QuestionView from "../../components/admin/QuestionView";
 import PaperExport from "../../components/admin/PaperExport";
 import { Loading, ErrorState } from "../../components/ui/AsyncState";
 import ClientPerformance from "./ClientPerformance";
+import ShareByEmailModal from "../../components/client/ShareByEmailModal";
 
 const previewText = (t, n = 100) => {
   const s = String(t || "").replace(/\$/g, "").replace(/\s+/g, " ").trim();
@@ -110,6 +112,7 @@ export default function ClientDashboard({ onBuild, onUpgrade }) {
   const [qResults, setQResults] = useState([]); // question matches (backend search)
   const [qLoading, setQLoading] = useState(false);
   const [detail, setDetail] = useState(null); // question shown in the detail panel
+  const [shareTarget, setShareTarget] = useState(null); // { level, id, name } for the Share-by-email modal
 
   const copyReferral = () => {
     if (!user?.referralCode) return;
@@ -510,6 +513,7 @@ export default function ClientDashboard({ onBuild, onUpgrade }) {
                     <span className="inline-flex items-center gap-1"><HelpCircle className="h-3 w-3" /> {item.questionCount} Qs</span>
                     {item.kind === "test" && <span className="inline-flex items-center gap-1"><Clock className="h-3 w-3" /> {item.duration} min</span>}
                     {item.difficulty && <Badge variant={item.difficulty}>{item.difficulty}</Badge>}
+                    {item.sharedByOther && <Badge variant="accent"><Share2 className="h-3 w-3" /> Shared with you</Badge>}
                   </div>
                   <div className="mt-3 flex items-center gap-2">
                     <button
@@ -520,6 +524,15 @@ export default function ClientDashboard({ onBuild, onUpgrade }) {
                     >
                       <Play className="h-3.5 w-3.5" /> {empty ? "No questions" : cta}
                     </button>
+                    {!item.sharedByOther && (
+                      <button
+                        onClick={() => setShareTarget({ level: "item", id: item._id, name: item.name })}
+                        title="Share with another user by email"
+                        className="rounded-lg border border-slate-200 p-2 text-slate-500 hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800"
+                      >
+                        <Share2 className="h-3.5 w-3.5" />
+                      </button>
+                    )}
                     {!empty && <PaperExport compact title={item.name} load={paperLoad(item)} />}
                   </div>
                 </div>
@@ -531,25 +544,38 @@ export default function ClientDashboard({ onBuild, onUpgrade }) {
           <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {rows.map((node) => {
               const Icon = Icons[node.icon] || fallbackIcon;
+              // Map the current drill-down level to a share level.
+              const shareLevel = level === "streams" ? "stream" : level === "subjects" ? "subject" : "topic";
               return (
-                <button
-                  key={node._id}
-                  onClick={() => openNode(node)}
-                  className="card-hover group p-5 text-left"
-                >
-                  <div className={`flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br ${node.color || "from-violet-500 to-fuchsia-600"} text-white shadow-soft`}>
-                    <Icon className="h-6 w-6" />
-                  </div>
-                  <h3 className="mt-3 font-bold">{node.name}</h3>
-                  <span className="mt-3 inline-flex items-center gap-1 text-sm font-semibold text-brand-600 transition group-hover:gap-2 dark:text-brand-400">
-                    Open <ArrowRight className="h-4 w-4" />
-                  </span>
-                </button>
+                <div key={node._id} className="relative">
+                  <button
+                    onClick={() => openNode(node)}
+                    className="card-hover group w-full p-5 text-left"
+                  >
+                    <div className={`flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br ${node.color || "from-violet-500 to-fuchsia-600"} text-white shadow-soft`}>
+                      <Icon className="h-6 w-6" />
+                    </div>
+                    <h3 className="mt-3 font-bold">{node.name}</h3>
+                    <span className="mt-3 inline-flex items-center gap-1 text-sm font-semibold text-brand-600 transition group-hover:gap-2 dark:text-brand-400">
+                      Open <ArrowRight className="h-4 w-4" />
+                    </span>
+                  </button>
+                  <button
+                    onClick={() => setShareTarget({ level: shareLevel, id: node._id, name: node.name })}
+                    title={`Share this ${shareLevel} with another user by email`}
+                    className="absolute right-3 top-3 rounded-lg bg-white/80 p-1.5 text-slate-500 shadow-sm hover:bg-slate-100 dark:bg-slate-800/80 dark:hover:bg-slate-700"
+                  >
+                    <Share2 className="h-4 w-4" />
+                  </button>
+                </div>
               );
             })}
           </div>
         )}
       </div>
+
+      {/* Share practice content with another registered user by email. */}
+      {shareTarget && <ShareByEmailModal target={shareTarget} onClose={() => setShareTarget(null)} />}
 
       {/* Question detail — opens on tap, shows the full question + its location. */}
       {detail && (
