@@ -22,6 +22,7 @@ import {
   X,
   BarChart3,
   Share2,
+  Trash2,
 } from "lucide-react";
 import { authService, practiceService, searchService, testService } from "../../services";
 import { loadNav, saveNav } from "../../lib/navState";
@@ -71,9 +72,16 @@ function uniqueNodes(list, key) {
   const map = new Map();
   for (const it of list) {
     const node = it[key];
-    if (node && node._id && !map.has(String(node._id))) map.set(String(node._id), node);
+    if (!node || !node._id) continue;
+    const k = String(node._id);
+    if (!map.has(k)) map.set(k, { node, owned: false, shared: false });
+    const e = map.get(k);
+    if (it.sharedByOther) e.shared = true; else e.owned = true;
   }
-  return [...map.values()];
+  // Flag a grouping node as shared-with-you only when EVERY item under it was
+  // shared by someone else (so you can safely "remove" the whole node); mixed
+  // nodes that also contain your own content keep the normal (share) controls.
+  return [...map.values()].map((e) => ({ ...e.node, sharedByOther: e.shared && !e.owned }));
 }
 
 // Remembers the client's practice-browser drill-down position across refreshes
@@ -140,6 +148,18 @@ export default function ClientDashboard({ onBuild, onUpgrade }) {
       .finally(() => setLoading(false));
   };
   useEffect(load, []);
+
+  // Remove content that was shared WITH you (reference access) from your
+  // dashboard. Doesn't delete the owner's copy — just un-shares it from you.
+  const removeShared = async (level, id, name) => {
+    if (!window.confirm(`Remove "${name}" from your dashboard? It was shared with you — this only removes it from your account; the owner keeps their copy.`)) return;
+    try {
+      await practiceService.removeSharedWithMe({ level, id });
+      load();
+    } catch (e) {
+      setError(e.message);
+    }
+  };
 
   // Remember the current drill-down position so a refresh or a return trip from
   // a quiz/test restores it instead of dropping back to the top.
@@ -538,7 +558,15 @@ export default function ClientDashboard({ onBuild, onUpgrade }) {
                     >
                       <Play className="h-3.5 w-3.5" /> {empty ? "No questions" : cta}
                     </button>
-                    {!item.sharedByOther && (
+                    {item.sharedByOther ? (
+                      <button
+                        onClick={() => removeShared("item", item._id, item.name)}
+                        title="Remove this shared item from your dashboard"
+                        className="rounded-lg border border-slate-200 p-2 text-rose-500 hover:bg-rose-50 dark:border-slate-700 dark:hover:bg-rose-900/20"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    ) : (
                       <button
                         onClick={() => setShareTarget({ level: "item", id: item._id, name: item.name })}
                         title="Share with another user by email"
@@ -570,17 +598,30 @@ export default function ClientDashboard({ onBuild, onUpgrade }) {
                       <Icon className="h-6 w-6" />
                     </div>
                     <h3 className="mt-3 font-bold">{node.name}</h3>
+                    {node.sharedByOther && (
+                      <span className="mt-1 inline-flex items-center gap-1 text-[11px] font-semibold text-brand-600 dark:text-brand-400"><Share2 className="h-3 w-3" /> Shared with you</span>
+                    )}
                     <span className="mt-3 inline-flex items-center gap-1 text-sm font-semibold text-brand-600 transition group-hover:gap-2 dark:text-brand-400">
                       Open <ArrowRight className="h-4 w-4" />
                     </span>
                   </button>
-                  <button
-                    onClick={() => setShareTarget({ level: shareLevel, id: node._id, name: node.name })}
-                    title={`Share this ${shareLevel} with another user by email`}
-                    className="absolute right-3 top-3 rounded-lg bg-white/80 p-1.5 text-slate-500 shadow-sm hover:bg-slate-100 dark:bg-slate-800/80 dark:hover:bg-slate-700"
-                  >
-                    <Share2 className="h-4 w-4" />
-                  </button>
+                  {node.sharedByOther ? (
+                    <button
+                      onClick={() => removeShared(shareLevel, node._id, node.name)}
+                      title={`Remove this shared ${shareLevel} from your dashboard`}
+                      className="absolute right-3 top-3 rounded-lg bg-white/80 p-1.5 text-rose-500 shadow-sm hover:bg-rose-50 dark:bg-slate-800/80 dark:hover:bg-rose-900/20"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => setShareTarget({ level: shareLevel, id: node._id, name: node.name })}
+                      title={`Share this ${shareLevel} with another user by email`}
+                      className="absolute right-3 top-3 rounded-lg bg-white/80 p-1.5 text-slate-500 shadow-sm hover:bg-slate-100 dark:bg-slate-800/80 dark:hover:bg-slate-700"
+                    >
+                      <Share2 className="h-4 w-4" />
+                    </button>
+                  )}
                 </div>
               );
             })}

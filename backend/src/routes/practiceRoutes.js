@@ -6,7 +6,7 @@ import {
   listItems, createItem,
   browseStreams, browseSubjects, browseTopics, browseItems, browseTopicItems,
   playQuiz, allSubjects, myItems, moveItem, updateItem, splitItem, splitTopic, mergeItem, moveQuestions, shareContent,
-  incomingShares, acceptShare, declineShare, sharePlacement,
+  incomingShares, acceptShare, declineShare, sharePlacement, removeSharedWithMe,
 } from "../controllers/practiceController.js";
 import { protect, authorize, optionalAuth } from "../middleware/auth.js";
 
@@ -37,6 +37,9 @@ router.get("/shares/incoming", ...admin, incomingShares);
 router.get("/shares/:id/placement", ...admin, sharePlacement); // where-to-save options for the accept dialog
 router.post("/shares/:id/accept", ...admin, acceptShare);
 router.post("/shares/:id/decline", ...admin, declineShare);
+// Remove content that was shared WITH me (reference/view access) from my
+// dashboard — un-shares it from my account without touching the owner's copy.
+router.post("/shared/remove", ...admin, removeSharedWithMe);
 
 // Admin — streams
 router.get("/streams", ...admin, listStreams);
