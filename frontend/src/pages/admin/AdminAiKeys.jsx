@@ -132,7 +132,11 @@ export default function AdminAiKeys({ clientMode = false }) {
   const scopeLabel = scopeAll ? "all pages" : `page ${curPage + 1}`;
 
   // ---- Multi-select delete (tick keys, delete them together) ----------------
-  const selectableOnPage = pageKeys.filter((k) => !k.readOnly && !k.source);
+  // Selectable for bulk delete = a real deletable key. Only ENV/server keys
+  // (source "env", read-only) are excluded — every saved key now carries
+  // source "db", so the old `!k.source` check wrongly matched NOTHING and the
+  // select checkboxes did nothing.
+  const selectableOnPage = pageKeys.filter((k) => !k.readOnly && k.source !== "env");
   const allPageSelected = selectableOnPage.length > 0 && selectableOnPage.every((k) => selected.has(k._id));
   const toggleSelect = (id) => setSelected((s) => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
   const toggleSelectAllPage = () => setSelected((s) => {
@@ -622,7 +626,7 @@ export default function AdminAiKeys({ clientMode = false }) {
           </div>
           {pageKeys.map((k) => (
             <div key={k._id} className={`card flex flex-wrap items-center justify-between gap-3 p-4 ${selected.has(k._id) ? "ring-2 ring-rose-400 dark:ring-rose-500/60" : ""}`}>
-              {!k.readOnly && !k.source && (
+              {!k.readOnly && k.source !== "env" && (
                 <input
                   type="checkbox"
                   className="h-4 w-4 flex-shrink-0 accent-rose-600"
