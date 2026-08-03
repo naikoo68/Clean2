@@ -13,6 +13,11 @@ const userSchema = new mongoose.Schema(
     role: { type: String, enum: ["student", "admin", "client"], default: "student" },
     plan: { type: String, enum: ["Free", "Premium", "Pro"], default: "Free" },
     status: { type: String, enum: ["active", "blocked"], default: "active" },
+    // Soft delete (recoverable). When true the account is in the "Recycle bin":
+    // it can't log in and is hidden from the normal lists, but its content is
+    // KEPT so an admin can restore it. A separate permanent-delete erases it.
+    deleted: { type: Boolean, default: false },
+    deletedAt: { type: Date, default: null },
     isEmailVerified: { type: Boolean, default: false },
     // Temporary accounts (created by an admin) expire at this time. When null
     // the account never expires. After expiry the user can no longer log in.

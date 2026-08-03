@@ -377,6 +377,9 @@ export const uploadService = {
 export const userService = {
   list: (search = "") => api.get(`/users${search ? `?search=${encodeURIComponent(search)}` : ""}`),
   clients: (search = "") => api.get(`/users/clients${search ? `?search=${encodeURIComponent(search)}` : ""}`),
+  deletedClients: () => api.get("/users/clients/deleted"), // Recycle bin (soft-deleted clients)
+  restore: (id) => api.post(`/users/${id}/restore`), // restore a soft-deleted client
+  deletePermanent: (id) => api.del(`/users/${id}/permanent`), // permanent delete (cannot be undone)
   create: (data) => api.post("/users", data),
   update: (id, data) => api.put(`/users/${id}`, data),
   remove: (id) => api.del(`/users/${id}`),
