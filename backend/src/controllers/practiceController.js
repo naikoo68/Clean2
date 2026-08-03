@@ -682,6 +682,24 @@ export async function declineShare(req, res) {
   res.json({ message: "Declined" });
 }
 
+// Remove content that was shared WITH the caller (the older reference/view
+// share) from their dashboard: pull them out of `sharedWith` on every practice
+// item under the chosen node (stream / subject / topic / single item). This
+// only affects the caller's access — the owner's original content is untouched,
+// and the caller's OWN items are never affected (filtered by sharedWith).
+export async function removeSharedWithMe(req, res) {
+  const level = String(req.body?.level || "").trim();
+  const id = String(req.body?.id || "").trim();
+  if (!["stream", "subject", "topic", "item"].includes(level)) return res.status(400).json({ message: "Invalid level." });
+  if (!id) return res.status(400).json({ message: "Nothing selected to remove." });
+  const key = level === "item" ? "_id" : level === "topic" ? "practiceTopic" : level === "subject" ? "practiceSubject" : "practiceStream";
+  const result = await TestSeries.updateMany(
+    { practice: true, sharedWith: req.user._id, [key]: id },
+    { $pull: { sharedWith: req.user._id } }
+  );
+  res.json({ removed: result.modifiedCount || 0 });
+}
+
 // Find-or-create an owner-scoped practice container (stream/subject/topic) that
 // mirrors a source node by name, so a copied item lands in the same hierarchy
 // under the recipient. `cache` dedupes within one accept.
