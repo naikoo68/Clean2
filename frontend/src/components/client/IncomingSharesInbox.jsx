@@ -1,0 +1,78 @@
+import { useEffect, useState } from "react";
+import { Inbox, Check } from "lucide-react";
+import { practiceService } from "../../services";
+
+// Self-contained "Incoming shares" inbox. Fetches pending shares sent to the
+// current account and lets them Accept (save an owned copy) or Decline.
+// Renders nothing when there's nothing pending. Works for both clients and
+// admins — the backend scopes shares by the logged-in user's id, and an admin's
+// accepted copy is stored in the shared platform space automatically.
+//
+// Props:
+//   onAccepted — optional callback fired after a successful accept, so the host
+//                page (e.g. AdminPractice) can refresh its content list.
+export default function IncomingSharesInbox({ onAccepted }) {
+  const [incoming, setIncoming] = useState([]);
+  const [busy, setBusy] = useState(""); // share id currently being accepted/declined
+
+  useEffect(() => {
+    practiceService.incomingShares().then(setIncoming).catch(() => {});
+  }, []);
+
+  const accept = async (s) => {
+    setBusy(s._id);
+    try {
+      await practiceService.acceptShare(s._id);
+      setIncoming((list) => list.filter((x) => x._id !== s._id));
+      onAccepted?.();
+    } catch {
+      /* surfaced via global api error toast */
+    } finally {
+      setBusy("");
+    }
+  };
+
+  const decline = async (s) => {
+    setBusy(s._id);
+    try {
+      await practiceService.declineShare(s._id);
+      setIncoming((list) => list.filter((x) => x._id !== s._id));
+    } catch {
+      /* ignore */
+    } finally {
+      setBusy("");
+    }
+  };
+
+  if (!incoming.length) return null;
+
+  return (
+    <div className="card border-brand-200 p-5 dark:border-brand-900/50">
+      <h2 className="flex items-center gap-2 text-lg font-bold">
+        <Inbox className="h-5 w-5 text-brand-600" /> Incoming
+        <span className="rounded-full bg-brand-100 px-2 py-0.5 text-xs font-semibold text-brand-700 dark:bg-brand-900/40 dark:text-brand-300">{incoming.length}</span>
+      </h2>
+      <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+        Content other users sent you. <b>Accept</b> to save your own copy (you can then practise, edit and keep it); <b>Decline</b> to remove it.
+      </p>
+      <div className="mt-3 divide-y divide-slate-100 dark:divide-slate-800">
+        {incoming.map((s) => (
+          <div key={s._id} className="flex flex-wrap items-center justify-between gap-3 py-3">
+            <div className="min-w-0">
+              <p className="font-medium">{s.title}</p>
+              <p className="text-xs text-slate-400">
+                from <b className="text-slate-500 dark:text-slate-300">{s.from}</b> · {s.level === "item" ? (s.kind === "test" ? "1 test" : "1 quiz") : `${s.itemCount} ${s.kind === "test" ? "test" : "quiz"}(s) · whole ${s.level}`}
+              </p>
+            </div>
+            <div className="flex flex-shrink-0 items-center gap-2">
+              <button onClick={() => accept(s)} disabled={busy === s._id} className="btn-primary py-1.5 text-xs disabled:opacity-50">
+                <Check className="h-3.5 w-3.5" /> {busy === s._id ? "Saving…" : "Accept & save"}
+              </button>
+              <button onClick={() => decline(s)} disabled={busy === s._id} className="btn-outline py-1.5 text-xs text-rose-600">Decline</button>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
