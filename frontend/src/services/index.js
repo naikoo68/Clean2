@@ -140,6 +140,7 @@ export const practiceService = {
   sharePlacement: (id) => api.get(`/practice/shares/${id}/placement`), // which container levels to place (existing/new) + suggested names
   acceptShare: (id, placement) => api.post(`/practice/shares/${id}/accept`, placement ? { placement } : {}), // save the shared content into my account (optionally choosing where)
   declineShare: (id) => api.post(`/practice/shares/${id}/decline`),
+  removeSharedWithMe: (data) => api.post("/practice/shared/remove", data), // { level, id } → remove content shared WITH me from my dashboard
   // flat list of all practice subjects (for composing a test from practice)
   allSubjects: () => api.get("/practice/all-subjects"),
   // admin — streams (kind-scoped so My Quiz & My Test Series stay separate)
