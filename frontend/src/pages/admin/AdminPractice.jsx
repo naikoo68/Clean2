@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef, Fragment } from "react";
 import { useSearchParams } from "react-router-dom";
-import { Plus, Pencil, Trash2, X, ChevronRight, GraduationCap, FolderOpen, ListChecks, FileStack, HelpCircle, Users, Search, Share2, ClipboardList, ArrowRightLeft } from "lucide-react";
+import { Plus, Pencil, Trash2, X, ChevronRight, GraduationCap, FolderOpen, ListChecks, FileStack, HelpCircle, Users, Search, Share2, ClipboardList, ArrowRightLeft, Send } from "lucide-react";
 import { practiceService, testService, contentService, aiService } from "../../services";
 import { loadNav, saveNav } from "../../lib/navState";
 import Badge from "../../components/ui/Badge";
@@ -16,6 +16,7 @@ import PickFromBank from "../../components/admin/PickFromBank";
 import ManageTestQuestions from "../../components/admin/ManageTestQuestions";
 import SubjectPlanEditor from "../../components/admin/SubjectPlanEditor";
 import ShareTestModal from "../../components/admin/ShareTestModal";
+import ShareByEmailModal from "../../components/client/ShareByEmailModal";
 import IncomingSharesInbox from "../../components/client/IncomingSharesInbox";
 import ExtendExplanationsModal from "../../components/admin/ExtendExplanationsModal";
 import ExtendOneQuestionModal from "../../components/admin/ExtendOneQuestionModal";
@@ -132,6 +133,7 @@ export default function AdminPractice({ clientMode = false }) {
   const [moveTargetId, setMoveTargetId] = useState(""); // destination quiz for the move
   const [movingQ, setMovingQ] = useState(false);
   const [shareItem, setShareItem] = useState(null); // public share-link modal target (tests)
+  const [shareEmailTarget, setShareEmailTarget] = useState(null); // account-to-account share (stream/subject/topic/item)
   const [migrateItem, setMigrateItem] = useState(null); // per-quiz migrate modal target (My Quiz)
   const [selTopics, setSelTopics] = useState({}); // checkbox selection in the topics view (id -> true)
   const [migrateTopicsOpen, setMigrateTopicsOpen] = useState(false); // bulk-topic migrate modal
@@ -869,6 +871,9 @@ export default function AdminPractice({ clientMode = false }) {
                     </button>
                   )}
                   {view !== "items" && (
+                    <button onClick={() => setShareEmailTarget({ level: view === "streams" ? "stream" : view === "subjects" ? "subject" : "topic", id: item._id, name: item.name })} title="Send to another user by email (they must have an account)" className="rounded-lg p-2 text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-900/30"><Send className="h-4 w-4" /></button>
+                  )}
+                  {view !== "items" && (
                     <button onClick={() => setModal({ type: view === "streams" ? "stream" : view === "subjects" ? "subject" : "topic", mode: "edit", data: item })} className="rounded-lg p-2 text-brand-600 hover:bg-brand-50 dark:hover:bg-brand-900/30"><Pencil className="h-4 w-4" /></button>
                   )}
                   <button onClick={() => remove(view === "streams" ? "stream" : view === "subjects" ? "subject" : view === "topics" ? "topic" : "item", item._id, item.name)} className="rounded-lg p-2 text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-900/30"><Trash2 className="h-4 w-4" /></button>
@@ -887,7 +892,9 @@ export default function AdminPractice({ clientMode = false }) {
                     <button onClick={() => { setMergeIds([]); setMergeTarget(item); }} className="btn-outline py-1.5 text-xs text-indigo-600" title="Merge other quizzes in this topic into this one"><GitMerge className="h-3.5 w-3.5" /> Merge</button>
                   )}
                   {/* Public share link (no login needed) — for My Quiz AND My Test */}
-                  <button onClick={() => setShareItem(item)} className={`btn-outline py-1.5 text-xs ${item.publicShare ? "text-emerald-600" : ""}`} title="Share a public link (anyone with the link can take this — no login/account needed)"><Share2 className="h-3.5 w-3.5" /> Share</button>
+                  <button onClick={() => setShareItem(item)} className={`btn-outline py-1.5 text-xs ${item.publicShare ? "text-emerald-600" : ""}`} title="Share a public link (anyone with the link can take this — no login/account needed)"><Share2 className="h-3.5 w-3.5" /> Share link</button>
+                  {/* Account-to-account: send to another registered user by email */}
+                  <button onClick={() => setShareEmailTarget({ level: "item", id: item._id, name: item.name })} className="btn-outline py-1.5 text-xs text-emerald-600" title="Send to another user by email (they must have an account)"><Send className="h-3.5 w-3.5" /> Send to user</button>
                   {!clientMode && (
                     <button onClick={() => openAccess(item)} className="btn-outline py-1.5 text-xs"><Users className="h-3.5 w-3.5" /> Visibility</button>
                   )}
@@ -1362,6 +1369,8 @@ export default function AdminPractice({ clientMode = false }) {
       )}
 
       {/* Public share-link modal (My Test / Client Test) */}
+      {shareEmailTarget && <ShareByEmailModal target={shareEmailTarget} onClose={() => setShareEmailTarget(null)} />}
+
       {shareItem && (
         <ShareTestModal
           test={shareItem}
