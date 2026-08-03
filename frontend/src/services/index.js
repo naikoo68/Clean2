@@ -202,6 +202,7 @@ export const cbtService = {
 // ---- Dashboard / analytics ----
 export const analyticsService = {
   dashboard: () => api.get("/me/dashboard"),
+  myPerformance: () => api.get("/me/performance"), // the logged-in user's own attempts + weak areas
   leaderboard: () => api.get("/leaderboard"),
   stats: () => api.get("/stats", { auth: false }),
   adminAnalytics: () => api.get("/admin/analytics"),

@@ -20,6 +20,7 @@ import {
   Crown,
   Search,
   X,
+  BarChart3,
 } from "lucide-react";
 import { authService, practiceService, searchService, testService } from "../../services";
 import { loadNav, saveNav } from "../../lib/navState";
@@ -28,6 +29,7 @@ import Badge from "../../components/ui/Badge";
 import QuestionView from "../../components/admin/QuestionView";
 import PaperExport from "../../components/admin/PaperExport";
 import { Loading, ErrorState } from "../../components/ui/AsyncState";
+import ClientPerformance from "./ClientPerformance";
 
 const previewText = (t, n = 100) => {
   const s = String(t || "").replace(/\$/g, "").replace(/\s+/g, " ").trim();
@@ -56,6 +58,7 @@ const isExpired = (d) => d && new Date(d).getTime() < Date.now();
 const KINDS = [
   { key: "quiz", label: "My Quiz", Icon: ListChecks, tone: "bg-violet-100 text-violet-600 dark:bg-violet-900/40 dark:text-violet-300" },
   { key: "test", label: "My Test", Icon: FileStack, tone: "bg-brand-100 text-brand-600 dark:bg-brand-900/40 dark:text-brand-300" },
+  { key: "performance", label: "Performance", Icon: BarChart3, tone: "bg-emerald-100 text-emerald-600 dark:bg-emerald-900/40 dark:text-emerald-300" },
 ];
 
 const eq = (a, b) => String(a || "") === String(b || "");
@@ -382,7 +385,8 @@ export default function ClientDashboard({ onBuild, onUpgrade }) {
           ))}
         </div>
 
-        {/* Breadcrumb */}
+        {/* Breadcrumb + level hint — only for the browse tabs, not Performance */}
+        {kind !== "performance" && (<>
         <nav className="mt-4 flex flex-wrap items-center gap-1 text-sm">
           {crumbs.map((c, i) => (
             <span key={i} className="flex items-center gap-1">
@@ -397,6 +401,7 @@ export default function ClientDashboard({ onBuild, onUpgrade }) {
         </nav>
 
         <h2 className="mt-2 text-lg font-bold">{levelHint}</h2>
+        </>)}
         </>)}
 
         {loading ? (
@@ -478,6 +483,8 @@ export default function ClientDashboard({ onBuild, onUpgrade }) {
               </div>
             )}
           </div>
+        ) : kind === "performance" ? (
+          <ClientPerformance />
         ) : rows.length === 0 ? (
           <div className="mt-6 rounded-xl border border-dashed border-slate-200 p-8 text-center dark:border-slate-700">
             <p className="text-sm text-slate-500 dark:text-slate-400">
