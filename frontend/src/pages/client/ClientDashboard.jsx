@@ -101,7 +101,14 @@ export default function ClientDashboard({ onBuild, onUpgrade }) {
   // topic define how deep we've navigated. Switching kind resets the path.
   // Restored from sessionStorage so a refresh — or returning after finishing a
   // practice — keeps you where you were instead of jumping back to the top.
-  const [kind, setKind] = useState(() => loadNav(DASH_NAV_KEY).kind || "quiz");
+  // Restore the saved tab, but only if it's still a valid kind. A stale value
+  // (e.g. "performance" saved before that tab was removed) must NOT survive, or
+  // KINDS.find(...) below returns undefined and the whole dashboard crashes on
+  // `.label`. Fall back to "quiz".
+  const [kind, setKind] = useState(() => {
+    const saved = loadNav(DASH_NAV_KEY).kind;
+    return KINDS.some((k) => k.key === saved) ? saved : "quiz";
+  });
   const [stream, setStream] = useState(() => loadNav(DASH_NAV_KEY).stream || null);
   const [subject, setSubject] = useState(() => loadNav(DASH_NAV_KEY).subject || null);
   const [topic, setTopic] = useState(() => loadNav(DASH_NAV_KEY).topic || null);
@@ -230,7 +237,7 @@ export default function ClientDashboard({ onBuild, onUpgrade }) {
   const isItems = level === "items";
 
   // Breadcrumb trail for the active kind.
-  const crumbs = [{ label: KINDS.find((k) => k.key === kind).label, onClick: resetPath }];
+  const crumbs = [{ label: (KINDS.find((k) => k.key === kind) || KINDS[0]).label, onClick: resetPath }];
   if (stream) crumbs.push({ label: stream.name, onClick: () => { setSubject(null); setTopic(null); } });
   if (subject) crumbs.push({ label: subject.name, onClick: () => setTopic(null) });
   if (topic) crumbs.push({ label: topic.name, onClick: null });
@@ -252,9 +259,11 @@ export default function ClientDashboard({ onBuild, onUpgrade }) {
 
   return (
     <div className="space-y-6">
-      {/* Profile + validity — side by side (name left, validity right) from md up */}
-      <div className="grid gap-4 md:grid-cols-3">
-        <div className="card p-5 md:col-span-2">
+      {/* Profile + validity — side by side (name left, validity right) from the
+          sm breakpoint (640px) up, so it's beside the name on tablets too; only
+          stacks on small phones. */}
+      <div className="grid gap-4 sm:grid-cols-3">
+        <div className="card p-5 sm:col-span-2">
           <p className="text-sm text-slate-500 dark:text-slate-400">Welcome back,</p>
           <h1 className="text-2xl font-extrabold">{user?.name || "there"}</h1>
           <p className="mt-0.5 text-sm text-slate-400">{user?.email}</p>
