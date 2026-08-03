@@ -45,6 +45,7 @@ export default function AiGenerate({ open, onClose, onUpload, title = "Generate 
   const [busy, setBusy] = useState(false);
   const [stopping, setStopping] = useState(false); // user asked to stop the current generation
   const [autoContinue, setAutoContinue] = useState(false); // keep generating in waves until the full count is reached
+  const [numerical, setNumerical] = useState(false); // opt-in: also include numerical/calculation questions (default off)
   const jobIdRef = useRef(null); // id of the running background job (so Stop can cancel it)
   const stopRef = useRef(false); // set when the user clicks Stop — breaks/short-circuits the poll loop
   const pendingDoneRef = useRef([]); // subtopics queued (via "Use selected") to hide after the next Generate
@@ -261,6 +262,7 @@ export default function AiGenerate({ open, onClose, onUpload, title = "Generate 
           url: url.trim() || undefined,
           plan,
           notes: notes.trim(),
+          numerical: numerical || undefined, // include calculation-based numerical questions only when ticked
           model: model || undefined,
           avoid: avoidLocal, // don't repeat anything from earlier waves/batches
           mode: isClient ? source : undefined,
@@ -692,6 +694,11 @@ export default function AiGenerate({ open, onClose, onUpload, title = "Generate 
             <label className="mt-4 flex items-start gap-2 rounded-lg border border-slate-200 p-2.5 text-xs text-slate-600 dark:border-slate-700 dark:text-slate-300">
               <input type="checkbox" checked={autoContinue} onChange={(e) => setAutoContinue(e.target.checked)} className="mt-0.5 h-4 w-4 flex-shrink-0 accent-brand-600" />
               <span><b>Auto-continue</b> until the full count is generated. When the free-tier limit stops a wave, it waits ~60s and keeps going (no duplicates) until it reaches {total || "the"} question(s) — press <b>Stop</b> to end early. Best for big batches.</span>
+            </label>
+
+            <label className="mt-2 flex items-start gap-2 rounded-lg border border-slate-200 p-2.5 text-xs text-slate-600 dark:border-slate-700 dark:text-slate-300">
+              <input type="checkbox" checked={numerical} onChange={(e) => setNumerical(e.target.checked)} className="mt-0.5 h-4 w-4 flex-shrink-0 accent-brand-600" />
+              <span><b>Include numerical questions</b> that need calculation (solving with a formula/arithmetic). Off by default — leave unticked to keep questions conceptual/factual only.</span>
             </label>
 
             <button
