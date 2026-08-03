@@ -279,8 +279,26 @@ export async function myPerformance(req, res) {
   const list = await Attempt.find({ user: req.user._id })
     .sort("-createdAt")
     .limit(2000) // generous cap so a huge history can't blow up the response
-    .populate("testSeries", "name practiceKind practice")
-    .populate("quiz", "title")
+    // Pull the location so each item can show its Stream › Subject › Topic path.
+    // Client practice items (TestSeries) carry practiceStream/Subject/Topic;
+    // platform quizzes derive Subject from the quiz and Topic from its session.
+    .populate({
+      path: "testSeries",
+      select: "name practiceKind practice practiceStream practiceSubject practiceTopic",
+      populate: [
+        { path: "practiceStream", select: "name" },
+        { path: "practiceSubject", select: "name" },
+        { path: "practiceTopic", select: "name" },
+      ],
+    })
+    .populate({
+      path: "quiz",
+      select: "title subject session",
+      populate: [
+        { path: "subject", select: "name" },
+        { path: "session", select: "title topic", populate: { path: "topic", select: "name" } },
+      ],
+    })
     .lean();
 
   // Group attempts by the item they belong to (newest attempt first, because the
@@ -294,7 +312,11 @@ export async function myPerformance(req, res) {
     const kind = isTest ? (ts?.practiceKind === "test" ? "test" : "quiz") : "quiz";
     const itemId = String(ts?._id || a.quiz?._id || a._id);
     const title = isTest ? ts?.name || "Untitled test" : a.quiz?.title || "Untitled quiz";
-    if (!itemsMap.has(itemId)) itemsMap.set(itemId, { id: itemId, title, kind, attempts: [] });
+    // Where the item lives, so the UI can show the full Stream › Subject › Topic.
+    const location = isTest
+      ? { stream: ts?.practiceStream?.name || null, subject: ts?.practiceSubject?.name || null, topic: ts?.practiceTopic?.name || null }
+      : { stream: null, subject: a.quiz?.subject?.name || null, topic: a.quiz?.session?.topic?.name || null };
+    if (!itemsMap.has(itemId)) itemsMap.set(itemId, { id: itemId, title, kind, location, attempts: [] });
     itemsMap.get(itemId).attempts.push({
       _id: a._id,
       score: a.score,
@@ -394,5 +416,69 @@ export async function myPerformance(req, res) {
     topics,
     weakSubjects,
     weakTopics,
+  });
+}
+
+
+// GET /api/me/performance/attempt/:attemptId  (owner-scoped)
+// The full question-by-question review of ONE completed attempt: every question
+// with the option the user chose, the correct option, whether it was right, and
+// the explanation — so a client can see exactly which questions they got right
+// and wrong. Scoped by `user` (an Attempt has no owner field).
+export async function myAttemptReview(req, res) {
+  const attempt = await Attempt.findOne({ _id: req.params.attemptId, user: req.user._id })
+    .populate("testSeries", "name practiceKind")
+    .populate("quiz", "title")
+    .lean();
+  if (!attempt) return res.status(404).json({ message: "Attempt not found." });
+
+  // Load the questions referenced by this attempt's responses, then join each
+  // stored { chosen, isCorrect } with its question to build a review row that
+  // mirrors the post-submit review shape (so the same renderer works).
+  const ids = (attempt.responses || []).map((r) => r.question).filter(Boolean);
+  const qDocs = ids.length
+    ? await Question.find({ _id: { $in: ids } })
+        .select("type text image options correct columnA columnB tableRows assertion reason graph explanation optionExplanations difficulty section")
+        .lean()
+    : [];
+  const qMap = new Map(qDocs.map((q) => [String(q._id), q]));
+
+  const review = (attempt.responses || []).map((r, i) => {
+    const q = qMap.get(String(r.question)) || {};
+    return {
+      _id: String(r.question || i),
+      type: q.type || "mcq",
+      section: q.section,
+      text: q.text || "(this question is no longer available)",
+      image: q.image,
+      options: q.options || [],
+      columnA: q.columnA || [],
+      columnB: q.columnB || [],
+      tableRows: q.tableRows,
+      assertion: q.assertion,
+      reason: q.reason,
+      graph: q.graph,
+      correct: q.correct,
+      difficulty: q.difficulty,
+      explanation: q.explanation,
+      optionExplanations: q.optionExplanations || [],
+      chosen: r.chosen ?? null, // option index the user picked (null = skipped)
+      isCorrect: !!r.isCorrect,
+    };
+  });
+
+  res.json({
+    _id: String(attempt._id),
+    title: attempt.type === "test" ? attempt.testSeries?.name || "Test" : attempt.quiz?.title || "Quiz",
+    kind: attempt.type === "test" ? (attempt.testSeries?.practiceKind === "test" ? "test" : "quiz") : "quiz",
+    createdAt: attempt.createdAt,
+    score: attempt.score,
+    percentage: attempt.percentage,
+    correct: attempt.correct,
+    incorrect: attempt.incorrect,
+    attempted: attempt.attempted,
+    total: attempt.total,
+    timeTaken: attempt.timeTaken,
+    review,
   });
 }
