@@ -137,7 +137,8 @@ export const practiceService = {
   myItems: () => api.get("/practice/my-items"),
   share: (data) => api.post("/practice/share", data), // { level, id, email } → send a pending share to a registered user
   incomingShares: () => api.get("/practice/shares/incoming"), // pending shares awaiting my accept/decline
-  acceptShare: (id) => api.post(`/practice/shares/${id}/accept`), // save the shared content into my account
+  sharePlacement: (id) => api.get(`/practice/shares/${id}/placement`), // which container levels to place (existing/new) + suggested names
+  acceptShare: (id, placement) => api.post(`/practice/shares/${id}/accept`, placement ? { placement } : {}), // save the shared content into my account (optionally choosing where)
   declineShare: (id) => api.post(`/practice/shares/${id}/decline`),
   // flat list of all practice subjects (for composing a test from practice)
   allSubjects: () => api.get("/practice/all-subjects"),

@@ -543,6 +543,56 @@ function nodeItemFilter(level, id, owner) {
   return f;
 }
 
+// Which container levels the recipient must place when accepting a share.
+// A whole STREAM needs no placement (it's the top container — saved as-is).
+// A subject/topic/quiz/test needs the recipient to say, for each parent
+// container (and for a shared subject/topic, that node itself), whether to use
+// an EXISTING container of theirs or CREATE a NEW one. Tests have no topic level.
+function placementChain(level, kind) {
+  if (level === "subject") return ["stream", "subject"];
+  if (level === "topic") return ["stream", "subject", "topic"];
+  if (level === "item") return kind === "test" ? ["stream", "subject"] : ["stream", "subject", "topic"];
+  return []; // stream (or unknown) → no placement prompt
+}
+
+// Turn the recipient's placement choices into concrete container ids (in their
+// own space). For each level: "existing" → validate & reuse their container;
+// "new" → find-or-create by the given name under the resolved parent.
+async function resolvePlacementChain(chainLevels, placement, kind, copyOwner, cache) {
+  const models = { stream: PracticeStream, subject: PracticeSubject, topic: PracticeTopic };
+  const resolved = {};
+  for (const level of chainLevels) {
+    const choice = (placement && placement[level]) || {};
+    const parentId = level === "stream" ? null : level === "subject" ? resolved.stream : resolved.subject;
+    const parentKey = level === "subject" ? "stream" : level === "topic" ? "subject" : undefined;
+    if (choice.mode === "existing" && choice.id) {
+      const q = { _id: choice.id, owner: copyOwner ?? null };
+      if (parentKey) q[parentKey] = parentId;
+      const found = await models[level].findOne(q).lean();
+      if (!found) {
+        const e = new Error(`The selected ${level} was not found in your account.`);
+        e.status = 400;
+        throw e;
+      }
+      resolved[level] = found._id;
+    } else {
+      const name = String(choice.name || "").trim();
+      if (!name) {
+        const e = new Error(`Please choose an existing ${level} or enter a name for a new one.`);
+        e.status = 400;
+        throw e;
+      }
+      resolved[level] = await ensureContainer(
+        models[level],
+        { name, kind: level === "stream" ? kind : undefined, parentKey, parentId },
+        copyOwner,
+        cache
+      );
+    }
+  }
+  return resolved;
+}
+
 // POST /api/practice/share — SEND content to another registered user. This does
 // NOT grant access directly; it creates a PENDING share the recipient must
 // ACCEPT, at which point the content is DUPLICATED (saved) into THEIR account.
@@ -673,25 +723,42 @@ export async function acceptShare(req, res) {
   // Where the saved copy lives: a client keeps it under their own id; an admin
   // saves it into the shared PLATFORM space (owner:null) so it shows up in the
   // normal admin practice lists (which are all scoped to owner:null).
-  const copyOwner = req.user?.role === "admin" ? null : req.user._id;
+  const copyOwner = ownerValue(req);
   const cache = new Map();
+
+  // Resolve the recipient's placement choices (which existing containers to
+  // reuse / new ones to create) into fixed ids for the top of the hierarchy.
+  // A whole-stream share has an empty chain → nothing to resolve (recreated by
+  // the sender's names, as before). Levels BELOW the chosen chain (e.g. the
+  // topics inside a shared subject) are still recreated by their source names,
+  // preserving the sub-structure.
+  const shareKind = share.kind === "test" ? "test" : "quiz";
+  const chainLevels = placementChain(share.level, shareKind);
+  let placed;
+  try {
+    placed = await resolvePlacementChain(chainLevels, req.body?.placement, shareKind, copyOwner, cache);
+  } catch (err) {
+    return res.status(err.status || 400).json({ message: err.message });
+  }
+
   let saved = 0;
   for (const src of items) {
     const kind = src.practiceKind === "test" ? "test" : "quiz";
-    // Recreate the hierarchy under the recipient.
-    const streamId = await ensureContainer(
+    // Recreate the hierarchy under the recipient — using the placed containers
+    // where the recipient chose them, else find-or-create by the source name.
+    const streamId = placed.stream || await ensureContainer(
       PracticeStream,
       { name: src.practiceStream?.name || "Shared", kind, icon: src.practiceStream?.icon, color: src.practiceStream?.color },
       copyOwner, cache
     );
-    const subjectId = await ensureContainer(
+    const subjectId = placed.subject || await ensureContainer(
       PracticeSubject,
       { name: src.practiceSubject?.name || "Shared", parentKey: "stream", parentId: streamId, icon: src.practiceSubject?.icon, color: src.practiceSubject?.color },
       copyOwner, cache
     );
     let topicId;
     if (kind === "quiz") {
-      topicId = await ensureContainer(
+      topicId = placed.topic || await ensureContainer(
         PracticeTopic,
         { name: src.practiceTopic?.name || "Shared", parentKey: "subject", parentId: subjectId, icon: src.practiceTopic?.icon, color: src.practiceTopic?.color },
         copyOwner, cache
@@ -723,6 +790,36 @@ export async function acceptShare(req, res) {
   share.status = "accepted";
   await share.save();
   res.json({ message: "Saved to your account", saved });
+}
+
+// Placement plan for the accept dialog: which container levels the recipient
+// must choose (existing vs new) for this share, plus a suggested name for each
+// (the sender's own stream/subject/topic name) to pre-fill the "create new"
+// option. An empty chain (whole stream) means accept can proceed with no prompt.
+export async function sharePlacement(req, res) {
+  const share = await ContentShare.findOne({ _id: req.params.id, to: req.user._id, status: "pending" });
+  if (!share) return res.status(404).json({ message: "Share not found." });
+  const kind = share.kind === "test" ? "test" : "quiz";
+  const levels = placementChain(share.level, kind);
+  let names = {};
+  if (levels.length) {
+    const src = await TestSeries.findOne(nodeItemFilter(share.level, String(share.sourceId), share.from))
+      .populate("practiceStream", "name")
+      .populate("practiceSubject", "name")
+      .populate("practiceTopic", "name")
+      .lean();
+    names = {
+      stream: src?.practiceStream?.name || "",
+      subject: src?.practiceSubject?.name || "",
+      topic: src?.practiceTopic?.name || "",
+    };
+  }
+  res.json({
+    level: share.level,
+    kind,
+    title: share.title,
+    chain: levels.map((l) => ({ level: l, suggestedName: names[l] || "" })),
+  });
 }
 
 /* ---------------- Student browse (visibility-filtered) ---------------- */
