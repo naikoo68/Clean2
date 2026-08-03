@@ -2707,7 +2707,7 @@ function buildExtendPrompt(q, notes, fixOptions = false, extendQuestion = false)
     lines.push(`ALSO FIX THE OPTIONS (do this in addition): keep the question stem and the CORRECT option EXACTLY as given, but make sure all four options belong to the SAME real-world category/type as the correct answer. If any option is off-category, unrelated or an obvious give-away (for example a bird or a flower listed among tree names), REPLACE only those wrong options with real, closely-related same-category distractors that match their language, form, length and specificity. Return the full corrected "options" array of EXACTLY 4 (the correct option's text unchanged) plus the 0-based "correct" index for it. Do NOT change the stem or which answer is correct.`);
   }
   if (extendQuestion) {
-    lines.push(`ALSO EXTEND THE QUESTION LENGTH (this OVERRIDES the "do not change the wording" rule for the STEM ONLY): rewrite the question stem into a LONGER, clearer, more descriptive version and return it as "text". You MUST keep the EXACT SAME meaning, the same thing being asked, the same options and the same correct answer — only make the phrasing fuller (add helpful context, expand abbreviations, turn a bare label like "Lateral means:" into a proper full sentence such as "In anatomical terminology, the directional term 'lateral' refers to which of the following?"). Do NOT make the question harder, do NOT change the topic, do NOT add or reveal the answer, and do NOT turn it into a different question. Keep any real math/values wrapped in $...$ but never wrap ordinary words in $...$. For matching/assertion/statement/table questions, extend ONLY the intro sentence in "text" and leave the columns/assertion/reason/table untouched.`);
+    lines.push(`ALSO EXTEND THE QUESTION LENGTH (this OVERRIDES the "do not change the wording" rule for the STEM ONLY): rewrite the question stem into a slightly LONGER, clearer, more descriptive version and return it as "text". STRICT LENGTH LIMIT: the rewritten stem must be SHORT — AT MOST 3 lines, i.e. no more than 2 sentences / about 40 words. Do NOT expand it into a paragraph; brevity matters more than extra detail — stop as soon as it is a clear, full-sentence question, and never exceed 3 lines. You MUST keep the EXACT SAME meaning, the same thing being asked, the same options and the same correct answer — only make the phrasing fuller (add a little helpful context, expand abbreviations, turn a bare label like "Lateral means:" into a proper full sentence such as "In anatomical terminology, the directional term 'lateral' refers to which of the following?"). Do NOT make the question harder, do NOT change the topic, do NOT add or reveal the answer, and do NOT turn it into a different question. Keep any real math/values wrapped in $...$ but never wrap ordinary words in $...$. For matching/assertion/statement/table questions, extend ONLY the intro sentence in "text" (still within the 3-line limit) and leave the columns/assertion/reason/table untouched.`);
   }
   return lines.join("\n");
 }
@@ -2984,7 +2984,14 @@ function buildExtendSet(q, parsed, extendQuestion = false, shuffleOptions = fals
   // wrongly wrapped around plain words. Ignored otherwise so Extend never
   // touches the question wording.
   if (extendQuestion && typeof parsed?.text === "string" && parsed.text.trim()) {
-    set.text = unwrapWordMath(parsed.text.trim());
+    const rewritten = unwrapWordMath(parsed.text.trim());
+    // Backstop for the "at most 3 lines" rule: if the model ignored the limit
+    // and returned an over-long stem (roughly > 3 lines ≈ 45 words or explicit
+    // line breaks pushing past 3 lines), keep the ORIGINAL short stem instead of
+    // applying a wall of text.
+    const wordCount = rewritten.split(/\s+/).filter(Boolean).length;
+    const lineCount = rewritten.split(/\r?\n/).filter((l) => l.trim()).length;
+    if (wordCount <= 45 && lineCount <= 3) set.text = rewritten;
   }
   const newCorrect =
     Number.isInteger(parsed?.correct) && parsed.correct >= 0 && parsed.correct <= 3 ? parsed.correct : null;
