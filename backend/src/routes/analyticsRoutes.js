@@ -9,6 +9,7 @@ import {
   clearUserPerformance,
   clearAllPerformance,
   myPerformance,
+  myAttemptReview,
 } from "../controllers/analyticsController.js";
 import { protect, authorize, optionalAuth } from "../middleware/auth.js";
 
@@ -23,6 +24,7 @@ router.delete("/admin/performance/user/:userId", ...admin, clearUserPerformance)
 router.delete("/admin/performance", ...admin, clearAllPerformance);
 router.get("/me/dashboard", protect, studentDashboard);
 router.get("/me/performance", protect, myPerformance); // a client's own attempts + weak areas (real-time)
+router.get("/me/performance/attempt/:attemptId", protect, myAttemptReview); // full question-by-question review of one attempt
 router.get("/leaderboard", optionalAuth, leaderboard);
 
 export default router;
