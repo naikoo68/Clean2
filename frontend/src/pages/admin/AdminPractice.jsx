@@ -17,6 +17,7 @@ import ManageTestQuestions from "../../components/admin/ManageTestQuestions";
 import SubjectPlanEditor from "../../components/admin/SubjectPlanEditor";
 import ShareTestModal from "../../components/admin/ShareTestModal";
 import ShareByEmailModal from "../../components/client/ShareByEmailModal";
+import IncomingSharesInbox from "../../components/client/IncomingSharesInbox";
 import ExtendExplanationsModal from "../../components/admin/ExtendExplanationsModal";
 import ExtendOneQuestionModal from "../../components/admin/ExtendOneQuestionModal";
 import RegenerateAllModal from "../../components/admin/RegenerateAllModal";
@@ -728,6 +729,9 @@ export default function AdminPractice({ clientMode = false }) {
 
   return (
     <div className="space-y-5">
+      {/* Content other accounts shared with you — Accept saves an owned copy */}
+      <IncomingSharesInbox onAccepted={() => load(view)} />
+
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="text-2xl font-extrabold">My Practice</h1>
