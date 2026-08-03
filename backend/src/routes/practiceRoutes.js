@@ -6,6 +6,7 @@ import {
   listItems, createItem,
   browseStreams, browseSubjects, browseTopics, browseItems, browseTopicItems,
   playQuiz, allSubjects, myItems, moveItem, updateItem, splitItem, splitTopic, mergeItem, moveQuestions, shareContent,
+  incomingShares, acceptShare, declineShare,
 } from "../controllers/practiceController.js";
 import { protect, authorize, optionalAuth } from "../middleware/auth.js";
 
@@ -28,8 +29,13 @@ router.get("/quiz/:id/play", protect, playQuiz);
 router.get("/my-items", ...admin, myItems);
 
 // Share practice content (stream/subject/topic/quiz/test) with another
-// REGISTERED user by email (account-to-account).
+// REGISTERED user by email (account-to-account). Creates a PENDING share the
+// recipient must accept.
 router.post("/share", ...admin, shareContent);
+// Recipient's incoming shares + accept (duplicate into their account) / decline.
+router.get("/shares/incoming", ...admin, incomingShares);
+router.post("/shares/:id/accept", ...admin, acceptShare);
+router.post("/shares/:id/decline", ...admin, declineShare);
 
 // Admin — streams
 router.get("/streams", ...admin, listStreams);

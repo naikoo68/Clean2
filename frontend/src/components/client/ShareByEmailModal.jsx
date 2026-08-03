@@ -48,8 +48,9 @@ export default function ShareByEmailModal({ target, onClose }) {
         {done ? (
           <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-700 dark:border-emerald-900/40 dark:bg-emerald-900/20 dark:text-emerald-300">
             <CheckCircle2 className="mr-1 inline h-4 w-4" />
-            Shared {done.shared} item{done.shared === 1 ? "" : "s"} with <b>{done.recipient?.name || done.recipient?.email}</b>.
-            {done.emailed ? " They've been emailed a link." : " (Email notification is off, but it's now in their dashboard.)"}
+            Sent {done.sent} item{done.sent === 1 ? "" : "s"} to <b>{done.recipient?.name || done.recipient?.email}</b>.
+            {" "}They'll see it under <b>Incoming</b> on their dashboard and can <b>Accept</b> to save it to their own account.
+            {done.emailed ? " (We've emailed them too.)" : ""}
             <div className="mt-3 text-right">
               <button onClick={onClose} className="btn-outline py-1.5 text-xs">Done</button>
             </div>
@@ -70,7 +71,7 @@ export default function ShareByEmailModal({ target, onClose }) {
               disabled={busy}
             />
             <p className="mt-1.5 text-xs text-slate-400">
-              The person must already have an account. They'll see it in their dashboard with the same Stream › Subject › Topic layout, and can practise it — they can't edit it.
+              The person must already have an account. They'll get it under <b>Incoming</b> and, once they <b>Accept</b>, it's saved as their own copy (they can practise, edit and keep it).
             </p>
             {error && <p className="mt-2 rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700 dark:bg-rose-900/30 dark:text-rose-300">{error}</p>}
             <div className="mt-5 flex justify-end gap-2">
