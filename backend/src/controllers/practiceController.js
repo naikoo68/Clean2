@@ -732,6 +732,20 @@ async function createUniqueContainer(Model, { name, kind, parentKey, parentId, i
   return created._id;
 }
 
+// Pick a name for a saved quiz/test copy that doesn't collide with an item the
+// recipient already has in the SAME destination (topic for a quiz, subject for
+// a test). On a clash it suffixes "(shared)", then "(shared 2)"… so the copy
+// stays distinct instead of showing up as a duplicate name.
+async function uniqueItemName(baseName, scope) {
+  let finalName = baseName;
+  for (let n = 1; ; n++) {
+    const clash = await TestSeries.exists({ ...scope, name: finalName });
+    if (!clash) break;
+    finalName = n === 1 ? `${baseName} (shared)` : `${baseName} (shared ${n})`;
+  }
+  return finalName;
+}
+
 // POST /api/practice/shares/:id/accept — DUPLICATE the shared content into the
 // recipient's own account (owned by them) and mark the share accepted.
 export async function acceptShare(req, res) {
@@ -797,9 +811,14 @@ export async function acceptShare(req, res) {
         copyOwner, cache
       );
     }
-    // Create the recipient-owned copy, then duplicate its questions.
+    // Create the recipient-owned copy, then duplicate its questions. Keep the
+    // copy's name distinct from any same-named item already in the destination.
+    const itemScope = kind === "quiz"
+      ? { practice: true, owner: copyOwner ?? null, practiceTopic: topicId }
+      : { practice: true, owner: copyOwner ?? null, practiceSubject: subjectId };
+    const copyName = await uniqueItemName(src.name, itemScope);
     const copy = await TestSeries.create({
-      name: src.name,
+      name: copyName,
       owner: copyOwner,
       practice: true,
       practiceKind: kind,
