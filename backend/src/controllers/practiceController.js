@@ -582,7 +582,9 @@ async function resolvePlacementChain(chainLevels, placement, kind, copyOwner, ca
         e.status = 400;
         throw e;
       }
-      resolved[level] = await ensureContainer(
+      // "Create new" must stay separate from a same-named container the
+      // recipient already has, so suffix it on a clash rather than merge.
+      resolved[level] = await createUniqueContainer(
         models[level],
         { name, kind: level === "stream" ? kind : undefined, parentKey, parentId },
         copyOwner,
@@ -702,6 +704,34 @@ async function ensureContainer(Model, { name, kind, parentKey, parentId, icon, c
   return node._id;
 }
 
+// Like ensureContainer, but ALWAYS creates a brand-new container instead of
+// merging into an existing same-named one. On a name clash (same owner / parent
+// / kind) it appends " (shared)" — then " (shared 2)", " (shared 3)"… — so an
+// incoming "JKSSB" stream becomes "JKSSB (shared)" when the recipient already
+// has a "JKSSB", keeping the two separate. Used for every "create new" choice
+// (and the automatic whole-stream accept); "use existing" still reuses/merges.
+async function createUniqueContainer(Model, { name, kind, parentKey, parentId, icon, color }, owner, cache) {
+  const cacheKey = `${Model.modelName}:${parentId || "-"}:new:${name}`;
+  if (cache.has(cacheKey)) return cache.get(cacheKey);
+  const baseQuery = { owner: owner ?? null };
+  if (kind) baseQuery.kind = kind;
+  if (parentKey) baseQuery[parentKey] = parentId;
+  let finalName = name;
+  for (let n = 1; ; n++) {
+    const clash = await Model.exists({ ...baseQuery, name: finalName });
+    if (!clash) break;
+    finalName = n === 1 ? `${name} (shared)` : `${name} (shared ${n})`;
+  }
+  const doc = { name: finalName, owner, slug: slugify(finalName), status: undefined };
+  if (kind) doc.kind = kind;
+  if (parentKey) doc[parentKey] = parentId;
+  if (icon) doc.icon = icon;
+  if (color) doc.color = color;
+  const created = (await Model.create(doc)).toObject();
+  cache.set(cacheKey, created._id);
+  return created._id;
+}
+
 // POST /api/practice/shares/:id/accept — DUPLICATE the shared content into the
 // recipient's own account (owned by them) and mark the share accepted.
 export async function acceptShare(req, res) {
@@ -745,8 +775,11 @@ export async function acceptShare(req, res) {
   for (const src of items) {
     const kind = src.practiceKind === "test" ? "test" : "quiz";
     // Recreate the hierarchy under the recipient — using the placed containers
-    // where the recipient chose them, else find-or-create by the source name.
-    const streamId = placed.stream || await ensureContainer(
+    // where the recipient chose them, else create by the source name. This
+    // fallback only runs for a whole-stream accept (no placement prompt); it
+    // creates a NEW stream (suffixed on a name clash, e.g. "JKSSB (shared)")
+    // rather than merging into the recipient's existing same-named stream.
+    const streamId = placed.stream || await createUniqueContainer(
       PracticeStream,
       { name: src.practiceStream?.name || "Shared", kind, icon: src.practiceStream?.icon, color: src.practiceStream?.color },
       copyOwner, cache

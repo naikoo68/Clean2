@@ -202,6 +202,9 @@ export default function AcceptShareModal({ share, onClose, onDone }) {
                   {c.mode === "existing" && !existingAllowed && (
                     <p className="mt-1 text-[11px] text-slate-400">Pick an existing parent first to reuse an existing {level}.</p>
                   )}
+                  {c.mode === "new" && (
+                    <p className="mt-1 text-[11px] text-slate-400">If you already have a {level} with this name, a separate "(shared)" copy is created.</p>
+                  )}
                 </div>
               );
             })}
