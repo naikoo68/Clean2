@@ -17,6 +17,10 @@ import {
 import { useNavigate } from "react-router-dom";
 import { analyticsService } from "../../services";
 import { Loading, ErrorState } from "../../components/ui/AsyncState";
+import QuestionView from "../../components/admin/QuestionView";
+
+// Option index → letter (A, B, …); null/negative = not answered.
+const optLetter = (i) => (i == null || i < 0 ? "—" : String.fromCharCode(65 + i));
 
 const fmtDate = (d) =>
   new Date(d).toLocaleString(undefined, { day: "2-digit", month: "short", year: "numeric", hour: "numeric", minute: "2-digit" });
@@ -96,6 +100,23 @@ export default function ClientPerformance({ full = false }) {
   const [error, setError] = useState("");
   const [refreshing, setRefreshing] = useState(false);
   const [openId, setOpenId] = useState(null); // which item's attempt history is expanded
+  const [openAttempt, setOpenAttempt] = useState(null); // which attempt's question review is open
+  const [reviews, setReviews] = useState({}); // attemptId -> { loading } | { error } | { data }
+
+  // Expand an attempt and lazily load its full question-by-question review.
+  const toggleAttempt = async (id) => {
+    if (openAttempt === id) { setOpenAttempt(null); return; }
+    setOpenAttempt(id);
+    if (!reviews[id]) {
+      setReviews((r) => ({ ...r, [id]: { loading: true } }));
+      try {
+        const data = await analyticsService.attemptReview(id);
+        setReviews((r) => ({ ...r, [id]: { data } }));
+      } catch (e) {
+        setReviews((r) => ({ ...r, [id]: { error: e.message || "Couldn't load this attempt's questions." } }));
+      }
+    }
+  };
 
   const fetchData = useCallback(async (isRefresh = false) => {
     if (isRefresh) setRefreshing(true);
@@ -217,6 +238,10 @@ export default function ClientPerformance({ full = false }) {
                   <KindIcon className={`h-4 w-4 flex-shrink-0 ${it.kind === "test" ? "text-brand-600" : "text-violet-600"}`} />
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-semibold">{it.title}</p>
+                    {(() => {
+                      const trail = [it.location?.stream, it.location?.subject, it.location?.topic].filter(Boolean).join(" › ");
+                      return trail ? <p className="truncate text-[11px] text-slate-400">{trail}</p> : null;
+                    })()}
                     <p className="text-xs text-slate-400">
                       {it.kind === "test" ? "Test" : "Quiz"} · attempted {it.count} time{it.count === 1 ? "" : "s"}
                       {it.lastAt ? ` · last ${fmtDate(it.lastAt)}` : ""}
@@ -229,24 +254,65 @@ export default function ClientPerformance({ full = false }) {
                 </button>
                 {open && (
                   <div className="border-t border-slate-100 dark:border-slate-800">
-                    {it.attempts.map((a, i) => (
-                      <div key={a._id} className="flex flex-wrap items-center gap-x-4 gap-y-1 px-4 py-2.5 text-xs sm:text-sm">
-                        <span className="w-6 flex-shrink-0 font-semibold text-slate-400">#{it.attempts.length - i}</span>
-                        <span className="min-w-[9rem] flex-1 text-slate-500 dark:text-slate-400">{fmtDate(a.createdAt)}</span>
-                        <span className={`font-bold ${pctTone(a.percentage)}`}>{a.percentage}%</span>
-                        <span className="inline-flex items-center gap-1 text-emerald-600 dark:text-emerald-400">
-                          <CheckCircle2 className="h-3.5 w-3.5" /> {a.correct}
-                        </span>
-                        <span className="inline-flex items-center gap-1 text-rose-600 dark:text-rose-400">
-                          <XCircle className="h-3.5 w-3.5" /> {a.incorrect}
-                        </span>
-                        <span className="text-slate-400">of {a.total}</span>
-                        <span className="inline-flex items-center gap-1 text-slate-400">
-                          <Clock className="h-3.5 w-3.5" /> {fmtTime(a.timeTaken)}
-                        </span>
-                        <span className="text-slate-400">Score {a.score}</span>
-                      </div>
-                    ))}
+                    {it.attempts.map((a, i) => {
+                      const aOpen = openAttempt === a._id;
+                      const rev = reviews[a._id];
+                      return (
+                        <div key={a._id} className="border-t border-slate-100 first:border-t-0 dark:border-slate-800">
+                          {/* Tap an attempt to see its full question-by-question review. */}
+                          <button
+                            type="button"
+                            onClick={() => toggleAttempt(a._id)}
+                            className="flex w-full flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2.5 text-left text-xs hover:bg-slate-50 dark:hover:bg-slate-800/40 sm:text-sm"
+                          >
+                            {aOpen ? <ChevronDown className="h-3.5 w-3.5 flex-shrink-0 text-slate-400" /> : <ChevronRight className="h-3.5 w-3.5 flex-shrink-0 text-slate-400" />}
+                            <span className="w-6 flex-shrink-0 font-semibold text-slate-400">#{it.attempts.length - i}</span>
+                            <span className="min-w-[8rem] flex-1 text-slate-500 dark:text-slate-400">{fmtDate(a.createdAt)}</span>
+                            <span className={`font-bold ${pctTone(a.percentage)}`}>{a.percentage}%</span>
+                            <span className="inline-flex items-center gap-1 text-emerald-600 dark:text-emerald-400">
+                              <CheckCircle2 className="h-3.5 w-3.5" /> {a.correct}
+                            </span>
+                            <span className="inline-flex items-center gap-1 text-rose-600 dark:text-rose-400">
+                              <XCircle className="h-3.5 w-3.5" /> {a.incorrect}
+                            </span>
+                            <span className="text-slate-400">of {a.total}</span>
+                            <span className="inline-flex items-center gap-1 text-slate-400">
+                              <Clock className="h-3.5 w-3.5" /> {fmtTime(a.timeTaken)}
+                            </span>
+                          </button>
+                          {aOpen && (
+                            <div className="bg-slate-50/60 px-3 pb-3 pt-1 dark:bg-slate-900/30">
+                              {rev?.loading ? (
+                                <p className="px-1 py-3 text-xs text-slate-400">Loading the questions…</p>
+                              ) : rev?.error ? (
+                                <p className="px-1 py-3 text-xs text-rose-500">{rev.error}</p>
+                              ) : rev?.data ? (
+                                <div className="space-y-3">
+                                  <p className="px-1 pt-1 text-xs text-slate-400">
+                                    {rev.data.correct} correct · {rev.data.incorrect} incorrect · {rev.data.total} question{rev.data.total === 1 ? "" : "s"}
+                                  </p>
+                                  {rev.data.review.map((rq, k) => (
+                                    <div key={`${rq._id}-${k}`}>
+                                      <div className="mb-1 flex flex-wrap items-center gap-2 text-xs">
+                                        <span className={`rounded-full px-2 py-0.5 font-semibold ${rq.isCorrect
+                                          ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300"
+                                          : rq.chosen == null
+                                            ? "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300"
+                                            : "bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-300"}`}>
+                                          {rq.isCorrect ? "Correct" : rq.chosen == null ? "Skipped" : "Incorrect"}
+                                        </span>
+                                        <span className="text-slate-500 dark:text-slate-400">Your answer: <b>{optLetter(rq.chosen)}</b></span>
+                                      </div>
+                                      <QuestionView q={rq} index={k + 1} />
+                                    </div>
+                                  ))}
+                                </div>
+                              ) : null}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
               </div>
