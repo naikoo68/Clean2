@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Inbox, Check } from "lucide-react";
 import { practiceService } from "../../services";
+import AcceptShareModal from "./AcceptShareModal";
 
 // Self-contained "Incoming shares" inbox. Fetches pending shares sent to the
 // current account and lets them Accept (save an owned copy) or Decline.
@@ -14,16 +15,22 @@ import { practiceService } from "../../services";
 export default function IncomingSharesInbox({ onAccepted }) {
   const [incoming, setIncoming] = useState([]);
   const [busy, setBusy] = useState(""); // share id currently being accepted/declined
+  const [placing, setPlacing] = useState(null); // share whose "where to save" dialog is open
 
   useEffect(() => {
     practiceService.incomingShares().then(setIncoming).catch(() => {});
   }, []);
 
+  const remove = (id) => setIncoming((list) => list.filter((x) => x._id !== id));
+
+  // Whole-stream share → save as-is (no placement needed). Anything smaller
+  // (subject/topic/quiz/test) → open the dialog to choose existing vs new.
   const accept = async (s) => {
+    if (s.level !== "stream") { setPlacing(s); return; }
     setBusy(s._id);
     try {
       await practiceService.acceptShare(s._id);
-      setIncoming((list) => list.filter((x) => x._id !== s._id));
+      remove(s._id);
       onAccepted?.();
     } catch {
       /* surfaced via global api error toast */
@@ -36,7 +43,7 @@ export default function IncomingSharesInbox({ onAccepted }) {
     setBusy(s._id);
     try {
       await practiceService.declineShare(s._id);
-      setIncoming((list) => list.filter((x) => x._id !== s._id));
+      remove(s._id);
     } catch {
       /* ignore */
     } finally {
@@ -66,13 +73,21 @@ export default function IncomingSharesInbox({ onAccepted }) {
             </div>
             <div className="flex flex-shrink-0 items-center gap-2">
               <button onClick={() => accept(s)} disabled={busy === s._id} className="btn-primary py-1.5 text-xs disabled:opacity-50">
-                <Check className="h-3.5 w-3.5" /> {busy === s._id ? "Saving…" : "Accept & save"}
+                <Check className="h-3.5 w-3.5" /> {busy === s._id ? "Saving…" : s.level === "stream" ? "Accept & save" : "Accept & choose…"}
               </button>
               <button onClick={() => decline(s)} disabled={busy === s._id} className="btn-outline py-1.5 text-xs text-rose-600">Decline</button>
             </div>
           </div>
         ))}
       </div>
+
+      {placing && (
+        <AcceptShareModal
+          share={placing}
+          onClose={() => setPlacing(null)}
+          onDone={() => { remove(placing._id); setPlacing(null); onAccepted?.(); }}
+        />
+      )}
     </div>
   );
 }
