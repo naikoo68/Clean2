@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Search, Ban, CheckCircle2, KeyRound, UserPlus, Trash2, X, ListChecks, FileStack, HelpCircle, Store, Pencil, Clock, AlarmClock, Gift, Ticket, Sparkles } from "lucide-react";
+import { Search, Ban, CheckCircle2, KeyRound, UserPlus, Trash2, X, ListChecks, FileStack, HelpCircle, Store, Pencil, Clock, AlarmClock, Gift, Ticket, Sparkles, Undo2, Archive } from "lucide-react";
 import { userService, settingsService } from "../../services";
 import Badge from "../../components/ui/Badge";
 import { Loading, ErrorState, EmptyState } from "../../components/ui/AsyncState";
@@ -66,6 +66,7 @@ const isExpired = (d) => d && new Date(d).getTime() < Date.now();
 // and delete them (which also removes all their content).
 export default function AdminClients() {
   const [clients, setClients] = useState([]);
+  const [deletedClients, setDeletedClients] = useState([]); // Recycle bin
   const [search, setSearch] = useState("");
   const [plans, setPlans] = useState([]); // client subscription plans (from settings) for the plan dropdown
   const [loading, setLoading] = useState(true);
@@ -89,7 +90,11 @@ export default function AdminClients() {
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false));
   };
-  useEffect(load, []);
+  // Recycle bin (soft-deleted clients) — loaded alongside the active list.
+  const loadDeleted = () => {
+    userService.deletedClients().then((res) => setDeletedClients(res.clients || [])).catch(() => {});
+  };
+  useEffect(() => { load(); loadDeleted(); }, []);
 
   const flash = (msg) => {
     setToast(msg);
@@ -146,11 +151,36 @@ export default function AdminClients() {
   };
 
   const removeClient = async (c) => {
-    if (!window.confirm(`Delete client "${c.name}"? This also permanently deletes ALL their My Practice content. This cannot be undone.`)) return;
+    if (!window.confirm(`Move client "${c.name}" to the Recycle bin?\n\nTheir account and all My Practice content are KEPT and can be restored later. (To erase permanently, use the Recycle bin below.)`)) return;
     try {
       await userService.remove(c._id);
       setClients((list) => list.filter((x) => x._id !== c._id));
-      flash("Client deleted.");
+      loadDeleted();
+      flash("Client moved to Recycle bin — you can restore it below.");
+    } catch (e) {
+      flash(e.message);
+    }
+  };
+
+  // Restore a soft-deleted client (account + content come back intact).
+  const restoreClient = async (c) => {
+    try {
+      await userService.restore(c._id);
+      setDeletedClients((list) => list.filter((x) => x._id !== c._id));
+      load();
+      flash("Client restored.");
+    } catch (e) {
+      flash(e.message);
+    }
+  };
+
+  // Permanently delete a client from the Recycle bin — irreversible.
+  const permanentlyDelete = async (c) => {
+    if (!window.confirm(`Permanently delete "${c.name}" and ALL their My Practice content?\n\nThis CANNOT be undone.`)) return;
+    try {
+      await userService.deletePermanent(c._id);
+      setDeletedClients((list) => list.filter((x) => x._id !== c._id));
+      flash("Client permanently deleted.");
     } catch (e) {
       flash(e.message);
     }
@@ -399,7 +429,7 @@ export default function AdminClients() {
                             >
                               {c.status === "blocked" ? <CheckCircle2 className="h-4 w-4" /> : <Ban className="h-4 w-4" />}
                             </button>
-                            <button onClick={() => removeClient(c)} title="Delete client & their content" className="rounded-lg p-2 text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-900/30">
+                            <button onClick={() => removeClient(c)} title="Move to Recycle bin (recoverable)" className="rounded-lg p-2 text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-900/30">
                               <Trash2 className="h-4 w-4" />
                             </button>
                           </div>
@@ -409,6 +439,43 @@ export default function AdminClients() {
                   })}
                 </tbody>
               </table>
+            </div>
+          )}
+
+          {/* Recycle bin — soft-deleted clients, restorable or permanently removable */}
+          {deletedClients.length > 0 && (
+            <div className="card p-5">
+              <h3 className="mb-1 flex items-center gap-2 text-lg font-bold">
+                <Archive className="h-5 w-5 text-slate-500" /> Recycle bin
+                <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-500 dark:bg-slate-800">{deletedClients.length}</span>
+              </h3>
+              <p className="mb-3 text-sm text-slate-500 dark:text-slate-400">
+                Deleted clients are kept here with all their content. <b>Restore</b> brings the account fully back; <b>Delete permanently</b> erases it and cannot be undone.
+              </p>
+              <div className="divide-y divide-slate-100 dark:divide-slate-800">
+                {deletedClients.map((c) => (
+                  <div key={c._id} className="flex flex-wrap items-center justify-between gap-3 py-3">
+                    <div className="min-w-0">
+                      <p className="font-medium">{c.name}</p>
+                      <p className="text-xs text-slate-400">{c.email}</p>
+                      <p className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-slate-400">
+                        <Badge variant="brand"><ListChecks className="h-3 w-3" /> {c.quizzes}</Badge>
+                        <Badge variant="accent"><FileStack className="h-3 w-3" /> {c.tests}</Badge>
+                        <Badge variant="neutral"><HelpCircle className="h-3 w-3" /> {c.questions} Qs</Badge>
+                        {c.deletedAt && <span>· deleted {fmtDate(c.deletedAt)}</span>}
+                      </p>
+                    </div>
+                    <div className="flex flex-shrink-0 items-center gap-2">
+                      <button onClick={() => restoreClient(c)} className="btn-outline !py-1.5 text-xs">
+                        <Undo2 className="h-3.5 w-3.5" /> Restore
+                      </button>
+                      <button onClick={() => permanentlyDelete(c)} title="Delete permanently (cannot be undone)" className="rounded-lg p-2 text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-900/30">
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
         </>

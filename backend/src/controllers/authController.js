@@ -322,6 +322,9 @@ export async function login(req, res) {
   if (user.status === "blocked") {
     return res.status(403).json({ message: "Account blocked" });
   }
+  if (user.deleted) {
+    return res.status(403).json({ message: "This account has been deleted. Please contact the administrator." });
+  }
   if (user.expiresAt && user.expiresAt.getTime() < Date.now()) {
     return res.status(403).json({ message: "This temporary account has expired. Please contact the administrator." });
   }
