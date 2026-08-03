@@ -4,6 +4,7 @@ import PracticeTopic from "../models/PracticeTopic.js";
 import TestSeries from "../models/TestSeries.js";
 import Question from "../models/Question.js";
 import User from "../models/User.js";
+import ContentShare from "../models/ContentShare.js";
 import { isTestVisibleToUser, isSharedWithUser } from "../utils/accessControl.js";
 import { ownerFilter, ownerValue } from "../utils/ownership.js";
 import { sendMail, isMailConfigured } from "../config/mailer.js";
@@ -531,6 +532,20 @@ export async function myItems(req, res) {
 // (else 404 "user has no account"). Adds the recipient to sharedWith on EVERY
 // practice item under the chosen node (so they see the whole hierarchy), scoped
 // to the caller's OWN content only. Best-effort emails the recipient.
+// Build the TestSeries scope for a share/copy of a node, restricted to the
+// given owner (the sender). Returns a Mongo filter.
+function nodeItemFilter(level, id, owner) {
+  const f = { practice: true, owner: owner ?? null };
+  if (level === "item") f._id = id;
+  else if (level === "topic") f.practiceTopic = id;
+  else if (level === "subject") f.practiceSubject = id;
+  else if (level === "stream") f.practiceStream = id;
+  return f;
+}
+
+// POST /api/practice/share — SEND content to another registered user. This does
+// NOT grant access directly; it creates a PENDING share the recipient must
+// ACCEPT, at which point the content is DUPLICATED (saved) into THEIR account.
 export async function shareContent(req, res) {
   const level = String(req.body?.level || "").trim();
   const id = String(req.body?.id || "").trim();
@@ -544,36 +559,167 @@ export async function shareContent(req, res) {
   if (!recipient) return res.status(404).json({ message: "This user doesn't have an account, so nothing was shared." });
   if (String(recipient._id) === String(req.user._id)) return res.status(400).json({ message: "That's your own account." });
 
-  // Scope to the caller's OWN practice content, and to the chosen node.
-  const base = { practice: true, ...ownerFilter(req) };
-  if (level === "item") base._id = id;
-  else if (level === "topic") base.practiceTopic = id;
-  else if (level === "subject") base.practiceSubject = id;
-  else if (level === "stream") base.practiceStream = id;
-
-  const matches = await TestSeries.find(base).select("_id name practiceKind").lean();
+  // Only your OWN content, scoped to the chosen node.
+  const filter = nodeItemFilter(level, id, ownerValue(req));
+  const matches = await TestSeries.find(filter).select("_id name practiceKind").lean();
   if (!matches.length) return res.status(404).json({ message: "No quizzes/tests found here to share (or not your content)." });
 
-  await TestSeries.updateMany({ _id: { $in: matches.map((m) => m._id) } }, { $addToSet: { sharedWith: recipient._id } });
+  // Title = the node's own name (stream/subject/topic) or the single item's name.
+  let title = matches[0].name;
+  if (level !== "item") {
+    const Model = level === "stream" ? PracticeStream : level === "subject" ? PracticeSubject : PracticeTopic;
+    const node = await Model.findOne({ _id: id, owner: ownerValue(req) }).select("name").lean();
+    if (node?.name) title = node.name;
+  }
+  const kind = matches[0].practiceKind === "test" ? "test" : "quiz";
 
-  // Notify the recipient (best-effort — sharing still succeeds if mail is off).
+  const share = await ContentShare.create({
+    from: req.user._id,
+    to: recipient._id,
+    fromName: req.user?.name || "",
+    level,
+    sourceId: id,
+    kind,
+    title,
+    itemCount: matches.length,
+    status: "pending",
+  });
+
+  // Best-effort email — the pending share is saved regardless.
   let emailed = false;
   if (isMailConfigured()) {
     try {
-      const appBase = clientBaseFromReq(req);
-      const link = `${appBase}#/client`;
-      const label = level === "item" ? `"${matches[0].name}"` : `${matches.length} ${matches[0].practiceKind === "test" ? "test" : "quiz"}(s)`;
+      const link = `${clientBaseFromReq(req)}#/client`;
+      const label = level === "item" ? `"${title}"` : `${matches.length} ${kind}(s) from "${title}"`;
       await sendMail({
         to: recipient.email,
-        subject: `${req.user?.name || "Someone"} shared study content with you`,
-        text: `${req.user?.name || "A teacher"} has shared ${label} with you on the study app. Open your dashboard to practise: ${link}`,
-        html: `<p><b>${req.user?.name || "A teacher"}</b> has shared ${label} with you.</p><p>Open your dashboard to practise it: <a href="${link}">${link}</a></p>`,
+        subject: `${req.user?.name || "Someone"} sent you study content`,
+        text: `${req.user?.name || "A teacher"} sent you ${label}. Open your dashboard and click "Accept" under Incoming to save it to your account: ${link}`,
+        html: `<p><b>${req.user?.name || "A teacher"}</b> sent you ${label}.</p><p>Open your dashboard and click <b>Accept</b> under <b>Incoming</b> to save it to your account: <a href="${link}">${link}</a></p>`,
       });
       emailed = true;
-    } catch { /* ignore mail errors — the share is already saved */ }
+    } catch { /* ignore mail errors */ }
   }
 
-  res.json({ shared: matches.length, recipient: { name: recipient.name, email: recipient.email }, emailed });
+  res.json({ sent: matches.length, pending: true, shareId: share._id, recipient: { name: recipient.name, email: recipient.email }, emailed });
+}
+
+// GET /api/practice/shares/incoming — pending shares waiting for THIS user to
+// accept or decline.
+export async function incomingShares(req, res) {
+  const shares = await ContentShare.find({ to: req.user._id, status: "pending" }).sort("-createdAt").lean();
+  res.json(
+    shares.map((s) => ({
+      _id: s._id,
+      from: s.fromName || "Someone",
+      level: s.level,
+      kind: s.kind,
+      title: s.title,
+      itemCount: s.itemCount,
+      createdAt: s.createdAt,
+    }))
+  );
+}
+
+// POST /api/practice/shares/:id/decline — dismiss a pending share.
+export async function declineShare(req, res) {
+  const share = await ContentShare.findOne({ _id: req.params.id, to: req.user._id, status: "pending" });
+  if (!share) return res.status(404).json({ message: "Share not found." });
+  share.status = "declined";
+  await share.save();
+  res.json({ message: "Declined" });
+}
+
+// Find-or-create an owner-scoped practice container (stream/subject/topic) that
+// mirrors a source node by name, so a copied item lands in the same hierarchy
+// under the recipient. `cache` dedupes within one accept.
+async function ensureContainer(Model, { name, kind, parentKey, parentId, icon, color }, owner, cache) {
+  const cacheKey = `${Model.modelName}:${parentId || "-"}:${name}`;
+  if (cache.has(cacheKey)) return cache.get(cacheKey);
+  const query = { owner, name };
+  if (kind) query.kind = kind;
+  if (parentKey) query[parentKey] = parentId;
+  let node = await Model.findOne(query).lean();
+  if (!node) {
+    const doc = { name, owner, slug: slugify(name), status: undefined };
+    if (kind) doc.kind = kind;
+    if (parentKey) doc[parentKey] = parentId;
+    if (icon) doc.icon = icon;
+    if (color) doc.color = color;
+    node = (await Model.create(doc)).toObject();
+  }
+  cache.set(cacheKey, node._id);
+  return node._id;
+}
+
+// POST /api/practice/shares/:id/accept — DUPLICATE the shared content into the
+// recipient's own account (owned by them) and mark the share accepted.
+export async function acceptShare(req, res) {
+  const share = await ContentShare.findOne({ _id: req.params.id, to: req.user._id, status: "pending" });
+  if (!share) return res.status(404).json({ message: "Share not found." });
+
+  // Load the sender's source items (they must still exist).
+  const items = await TestSeries.find(nodeItemFilter(share.level, String(share.sourceId), share.from))
+    .populate("practiceStream", "name kind icon color")
+    .populate("practiceSubject", "name icon color")
+    .populate("practiceTopic", "name icon color")
+    .lean();
+  if (!items.length) {
+    share.status = "declined";
+    await share.save();
+    return res.status(410).json({ message: "The sender no longer has this content, so there's nothing to save." });
+  }
+
+  const recipient = req.user._id;
+  const cache = new Map();
+  let saved = 0;
+  for (const src of items) {
+    const kind = src.practiceKind === "test" ? "test" : "quiz";
+    // Recreate the hierarchy under the recipient.
+    const streamId = await ensureContainer(
+      PracticeStream,
+      { name: src.practiceStream?.name || "Shared", kind, icon: src.practiceStream?.icon, color: src.practiceStream?.color },
+      recipient, cache
+    );
+    const subjectId = await ensureContainer(
+      PracticeSubject,
+      { name: src.practiceSubject?.name || "Shared", parentKey: "stream", parentId: streamId, icon: src.practiceSubject?.icon, color: src.practiceSubject?.color },
+      recipient, cache
+    );
+    let topicId;
+    if (kind === "quiz") {
+      topicId = await ensureContainer(
+        PracticeTopic,
+        { name: src.practiceTopic?.name || "Shared", parentKey: "subject", parentId: subjectId, icon: src.practiceTopic?.icon, color: src.practiceTopic?.color },
+        recipient, cache
+      );
+    }
+    // Create the recipient-owned copy, then duplicate its questions.
+    const copy = await TestSeries.create({
+      name: src.name,
+      owner: recipient,
+      practice: true,
+      practiceKind: kind,
+      practiceStream: streamId,
+      practiceSubject: subjectId,
+      practiceTopic: topicId,
+      category: src.category || "Full-Length",
+      duration: src.duration,
+      marks: src.marks,
+      difficulty: src.difficulty,
+      negativeMarking: src.negativeMarking,
+      subjectPlan: Array.isArray(src.subjectPlan) ? src.subjectPlan : [],
+      status: "published",
+      visibleToAll: false,
+    });
+    const created = await duplicateQuestions({ testSeries: src._id }, { testSeries: copy._id, owner: recipient });
+    if (created.length) await TestSeries.findByIdAndUpdate(copy._id, { $push: { questions: { $each: created.map((c) => c._id) } } });
+    saved += 1;
+  }
+
+  share.status = "accepted";
+  await share.save();
+  res.json({ message: "Saved to your account", saved });
 }
 
 /* ---------------- Student browse (visibility-filtered) ---------------- */
