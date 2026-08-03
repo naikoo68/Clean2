@@ -106,6 +106,12 @@ const testSeriesSchema = new mongoose.Schema(
         validUntil: { type: Date, default: null },
       },
     ],
+    // Account-to-account sharing: registered users this practice item (quiz/test)
+    // has been shared with. A recipient sees it (with its full Stream › Subject ›
+    // Topic hierarchy) in their own dashboard and can play/take it, but cannot
+    // edit it. Sharing a stream/subject/topic simply adds the recipient here on
+    // every item beneath that node.
+    sharedWith: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
   },
   { timestamps: true }
 );
