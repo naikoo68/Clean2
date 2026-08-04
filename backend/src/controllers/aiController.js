@@ -2953,12 +2953,19 @@ function parseExplanationJson(content) {
 // ones — so it composes correctly with "fix options"/numerical corrections.
 function applyOptionShuffle(set, q) {
   if (q.type === "assertion") return; // fixed rubric — order is meaningful
-  const options = (Array.isArray(set.options) && set.options.length
-    ? set.options
-    : Array.isArray(q.options) ? q.options : []).map((x) => String(x));
+  // Shuffle the options we're actually going to store, and track the correct
+  // index that MATCHES that same array. IMPORTANT: when we're reordering the
+  // ORIGINAL options (the model didn't return a fixed options array), anchor to
+  // the ORIGINAL correct answer (q.correct) — NOT any `correct` the model may
+  // have returned, which can be relative to a different order and would move
+  // the answer to the wrong option (e.g. B → C). This guarantees a reshuffle
+  // never changes WHICH option is correct.
+  const usingSet = Array.isArray(set.options) && set.options.length;
+  const options = (usingSet ? set.options : (Array.isArray(q.options) ? q.options : [])).map((x) => String(x));
   const n = options.length;
   if (n < 2) return;
-  const correct = Number.isInteger(set.correct) ? set.correct
+  const correct = usingSet
+    ? (Number.isInteger(set.correct) ? set.correct : (Number.isInteger(q.correct) ? q.correct : null))
     : (Number.isInteger(q.correct) ? q.correct : null);
   const oe = Array.isArray(set.optionExplanations) ? set.optionExplanations.slice()
     : (Array.isArray(q.optionExplanations) ? q.optionExplanations.slice() : null);
