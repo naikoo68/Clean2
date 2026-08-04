@@ -2969,10 +2969,9 @@ function applyOptionShuffle(set, q) {
     : (Number.isInteger(q.correct) ? q.correct : null);
   const oe = Array.isArray(set.optionExplanations) ? set.optionExplanations.slice()
     : (Array.isArray(q.optionExplanations) ? q.optionExplanations.slice() : null);
-  // A permutation guaranteed to differ from the current order (so it visibly
-  // reshuffles); perm[newIndex] = oldIndex.
-  let perm = [...Array(n).keys()];
-  do { shuffleInPlace(perm); } while (perm.every((p, i) => p === i));
+  // A genuinely RANDOM permutation (not identity, not a simple rotation) that
+  // moves the correct answer to a random new slot; perm[newIndex] = oldIndex.
+  const perm = shuffledPermutation(n, (correct != null && correct >= 0 && correct < n) ? correct : null);
   set.options = perm.map((p) => options[p]);
   if (correct != null && correct >= 0 && correct < n) set.correct = perm.indexOf(correct);
   if (oe) { while (oe.length < n) oe.push(""); set.optionExplanations = perm.map((p) => oe[p] ?? ""); }
@@ -3314,6 +3313,24 @@ const NUM_WORD = ["zero", "one", "two", "three", "four", "five", "six", "seven",
 const ROMAN = ["I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X"];
 const toRomanPos = (i0) => ROMAN[i0] || String(i0 + 1); // 0-based index → roman label
 const shuffleInPlace = (a) => { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+// A uniformly-random permutation (perm[newIndex] = oldIndex) for reshuffling
+// options that is genuinely RANDOM — never the identity, never a simple cyclic
+// rotation (so the answer doesn't just march A→B→C→D→A), and, when a correct
+// index is given, ALWAYS moves that answer to a different slot. Best-effort:
+// returns the last attempt after enough tries.
+function shuffledPermutation(n, mustMoveIndex = null) {
+  if (n < 2) return [...Array(n).keys()];
+  const isRotation = (p) => { for (let k = 1; k < n; k++) if (p.every((v, i) => v === (i + k) % n)) return true; return false; };
+  let perm = [...Array(n).keys()];
+  for (let g = 0; g < 80; g++) {
+    shuffleInPlace(perm);
+    const identity = perm.every((p, i) => p === i);
+    const rotated = n >= 4 && isRotation(perm); // only enforce for 4+ options (n<4 has too few perms)
+    const answerStuck = mustMoveIndex != null && perm.indexOf(mustMoveIndex) === mustMoveIndex;
+    if (!identity && !rotated && !answerStuck) break;
+  }
+  return perm;
+}
 // Return a derangement (permutation with NO element left in its original slot).
 function derange(arr) {
   if (arr.length < 2) return arr.slice();
@@ -3548,8 +3565,7 @@ function buildRegenSet(q, parsed) {
     // it (correctness preserved).
     const opts = Array.isArray(set.options) && set.options.length ? set.options : null;
     if (opts && opts.length >= 2 && Number.isInteger(set.correct) && set.correct >= 0 && set.correct < opts.length) {
-      let perm = [...Array(opts.length).keys()];
-      do { shuffleInPlace(perm); } while (perm.every((p, i) => p === i)); // guarantee a real move
+      const perm = shuffledPermutation(opts.length, set.correct); // random, non-rotation, answer moves
       set.options = perm.map((p) => opts[p]);
       set.correct = perm.indexOf(set.correct);
       if (Array.isArray(set.optionExplanations)) {
