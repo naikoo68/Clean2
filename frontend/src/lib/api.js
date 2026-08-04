@@ -34,7 +34,7 @@ const DEFAULT_TIMEOUT = 120000;
 // long cold-start retry sequence. Set via api.onRetry.
 let retryListener = null;
 
-async function request(path, { method = "GET", body, auth = true, headers = {}, timeout = DEFAULT_TIMEOUT } = {}) {
+async function request(path, { method = "GET", body, auth = true, headers = {}, timeout = DEFAULT_TIMEOUT, signal } = {}) {
   const finalHeaders = { ...headers };
   let payload = body;
 
@@ -49,14 +49,24 @@ async function request(path, { method = "GET", body, auth = true, headers = {}, 
     if (token) finalHeaders.Authorization = `Bearer ${token}`;
   }
 
+  // If the caller passed an already-aborted signal, bail immediately.
+  if (signal?.aborted) { const e = new Error("Cancelled"); e.aborted = true; throw e; }
+
   let lastNetworkError = false;
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
     let res;
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeout);
+    // Link an external abort signal (e.g. a "Stop" button) to this attempt so
+    // the in-flight request is cancelled on demand.
+    const onExtAbort = () => controller.abort();
+    if (signal) signal.addEventListener("abort", onExtAbort, { once: true });
     try {
       res = await fetch(`${BASE_URL}${path}`, { method, headers: finalHeaders, body: payload, signal: controller.signal });
     } catch {
+      // A user-initiated cancel (external signal) must NOT be retried — surface
+      // it as an abort so callers can quietly stop.
+      if (signal?.aborted) { const e = new Error("Cancelled"); e.aborted = true; throw e; }
       // Network error OR our own timeout abort — both mean "no usable response";
       // retry a few times (rides out a cold start), then give up with an error.
       lastNetworkError = true;
@@ -68,6 +78,7 @@ async function request(path, { method = "GET", body, auth = true, headers = {}, 
       break;
     } finally {
       clearTimeout(timer);
+      if (signal) signal.removeEventListener("abort", onExtAbort);
     }
 
     // Gateway/cold-start errors → wait and retry

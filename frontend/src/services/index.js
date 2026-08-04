@@ -325,6 +325,7 @@ const withRateLimitRetry = async (fn, { waitMs = 60000, tries = 2 } = {}) => {
   for (let i = 0; i < tries; i++) {
     try { return await fn(); }
     catch (e) {
+      if (e?.aborted) throw e; // user pressed Stop — never retry
       if (!isRateLimit(e) || i === tries - 1) throw e;
       await new Promise((r) => setTimeout(r, waitMs)); // wait for the per-minute limit to reset, then retry
     }
@@ -345,8 +346,8 @@ export const aiService = {
   parseSyllabus: (data) => api.post("/ai/parse-syllabus", data, { timeout: 180000 }), // full syllabus → { subject, topics:[{title,subtopics}] }
   classifyUnits: (data) => api.post("/ai/classify-units", data), // file question stems under units → { assign: [...] }
   extendExplanations: (data) => api.post("/ai/extend-explanations", data), // enrich all explanations in a quiz/test → { jobId, requested }
-  extendOne: (data) => withRateLimitRetry(() => api.post("/ai/extend-explanation", data)), // enrich ONE question's explanation → { explanation, optionExplanations }; waits 60s & retries on a rate limit
-  regenerate: (data) => withRateLimitRetry(() => api.post("/ai/regenerate-question", data)), // analyse ONE question → rebuild options/answer → { options, correct, explanation }; waits 60s & retries on a rate limit
+  extendOne: (data, opts) => withRateLimitRetry(() => api.post("/ai/extend-explanation", data, opts)), // enrich ONE question's explanation → { explanation, optionExplanations }; opts.signal supports Stop
+  regenerate: (data, opts) => withRateLimitRetry(() => api.post("/ai/regenerate-question", data, opts)), // analyse ONE question → rebuild options/answer → { options, correct, explanation }; opts.signal supports Stop
   regenerateAll: (data) => api.post("/ai/regenerate-all", data), // regenerate EVERY question in a quiz/test → { jobId, requested }
   checkSemantic: (data) => api.post("/ai/check-semantic", data, { timeout: 120000 }), // AI "deep check": match pasted questions to the bank BY MEANING, across formats → same shape as contentService.checkQuestions
   // Client AI access + pool selection (built-in vs own keys)
