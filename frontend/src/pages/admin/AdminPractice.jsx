@@ -956,8 +956,14 @@ export default function AdminPractice({ clientMode = false }) {
             {(() => {
               const others = items.filter((it) => it._id !== mergeTarget._id);
               if (!others.length) return <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-700 dark:bg-amber-900/20 dark:text-amber-300">There are no other quizzes in this topic to merge.</p>;
+              const otherIds = others.map((o) => o._id);
+              const allSelected = otherIds.every((id) => mergeIds.includes(id));
               return (
                 <div className="max-h-64 space-y-1 overflow-y-auto rounded-lg border border-slate-200 p-2 dark:border-slate-700">
+                  <label className="flex cursor-pointer items-center gap-2 rounded-md border-b border-slate-200 px-2 py-1.5 font-semibold hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800">
+                    <input type="checkbox" checked={allSelected} onChange={() => setMergeIds(allSelected ? [] : otherIds)} />
+                    <span className="text-sm">Select all <span className="text-slate-400">· {others.length}</span></span>
+                  </label>
                   {others.map((it) => (
                     <label key={it._id} className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 hover:bg-slate-50 dark:hover:bg-slate-800">
                       <input type="checkbox" checked={mergeIds.includes(it._id)} onChange={() => setMergeIds((s) => (s.includes(it._id) ? s.filter((x) => x !== it._id) : [...s, it._id]))} />
