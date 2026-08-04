@@ -20,6 +20,7 @@ import ShareByEmailModal from "../../components/client/ShareByEmailModal";
 import IncomingSharesInbox from "../../components/client/IncomingSharesInbox";
 import ExtendExplanationsModal from "../../components/admin/ExtendExplanationsModal";
 import ExtendOneQuestionModal from "../../components/admin/ExtendOneQuestionModal";
+import RegenerateOneModal from "../../components/admin/RegenerateOneModal";
 import RegenerateAllModal from "../../components/admin/RegenerateAllModal";
 import ScheduleQuestionModal from "../../components/admin/ScheduleQuestionModal";
 import MigrateQuizModal from "../../components/admin/MigrateQuizModal";
@@ -140,8 +141,9 @@ export default function AdminPractice({ clientMode = false }) {
   const [extendItem, setExtendItem] = useState(null); // AI extend-explanations target
   const [extendingQId, setExtendingQId] = useState(null); // per-question extend in progress
   const [extendOneItem, setExtendOneItem] = useState(null); // per-question extend confirm modal target
-  const [regenId, setRegenId] = useState(null); // per-question regenerate in progress
+  const [regenOneItem, setRegenOneItem] = useState(null); // per-question regenerate modal target
   const [regenAllItem, setRegenAllItem] = useState(null); // bulk "regenerate all" modal target
+  const extendAbortRef = useRef(null); // AbortController for the single-question extend (Stop button)
   const [scheduleQ, setScheduleQ] = useState(null); // question to post/schedule to Facebook
   // Which subject a question-adding tool should target (set when opened from a
   // subject inside the manager). "" / "__unassigned__" means no subject.
@@ -646,29 +648,30 @@ export default function AdminPractice({ clientMode = false }) {
     return res;
   };
   // Run the per-question extend once confirmed in the modal.
-  const runExtendOne = async ({ fixOptions, extendQuestion, shuffleOptions } = {}) => {
+  const runExtendOne = async ({ fixOptions, extendQuestion, shuffleOptions, model, mode } = {}) => {
     const item = extendOneItem;
     if (!item) return;
     setExtendingQId(item._id);
+    const controller = new AbortController();
+    extendAbortRef.current = controller;
     try {
-      const updated = await aiService.extendOne({ questionId: item._id, fixOptions, extendQuestion, shuffleOptions });
+      const updated = await aiService.extendOne(
+        { questionId: item._id, fixOptions, extendQuestion, shuffleOptions, model, mode },
+        { signal: controller.signal }
+      );
       setViewQ((prev) => (prev && prev._id === item._id ? { ...prev, ...updated } : prev));
       setExtendOneItem(null);
       await reloadTq();
-    } catch (e) { setError(e.message); setExtendOneItem(null); }
-    finally { setExtendingQId(null); }
+    } catch (e) { if (!e?.aborted) setError(e.message); setExtendOneItem(null); }
+    finally { extendAbortRef.current = null; setExtendingQId(null); }
   };
-  // Regenerate ONE question's options/answer to fit its stem, then reload
-  // (and update the open preview modal in place if it's the same question).
-  const regenerateQ = async (item) => {
-    setRegenId(item._id);
-    try {
-      const updated = await aiService.regenerate({ questionId: item._id });
-      setViewQ((prev) => (prev && prev._id === item._id ? { ...prev, ...updated } : prev));
-      await reloadTq();
-    }
-    catch (e) { setError(e.message); }
-    finally { setRegenId(null); }
+  // Apply a single-question regenerate result (from RegenerateOneModal) to the
+  // open preview and reload the list.
+  const applyRegenerated = async (updated) => {
+    const item = regenOneItem;
+    if (item) setViewQ((prev) => (prev && prev._id === item._id ? { ...prev, ...updated } : prev));
+    setRegenOneItem(null);
+    await reloadTq();
   };
   const saveTestQuestion = async (payload) => {
     setTqSaving(true);
@@ -1020,8 +1023,8 @@ export default function AdminPractice({ clientMode = false }) {
               onExtendExplanations={() => setExtendItem(qItem)}
               onExtendQuestion={(item) => setExtendOneItem(item)}
               extendingId={extendingQId}
-              onRegenerateQuestion={(item) => regenerateQ(item)}
-              regeneratingId={regenId}
+              onRegenerateQuestion={(item) => setRegenOneItem(item)}
+              regeneratingId={null}
               onRegenerateAll={() => setRegenAllItem(qItem)}
             />
           </div>
@@ -1044,7 +1047,7 @@ export default function AdminPractice({ clientMode = false }) {
         <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/50 p-4" onClick={() => setViewQ(null)}>
           <div onClick={(e) => e.stopPropagation()} className="my-8 w-full max-w-2xl animate-scale-in card p-6">
             <div className="mb-4 flex items-center justify-between"><h3 className="text-lg font-bold">Question</h3><button onClick={() => setViewQ(null)}><X className="h-5 w-5" /></button></div>
-            <QuestionView q={viewQ} {...(() => { const L = tq; const i = L.findIndex((x) => x._id === viewQ._id); return { position: i >= 0 ? `${i + 1} / ${L.length}` : undefined, onPrev: i > 0 ? () => setViewQ(L[i - 1]) : undefined, onNext: i >= 0 && i < L.length - 1 ? () => setViewQ(L[i + 1]) : undefined }; })()} onRegenerate={() => regenerateQ(viewQ)} regenerating={regenId === viewQ._id} onExtend={() => setExtendOneItem(viewQ)} extending={extendingQId === viewQ._id} onSchedule={clientMode ? undefined : () => setScheduleQ(viewQ)} />
+            <QuestionView q={viewQ} {...(() => { const L = tq; const i = L.findIndex((x) => x._id === viewQ._id); return { position: i >= 0 ? `${i + 1} / ${L.length}` : undefined, onPrev: i > 0 ? () => setViewQ(L[i - 1]) : undefined, onNext: i >= 0 && i < L.length - 1 ? () => setViewQ(L[i + 1]) : undefined }; })()} onRegenerate={() => setRegenOneItem(viewQ)} regenerating={false} onExtend={() => setExtendOneItem(viewQ)} extending={extendingQId === viewQ._id} onSchedule={clientMode ? undefined : () => setScheduleQ(viewQ)} />
             <div className="mt-6 flex justify-end gap-2">
               <button onClick={async () => { if (!window.confirm("Delete this question?")) return; await testService.deleteQuestion(qItem._id, viewQ._id); setViewQ(null); await reloadTq(); load("items"); }} className="btn-outline mr-auto text-rose-600"><Trash2 className="h-4 w-4" /> Delete</button>
               <button onClick={() => setAddToTestQ(viewQ)} className="btn-outline"><ClipboardList className="h-4 w-4" /> Add to test</button>
@@ -1115,7 +1118,7 @@ export default function AdminPractice({ clientMode = false }) {
                       </>
                     )}
                   </div>
-                  <QuestionView q={it} index={i + 1} studentView={studentView} onRegenerate={() => regenerateQ(it)} regenerating={regenId === it._id} onExtend={() => setExtendOneItem(it)} extending={extendingQId === it._id} onSchedule={clientMode ? undefined : () => setScheduleQ(it)} />
+                  <QuestionView q={it} index={i + 1} studentView={studentView} onRegenerate={() => setRegenOneItem(it)} regenerating={false} onExtend={() => setExtendOneItem(it)} extending={extendingQId === it._id} onSchedule={clientMode ? undefined : () => setScheduleQ(it)} />
                 </div>
               ))}
             </div>
@@ -1399,8 +1402,17 @@ export default function AdminPractice({ clientMode = false }) {
       <ExtendOneQuestionModal
         open={!!extendOneItem}
         busy={!!extendingQId}
+        modelPicker
+        onStop={() => extendAbortRef.current?.abort()}
         onCancel={() => setExtendOneItem(null)}
         onConfirm={runExtendOne}
+      />
+
+      <RegenerateOneModal
+        open={!!regenOneItem}
+        question={regenOneItem}
+        onClose={() => setRegenOneItem(null)}
+        onDone={applyRegenerated}
       />
 
       <RegenerateAllModal
