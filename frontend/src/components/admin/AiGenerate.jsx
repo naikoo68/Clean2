@@ -461,7 +461,10 @@ export default function AiGenerate({ open, onClose, onUpload, title = "Generate 
     setMsg(`"Subtopics to cover" now holds only your ${picks.length} selected subtopic(s) — Generate will focus on just these, and they'll drop off the list once done.`);
   };
   // Generate a batch focused on ONE saved subtopic (uses the type/difficulty grid).
-  const generateSubtopic = (text) => { setSubtopics(text); generate(false, text); };
+  // Generate a focused subtopic / uncovered batch and APPEND it to whatever is
+  // already in the preview (so the previous batch isn't wiped) — deduped against
+  // it. Manually-typed subtopics still take precedence for the main Generate.
+  const generateSubtopic = (text) => { setSubtopics(text); generate(true, text); };
 
   // Stop the current generation. Tells the server to cancel the background job;
   // the poll loop then finalizes with whatever was produced so far, so the
