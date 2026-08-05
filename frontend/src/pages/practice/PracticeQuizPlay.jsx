@@ -290,7 +290,12 @@ export default function PracticeQuizPlay() {
             <button onClick={() => setShowReview((v) => !v)} className="btn-accent">
               <Lightbulb className="h-4 w-4" /> {showReview ? "Hide Answers" : "Review Answers"}
             </button>
-            <PaperExport title={title || "Practice Quiz"} questions={questions} />
+            {/* Generated "Paper / Key" (built from the questions) is hidden for
+                Previous Papers that have their OWN uploaded paper/answer-key —
+                those real uploads are shown in the Paper resources panel below. */}
+            {!(paper.paperPdfUrl || paper.answerKeyPdfUrl) && (
+              <PaperExport title={title || "Practice Quiz"} questions={questions} />
+            )}
             {isPublic ? (
               <button onClick={() => navigate("/")} className="btn-primary">Done</button>
             ) : isClient ? (
