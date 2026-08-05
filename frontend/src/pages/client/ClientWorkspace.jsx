@@ -1,12 +1,13 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { GraduationCap, LogOut, Moon, Sun, ZoomIn, ZoomOut, LayoutDashboard, Wrench, ArrowRightLeft, Sparkles, FileText, Feather, BookOpen, Files } from "lucide-react";
+import { GraduationCap, LogOut, Moon, Sun, ZoomIn, ZoomOut, LayoutDashboard, Wrench, ArrowRightLeft, Sparkles, FileText, Feather, BookOpen, Files, SearchCheck } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import { useTheme } from "../../context/ThemeContext";
 import { useSettings } from "../../context/SettingsContext";
 import { useZoom } from "../../context/ZoomContext";
 import AdminPractice from "../admin/AdminPractice";
 import AdminMigration from "../admin/AdminMigration";
+import AdminChecker from "../admin/AdminChecker";
 import ClientDashboard from "./ClientDashboard";
 import ClientUserManual from "./ClientUserManual";
 import ClientUpgrade from "./ClientUpgrade";
@@ -56,6 +57,7 @@ export default function ClientWorkspace() {
       { key: "migrate", label: "Migrate", Icon: ArrowRightLeft },
     ] : []),
     ...(user?.featPapers !== false ? [{ key: "papers", label: "Previous Papers", Icon: Files }] : []),
+    ...(user?.featChecker !== false ? [{ key: "checker", label: "Question Checker", Icon: SearchCheck }] : []),
     ...(user?.aiAccess ? [{ key: "ai", label: "AI", Icon: Sparkles }] : []),
     ...(user?.featAiGenerator ? [{ key: "aigen", label: "AI Generator", Icon: Sparkles }] : []),
     ...(user?.featDocuments !== false ? [{ key: "documents", label: "Documents", Icon: FileText }] : []),
@@ -143,6 +145,8 @@ export default function ClientWorkspace() {
           <ClientUserManual onGoTab={setTab} />
         ) : tab === "papers" ? (
           <AdminPractice clientMode fixedKind="paper" />
+        ) : tab === "checker" ? (
+          <AdminChecker />
         ) : (
           <AdminPractice clientMode />
         )}
