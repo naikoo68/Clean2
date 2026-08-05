@@ -23,7 +23,19 @@ const testSeriesSchema = new mongoose.Schema(
     // question-paper PDF, the answer-key PDF, and free-text additional info that
     // students can view alongside the paper.
     paperPdfUrl: { type: String, default: "" },
+    // Legacy single answer key. Kept in sync with answerKeys[0] for backward
+    // compatibility; new code reads answerKeys (below).
     answerKeyPdfUrl: { type: String, default: "" },
+    // Multiple answer keys (e.g. the original key plus a revised key). Each is
+    // { label, url }. Admins add as many as needed; students see one button
+    // per key, labelled accordingly.
+    answerKeys: [
+      {
+        _id: false,
+        label: { type: String, default: "" },
+        url: { type: String, default: "" },
+      },
+    ],
     additionalInfo: { type: String, default: "" },
     practiceStream: { type: mongoose.Schema.Types.ObjectId, ref: "PracticeStream" },
     practiceSubject: { type: mongoose.Schema.Types.ObjectId, ref: "PracticeSubject" },
