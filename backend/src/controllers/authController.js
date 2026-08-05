@@ -64,6 +64,7 @@ const sanitize = (u) => ({
   featDashboard: u.featDashboard !== false,
   featBuild: u.featBuild !== false,
   featPapers: u.featPapers !== false,
+  featChecker: u.featChecker !== false,
   featNotes: u.featNotes !== false,
   featDocuments: u.featDocuments !== false,
   featManual: u.featManual !== false,
