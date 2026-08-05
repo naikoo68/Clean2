@@ -45,6 +45,7 @@ export default function AiGenerate({ open, onClose, onUpload, title = "Generate 
   const [busy, setBusy] = useState(false);
   const [stopping, setStopping] = useState(false); // user asked to stop the current generation
   const [autoContinue, setAutoContinue] = useState(false); // keep generating in waves until the full count is reached
+  const [keepExtras, setKeepExtras] = useState(false); // if a wave produces more than the target, keep ALL of them instead of trimming to the exact count
   const [numerical, setNumerical] = useState(false); // opt-in: also include numerical/calculation questions (default off)
   const jobIdRef = useRef(null); // id of the running background job (so Stop can cancel it)
   const stopRef = useRef(false); // set when the user clicks Stop — breaks/short-circuits the poll loop
@@ -282,7 +283,9 @@ export default function AiGenerate({ open, onClose, onUpload, title = "Generate 
           // exactly — each wave requests the full plan, so without this the last
           // wave overshoots (e.g. 472 for a target of 400).
           const room = target > 0 ? Math.max(0, target - priorTotal) : qsAll.length;
-          const qs = qsAll.slice(0, room);
+          // "Keep all generated" → keep the whole wave even if it overshoots the
+          // target; otherwise trim so the total lands on the requested count exactly.
+          const qs = keepExtras ? qsAll : qsAll.slice(0, room);
           setPreview((prev) => (isAppend ? [...prev, ...qs] : qs));
           const batchStems = qs.map((q) => q.text).filter(Boolean);
           avoidLocal = Array.from(new Set([...avoidLocal, ...batchStems]));
@@ -694,6 +697,11 @@ export default function AiGenerate({ open, onClose, onUpload, title = "Generate 
             <label className="mt-4 flex items-start gap-2 rounded-lg border border-slate-200 p-2.5 text-xs text-slate-600 dark:border-slate-700 dark:text-slate-300">
               <input type="checkbox" checked={autoContinue} onChange={(e) => setAutoContinue(e.target.checked)} className="mt-0.5 h-4 w-4 flex-shrink-0 accent-brand-600" />
               <span><b>Auto-continue</b> until the full count is generated. When the free-tier limit stops a wave, it waits ~60s and keeps going (no duplicates) until it reaches {total || "the"} question(s) — press <b>Stop</b> to end early. Best for big batches.</span>
+            </label>
+
+            <label className="mt-2 flex items-start gap-2 rounded-lg border border-slate-200 p-2.5 text-xs text-slate-600 dark:border-slate-700 dark:text-slate-300">
+              <input type="checkbox" checked={keepExtras} onChange={(e) => setKeepExtras(e.target.checked)} className="mt-0.5 h-4 w-4 flex-shrink-0 accent-brand-600" />
+              <span><b>Keep all generated</b> — if a wave produces more than the {total || "target"} you asked for, keep them all instead of trimming to the exact count. Leave unticked to keep exactly {total || "the target"} (extras are dropped).</span>
             </label>
 
             <label className="mt-2 flex items-start gap-2 rounded-lg border border-slate-200 p-2.5 text-xs text-slate-600 dark:border-slate-700 dark:text-slate-300">
