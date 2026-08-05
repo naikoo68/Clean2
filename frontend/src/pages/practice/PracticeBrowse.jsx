@@ -6,7 +6,7 @@ import { practiceService } from "../../services";
 import { useAuth } from "../../context/AuthContext";
 import { Loading, ErrorState, EmptyState } from "../../components/ui/AsyncState";
 
-const KIND_LABEL = { quiz: "My Quiz", test: "My Test" };
+const KIND_LABEL = { quiz: "My Quiz", test: "My Test", paper: "Previous Papers" };
 
 // Handles the three practice browse levels based on the URL params:
 //   /practice/:kind                         → streams
@@ -21,16 +21,18 @@ export default function PracticeBrowse() {
   const [error, setError] = useState("");
 
   // My Quiz has an extra Topic level; My Test Series goes subject → items.
+  // My Quiz: stream → subject → topic → items. My Test: stream → subject → items.
+  // Previous Papers: stream → papers (items directly under the stream, no subject).
   const level = topicId ? "items"
     : subjectId ? (kind === "quiz" ? "topics" : "items")
-    : streamId ? "subjects"
+    : streamId ? (kind === "paper" ? "items" : "subjects")
     : "streams";
 
   const load = () => {
     setLoading(true);
     setError("");
     const p =
-      level === "items" ? (kind === "quiz" ? practiceService.topicItems(kind, topicId) : practiceService.items(kind, subjectId))
+      level === "items" ? (kind === "paper" ? practiceService.streamItems(kind, streamId) : kind === "quiz" ? practiceService.topicItems(kind, topicId) : practiceService.items(kind, subjectId))
       : level === "topics" ? practiceService.topics(kind, subjectId)
       : level === "subjects" ? practiceService.subjects(kind, streamId)
       : practiceService.streams(kind);
@@ -39,7 +41,7 @@ export default function PracticeBrowse() {
   useEffect(load, [kind, streamId, subjectId, topicId]);
 
   const back =
-    level === "items" ? (kind === "quiz" ? `/practice/${kind}/${streamId}/${subjectId}` : `/practice/${kind}/${streamId}`)
+    level === "items" ? (kind === "paper" ? `/practice/${kind}` : kind === "quiz" ? `/practice/${kind}/${streamId}/${subjectId}` : `/practice/${kind}/${streamId}`)
     : level === "topics" ? `/practice/${kind}/${streamId}`
     : level === "subjects" ? `/practice/${kind}`
     : "/practice";
@@ -50,7 +52,7 @@ export default function PracticeBrowse() {
     if (!user) return navigate("/login");
     // My Quiz → quiz-style player (instant answer reveal + per-question timer).
     // My Test Series → full test interface (timed, submit at end).
-    if (kind === "quiz") navigate(`/practice/quiz/play/${item._id}`);
+    if (kind === "quiz" || kind === "paper") navigate(`/practice/quiz/play/${item._id}`);
     else navigate(`/test-series/attempt/${item._id}`);
   };
 
