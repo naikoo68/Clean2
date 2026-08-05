@@ -51,6 +51,7 @@ const userSchema = new mongoose.Schema(
     // (the AI keys tab is gated by aiAccess above, also OFF by default).
     featDashboard: { type: Boolean, default: true },
     featBuild: { type: Boolean, default: true },
+    featPapers: { type: Boolean, default: true },
     featNotes: { type: Boolean, default: true },
     featDocuments: { type: Boolean, default: true },
     featManual: { type: Boolean, default: true },

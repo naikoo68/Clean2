@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { GraduationCap, LogOut, Moon, Sun, ZoomIn, ZoomOut, LayoutDashboard, Wrench, ArrowRightLeft, Sparkles, FileText, Feather, BookOpen } from "lucide-react";
+import { GraduationCap, LogOut, Moon, Sun, ZoomIn, ZoomOut, LayoutDashboard, Wrench, ArrowRightLeft, Sparkles, FileText, Feather, BookOpen, Files } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import { useTheme } from "../../context/ThemeContext";
 import { useSettings } from "../../context/SettingsContext";
@@ -55,6 +55,7 @@ export default function ClientWorkspace() {
       { key: "build", label: "Build", Icon: Wrench },
       { key: "migrate", label: "Migrate", Icon: ArrowRightLeft },
     ] : []),
+    ...(user?.featPapers !== false ? [{ key: "papers", label: "Previous Papers", Icon: Files }] : []),
     ...(user?.aiAccess ? [{ key: "ai", label: "AI", Icon: Sparkles }] : []),
     ...(user?.featAiGenerator ? [{ key: "aigen", label: "AI Generator", Icon: Sparkles }] : []),
     ...(user?.featDocuments !== false ? [{ key: "documents", label: "Documents", Icon: FileText }] : []),
@@ -140,6 +141,8 @@ export default function ClientWorkspace() {
           <AdminNotes />
         ) : tab === "manual" ? (
           <ClientUserManual onGoTab={setTab} />
+        ) : tab === "papers" ? (
+          <AdminPractice clientMode fixedKind="paper" />
         ) : (
           <AdminPractice clientMode />
         )}
