@@ -140,7 +140,7 @@ export async function updateUser(req, res) {
   if ("aiAllowInbuilt" in req.body) user.aiAllowInbuilt = !!req.body.aiAllowInbuilt;
   if ("aiAllowSelf" in req.body) user.aiAllowSelf = !!req.body.aiAllowSelf;
   // Per-feature client workspace access (applied only when present).
-  for (const f of ["featDashboard", "featBuild", "featPapers", "featNotes", "featDocuments", "featManual", "featAiGenerator"]) {
+  for (const f of ["featDashboard", "featBuild", "featPapers", "featChecker", "featNotes", "featDocuments", "featManual", "featAiGenerator"]) {
     if (f in req.body) user[f] = !!req.body[f];
   }
   // Assign a subscription plan (admin override). Sets the plan key plus its
@@ -244,7 +244,7 @@ export async function toggleStatus(req, res) {
 // Only the keys present are applied; the rest are left untouched.
 export async function applyClientFeatureAccess(req, res) {
   const f = req.body?.features || {};
-  const allowed = ["featDashboard", "featBuild", "featPapers", "featNotes", "featDocuments", "featManual", "aiAccess", "featAiGenerator"];
+  const allowed = ["featDashboard", "featBuild", "featPapers", "featChecker", "featNotes", "featDocuments", "featManual", "aiAccess", "featAiGenerator"];
   const set = {};
   for (const k of allowed) if (k in f) set[k] = !!f[k];
   if (!Object.keys(set).length) return res.status(400).json({ message: "No feature flags provided." });
