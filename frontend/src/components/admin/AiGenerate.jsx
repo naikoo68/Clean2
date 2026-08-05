@@ -232,8 +232,42 @@ export default function AiGenerate({ open, onClose, onUpload, title = "Generate 
   // on, the main Generate runs in WAVES — after a wave is cut short (free-tier
   // quota / shortfall) it waits ~60s for the limit to reset and generates the
   // remainder, repeating until the full count is reached or you press Stop.
-  const generate = async (append = false, overrideSubtopics = null) => {
-    if (!topic.trim() && !url.trim()) { setMsg("Enter a topic/syllabus, or paste a source link (web page or YouTube video)."); return; }
+  // Serialize the existing questions (whole topic + this quiz) into source text
+  // the AI can reshape (A) or use as source material (B) for other question types.
+  const serializeExisting = () => {
+    const pool = [...(coverageQuestions || []), ...(existingQuestions || [])];
+    const seen = new Set();
+    const parts = [];
+    for (const q of pool) {
+      const text = typeof q === "string" ? q : q?.text;
+      if (!text) continue;
+      const key = String(text).trim().toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      if (typeof q === "string") { parts.push(`Q: ${text}`); continue; }
+      const opts = Array.isArray(q.options) ? q.options : [];
+      const ans = Number.isInteger(q.correct) && opts[q.correct] != null ? opts[q.correct] : "";
+      let s = `Q: ${text}`;
+      if (opts.length) s += `\nOptions: ${opts.join(" | ")}`;
+      if (ans) s += `\nAnswer: ${ans}`;
+      if (q.explanation) s += `\nExplanation: ${String(q.explanation).slice(0, 400)}`;
+      parts.push(s);
+    }
+    return parts.join("\n\n");
+  };
+
+  // Two buttons: (A) reshape=true recasts existing MCQ facts into the chosen
+  // types; (B) reshape=false writes fresh questions of those types from the same
+  // material (avoiding duplicates). Both use the type counts set in the grid and
+  // flow into the SAME preview → choose → insert.
+  const generateFromExisting = (reshape) => {
+    const src = serializeExisting();
+    if (!src) { setMsg("No existing questions found to build from — generate some MCQs first."); return; }
+    generate(false, null, { sourceText: src, reshape });
+  };
+
+  const generate = async (append = false, overrideSubtopics = null, extra = {}) => {
+    if (!topic.trim() && !url.trim() && !extra.sourceText) { setMsg("Enter a topic/syllabus, or paste a source link (web page or YouTube video)."); return; }
     const plan = buildPlan();
     if (!plan.length) { setMsg("Set at least one question count in the grid below."); return; }
     if (total > maxPerBatch) { setMsg(`Please keep the total to ${maxPerBatch} questions or fewer per batch.`); return; }
@@ -273,6 +307,8 @@ export default function AiGenerate({ open, onClose, onUpload, title = "Generate 
           model: model || undefined,
           avoid: avoidLocal, // don't repeat anything from earlier waves/batches
           mode: isClient ? source : undefined,
+          source: extra.sourceText || undefined, // existing questions as material (from-existing modes)
+          reshape: extra.reshape || undefined,   // true = recast existing MCQs into the chosen types
         }));
       } catch (e) { setMsg(e.message || "Generation failed."); return { produced: 0, errored: true }; }
       if (!jobId) { setMsg("Could not start generation."); return { produced: 0, errored: true }; }
@@ -746,6 +782,26 @@ export default function AiGenerate({ open, onClose, onUpload, title = "Generate 
               >
                 {busy ? <><Loader2 className="h-4 w-4 animate-spin" /> Generating more…</> : <><Sparkles className="h-4 w-4" /> Generate more from this topic (no duplicates)</>}
               </button>
+            )}
+
+            {(existingQuestions.length > 0 || coverageQuestions.length > 0) && (
+              <div className="mt-3 rounded-lg border border-slate-200 p-3 dark:border-slate-700">
+                <p className="text-xs font-semibold">Make other question types from your existing questions</p>
+                <p className="mt-0.5 text-[11px] text-slate-500 dark:text-slate-400">
+                  Set the counts for the types you want in the grid above (Assertion, Statements, Matching, Pair, Pair-select…), then choose:
+                </p>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  <button type="button" disabled={busy} onClick={() => generateFromExisting(true)} className="inline-flex items-center gap-1.5 rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-brand-700 disabled:opacity-50">
+                    <Wand2 className="h-3.5 w-3.5" /> Convert existing → these types
+                  </button>
+                  <button type="button" disabled={busy} onClick={() => generateFromExisting(false)} className="btn-outline text-xs">
+                    <Sparkles className="h-3.5 w-3.5" /> Generate new of these types (from existing)
+                  </button>
+                </div>
+                <p className="mt-1 text-[11px] text-slate-400">
+                  <b>Convert</b> = recast the same facts into the new formats. <b>Generate new</b> = fresh questions on the same content, avoiding duplicates. Both appear in the preview below to review &amp; insert (your original MCQs are untouched).
+                </p>
+              </div>
             )}
 
             {preview.length > 0 && (
