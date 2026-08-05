@@ -170,6 +170,9 @@ export default function Home() {
               <Link to="/test-series" className="btn-outline text-base">
                 Explore Test Series <ArrowRight className="h-4 w-4" />
               </Link>
+              <Link to="/practice/paper" className="btn-outline text-base">
+                <FileText className="h-5 w-5" /> Previous Papers
+              </Link>
             </div>
             {/* Search all content — streams, subjects, topics, quizzes & tests */}
             <div className="mt-6 max-w-lg">
