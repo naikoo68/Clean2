@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
+  FileText,
   ChevronLeft,
   ChevronRight,
   Bookmark,
@@ -93,6 +94,7 @@ export default function PracticeQuizPlay() {
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState(null);
+  const [paper, setPaper] = useState({ paperPdfUrl: "", answerKeyPdfUrl: "", additionalInfo: "" }); // Previous Papers extras
   const [showReview, setShowReview] = useState(false);
   const [reviewSearch, setReviewSearch] = useState("");
   // Per-attempt option-shuffle seed — persisted so "Continue" keeps the SAME
@@ -132,6 +134,7 @@ export default function PracticeQuizPlay() {
       .then((data) => {
         setQuestions(shuffleAll(data.questions || [], seed)); // reshuffle options
         setTitle(data.name || "Practice Quiz");
+        setPaper({ paperPdfUrl: data.paperPdfUrl || "", answerKeyPdfUrl: data.answerKeyPdfUrl || "", additionalInfo: data.additionalInfo || "" });
       })
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false));
@@ -483,6 +486,24 @@ export default function PracticeQuizPlay() {
             With a timer, each question reveals its answer when time runs out. You can still review and continue.
           </p>
         </div>
+
+        {(paper.paperPdfUrl || paper.answerKeyPdfUrl || paper.additionalInfo) && (
+          <div className="mx-auto mt-4 max-w-lg card p-5 text-left">
+            <h2 className="flex items-center gap-2 text-sm font-bold"><FileText className="h-4 w-4 text-brand-600" /> Paper resources</h2>
+            {(paper.paperPdfUrl || paper.answerKeyPdfUrl) && (
+              <div className="mt-3 flex flex-wrap gap-2">
+                {paper.paperPdfUrl && <a href={paper.paperPdfUrl} target="_blank" rel="noreferrer" className="btn-outline text-sm"><FileText className="h-4 w-4" /> View question paper (PDF)</a>}
+                {paper.answerKeyPdfUrl && <a href={paper.answerKeyPdfUrl} target="_blank" rel="noreferrer" className="btn-outline text-sm"><FileText className="h-4 w-4" /> View answer key (PDF)</a>}
+              </div>
+            )}
+            {paper.additionalInfo && (
+              <div className="mt-3 whitespace-pre-line rounded-xl bg-slate-50 p-3 text-sm text-slate-600 dark:bg-slate-800/60 dark:text-slate-300">
+                <p className="mb-1 font-semibold text-slate-700 dark:text-slate-200">Additional information</p>
+                {paper.additionalInfo}
+              </div>
+            )}
+          </div>
+        )}
       </div>
     );
   }
