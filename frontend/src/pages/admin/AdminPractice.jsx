@@ -50,6 +50,7 @@ const normSection = (s) => (s && s !== "__unassigned__" ? s : "");
 const KINDS = [
   { key: "quiz", label: "My Quiz", icon: ListChecks },
   { key: "test", label: "My Test", icon: FileStack },
+  { key: "paper", label: "Previous Papers", icon: Files }, // built like a test (stream → subject → items), played like a quiz
 ];
 
 // `clientMode` renders this same manager for a self-service CLIENT account:
