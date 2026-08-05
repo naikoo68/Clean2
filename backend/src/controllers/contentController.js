@@ -534,6 +534,12 @@ export async function findDuplicates(req, res) {
     const items = await TestSeries.find({ practiceSubject: req.query.practiceSubject }).select("_id").lean();
     filter.testSeries = { $in: items.map((i) => i._id) };
   }
+  // ?pool=1 (with practiceSubject): pool the comparison ACROSS all of the
+  // subject's items/topics, so the same question appearing in two different
+  // topic quizzes is flagged — instead of the default per-item grouping.
+  const poolScopeId = (req.query.practiceSubject && (req.query.pool === "1" || req.query.pool === "true"))
+    ? `psub:${req.query.practiceSubject}`
+    : null;
 
   const questions = await Question.find(filter)
     .select("text options correct type difficulty status subject quiz session testSeries createdAt assertion reason columnA columnB tableRows image")
@@ -551,7 +557,12 @@ export async function findDuplicates(req, res) {
           ? "Practice Quiz"
           : "Practice Test"
         : "Test Series";
-      return { category, scopeId: String(ts._id), scopeName: ts.name || "Untitled", location: ts.name || "Untitled" };
+      return {
+        category,
+        scopeId: poolScopeId || String(ts._id),
+        scopeName: poolScopeId ? "Across all topics" : (ts.name || "Untitled"),
+        location: ts.name || "Untitled",
+      };
     }
     if (q.subject || q.quiz) {
       return {
