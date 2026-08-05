@@ -10,6 +10,7 @@ import BulkUploadQuestions, { questionsToCsv } from "../../components/admin/Bulk
 import AiGenerate from "../../components/admin/AiGenerate";
 import AiImport from "../../components/admin/AiImport";
 import DuplicatesModal from "../../components/admin/DuplicatesModal";
+import PaperFilesModal from "../../components/admin/PaperFilesModal";
 import QuestionView from "../../components/admin/QuestionView";
 import AddToTestModal from "../../components/admin/AddToTestModal";
 import PickFromBank from "../../components/admin/PickFromBank";
@@ -138,6 +139,7 @@ export default function AdminPractice({ clientMode = false }) {
   const [shareItem, setShareItem] = useState(null); // public share-link modal target (tests)
   const [shareEmailTarget, setShareEmailTarget] = useState(null); // account-to-account share (stream/subject/topic/item)
   const [migrateItem, setMigrateItem] = useState(null); // per-quiz migrate modal target (My Quiz)
+  const [paperFilesItem, setPaperFilesItem] = useState(null); // Previous Papers: paper/answer-key PDF + info modal target
   const [selTopics, setSelTopics] = useState({}); // checkbox selection in the topics view (id -> true)
   const [migrateTopicsOpen, setMigrateTopicsOpen] = useState(false); // bulk-topic migrate modal
   const [extendItem, setExtendItem] = useState(null); // AI extend-explanations target
@@ -177,7 +179,7 @@ export default function AdminPractice({ clientMode = false }) {
       : which === "subjects" ? practiceService.adminSubjects(stream._id)
       : which === "topics" ? practiceService.adminTopics(subject._id)
       : kind === "quiz" ? practiceService.adminTopicItems(topic._id)
-      : practiceService.adminItems(subject._id, "test");
+      : practiceService.adminItems(subject._id, kind);
     p.then(setItems).catch((e) => setError(e.message)).finally(() => setLoading(false));
   };
   useEffect(() => { load(view); /* eslint-disable-next-line */ }, [view, kind]);
@@ -911,6 +913,9 @@ export default function AdminPractice({ clientMode = false }) {
               {view === "items" && (
                 <div className="mt-3 flex flex-wrap gap-2">
                   <button onClick={() => openQuestions(item)} className="btn-outline py-1.5 text-xs"><HelpCircle className="h-3.5 w-3.5" /> Questions</button>
+                  {kind === "paper" && (
+                    <button onClick={() => setPaperFilesItem(item)} className="btn-outline py-1.5 text-xs text-brand-600" title="Upload the question-paper PDF, answer-key PDF and additional information"><Files className="h-3.5 w-3.5" /> Paper files</button>
+                  )}
                   {kind === "quiz" && (
                     <button onClick={() => setMigrateItem(item)} className="btn-outline py-1.5 text-xs" title="Move or copy this quiz (My Quiz → My Quiz, or My Quiz → Content)"><ArrowRightLeft className="h-3.5 w-3.5" /> Migrate</button>
                   )}
@@ -1391,6 +1396,14 @@ export default function AdminPractice({ clientMode = false }) {
           clientMode={clientMode}
           onClose={() => setMigrateItem(null)}
           onDone={() => load("items")}
+        />
+      )}
+
+      {paperFilesItem && (
+        <PaperFilesModal
+          item={paperFilesItem}
+          onClose={() => setPaperFilesItem(null)}
+          onSaved={() => { setPaperFilesItem(null); load("items"); }}
         />
       )}
 
