@@ -29,6 +29,7 @@ import {
   Feather,
   FilePlus2,
   LayoutGrid,
+  Files,
 } from "lucide-react";
 import { useTheme } from "../../context/ThemeContext";
 import { useAuth } from "../../context/AuthContext";
@@ -42,6 +43,7 @@ const nav = [
   { to: "/admin/content", label: "Content", icon: BookCopy },
   { to: "/admin/tests", label: "Test Series", icon: FileStack },
   { to: "/admin/practice", label: "My Practice", icon: GraduationCap },
+  { to: "/admin/previous-papers", label: "Previous Papers", icon: Files },
   { to: "/admin/checker", label: "Question Checker", icon: SearchCheck },
   { to: "/admin/shared", label: "Shared Links", icon: Share2 },
   { to: "/admin/cbt", label: "Online Exams", icon: MonitorCheck },

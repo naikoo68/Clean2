@@ -26,6 +26,7 @@ const blank = {
   // Per-feature workspace access (defaults: most ON, AI Generator OFF).
   featDashboard: true,
   featBuild: true,
+  featPapers: true,
   featNotes: true,
   featDocuments: true,
   featManual: true,
@@ -36,6 +37,7 @@ const blank = {
 const FEATURES = [
   { key: "featDashboard", label: "Dashboard" },
   { key: "featBuild", label: "Build" },
+  { key: "featPapers", label: "Previous Papers" },
   { key: "aiAccess", label: "AI (API keys)" },
   { key: "featAiGenerator", label: "AI Generator" },
   { key: "featNotes", label: "Notes" },
@@ -122,6 +124,7 @@ export default function AdminClients() {
       subscriptionPlan: c.subscriptionPlan || "",
       featDashboard: c.featDashboard !== false,
       featBuild: c.featBuild !== false,
+      featPapers: c.featPapers !== false,
       featNotes: c.featNotes !== false,
       featDocuments: c.featDocuments !== false,
       featManual: c.featManual !== false,
@@ -207,6 +210,7 @@ export default function AdminClients() {
           subscriptionPlan: form.subscriptionPlan,
           featDashboard: form.featDashboard,
           featBuild: form.featBuild,
+          featPapers: form.featPapers,
           featNotes: form.featNotes,
           featDocuments: form.featDocuments,
           featManual: form.featManual,

@@ -67,6 +67,8 @@ const AdminNotices = lazy(() => import("./pages/admin/AdminNotices"));
 const AdminFacebook = lazy(() => import("./pages/admin/AdminFacebook"));
 const AdminPerformance = lazy(() => import("./pages/admin/AdminPerformance"));
 const AdminPractice = lazy(() => import("./pages/admin/AdminPractice"));
+// Standalone "Previous Papers" = the practice manager locked to the paper kind.
+const AdminPreviousPapers = () => <AdminPractice fixedKind="paper" />;
 const AdminMigration = lazy(() => import("./pages/admin/AdminMigration"));
 const AdminClients = lazy(() => import("./pages/admin/AdminClients"));
 const AdminCoupons = lazy(() => import("./pages/admin/AdminCoupons"));
@@ -208,6 +210,7 @@ const router = createHashRouter([
       { path: "content", element: S(AdminContent) },
       { path: "tests", element: S(AdminTests) },
       { path: "practice", element: S(AdminPractice) },
+      { path: "previous-papers", element: S(AdminPreviousPapers) },
       { path: "checker", element: S(AdminChecker) },
       { path: "shared", element: S(AdminSharedLinks) },
       { path: "migration", element: S(AdminMigration) },

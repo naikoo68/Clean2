@@ -58,10 +58,17 @@ const KINDS = [
 // the backend scopes everything to that client's own content, so we just hide
 // the per-student "Visibility" control (irrelevant — a client is the only
 // viewer) and add a "Practice" button so they can take their own quizzes/tests.
-export default function AdminPractice({ clientMode = false }) {
+// `fixedKind` locks this manager to a single practice kind (e.g. "paper") and
+// hides the kind tab-bar — used to render "Previous Papers" as its own
+// standalone page (admin sidebar item + client workspace tab) rather than a
+// tab inside "My Practice".
+export default function AdminPractice({ clientMode = false, fixedKind = "" }) {
   // Remember drill-down position across refreshes (separate keys for the admin
-  // panel and the client workspace so they never clash).
-  const NAV_KEY = clientMode ? "mpm-client-practice-nav" : "mpm-admin-practice-nav";
+  // panel and the client workspace so they never clash; a fixed-kind page also
+  // gets its own key so it never clobbers the main practice position).
+  const NAV_KEY =
+    (clientMode ? "mpm-client-practice-nav" : "mpm-admin-practice-nav") +
+    (fixedKind ? `-${fixedKind}` : "");
   // The drill-down level lives in the URL (?v=subjects|topics|items) so the
   // phone/browser BACK button steps UP one level (Streams > Subject > Topic >
   // Quizzes) instead of leaving the page — each level is its own history entry.
@@ -76,7 +83,13 @@ export default function AdminPractice({ clientMode = false }) {
     if (v && v !== "streams") next.set("v", v); else next.delete("v");
     setSearchParams(next, opts);
   };
-  const [kind, setKind] = useState(() => loadNav(NAV_KEY).kind || "quiz");
+  const [kind, setKind] = useState(() => {
+    if (fixedKind) return fixedKind;
+    // Previous Papers is now its own standalone page, so it's no longer a tab
+    // here. Coerce a stale saved "paper" position back to a visible tab.
+    const saved = loadNav(NAV_KEY).kind;
+    return saved && saved !== "paper" ? saved : "quiz";
+  });
   const [stream, setStream] = useState(() => loadNav(NAV_KEY).stream || null);
   const [subject, setSubject] = useState(() => loadNav(NAV_KEY).subject || null);
   const [topic, setTopic] = useState(() => loadNav(NAV_KEY).topic || null);
@@ -775,9 +788,12 @@ export default function AdminPractice({ clientMode = false }) {
         </button>
       </div>
 
-      {/* Kind tabs */}
+      {/* Kind tabs — hidden on a fixed-kind standalone page (e.g. Previous
+          Papers). Otherwise Previous Papers is its own section, so only the
+          My Quiz / My Test tabs are shown here. */}
+      {!fixedKind && (
       <div className="flex flex-wrap gap-2">
-        {KINDS.map((k) => (
+        {KINDS.filter((k) => k.key !== "paper").map((k) => (
           <button
             key={k.key}
             onClick={() => { setKind(k.key); setStream(null); setSubject(null); setTopic(null); setView("streams"); }}
@@ -787,6 +803,7 @@ export default function AdminPractice({ clientMode = false }) {
           </button>
         ))}
       </div>
+      )}
 
       {/* Breadcrumb */}
       <div className="card px-4 py-3">
