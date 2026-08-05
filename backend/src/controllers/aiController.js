@@ -1481,8 +1481,8 @@ export async function generateQuestions(req, res) {
   // Stems of questions that already exist (from earlier batches) — the generator
   // must not repeat these. Capped to keep the request reasonable.
   const avoid = Array.isArray(req.body?.avoid)
-    ? req.body.avoid.filter((s) => typeof s === "string" && s.trim()).slice(0, 300)
-    : [];
+    ? req.body.avoid.filter((s) => typeof s === "string" && s.trim()).slice(0, 1000)
+    : []; // may include EVERY existing question in the whole topic (across its quizzes) so new questions don't duplicate them
 
   // Fire-and-forget — the client polls /api/ai/job/:id for progress.
   guardJob(id, runGenerationJob(id, { workers, fallbackWorkers, model, topic, notes, plan, count, difficulty, types, target, avoid, owner: jobOwner, source, userSubtopics, numerical: !!req.body?.numerical }));
