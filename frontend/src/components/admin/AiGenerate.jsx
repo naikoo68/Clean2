@@ -795,8 +795,11 @@ export default function AiGenerate({ open, onClose, onUpload, title = "Generate 
                     </div>
                     {coverage.missing.length > 0 && (
                       <div className="mt-3 flex flex-wrap gap-2">
+                        <button type="button" onClick={() => generateSubtopic(coverage.missing.join(", "))} disabled={busy} className="inline-flex items-center gap-1.5 rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-brand-700 disabled:opacity-50">
+                          <Sparkles className="h-3.5 w-3.5" /> Generate the uncovered topics now
+                        </button>
                         <button type="button" onClick={() => setSubtopics(coverage.missing.join(", "))} className="btn-outline text-xs">
-                          <Sparkles className="h-3.5 w-3.5" /> Put uncovered ones in Subtopics → generate them next
+                          <Sparkles className="h-3.5 w-3.5" /> Put uncovered ones in Subtopics
                         </button>
                         <button type="button" onClick={() => addToPlan(coverage.missing)} className="btn-outline text-xs">
                           <Bookmark className="h-3.5 w-3.5" /> Save uncovered to my plan
