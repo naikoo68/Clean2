@@ -786,6 +786,18 @@ export default function AdminPractice({ clientMode = false, fixedKind = "" }) {
         >
           <Files className="h-4 w-4" /> Find Duplicates{subject ? ` — ${subject.name}` : ""}
         </button>
+        {subject && kind === "quiz" && (
+          <button
+            onClick={() => {
+              setDupScope({ params: { practiceSubject: subject._id, pool: true }, name: `All topics in ${subject.name}` });
+              setDupOpen(true);
+            }}
+            className="btn-outline"
+            title={`Scan for the same question repeated across ALL topics of ${subject.name}`}
+          >
+            <Files className="h-4 w-4" /> Duplicates across all topics
+          </button>
+        )}
       </div>
 
       {/* Kind tabs — hidden on a fixed-kind standalone page (e.g. Previous
