@@ -220,13 +220,24 @@ export async function createItem(req, res) {
 export async function updateItem(req, res) {
   const item = await TestSeries.findOne({ _id: req.params.id, practice: true, ...ownerFilter(req) });
   if (!item) return res.status(404).json({ message: "Item not found" });
-  const { name, aiTopic, aiSubtopics, paperPdfUrl, answerKeyPdfUrl, additionalInfo } = req.body;
+  const { name, aiTopic, aiSubtopics, paperPdfUrl, answerKeyPdfUrl, answerKeys, additionalInfo } = req.body;
   if (typeof name === "string" && name.trim()) item.name = name.trim();
   if (typeof aiTopic === "string") item.aiTopic = aiTopic;
   if (typeof aiSubtopics === "string") item.aiSubtopics = aiSubtopics;
   // Previous Papers metadata — allow setting or clearing (empty string).
   if (typeof paperPdfUrl === "string") item.paperPdfUrl = paperPdfUrl.trim();
-  if (typeof answerKeyPdfUrl === "string") item.answerKeyPdfUrl = answerKeyPdfUrl.trim();
+  // Answer keys: prefer the new multi-key array; fall back to the legacy single
+  // field. Keep answerKeyPdfUrl in sync with the first key for old clients.
+  if (Array.isArray(answerKeys)) {
+    const cleaned = answerKeys
+      .filter((k) => k && typeof k.url === "string" && k.url.trim())
+      .map((k) => ({ label: (typeof k.label === "string" && k.label.trim()) ? k.label.trim() : "Answer key", url: k.url.trim() }));
+    item.answerKeys = cleaned;
+    item.answerKeyPdfUrl = cleaned[0]?.url || "";
+  } else if (typeof answerKeyPdfUrl === "string") {
+    item.answerKeyPdfUrl = answerKeyPdfUrl.trim();
+    item.answerKeys = answerKeyPdfUrl.trim() ? [{ label: "Answer key", url: answerKeyPdfUrl.trim() }] : [];
+  }
   if (typeof additionalInfo === "string") item.additionalInfo = additionalInfo;
   await item.save();
   res.json(item);
@@ -493,6 +504,9 @@ export async function playQuiz(req, res) {
     // the actual question-paper PDF / answer-key PDF and read the extra notes.
     paperPdfUrl: obj.paperPdfUrl || "",
     answerKeyPdfUrl: obj.answerKeyPdfUrl || "",
+    answerKeys: Array.isArray(obj.answerKeys) && obj.answerKeys.length
+      ? obj.answerKeys.map((k) => ({ label: k.label || "Answer key", url: k.url || "" })).filter((k) => k.url)
+      : (obj.answerKeyPdfUrl ? [{ label: "Answer key", url: obj.answerKeyPdfUrl }] : []),
     additionalInfo: obj.additionalInfo || "",
   });
 }
