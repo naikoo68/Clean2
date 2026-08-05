@@ -19,6 +19,12 @@ const testSeriesSchema = new mongoose.Schema(
     // from the normal Test Series listing. practiceKind is "quiz" or "test".
     practice: { type: Boolean, default: false },
     practiceKind: { type: String, enum: ["quiz", "test", "paper"], default: "test" },
+    // Previous Papers extras (used when practiceKind === "paper"): the uploaded
+    // question-paper PDF, the answer-key PDF, and free-text additional info that
+    // students can view alongside the paper.
+    paperPdfUrl: { type: String, default: "" },
+    answerKeyPdfUrl: { type: String, default: "" },
+    additionalInfo: { type: String, default: "" },
     practiceStream: { type: mongoose.Schema.Types.ObjectId, ref: "PracticeStream" },
     practiceSubject: { type: mongoose.Schema.Types.ObjectId, ref: "PracticeSubject" },
     practiceTopic: { type: mongoose.Schema.Types.ObjectId, ref: "PracticeTopic" }, // My Quiz only

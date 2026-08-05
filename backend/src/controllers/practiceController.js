@@ -220,10 +220,14 @@ export async function createItem(req, res) {
 export async function updateItem(req, res) {
   const item = await TestSeries.findOne({ _id: req.params.id, practice: true, ...ownerFilter(req) });
   if (!item) return res.status(404).json({ message: "Item not found" });
-  const { name, aiTopic, aiSubtopics } = req.body;
+  const { name, aiTopic, aiSubtopics, paperPdfUrl, answerKeyPdfUrl, additionalInfo } = req.body;
   if (typeof name === "string" && name.trim()) item.name = name.trim();
   if (typeof aiTopic === "string") item.aiTopic = aiTopic;
   if (typeof aiSubtopics === "string") item.aiSubtopics = aiSubtopics;
+  // Previous Papers metadata — allow setting or clearing (empty string).
+  if (typeof paperPdfUrl === "string") item.paperPdfUrl = paperPdfUrl.trim();
+  if (typeof answerKeyPdfUrl === "string") item.answerKeyPdfUrl = answerKeyPdfUrl.trim();
+  if (typeof additionalInfo === "string") item.additionalInfo = additionalInfo;
   await item.save();
   res.json(item);
 }
@@ -485,6 +489,11 @@ export async function playQuiz(req, res) {
     difficulty: obj.difficulty,
     questionCount: obj.questions.length,
     questions: obj.questions, // includes correct / explanation / optionExplanations
+    // Previous Papers extras (empty for normal quizzes): the student can open
+    // the actual question-paper PDF / answer-key PDF and read the extra notes.
+    paperPdfUrl: obj.paperPdfUrl || "",
+    answerKeyPdfUrl: obj.answerKeyPdfUrl || "",
+    additionalInfo: obj.additionalInfo || "",
   });
 }
 
