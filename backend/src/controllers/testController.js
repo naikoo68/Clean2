@@ -149,7 +149,7 @@ export async function getTest(req, res) {
   const isOwner = req.user?.role === "client" && String(test.owner || "") === String(req.user._id);
   // Additive master grant for practice content: myQuizAccess unlocks all My-Quiz
   // items, myTestAccess unlocks all My-Test items.
-  const masterGrant = test.practice === true && (test.practiceKind === "quiz" ? req.user?.myQuizAccess === true : req.user?.myTestAccess === true);
+  const masterGrant = test.practice === true && ((test.practiceKind === "quiz" || test.practiceKind === "paper") ? req.user?.myQuizAccess === true : req.user?.myTestAccess === true);
   if (req.user?.role !== "admin" && !isOwner && !masterGrant && !isTestVisibleToUser(test.toObject(), req.user?._id) && !isSharedWithUser(test, req.user?._id)) {
     return res.status(403).json({ message: "You don't have access to this test, or your access has expired." });
   }
@@ -385,7 +385,7 @@ export async function getPublicTest(req, res) {
   // An exam-style TEST hides the answers (anti-cheat). A shared QUIZ is played
   // reveal-style (the correct option + explanation show after each tap, exactly
   // like a student's My Quiz), so it KEEPS answers/explanations.
-  if (obj.practiceKind !== "quiz") {
+  if (obj.practiceKind !== "quiz" && obj.practiceKind !== "paper") {
     obj.questions = (obj.questions || []).map((q) => {
       const { correct, explanation, optionExplanations, ...rest } = q;
       return rest;

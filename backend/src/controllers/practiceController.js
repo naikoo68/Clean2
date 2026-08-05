@@ -467,7 +467,9 @@ export async function splitTopic(req, res) {
 // this never leaks answers for real tests or My-Test-Series items.
 export async function playQuiz(req, res) {
   const item = await TestSeries.findById(req.params.id).populate("questions");
-  if (!item || !item.practice || item.practiceKind !== "quiz") {
+  // Both "quiz" and "paper" are PLAYED like a quiz (instant reveal); only "test"
+  // uses the timed test-attempt flow.
+  if (!item || !item.practice || (item.practiceKind !== "quiz" && item.practiceKind !== "paper")) {
     return res.status(404).json({ message: "Practice quiz not found" });
   }
   // Admin, the owning client, a student the item is shared with, OR a user with
@@ -953,6 +955,19 @@ export async function browseTopics(req, res) {
   res.json(topics.filter((t) => ok.has(String(t._id))));
 }
 // My Quiz: quizzes under a topic.
+// Papers are listed DIRECTLY under a stream (no subject drill-down): return
+// every published item of this kind whose stream matches, across all its
+// subjects/topics. Used by the public "Previous Papers" browse.
+export async function browseStreamItems(req, res) {
+  const { kind, streamId } = req.params;
+  const grantAll = (kind === "quiz" || kind === "paper") ? req.user?.myQuizAccess === true : req.user?.myTestAccess === true;
+  const items = (await TestSeries.find({ practice: true, practiceKind: kind, status: "published", practiceStream: streamId, owner: null }).lean()).sort(byNatural("name"));
+  res.json(
+    items
+      .filter((t) => grantAll || isTestVisibleToUser(t, req.user?._id))
+      .map((t) => ({ _id: t._id, name: t.name, duration: t.duration, marks: t.marks, difficulty: t.difficulty, questionCount: t.questions?.length || 0 }))
+  );
+}
 export async function browseTopicItems(req, res) {
   const grantAll = req.user?.myQuizAccess === true; // master grant to all My Quiz
   // Natural order by name (Quiz 1, Quiz 2, … Quiz 10) instead of creation order.
