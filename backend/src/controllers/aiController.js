@@ -426,10 +426,12 @@ async function outlineSubtopics({ endpoints, model, topic, notes, source, want }
   return [];
 }
 
-function buildUserPrompt({ topic, count, difficulty, types, notes, plan, avoid, source, focus, numerical = false }) {
+function buildUserPrompt({ topic, count, difficulty, types, notes, plan, avoid, source, focus, numerical = false, reshape = false }) {
   const lines = [];
   if (source) {
-    lines.push(`Create the questions BASED ON the source material given at the end. Draw the facts and content from that material (you may use closely-related general knowledge to complete a question, but stay on the material's topics).`);
+    lines.push(reshape
+      ? `The SOURCE MATERIAL at the end is a set of EXISTING exam questions. RECAST / RESHAPE the FACTS in them into the requested question TYPES — e.g. bundle several related facts into a "consider the following statements" question, turn a single fact into an assertion–reason, or build a matching / pair question from related facts. REUSE the underlying knowledge but produce the NEW format requested: do NOT simply copy an MCQ unchanged, and do NOT alter the underlying facts. Spread across the material so different facts are used.`
+      : `Create the questions BASED ON the source material given at the end. Draw the facts and content from that material (you may use closely-related general knowledge to complete a question, but stay on the material's topics).`);
   }
   lines.push(`Topic / syllabus: ${topic}.`);
   lines.push(TOPIC_SCOPE_RULE);
@@ -1072,7 +1074,7 @@ function planGaps(planArr, collected, reserved) {
 }
 
 async function runGenerationJob(id, ctx) {
-  const { workers, fallbackWorkers = [], model, topic, notes, plan, count, difficulty, types, target, avoid, owner = null, source = "", userSubtopics = [], numerical = false } = ctx;
+  const { workers, fallbackWorkers = [], model, topic, notes, plan, count, difficulty, types, target, avoid, owner = null, source = "", userSubtopics = [], numerical = false, reshape = false } = ctx;
   const job = genJobs.get(id);
   const deadline = Date.now() + 8 * 60 * 1000; // overall time budget
   if (!job.keyStats) job.keyStats = {}; // live per-key activity for THIS run
@@ -1194,8 +1196,8 @@ async function runGenerationJob(id, ctx) {
       const res = reserveChunk();
       if (!res) break; // nothing left to generate
       const prompt = plan
-        ? buildUserPrompt({ topic, notes, plan: res.chunk, avoid: avoidNow(), source, focus: res.focus, numerical })
-        : buildUserPrompt({ topic, notes, count: res.n, difficulty, types, avoid: avoidNow(), source, focus: res.focus, numerical });
+        ? buildUserPrompt({ topic, notes, plan: res.chunk, avoid: avoidNow(), source, focus: res.focus, numerical, reshape })
+        : buildUserPrompt({ topic, notes, count: res.n, difficulty, types, avoid: avoidNow(), source, focus: res.focus, numerical, reshape });
       const maxTokens = Math.min(16000, 1800 + res.n * 1000);
       attempts += 1;
       // Live per-key activity for this run (surfaced via jobStatus.keyStats).
@@ -1485,7 +1487,7 @@ export async function generateQuestions(req, res) {
     : [];
 
   // Fire-and-forget — the client polls /api/ai/job/:id for progress.
-  guardJob(id, runGenerationJob(id, { workers, fallbackWorkers, model, topic, notes, plan, count, difficulty, types, target, avoid, owner: jobOwner, source, userSubtopics, numerical: !!req.body?.numerical }));
+  guardJob(id, runGenerationJob(id, { workers, fallbackWorkers, model, topic, notes, plan, count, difficulty, types, target, avoid, owner: jobOwner, source, userSubtopics, numerical: !!req.body?.numerical, reshape: !!req.body?.reshape }));
 
   res.json({ jobId: id, requested: target, model });
 }
