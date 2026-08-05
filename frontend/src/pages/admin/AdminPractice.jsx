@@ -102,6 +102,7 @@ export default function AdminPractice({ clientMode = false }) {
   const [aiOpen, setAiOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [aiTarget, setAiTarget] = useState(null); // {id,name} — after AI creates a new quiz/test, later batches target it
+  const [otherTypesTopic, setOtherTypesTopic] = useState(false); // AI opened at TOPIC level to build other question types from ALL its quizzes
   // "Scan missing areas": analyse all quizzes in this topic for uncovered syllabus.
   const [scanOpen, setScanOpen] = useState(false);
   const [scanFull, setScanFull] = useState(false); // full-screen the Missing areas modal
@@ -412,6 +413,21 @@ export default function AdminPractice({ clientMode = false }) {
     } catch {
       setTopicStems([]);
     }
+  };
+
+  // Topic-level entry point for "other question types": open the generator with
+  // ALL quizzes in this topic as the source (coverageQuestions) and a NEW quiz
+  // as the destination, so the Convert / Generate-from-existing buttons work
+  // across the whole topic in one place (beside Add Quiz).
+  const openTopicOtherTypes = () => {
+    setQItem(null);
+    setAiTarget(null);
+    setForceSection("");
+    setGapPrefill(null);
+    setOtherTypesTopic(true);
+    setTopicStems([]);
+    gatherTopicStems();
+    setAiOpen(true);
   };
 
   // Open the generator pre-filled to build a NEW quiz covering the missing areas,
@@ -800,6 +816,15 @@ export default function AdminPractice({ clientMode = false }) {
               <ScanSearch className="h-4 w-4" /> Scan Missing Areas
             </button>
           )}
+          {view === "items" && (kind === "quiz" ? topic : subject) && items.length > 0 && (
+            <button
+              onClick={openTopicOtherTypes}
+              className="btn-outline text-brand-600"
+              title={`Make other question types (assertion, statements, matching, pairs) from ALL ${kind === "quiz" ? "quizzes" : "tests"} in this ${kind === "quiz" ? "topic" : "subject"}`}
+            >
+              <Sparkles className="h-4 w-4" /> Other question types
+            </button>
+          )}
           <button onClick={() => setModal({ type: addType, mode: "add", data: {} })} className="btn-primary">
             <Plus className="h-4 w-4" /> {H.add}
           </button>
@@ -1161,15 +1186,15 @@ export default function AdminPractice({ clientMode = false }) {
         open={aiOpen}
         sections={sectionsOf(qItem)}
         defaultSection={normSection(forceSection)}
-        title={`Generate with AI — ${qItem?.name || (gapPrefill ? `new ${kind} (missing areas)` : "")}${normSection(forceSection) ? ` (${normSection(forceSection)})` : ""}`}
-        onClose={() => { setAiOpen(false); setForceSection(""); setGapPrefill(null); }}
+        title={`Generate with AI — ${qItem?.name || (gapPrefill ? `new ${kind} (missing areas)` : (otherTypesTopic ? "other question types (all quizzes)" : ""))}${normSection(forceSection) ? ` (${normSection(forceSection)})` : ""}`}
+        onClose={() => { setAiOpen(false); setForceSection(""); setGapPrefill(null); setOtherTypesTopic(false); }}
         allowNewTarget
         newLeafLabel={kind}
         currentTargetName={aiTarget?.name || qItem?.name || ""}
-        existingQuestions={gapPrefill ? gapPrefill.avoid : tq}
+        existingQuestions={otherTypesTopic ? [] : (gapPrefill ? gapPrefill.avoid : tq)}
         defaultTopic={gapPrefill ? gapPrefill.topic : (qItem?.aiTopic || (kind === "quiz" ? topic : subject)?.name || "")}
         defaultSubtopics={gapPrefill ? gapPrefill.subtopics : (qItem?.aiSubtopics || "")}
-        defaultDest={gapPrefill ? "new" : "current"}
+        defaultDest={(gapPrefill || otherTypesTopic) ? "new" : "current"}
         coverageQuestions={topicStems}
         onUpload={(questions, opts = {}) => saveAiBatch(questions, opts)}
       />
