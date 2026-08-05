@@ -201,6 +201,20 @@ export default function AiGenerate({ open, onClose, onUpload, title = "Generate 
     );
   const total = TYPE_OPTIONS.reduce((s, t) => s + rowTotal(t.id), 0);
 
+  // Turn the free-text "Subtopics to cover" box into a clean list of items, so
+  // coverage can track EXACTLY the subtopics you typed (e.g. "Skull",
+  // "vertebral column", …) instead of an AI-invented syllabus. Handles a leading
+  // "Header:-" label, bullets, commas, semicolons, newlines and sentence dots.
+  const parseManualSubtopics = (text) => {
+    let t = String(text || "").trim();
+    t = t.replace(/^[^\n:]{0,80}:-?\s*/, ""); // drop a leading "Header :-" label
+    return Array.from(new Set(
+      t.split(/[\n•;,]+|\.\s+/)
+        .map((s) => s.replace(/^[\s\-–—•*.]+/, "").replace(/[\s.]+$/, "").replace(/\s+/g, " ").trim())
+        .filter((s) => s.length >= 2)
+    )).slice(0, 60);
+  };
+
   // After a batch, summarise which syllabus subtopics are now covered vs still
   // missing — cumulative across the quiz's existing questions plus everything
   // generated in this session. Best-effort (one small AI call); silent on error.
@@ -214,10 +228,17 @@ export default function AiGenerate({ open, onClose, onUpload, title = "Generate 
     if (!t || !list.length) { setCoverage(null); return; }
     setCoverageLoading(true);
     try {
-      // Pass the fixed checklist (once we have it) so later batches classify the
-      // SAME list — covered grows and missing shrinks against a constant total.
-      const r = await aiService.coverageGaps({ topic: t, questions: list.slice(0, 300), syllabus: syllabus || undefined, mode: isClient ? source : undefined });
-      if (!syllabus && Array.isArray(r?.syllabus) && r.syllabus.length) setSyllabus(r.syllabus);
+      // If YOU typed subtopics, track coverage against EXACTLY those (they win
+      // over any AI-generated syllabus). Otherwise use the fixed AI checklist,
+      // passed back so later batches classify the SAME list (covered grows,
+      // missing shrinks against a constant total).
+      const manual = parseManualSubtopics(subtopics);
+      const useSyllabus = syllabus || (manual.length ? manual : undefined);
+      const r = await aiService.coverageGaps({ topic: t, questions: list.slice(0, 300), syllabus: useSyllabus, mode: isClient ? source : undefined });
+      if (!syllabus) {
+        if (manual.length) setSyllabus(manual);
+        else if (Array.isArray(r?.syllabus) && r.syllabus.length) setSyllabus(r.syllabus);
+      }
       setCoverage({ covered: r?.covered || [], missing: r?.missing || [] });
     } catch {
       /* coverage is a nice-to-have — ignore failures */
