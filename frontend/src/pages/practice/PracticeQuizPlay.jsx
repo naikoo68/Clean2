@@ -94,7 +94,7 @@ export default function PracticeQuizPlay() {
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState(null);
-  const [paper, setPaper] = useState({ paperPdfUrl: "", answerKeyPdfUrl: "", additionalInfo: "" }); // Previous Papers extras
+  const [paper, setPaper] = useState({ paperPdfUrl: "", answerKeyPdfUrl: "", answerKeys: [], additionalInfo: "" }); // Previous Papers extras
   const [showReview, setShowReview] = useState(false);
   const [reviewSearch, setReviewSearch] = useState("");
   // Per-attempt option-shuffle seed — persisted so "Continue" keeps the SAME
@@ -134,7 +134,7 @@ export default function PracticeQuizPlay() {
       .then((data) => {
         setQuestions(shuffleAll(data.questions || [], seed)); // reshuffle options
         setTitle(data.name || "Practice Quiz");
-        setPaper({ paperPdfUrl: data.paperPdfUrl || "", answerKeyPdfUrl: data.answerKeyPdfUrl || "", additionalInfo: data.additionalInfo || "" });
+        setPaper({ paperPdfUrl: data.paperPdfUrl || "", answerKeyPdfUrl: data.answerKeyPdfUrl || "", answerKeys: Array.isArray(data.answerKeys) ? data.answerKeys : [], additionalInfo: data.additionalInfo || "" });
       })
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false));
@@ -234,16 +234,24 @@ export default function PracticeQuizPlay() {
   if (!questions.length)
     return <div className="container-page"><EmptyState message="No questions in this quiz yet." /></div>;
 
-  // Uploaded Previous-Papers resources (question paper PDF, answer key PDF and
+  // Effective answer-key list: the new multi-key array if present, else the
+  // legacy single key as one entry.
+  const answerKeyList = (paper.answerKeys && paper.answerKeys.length)
+    ? paper.answerKeys.filter((k) => k && k.url)
+    : (paper.answerKeyPdfUrl ? [{ label: "Answer key", url: paper.answerKeyPdfUrl }] : []);
+
+  // Uploaded Previous-Papers resources (question paper PDF, answer-key PDFs and
   // additional information). Shown on BOTH the start screen and the results
   // screen when present; empty/hidden for normal quizzes.
-  const paperResources = (paper.paperPdfUrl || paper.answerKeyPdfUrl || paper.additionalInfo) ? (
+  const paperResources = (paper.paperPdfUrl || answerKeyList.length || paper.additionalInfo) ? (
     <div className="mx-auto mt-4 max-w-lg card p-5 text-left">
       <h2 className="flex items-center gap-2 text-sm font-bold"><FileText className="h-4 w-4 text-brand-600" /> Paper resources</h2>
-      {(paper.paperPdfUrl || paper.answerKeyPdfUrl) && (
+      {(paper.paperPdfUrl || answerKeyList.length > 0) && (
         <div className="mt-3 flex flex-wrap gap-2">
           {paper.paperPdfUrl && <a href={paper.paperPdfUrl} target="_blank" rel="noreferrer" className="btn-outline text-sm"><FileText className="h-4 w-4" /> View question paper (PDF)</a>}
-          {paper.answerKeyPdfUrl && <a href={paper.answerKeyPdfUrl} target="_blank" rel="noreferrer" className="btn-outline text-sm"><FileText className="h-4 w-4" /> View answer key (PDF)</a>}
+          {answerKeyList.map((k, i) => (
+            <a key={i} href={k.url} target="_blank" rel="noreferrer" className="btn-outline text-sm"><FileText className="h-4 w-4" /> View {k.label || "answer key"} (PDF)</a>
+          ))}
         </div>
       )}
       {paper.additionalInfo && (
@@ -293,7 +301,7 @@ export default function PracticeQuizPlay() {
             {/* Generated "Paper / Key" (built from the questions) is hidden for
                 Previous Papers that have their OWN uploaded paper/answer-key —
                 those real uploads are shown in the Paper resources panel below. */}
-            {!(paper.paperPdfUrl || paper.answerKeyPdfUrl) && (
+            {!(paper.paperPdfUrl || answerKeyList.length > 0) && (
               <PaperExport title={title || "Practice Quiz"} questions={questions} />
             )}
             {isPublic ? (
