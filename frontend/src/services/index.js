@@ -131,6 +131,7 @@ export const practiceService = {
   topics: (kind, subjectId) => api.get(`/practice/browse/${kind}/subjects/${subjectId}/topics`), // My Quiz
   items: (kind, subjectId) => api.get(`/practice/browse/${kind}/subjects/${subjectId}/items`), // My Test Series
   topicItems: (kind, topicId) => api.get(`/practice/browse/${kind}/topics/${topicId}/items`), // My Quiz
+  streamItems: (kind, streamId) => api.get(`/practice/browse/${kind}/streams/${streamId}/items`), // Previous Papers — items directly under a stream
   // My Quiz play — full questions WITH answers for instant reveal (quiz-style)
   quizPlay: (id) => api.get(`/practice/quiz/${id}/play`),
   // The caller's own practice items (client dashboard) — flat quiz + test list

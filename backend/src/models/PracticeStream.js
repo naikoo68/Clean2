@@ -4,7 +4,7 @@ import mongoose from "mongoose";
 // Separate from the main quiz Stream so practice content never mixes with it.
 const practiceStreamSchema = new mongoose.Schema(
   {
-    kind: { type: String, enum: ["quiz", "test"], default: "quiz" }, // My Quiz vs My Test Series — kept separate
+    kind: { type: String, enum: ["quiz", "test", "paper"], default: "quiz" }, // My Quiz vs My Test Series vs Previous Papers — kept separate
     // Multi-tenant owner. null/absent = platform (admin) content; a User id =
     // a client's private content, visible only to that client.
     owner: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },

@@ -4,7 +4,7 @@ import {
   listSubjects, createSubject, updateSubject, deleteSubject,
   listTopics, createTopic, updateTopic, deleteTopic, moveTopic, listTopicItems,
   listItems, createItem,
-  browseStreams, browseSubjects, browseTopics, browseItems, browseTopicItems,
+  browseStreams, browseSubjects, browseTopics, browseItems, browseTopicItems, browseStreamItems,
   playQuiz, allSubjects, myItems, moveItem, updateItem, splitItem, splitTopic, mergeItem, moveQuestions, shareContent,
   incomingShares, acceptShare, declineShare, sharePlacement, removeSharedWithMe,
 } from "../controllers/practiceController.js";
@@ -18,6 +18,7 @@ const admin = [protect, authorize("admin", "client")];
 // Student browse (visibility-filtered). Attempting an item reuses /tests/:id.
 router.get("/browse/:kind/streams", optionalAuth, browseStreams);
 router.get("/browse/:kind/streams/:streamId/subjects", optionalAuth, browseSubjects);
+router.get("/browse/:kind/streams/:streamId/items", optionalAuth, browseStreamItems); // Previous Papers: papers directly under a stream
 router.get("/browse/:kind/subjects/:subjectId/topics", optionalAuth, browseTopics); // My Quiz
 router.get("/browse/:kind/subjects/:subjectId/items", optionalAuth, browseItems); // My Test Series
 router.get("/browse/:kind/topics/:topicId/items", optionalAuth, browseTopicItems); // My Quiz
