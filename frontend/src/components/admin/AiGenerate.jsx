@@ -247,7 +247,13 @@ export default function AiGenerate({ open, onClose, onUpload, title = "Generate 
     // Accumulate the avoid-list LOCALLY across waves — React state updates are
     // async, so relying on avoidStems would let the next wave repeat this wave's
     // questions. We still mirror it into state for later manual "Generate more".
-    let avoidLocal = Array.from(new Set([...(avoidStems || [])]));
+    // Seed the avoid-list with EVERY existing question in the whole topic (all
+    // its quizzes) — passed in via coverageQuestions — not just the current
+    // quiz, so a repeat generation in a topic that already has several quizzes
+    // (e.g. 4 quizzes / 200 questions) produces genuinely NEW questions instead
+    // of duplicating ones that already exist elsewhere in the topic.
+    const topicStems = (coverageQuestions || []).map((q) => (typeof q === "string" ? q : q?.text)).filter(Boolean);
+    let avoidLocal = Array.from(new Set([...(avoidStems || []), ...topicStems]));
 
     // Run ONE wave (start job + poll to completion). Appends its questions to the
     // preview and returns how it ended so the loop can decide to auto-continue.
