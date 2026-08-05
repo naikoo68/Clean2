@@ -63,6 +63,7 @@ const sanitize = (u) => ({
   // User-manual default ON; AI Generator default OFF).
   featDashboard: u.featDashboard !== false,
   featBuild: u.featBuild !== false,
+  featPapers: u.featPapers !== false,
   featNotes: u.featNotes !== false,
   featDocuments: u.featDocuments !== false,
   featManual: u.featManual !== false,
