@@ -234,6 +234,27 @@ export default function PracticeQuizPlay() {
   if (!questions.length)
     return <div className="container-page"><EmptyState message="No questions in this quiz yet." /></div>;
 
+  // Uploaded Previous-Papers resources (question paper PDF, answer key PDF and
+  // additional information). Shown on BOTH the start screen and the results
+  // screen when present; empty/hidden for normal quizzes.
+  const paperResources = (paper.paperPdfUrl || paper.answerKeyPdfUrl || paper.additionalInfo) ? (
+    <div className="mx-auto mt-4 max-w-lg card p-5 text-left">
+      <h2 className="flex items-center gap-2 text-sm font-bold"><FileText className="h-4 w-4 text-brand-600" /> Paper resources</h2>
+      {(paper.paperPdfUrl || paper.answerKeyPdfUrl) && (
+        <div className="mt-3 flex flex-wrap gap-2">
+          {paper.paperPdfUrl && <a href={paper.paperPdfUrl} target="_blank" rel="noreferrer" className="btn-outline text-sm"><FileText className="h-4 w-4" /> View question paper (PDF)</a>}
+          {paper.answerKeyPdfUrl && <a href={paper.answerKeyPdfUrl} target="_blank" rel="noreferrer" className="btn-outline text-sm"><FileText className="h-4 w-4" /> View answer key (PDF)</a>}
+        </div>
+      )}
+      {paper.additionalInfo && (
+        <div className="mt-3 whitespace-pre-line rounded-xl bg-slate-50 p-3 text-sm text-slate-600 dark:bg-slate-800/60 dark:text-slate-300">
+          <p className="mb-1 font-semibold text-slate-700 dark:text-slate-200">Additional information</p>
+          {paper.additionalInfo}
+        </div>
+      )}
+    </div>
+  ) : null;
+
   // ---- Result screen ----
   if (result) {
     const mmss = `${String(Math.floor((result.timeTaken || 0) / 60)).padStart(2, "0")}:${String((result.timeTaken || 0) % 60).padStart(2, "0")}`;
@@ -282,6 +303,9 @@ export default function PracticeQuizPlay() {
             )}
           </div>
         </div>
+
+        {/* Uploaded question paper / answer key / additional info (papers) */}
+        {paperResources}
 
         {/* Answer review */}
         {showReview && (
@@ -487,23 +511,7 @@ export default function PracticeQuizPlay() {
           </p>
         </div>
 
-        {(paper.paperPdfUrl || paper.answerKeyPdfUrl || paper.additionalInfo) && (
-          <div className="mx-auto mt-4 max-w-lg card p-5 text-left">
-            <h2 className="flex items-center gap-2 text-sm font-bold"><FileText className="h-4 w-4 text-brand-600" /> Paper resources</h2>
-            {(paper.paperPdfUrl || paper.answerKeyPdfUrl) && (
-              <div className="mt-3 flex flex-wrap gap-2">
-                {paper.paperPdfUrl && <a href={paper.paperPdfUrl} target="_blank" rel="noreferrer" className="btn-outline text-sm"><FileText className="h-4 w-4" /> View question paper (PDF)</a>}
-                {paper.answerKeyPdfUrl && <a href={paper.answerKeyPdfUrl} target="_blank" rel="noreferrer" className="btn-outline text-sm"><FileText className="h-4 w-4" /> View answer key (PDF)</a>}
-              </div>
-            )}
-            {paper.additionalInfo && (
-              <div className="mt-3 whitespace-pre-line rounded-xl bg-slate-50 p-3 text-sm text-slate-600 dark:bg-slate-800/60 dark:text-slate-300">
-                <p className="mb-1 font-semibold text-slate-700 dark:text-slate-200">Additional information</p>
-                {paper.additionalInfo}
-              </div>
-            )}
-          </div>
-        )}
+        {paperResources}
       </div>
     );
   }
