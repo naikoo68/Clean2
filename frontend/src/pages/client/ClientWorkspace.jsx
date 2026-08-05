@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { GraduationCap, LogOut, Moon, Sun, ZoomIn, ZoomOut, LayoutDashboard, Wrench, ArrowRightLeft, Sparkles, FileText, Feather, BookOpen, Files, SearchCheck } from "lucide-react";
+import { GraduationCap, LogOut, Moon, Sun, ZoomIn, ZoomOut, LayoutDashboard, Wrench, ArrowRightLeft, Sparkles, FileText, Feather, BookOpen, Files, SearchCheck, Menu } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import { useTheme } from "../../context/ThemeContext";
 import { useSettings } from "../../context/SettingsContext";
@@ -29,6 +29,7 @@ export default function ClientWorkspace() {
   const [searchParams, setSearchParams] = useSearchParams();
 
   const [showUpgrade, setShowUpgrade] = useState(false); // opened voluntarily from the dashboard
+  const [menuOpen, setMenuOpen] = useState(false); // hamburger menu (all tabs except Dashboard)
 
   // Pull the latest profile once when the workspace opens. This is a long-lived
   // single-page app, so a client who logged in earlier may be holding a stale
@@ -73,6 +74,12 @@ export default function ClientWorkspace() {
   const tab = allowedTabs.includes(paramTab) ? paramTab : firstTab;
   const setTab = (key) => setSearchParams(key && key !== firstTab ? { tab: key } : {});
 
+  // Header shows only the Dashboard tab; every other tab lives in a hamburger
+  // menu on the right, keeping the client header compact (esp. on phones).
+  const dashboardTab = tabs.find((t) => t.key === "dashboard");
+  const menuTabs = tabs.filter((t) => t.key !== "dashboard");
+  const activeMenuTab = menuTabs.find((t) => t.key === tab);
+
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
       <header className="sticky top-0 z-30 border-b border-slate-200 bg-white px-4 py-3 dark:border-slate-800 dark:bg-slate-900">
@@ -108,20 +115,55 @@ export default function ClientWorkspace() {
             </button>
           </div>
         </div>
-        {/* Tabs: Dashboard (practice + validity) vs Build (create content) */}
+        {/* Header nav: only the Dashboard tab is shown inline; all other tabs
+            (Build, Migrate, Previous Papers, …) live in a hamburger menu on the
+            right. */}
         {!expired && (
-        <div className="mx-auto mt-3 flex max-w-6xl gap-2">
-          {tabs.map((t) => (
+        <div className="mx-auto mt-3 flex max-w-6xl items-center gap-2">
+          {dashboardTab && (
             <button
-              key={t.key}
-              onClick={() => { setTab(t.key); setShowUpgrade(false); }}
+              onClick={() => { setTab(dashboardTab.key); setShowUpgrade(false); }}
               className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-semibold transition ${
-                tab === t.key ? "bg-brand-600 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300"
+                tab === dashboardTab.key ? "bg-brand-600 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300"
               }`}
             >
-              <t.Icon className="h-4 w-4" /> {t.label}
+              <dashboardTab.Icon className="h-4 w-4" /> {dashboardTab.label}
             </button>
-          ))}
+          )}
+
+          {menuTabs.length > 0 && (
+            <div className="relative ml-auto">
+              <button
+                onClick={() => setMenuOpen((v) => !v)}
+                aria-label="Open menu"
+                aria-expanded={menuOpen}
+                className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-semibold transition ${
+                  activeMenuTab ? "bg-brand-600 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300"
+                }`}
+              >
+                <Menu className="h-4 w-4" /> {activeMenuTab ? activeMenuTab.label : "Menu"}
+              </button>
+              {menuOpen && (
+                <>
+                  {/* Click-away backdrop closes the menu. */}
+                  <button type="button" aria-hidden="true" tabIndex={-1} className="fixed inset-0 z-40 cursor-default" onClick={() => setMenuOpen(false)} />
+                  <div className="absolute right-0 z-50 mt-2 w-56 overflow-hidden rounded-xl border border-slate-200 bg-white py-1 shadow-lg dark:border-slate-700 dark:bg-slate-900">
+                    {menuTabs.map((t) => (
+                      <button
+                        key={t.key}
+                        onClick={() => { setTab(t.key); setShowUpgrade(false); setMenuOpen(false); }}
+                        className={`flex w-full items-center gap-2 px-3 py-2 text-left text-sm font-medium transition ${
+                          tab === t.key ? "bg-brand-50 text-brand-700 dark:bg-brand-900/30 dark:text-brand-300" : "text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"
+                        }`}
+                      >
+                        <t.Icon className="h-4 w-4" /> {t.label}
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
+          )}
         </div>
         )}
       </header>
