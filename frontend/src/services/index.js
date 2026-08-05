@@ -66,6 +66,7 @@ export const contentService = {
     const qs = new URLSearchParams();
     if (p.subject && p.subject !== "all") qs.set("subject", p.subject);
     if (p.practiceSubject) qs.set("practiceSubject", p.practiceSubject);
+    if (p.pool) qs.set("pool", "1"); // pool duplicates across all of a subject's topics/items
     if (p.testSeries) qs.set("testSeries", p.testSeries);
     const s = qs.toString();
     return api.get(`/questions/duplicates${s ? `?${s}` : ""}`);
