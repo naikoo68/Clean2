@@ -52,6 +52,7 @@ const userSchema = new mongoose.Schema(
     featDashboard: { type: Boolean, default: true },
     featBuild: { type: Boolean, default: true },
     featPapers: { type: Boolean, default: true },
+    featChecker: { type: Boolean, default: true },
     featNotes: { type: Boolean, default: true },
     featDocuments: { type: Boolean, default: true },
     featManual: { type: Boolean, default: true },
