@@ -384,6 +384,12 @@ export const uploadService = {
   },
 };
 
+// ---- User Manual (public read, admin write) ----
+export const userManualService = {
+  get: () => api.get("/manual", { auth: false }), // { sections: [...] }
+  update: (sections) => api.put("/manual", { sections }), // admin only
+};
+
 // ---- Users (admin) ----
 export const userService = {
   list: (search = "") => api.get(`/users${search ? `?search=${encodeURIComponent(search)}` : ""}`),
