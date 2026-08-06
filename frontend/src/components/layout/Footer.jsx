@@ -34,10 +34,13 @@ const columns = [
   },
 ];
 
-export default function Footer() {
+export default function Footer({ hideProduct = false }) {
   const { settings } = useSettings();
   const socialLinks = (settings.socialLinks || []).filter((s) => s.url && s.url !== "#");
   const email = (settings.contacts || []).find((c) => c.type === "email")?.value;
+  // Inside the client workspace the "Product" links (public quiz/test pages)
+  // aren't relevant, so allow hiding that column.
+  const visibleColumns = hideProduct ? columns.filter((c) => c.title !== "Product") : columns;
 
   return (
     <footer className="mt-20 border-t border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-950">
@@ -75,7 +78,7 @@ export default function Footer() {
             )}
           </div>
 
-          {columns.map((col) => (
+          {visibleColumns.map((col) => (
             <div key={col.title}>
               <h4 className="text-sm font-semibold text-slate-900 dark:text-white">{col.title}</h4>
               <ul className="mt-4 space-y-2.5">
