@@ -36,9 +36,13 @@
   html {
     scroll-behavior: smooth;
     font-family: var(--app-font);
+    /* Stop the mobile browser's pull-to-refresh gesture from reloading the page
+       (it triggers easily after pinch-zooming out and swiping at the top). */
+    overscroll-behavior-y: contain;
   }
   body {
     @apply bg-slate-50 text-slate-800 antialiased transition-colors duration-300 dark:bg-slate-950 dark:text-slate-100;
+    overscroll-behavior-y: contain;
   }
 }
 
