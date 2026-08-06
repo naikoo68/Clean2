@@ -3,6 +3,8 @@ import {
   BookOpen, LayoutDashboard, Wrench, ArrowRightLeft, Sparkles, FileText, Feather,
   ListChecks, FileStack, HelpCircle, Play, Download, Globe, RefreshCw, Wand2, Search,
   Crown, GraduationCap, FolderOpen, Layers, ShieldCheck,
+  BarChart3, Plus, Upload, Library, Eye, Copy, ScanSearch, Scissors, GitMerge,
+  SearchCheck, User, Gift, Send, Share2,
 } from "lucide-react";
 import { authService, practiceService, aiService } from "../../services";
 import { useAuth } from "../../context/AuthContext";
@@ -70,62 +72,205 @@ export default function ClientUserManual({ onGoTab }) {
     };
   }, [items]);
 
-  // Feature guides. Each is gated by what THIS client can actually do, so the
-  // manual only documents features that are available to them right now.
+  // What THIS client can actually do (mirrors the workspace tabs). Guides are
+  // gated by these, so the manual only ever documents available features and
+  // updates automatically when the admin changes access.
+  const can = {
+    dashboard: user?.featDashboard !== false,
+    build: user?.featBuild !== false,
+    papers: user?.featPapers !== false,
+    checker: user?.featChecker !== false,
+    documents: user?.featDocuments !== false,
+    notes: user?.featNotes !== false,
+    ai: hasAI,
+    aigen: !!user?.featAiGenerator,
+  };
+
+  // Feature guides — one per function. Each carries a `visual`: the SAME icons
+  // and button styles the real app uses, so it shows "how it looks" and stays
+  // in sync automatically when the UI/access/content changes (no static
+  // screenshots to go stale).
   const guides = [
     {
       key: "dashboard", tab: "dashboard", Icon: LayoutDashboard, title: "Dashboard — practice your content",
+      show: can.dashboard,
+      visual: [
+        { Icon: Play, label: "Practice", primary: true },
+        { Icon: Search, label: "Search" },
+        { Icon: Download, label: "Paper / Key" },
+        { Icon: BarChart3, label: "Performance" },
+      ],
       steps: [
-        "Open the Dashboard tab to see everything you've built.",
+        "Open the Dashboard to see everything you've built and your live account validity.",
         "Switch between My Quiz and My Test, then drill Stream → Subject → Topic → Quiz (tests go Stream → Test).",
-        "Tap Practice / Take Test to start. Use the search box to find any quiz, test or question instantly.",
-        "Use the download icon on any item to export a question paper or answer key (PDF).",
+        "Tap Practice / Take Test to start. The search box finds any quiz, test or question by name or content.",
+        "Use the download icon on any card to export a printable question paper or answer key (PDF).",
+        "Scroll to Performance for your accuracy, best score, attempt history and weak areas — it updates after every attempt.",
       ],
-      show: true,
     },
     {
-      key: "build", tab: "build", Icon: Wrench, title: "Build — create quizzes & tests",
-      steps: [
-        "Open the Build tab to create your own Streams, Subjects, Topics, Quizzes and Tests.",
-        "Add questions manually, bulk-upload them, or pick from your question bank.",
-        hasAI ? "Or use Generate with AI / Import from Web to create questions automatically." : "Ask your administrator to enable AI to generate questions automatically.",
-        "Every quiz/test you add here appears on your Dashboard immediately.",
+      key: "build", tab: "build", Icon: Wrench, title: "Build — create your structure",
+      show: can.build,
+      visual: [
+        { Icon: Plus, label: "Add Stream", primary: true },
+        { Icon: Plus, label: "Add Subject" },
+        { Icon: Plus, label: "Add Topic" },
+        { Icon: Plus, label: "Add Quiz" },
       ],
-      show: true,
+      steps: [
+        "Open Build and pick My Quiz or My Test.",
+        "Create a Stream, then a Subject, then (My Quiz) a Topic — use the Add button at each level.",
+        "Inside a Topic (Quiz) or Subject (Test), click Add Quiz / Add Test and set its name, duration, marks and difficulty.",
+        "Everything you add appears on your Dashboard immediately.",
+      ],
     },
     {
-      key: "ai", tab: "ai", Icon: Sparkles, title: "AI — generate questions",
-      steps: [
-        "In Build, choose Generate with AI: type a topic (or paste a link/YouTube URL), pick how many questions of each type & difficulty, then Generate.",
-        "Review the preview and Insert — you can Generate more from the same topic without duplicates, and send a batch to the current or a new quiz.",
-        "Import from Web extracts questions from a PDF/document/web page, or generates fresh ones from a source.",
-        "On any question, use Regenerate to rebuild its options/answer, or Extend explanation to enrich it.",
-        "In the AI tab you can choose built-in AI or add your own API keys.",
+      key: "questions", tab: "build", Icon: ListChecks, title: "Add questions to a quiz / test",
+      show: can.build,
+      visual: [
+        { Icon: Plus, label: "Add Manually", primary: true },
+        { Icon: Upload, label: "Bulk Upload" },
+        { Icon: Library, label: "Pick from Quizzes" },
+        { Icon: Eye, label: "View All" },
+        { Icon: Copy, label: "Copy CSV" },
+        { Icon: Download, label: "CSV" },
       ],
-      show: hasAI,
+      steps: [
+        "Open a quiz/test and tap Questions to open its question tools.",
+        "Add Manually: write one question at a time (MCQ, matching, assertion–reason, statements, pairs, table…).",
+        "Bulk Upload: paste or upload many questions at once.",
+        "Pick from Quizzes: copy existing questions from your other quizzes into this one.",
+        "View All reviews every question (Admin/Student view); Copy CSV / CSV export them.",
+      ],
+    },
+    {
+      key: "aigenerate", tab: "build", Icon: Sparkles, title: "Generate questions with AI",
+      show: can.ai,
+      visual: [
+        { Icon: Sparkles, label: "AI Generate", primary: true },
+        { Icon: Globe, label: "Import from Web" },
+      ],
+      steps: [
+        "In a quiz/test's question tools, tap AI Generate.",
+        "Type a topic (or paste a web/YouTube link), list exact subtopics if you like, then set how many of each type & difficulty.",
+        "Generate, review the preview, and Insert. \"Generate more\" continues from the uncovered subtopics (no repeats).",
+        "Import from Web reads a PDF / document / web page / YouTube transcript and turns it into questions.",
+        "Choose your AI source (built-in keys or your own) in the AI tab.",
+      ],
+    },
+    {
+      key: "improve", tab: "build", Icon: Wand2, title: "Improve questions with AI",
+      show: can.ai && can.build,
+      visual: [
+        { Icon: Sparkles, label: "Extend Explanations" },
+        { Icon: RefreshCw, label: "Regenerate All" },
+        { Icon: ScanSearch, label: "Scan Missing Areas" },
+        { Icon: Sparkles, label: "Other question types" },
+      ],
+      steps: [
+        "Extend Explanations: enrich the explanation of one question, or all at once.",
+        "Regenerate All: rebuild every question's options/answer (reshuffles pair/matching).",
+        "Scan Missing Areas: find syllabus subtopics not yet covered, then generate for just those.",
+        "Other question types: turn your existing MCQs into assertion–reason, statements, matching or pairs.",
+      ],
+    },
+    {
+      key: "organise", tab: "build", Icon: GitMerge, title: "Organise & clean up questions",
+      show: can.build,
+      visual: [
+        { Icon: Scissors, label: "Split" },
+        { Icon: GitMerge, label: "Merge" },
+        { Icon: Files, label: "Duplicates" },
+      ],
+      steps: [
+        "Split: break a large quiz (or a whole topic) into quizzes of N questions.",
+        "Merge: combine several sibling quizzes into one (use Select all to grab them quickly).",
+        "Find Duplicates: scan a subject (or across all topics) for repeated questions and delete the extra copies.",
+      ],
+    },
+    {
+      key: "papers", tab: "papers", Icon: Files, title: "Previous Papers",
+      show: can.papers,
+      visual: [
+        { Icon: Plus, label: "Add Exam" },
+        { Icon: Plus, label: "Add Year" },
+        { Icon: Plus, label: "Add Paper" },
+        { Icon: Files, label: "Paper files" },
+      ],
+      steps: [
+        "Open Previous Papers and build Stream → Exam → Year → Paper.",
+        "Add the paper's questions like any quiz (they play with instant answers).",
+        "Use Paper files on a paper to upload the actual question-paper PDF and one or more answer keys (original, revised…), plus additional information.",
+        "Students open the paper, see the PDFs + info, and practise it like a quiz.",
+      ],
+    },
+    {
+      key: "checker", tab: "checker", Icon: SearchCheck, title: "Question Checker",
+      show: can.checker,
+      visual: [
+        { Icon: SearchCheck, label: "Check my bank", primary: true },
+        { Icon: Upload, label: "Upload file / image" },
+      ],
+      steps: [
+        "Open Question Checker and paste questions, or upload a file/image of a paper.",
+        "\"Check my bank\" shows, per question, whether it already exists in your content — exact copy, very similar, related, or original — and where.",
+        "Tick \"Deep check with AI\" to match by meaning across formats (uses AI).",
+        "Nothing is saved — it only searches your own questions.",
+      ],
+    },
+    {
+      key: "aigen", tab: "aigen", Icon: Sparkles, title: "AI Generator (studio)",
+      show: can.aigen,
+      visual: [{ Icon: Sparkles, label: "AI Generator", primary: true }],
+      steps: [
+        "Open the AI Generator tab for a dedicated space to draft questions in bulk.",
+        "Generate, review, and save straight into your quizzes/tests.",
+      ],
     },
     {
       key: "documents", tab: "documents", Icon: FileText, title: "Documents — write & render",
+      show: can.documents,
+      visual: [{ Icon: FileText, label: "Documents" }, { Icon: Copy, label: "Copy for Word" }],
       steps: [
-        "Open the Documents tab to write notes and render equations.",
-        "Use Copy for Word to paste rendered equations straight into notes or MS Word.",
-        "Saved documents can be used as a source when importing questions with AI.",
+        "Open Documents to write notes and render math/chemistry equations.",
+        "Copy for Word pastes rendered equations straight into MS Word.",
+        "Saved documents can be a source when importing questions with AI.",
       ],
-      show: hasAI,
     },
     {
       key: "notes", tab: "notes", Icon: Feather, title: "Notes — AI study notes",
+      show: can.notes,
+      visual: [{ Icon: Feather, label: "Notes" }],
       steps: [
-        "Open the Notes tab to generate clean, structured study notes on any topic with AI.",
+        "Open Notes to generate clean, structured study notes on any topic with AI.",
       ],
-      show: hasAI,
     },
     {
       key: "migrate", tab: "migrate", Icon: ArrowRightLeft, title: "Migrate — move content",
+      show: can.build,
+      visual: [{ Icon: ArrowRightLeft, label: "Migrate" }],
       steps: [
-        "Open the Migrate tab to move or copy quizzes/tests and their questions between streams, subjects or topics.",
+        "Open Migrate to move or copy quizzes/tests (and their questions) between streams, subjects or topics.",
       ],
+    },
+    {
+      key: "sharing", tab: "dashboard", Icon: Send, title: "Share & receive content",
+      show: can.build,
+      visual: [{ Icon: Send, label: "Send to user" }, { Icon: Share2, label: "Share" }],
+      steps: [
+        "On any stream/subject/topic/quiz, use Send to user / Share to send it to another account by email.",
+        "Content others send you appears at the top of your Dashboard — Accept to save your own copy (whole streams save directly; smaller shares ask where to save).",
+      ],
+    },
+    {
+      key: "account", tab: "account", Icon: User, title: "Account — validity, plan & referral",
       show: true,
+      visual: [{ Icon: User, label: "Account" }, { Icon: Crown, label: "Renew / change plan" }, { Icon: Gift, label: "Refer a friend" }],
+      steps: [
+        "Open Account (in the ☰ menu) for your name, email, plan and validity.",
+        "Renew / change plan before your access expires.",
+        "Share your referral code — for every friend who buys a plan you get 10 free days.",
+      ],
     },
   ].filter((g) => g.show);
 
@@ -147,7 +292,7 @@ export default function ClientUserManual({ onGoTab }) {
           </span>
           <div>
             <h1 className="text-2xl font-extrabold leading-none">User Manual</h1>
-            <p className="mt-1 text-sm text-slate-400">A quick guide to your account — updates automatically as you add or remove content.</p>
+            <p className="mt-1 text-sm text-slate-400">A guide to every tool you can use. The buttons shown look just like the real ones, and this manual updates automatically as your access or content changes.</p>
           </div>
           <button onClick={load} title="Refresh" className="btn-ghost ml-auto"><RefreshCw className="h-4 w-4" /> <span className="hidden sm:inline">Refresh</span></button>
         </div>
@@ -227,6 +372,20 @@ export default function ClientUserManual({ onGoTab }) {
                     <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-100 text-brand-600 dark:bg-brand-900/40 dark:text-brand-300"><g.Icon className="h-4 w-4" /></span>
                     <h3 className="font-bold">{g.title}</h3>
                   </div>
+                  {/* "How it looks" — the real buttons/icons this function uses,
+                      styled like the live app (auto-updates with the UI). */}
+                  {g.visual?.length > 0 && (
+                    <div className="mt-3 flex flex-wrap gap-1.5">
+                      {g.visual.map((v, i) => (
+                        <span
+                          key={i}
+                          className={`inline-flex items-center gap-1 rounded-lg border px-2 py-1 text-[11px] font-semibold ${v.primary ? "border-brand-600 bg-brand-600 text-white" : "border-slate-300 text-slate-600 dark:border-slate-600 dark:text-slate-300"}`}
+                        >
+                          <v.Icon className="h-3.5 w-3.5" /> {v.label}
+                        </span>
+                      ))}
+                    </div>
+                  )}
                   <ol className="mt-3 list-decimal space-y-1.5 pl-5 text-sm text-slate-600 dark:text-slate-300">
                     {g.steps.map((s, i) => <li key={i}>{s}</li>)}
                   </ol>
