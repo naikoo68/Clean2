@@ -161,14 +161,14 @@ export default function ClientUserManual({ onGoTab }) {
     aigen: !!user?.featAiGenerator,
   };
 
-  // Feature guides — one per function. Each carries a `visual`: the SAME icons
-  // and button styles the real app uses, so it shows "how it looks" and stays
-  // in sync automatically when the UI/access/content changes (no static
-  // screenshots to go stale).
+  // Feature guides — one per function. Each carries an `img` (a real screenshot
+  // of the screen, served from /public/manual) shown as the "how it looks"
+  // visual, plus a `visual` (icon/button chips) used as an automatic fallback
+  // via <ScreenMock> for any guide that doesn't have a screenshot yet.
   const guides = [
     {
       key: "dashboard", tab: "dashboard", Icon: LayoutDashboard, title: "Dashboard — practice your content",
-      show: can.dashboard,
+      show: can.dashboard, img: "dashboard.png",
       visual: [
         { Icon: Play, label: "Practice", primary: true },
         { Icon: Search, label: "Search" },
@@ -185,7 +185,7 @@ export default function ClientUserManual({ onGoTab }) {
     },
     {
       key: "build", tab: "build", Icon: Wrench, title: "Build — create your structure",
-      show: can.build,
+      show: can.build, img: "build.png",
       visual: [
         { Icon: Plus, label: "Add Stream", primary: true },
         { Icon: Plus, label: "Add Subject" },
@@ -201,7 +201,7 @@ export default function ClientUserManual({ onGoTab }) {
     },
     {
       key: "questions", tab: "build", Icon: ListChecks, title: "Add questions to a quiz / test",
-      show: can.build,
+      show: can.build, img: "build.png",
       visual: [
         { Icon: Plus, label: "Add Manually", primary: true },
         { Icon: Upload, label: "Bulk Upload" },
@@ -220,7 +220,7 @@ export default function ClientUserManual({ onGoTab }) {
     },
     {
       key: "aigenerate", tab: "build", Icon: Sparkles, title: "Generate questions with AI",
-      show: can.ai,
+      show: can.ai, img: "aigen.png",
       visual: [
         { Icon: Sparkles, label: "AI Generate", primary: true },
         { Icon: Globe, label: "Import from Web" },
@@ -235,7 +235,7 @@ export default function ClientUserManual({ onGoTab }) {
     },
     {
       key: "improve", tab: "build", Icon: Wand2, title: "Improve questions with AI",
-      show: can.ai && can.build,
+      show: can.ai && can.build, img: "build.png",
       visual: [
         { Icon: Sparkles, label: "Extend Explanations" },
         { Icon: RefreshCw, label: "Regenerate All" },
@@ -251,7 +251,7 @@ export default function ClientUserManual({ onGoTab }) {
     },
     {
       key: "organise", tab: "build", Icon: GitMerge, title: "Organise & clean up questions",
-      show: can.build,
+      show: can.build, img: "build.png",
       visual: [
         { Icon: Scissors, label: "Split" },
         { Icon: GitMerge, label: "Merge" },
@@ -265,7 +265,7 @@ export default function ClientUserManual({ onGoTab }) {
     },
     {
       key: "papers", tab: "papers", Icon: Files, title: "Previous Papers",
-      show: can.papers,
+      show: can.papers, img: "papers.png",
       visual: [
         { Icon: Plus, label: "Add Exam" },
         { Icon: Plus, label: "Add Year" },
@@ -281,7 +281,7 @@ export default function ClientUserManual({ onGoTab }) {
     },
     {
       key: "checker", tab: "checker", Icon: SearchCheck, title: "Question Checker",
-      show: can.checker,
+      show: can.checker, img: "checker.png",
       visual: [
         { Icon: SearchCheck, label: "Check my bank", primary: true },
         { Icon: Upload, label: "Upload file / image" },
@@ -295,7 +295,7 @@ export default function ClientUserManual({ onGoTab }) {
     },
     {
       key: "aigen", tab: "aigen", Icon: Sparkles, title: "AI Generator (studio)",
-      show: can.aigen,
+      show: can.aigen, img: "aigen.png",
       visual: [{ Icon: Sparkles, label: "AI Generator", primary: true }],
       steps: [
         "Open the AI Generator tab for a dedicated space to draft questions in bulk.",
@@ -304,7 +304,7 @@ export default function ClientUserManual({ onGoTab }) {
     },
     {
       key: "documents", tab: "documents", Icon: FileText, title: "Documents — write & render",
-      show: can.documents,
+      show: can.documents, img: "documents.png",
       visual: [{ Icon: FileText, label: "Documents" }, { Icon: Copy, label: "Copy for Word" }],
       steps: [
         "Open Documents to write notes and render math/chemistry equations.",
@@ -314,7 +314,7 @@ export default function ClientUserManual({ onGoTab }) {
     },
     {
       key: "notes", tab: "notes", Icon: Feather, title: "Notes — AI study notes",
-      show: can.notes,
+      show: can.notes, img: "notes.png",
       visual: [{ Icon: Feather, label: "Notes" }],
       steps: [
         "Open Notes to generate clean, structured study notes on any topic with AI.",
@@ -322,7 +322,7 @@ export default function ClientUserManual({ onGoTab }) {
     },
     {
       key: "migrate", tab: "migrate", Icon: ArrowRightLeft, title: "Migrate — move content",
-      show: can.build,
+      show: can.build, img: "migrate.png",
       visual: [{ Icon: ArrowRightLeft, label: "Migrate" }],
       steps: [
         "Open Migrate to move or copy quizzes/tests (and their questions) between streams, subjects or topics.",
@@ -330,7 +330,7 @@ export default function ClientUserManual({ onGoTab }) {
     },
     {
       key: "sharing", tab: "dashboard", Icon: Send, title: "Share & receive content",
-      show: can.build,
+      show: can.build, img: "dashboard.png",
       visual: [{ Icon: Send, label: "Send to user" }, { Icon: Share2, label: "Share" }],
       steps: [
         "On any stream/subject/topic/quiz, use Send to user / Share to send it to another account by email.",
@@ -339,7 +339,7 @@ export default function ClientUserManual({ onGoTab }) {
     },
     {
       key: "account", tab: "account", Icon: User, title: "Account — validity, plan & referral",
-      show: true,
+      show: true, img: "account.png",
       visual: [{ Icon: User, label: "Account" }, { Icon: Crown, label: "Renew / change plan" }, { Icon: Gift, label: "Refer a friend" }],
       steps: [
         "Open Account (in the ☰ menu) for your name, email, plan and validity.",
@@ -367,7 +367,7 @@ export default function ClientUserManual({ onGoTab }) {
           </span>
           <div>
             <h1 className="text-2xl font-extrabold leading-none">User Manual</h1>
-            <p className="mt-1 text-sm text-slate-400">A guide to every tool you can use, with a preview picture of each screen so it's easy to follow. The previews use the real buttons, and this manual updates automatically as your access or content changes.</p>
+            <p className="mt-1 text-sm text-slate-400">A guide to every tool you can use, with a screenshot of each screen so it's easy to follow. Your live account details below update automatically as your access or content changes.</p>
           </div>
           <button onClick={load} title="Refresh" className="btn-ghost ml-auto"><RefreshCw className="h-4 w-4" /> <span className="hidden sm:inline">Refresh</span></button>
         </div>
@@ -447,10 +447,24 @@ export default function ClientUserManual({ onGoTab }) {
                     <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-100 text-brand-600 dark:bg-brand-900/40 dark:text-brand-300"><g.Icon className="h-4 w-4" /></span>
                     <h3 className="font-bold">{g.title}</h3>
                   </div>
-                  {/* "How it looks" — a preview image of the screen, drawn with
-                      the real buttons/icons this function uses and styled like
-                      the live app, so it stays in sync with the UI. */}
-                  <ScreenMock tab={g.tab} title={g.title.split(" — ")[0]} visual={g.visual} />
+                  {/* "How it looks" — a real screenshot of the screen when we
+                      have one; otherwise fall back to the drawn preview so a
+                      guide is never left without a visual. */}
+                  {g.img ? (
+                    <figure className="mt-3 overflow-hidden rounded-xl border border-slate-200 dark:border-slate-700">
+                      <img
+                        src={`/manual/${g.img}`}
+                        alt={`Screenshot of the ${g.title.split(" — ")[0]} screen`}
+                        loading="lazy"
+                        className="block w-full"
+                      />
+                      <figcaption className="border-t border-slate-100 px-3 py-1 text-center text-[10px] text-slate-400 dark:border-slate-800 dark:text-slate-500">
+                        The {g.title.split(" — ")[0]} screen
+                      </figcaption>
+                    </figure>
+                  ) : (
+                    <ScreenMock tab={g.tab} title={g.title.split(" — ")[0]} visual={g.visual} />
+                  )}
                   <ol className="mt-3 list-decimal space-y-1.5 pl-5 text-sm text-slate-600 dark:text-slate-300">
                     {g.steps.map((s, i) => <li key={i}>{s}</li>)}
                   </ol>
