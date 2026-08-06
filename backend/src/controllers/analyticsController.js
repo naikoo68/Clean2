@@ -18,7 +18,12 @@ export async function publicStats(req, res) {
     User.countDocuments({ role: "student" }),
     User.countDocuments(),
     Quiz.countDocuments(),
-    TestSeries.countDocuments(),
+    // Public "Total Test Series" must count only real platform test series —
+    // NOT the private "My Practice" content (client quizzes/tests/papers are
+    // stored as TestSeries with practice=true). This matches the admin
+    // dashboard's content.tests definition and stops practice content from
+    // inflating the public number.
+    TestSeries.countDocuments({ practice: { $ne: true } }),
     Question.countDocuments(),
     Subject.countDocuments(),
     Topic.countDocuments(),
