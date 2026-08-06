@@ -25,7 +25,7 @@ export default function PickFromBank({ open, onClose, testId, plan = [], title =
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState("");
   const [viewQ, setViewQ] = useState(null); // preview a question before picking
-  const [full, setFull] = useState(false); // full-screen the picker (more room to browse/select)
+  const [full, setFull] = useState(true); // open full-screen by default (toggle to shrink)
 
   // Quiz drill
   const [subjects, setSubjects] = useState([]);
