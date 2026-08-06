@@ -133,8 +133,8 @@ export default function RegenerateAllModal({ open, target, title, onClose, onDon
   const pct = progress && progress.total ? Math.min(100, Math.round((progress.done / progress.total) * 100)) : 0;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/50 p-4" onClick={busy ? undefined : onClose}>
-      <div onClick={(e) => e.stopPropagation()} className="my-8 w-full max-w-lg animate-scale-in card p-6">
+    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/50 p-0 sm:p-4" onClick={busy ? undefined : onClose}>
+      <div onClick={(e) => e.stopPropagation()} className="min-h-full w-full max-w-none animate-scale-in card m-0 rounded-none p-4 sm:rounded-2xl sm:p-6">
         <div className="mb-1 flex items-center justify-between">
           <h3 className="flex items-center gap-2 text-lg font-bold"><RefreshCw className="h-5 w-5 text-violet-600" /> Regenerate all questions</h3>
           <button onClick={onClose} disabled={busy}><X className="h-5 w-5" /></button>
