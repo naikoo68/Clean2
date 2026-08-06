@@ -13,6 +13,8 @@ import {
   ListChecks,
   Layers,
   Star,
+  FileStack,
+  HelpCircle,
 } from "lucide-react";
 import { useSettings } from "../context/SettingsContext";
 import { useAuth } from "../context/AuthContext";
@@ -248,6 +250,34 @@ export default function Home() {
         </section>
       ) : null,
 
+    // Combined totals across ALL clients (their "My Practice" content),
+    // computed live on every visit — updates automatically as clients build.
+    clientStats: realStats ? (
+      <section className="container-page pt-6">
+        <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+          <p className="mb-5 text-center text-sm font-semibold uppercase tracking-wide text-slate-400">
+            Across all accounts — updated live
+          </p>
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+            {[
+              { v: realStats.clients, l: "Total Clients", Icon: Users },
+              { v: realStats.clientQuizzes, l: "Total Quizzes", Icon: ListChecks },
+              { v: realStats.clientTests, l: "Total Tests", Icon: FileStack },
+              { v: realStats.clientQuestions, l: "Total Questions", Icon: HelpCircle },
+            ].map((s) => (
+              <div key={s.l} className="flex flex-col items-center gap-2 rounded-2xl bg-slate-50 p-5 text-center dark:bg-slate-800/60">
+                <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-brand-100 text-brand-600 dark:bg-brand-900/40 dark:text-brand-300">
+                  <s.Icon className="h-6 w-6" />
+                </span>
+                <p className="text-2xl font-extrabold sm:text-3xl">{fmt(s.v)}</p>
+                <p className="text-sm text-slate-500 dark:text-slate-400">{s.l}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+    ) : null,
+
     quickAccess: (
       <section className="container-page pt-10">
         <div className="grid gap-4 sm:grid-cols-3">
@@ -361,7 +391,11 @@ export default function Home() {
       {order
         .filter((s) => s.visible !== false && blocks[s.key])
         .map((s) => (
-          <Fragment key={s.key}>{blocks[s.key]}</Fragment>
+          <Fragment key={s.key}>
+            {blocks[s.key]}
+            {/* Live client-combined totals appear right after the stats strip. */}
+            {s.key === "stats" && blocks.clientStats}
+          </Fragment>
         ))}
     </div>
   );
