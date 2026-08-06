@@ -163,18 +163,18 @@ export default function Home() {
         <div className="absolute -right-20 -top-20 -z-10 h-72 w-72 rounded-full bg-accent-300/30 blur-3xl dark:bg-accent-600/10" />
         <div className="absolute -left-20 top-40 -z-10 h-72 w-72 rounded-full bg-brand-300/30 blur-3xl dark:bg-brand-700/10" />
 
-        <div className="container-page grid items-center gap-12 py-16 md:grid-cols-2 lg:py-24">
+        <div className="container-page grid grid-cols-2 items-center gap-4 py-16 sm:gap-8 md:gap-12 lg:py-24">
           <div className="animate-fade-in-up">
             <span className="badge bg-accent-100 text-accent-700 dark:bg-accent-900/40 dark:text-accent-300">
               <Star className="h-3.5 w-3.5" /> India's smart prep platform
             </span>
-            <h1 className="mt-5 text-4xl font-extrabold leading-tight tracking-tight sm:text-5xl lg:text-6xl">
+            <h1 className="mt-5 text-2xl font-extrabold leading-tight tracking-tight sm:text-4xl md:text-5xl lg:text-6xl">
               Prepare Smart, <br />
               <span className="bg-gradient-to-r from-brand-600 to-accent-500 bg-clip-text text-transparent">
                 Achieve More.
               </span>
             </h1>
-            <p className="mt-5 max-w-lg text-lg text-slate-600 dark:text-slate-300">
+            <p className="mt-5 max-w-lg text-sm text-slate-600 dark:text-slate-300 sm:text-lg">
               Master every subject with adaptive quizzes, full-length test series,
               instant results and powerful analytics — built for serious aspirants.
             </p>
@@ -203,7 +203,7 @@ export default function Home() {
           </div>
 
           <div className="relative animate-scale-in">
-            <div className="card p-6 shadow-soft">
+            <div className="card p-4 shadow-soft sm:p-6">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-slate-500 dark:text-slate-400">{progressSubtitle}</p>
@@ -226,9 +226,9 @@ export default function Home() {
                   </div>
                 ))}
               </div>
-              <div className="mt-5 grid grid-cols-3 gap-3 text-center">
+              <div className="mt-5 grid grid-cols-3 gap-2 text-center sm:gap-3">
                 {miniStats.map((s) => (
-                  <div key={s.l} className="rounded-xl bg-slate-50 p-3 dark:bg-slate-800/60">
+                  <div key={s.l} className="rounded-xl bg-slate-50 p-2 dark:bg-slate-800/60 sm:p-3">
                     <p className="text-lg font-bold text-brand-600 dark:text-brand-400">{s.v}</p>
                     <p className="text-xs text-slate-500 dark:text-slate-400">{s.l}</p>
                   </div>
