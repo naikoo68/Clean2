@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import * as Icons from "lucide-react";
 import {
@@ -30,6 +30,7 @@ import { useAuth } from "../../context/AuthContext";
 import Badge from "../../components/ui/Badge";
 import QuestionView from "../../components/admin/QuestionView";
 import PaperExport from "../../components/admin/PaperExport";
+import AccountOverview from "../../components/ui/AccountOverview";
 import { Loading, ErrorState } from "../../components/ui/AsyncState";
 import ClientPerformance from "./ClientPerformance";
 import IncomingSharesInbox from "../../components/client/IncomingSharesInbox";
@@ -215,6 +216,29 @@ export default function ClientDashboard({ onBuild, onUpgrade }) {
   const quizzes = items.filter((i) => i.kind === "quiz");
   const tests = items.filter((i) => i.kind === "test");
 
+  // Live "What's on your account now" overview — recomputed from the fresh
+  // items each load, so it auto-updates when content is added/deleted.
+  const overview = useMemo(() => {
+    const distinct = (arr, key) => new Set(arr.map((x) => x[key]?._id).filter(Boolean)).size;
+    const streamMap = new Map();
+    for (const it of items) {
+      const s = it.stream;
+      if (!s?._id) continue;
+      const cur = streamMap.get(String(s._id)) || { name: s.name, quizzes: 0, tests: 0 };
+      if (it.kind === "quiz") cur.quizzes += 1; else cur.tests += 1;
+      streamMap.set(String(s._id), cur);
+    }
+    return {
+      quizzes: quizzes.length,
+      tests: tests.length,
+      questions: items.reduce((s, i) => s + (i.questionCount || 0), 0),
+      streams: distinct(items, "stream"),
+      subjects: distinct(quizzes, "subject"),
+      topics: distinct(quizzes, "topic"),
+      streamList: [...streamMap.values()],
+    };
+  }, [items, quizzes, tests]);
+
   // Search across everything the client has built — matches an item by its own
   // name OR the name of its stream / subject / topic, so searching a subject
   // surfaces all its quizzes. Spans BOTH My Quiz and My Test.
@@ -289,7 +313,7 @@ export default function ClientDashboard({ onBuild, onUpgrade }) {
       <div className="grid gap-4 sm:grid-cols-3">
         <div className="card p-5 sm:col-span-2">
           <p className="text-sm text-slate-500 dark:text-slate-400">Welcome back,</p>
-          <h1 className="text-2xl font-extrabold">{user?.name || "there"}</h1>
+          <h1 className="text-lg font-bold">{user?.name || "there"}</h1>
           <p className="mt-0.5 text-sm text-slate-400">{user?.email}</p>
           <div className="mt-4 flex flex-wrap items-center gap-2">
             <button onClick={onBuild} className="btn-outline">
@@ -366,6 +390,9 @@ export default function ClientDashboard({ onBuild, onUpgrade }) {
           )}
         </div>
       </div>
+
+      {/* Live overview of everything you've built (auto-updates on add/delete). */}
+      <AccountOverview counts={overview} streamList={overview.streamList} />
 
       {/* Trial banner — nudge trial users to upgrade before it ends */}
       {user?.isTrial && !expired && onUpgrade && (
