@@ -42,60 +42,78 @@ export default function Footer({ hideProduct = false }) {
   // aren't relevant, so allow hiding that column.
   const visibleColumns = hideProduct ? columns.filter((c) => c.title !== "Product") : columns;
 
+  // Brand block (logo, tagline, social icons) — shared by both layouts.
+  const brandBlock = (
+    <>
+      <Link to="/">
+        <Brand />
+      </Link>
+      <p className="mt-4 max-w-sm text-sm text-slate-500 dark:text-slate-400">
+        {settings.tagline} Subject-wise quizzes, full-length test series,
+        instant results and performance analytics — all in one place.
+      </p>
+      {socialLinks.length > 0 && (
+        <div className="mt-5 flex flex-wrap gap-3">
+          {socialLinks.map((s, i) => {
+            const Icon = SOCIAL_ICONS[s.platform] || Website;
+            const bg = SOCIAL_COLORS[s.platform] || SOCIAL_COLORS.other;
+            return (
+              <a
+                key={i}
+                href={s.url}
+                target="_blank"
+                rel="noreferrer"
+                aria-label={s.platform}
+                title={s.platform}
+                style={{ backgroundColor: bg }}
+                className="flex h-12 w-12 items-center justify-center rounded-2xl text-white shadow-soft transition hover:-translate-y-0.5 hover:shadow-lg"
+              >
+                <Icon className="h-6 w-6" />
+              </a>
+            );
+          })}
+        </div>
+      )}
+    </>
+  );
+
+  // Link columns — shared markup; each is self-contained so it works as a grid
+  // cell (public) or a flex child (client).
+  const columnEls = visibleColumns.map((col) => (
+    <div key={col.title} className="min-w-0">
+      <h4 className="text-sm font-semibold text-slate-900 dark:text-white">{col.title}</h4>
+      <ul className="mt-4 space-y-2.5">
+        {col.links.map((link) => (
+          <li key={link.label}>
+            <Link
+              to={link.to}
+              className="text-sm text-slate-500 transition hover:text-brand-600 dark:text-slate-400 dark:hover:text-brand-400"
+            >
+              {link.label}
+            </Link>
+          </li>
+        ))}
+      </ul>
+    </div>
+  ));
+
   return (
     <footer className="mt-20 border-t border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-950">
       <div className="container-page py-12">
-        <div className="grid gap-10 md:grid-cols-2 lg:grid-cols-5">
-          <div className="lg:col-span-2">
-            <Link to="/">
-              <Brand />
-            </Link>
-            <p className="mt-4 max-w-sm text-sm text-slate-500 dark:text-slate-400">
-              {settings.tagline} Subject-wise quizzes, full-length test series,
-              instant results and performance analytics — all in one place.
-            </p>
-            {socialLinks.length > 0 && (
-              <div className="mt-5 flex flex-wrap gap-3">
-                {socialLinks.map((s, i) => {
-                  const Icon = SOCIAL_ICONS[s.platform] || Website;
-                  const bg = SOCIAL_COLORS[s.platform] || SOCIAL_COLORS.other;
-                  return (
-                    <a
-                      key={i}
-                      href={s.url}
-                      target="_blank"
-                      rel="noreferrer"
-                      aria-label={s.platform}
-                      title={s.platform}
-                      style={{ backgroundColor: bg }}
-                      className="flex h-12 w-12 items-center justify-center rounded-2xl text-white shadow-soft transition hover:-translate-y-0.5 hover:shadow-lg"
-                    >
-                      <Icon className="h-6 w-6" />
-                    </a>
-                  );
-                })}
-              </div>
-            )}
+        {hideProduct ? (
+          // Client footer: keep the brand and the link columns side by side at
+          // ALL widths (portrait/mobile included) — never stacked vertically.
+          <div className="flex flex-row items-start gap-6 sm:gap-12">
+            <div className="min-w-0 flex-1">{brandBlock}</div>
+            <div className="flex shrink-0 gap-10 sm:gap-16">{columnEls}</div>
           </div>
-
-          {visibleColumns.map((col) => (
-            <div key={col.title}>
-              <h4 className="text-sm font-semibold text-slate-900 dark:text-white">{col.title}</h4>
-              <ul className="mt-4 space-y-2.5">
-                {col.links.map((link) => (
-                  <li key={link.label}>
-                    <Link
-                      to={link.to}
-                      className="text-sm text-slate-500 transition hover:text-brand-600 dark:text-slate-400 dark:hover:text-brand-400"
-                    >
-                      {link.label}
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ))}
-        </div>
+        ) : (
+          // Public footer: responsive grid (stacks on small screens).
+          <div className="grid gap-10 md:grid-cols-2 lg:grid-cols-5">
+            <div className="lg:col-span-2">{brandBlock}</div>
+            {columnEls}
+          </div>
+        )}
 
         <div className="mt-10 flex flex-col items-center justify-between gap-4 border-t border-slate-200 pt-6 text-sm text-slate-500 sm:flex-row dark:border-slate-800 dark:text-slate-400">
           <p>© {new Date().getFullYear()} {settings.siteName}. All rights reserved.</p>
