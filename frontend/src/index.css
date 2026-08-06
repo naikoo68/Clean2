@@ -75,6 +75,20 @@
   }
 }
 
+/* Stop iOS Safari (and other mobile browsers) from auto-zooming the page when a
+   form field is focused: it zooms whenever the focused control's font-size is
+   below 16px, and our inputs use text-sm (14px). Force >=16px on TOUCH devices
+   only (phones/tablets), so the desktop design keeps its text-sm sizing and
+   users can still pinch-zoom. !important overrides Tailwind's text-sm/text-xs
+   utilities on inputs. */
+@media (hover: none) and (pointer: coarse) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+  textarea,
+  select {
+    font-size: 16px !important;
+  }
+}
+
 /* Scrolling notice board (marquee) — moves content right → left, loops. */
 @keyframes marquee {
   0% {
