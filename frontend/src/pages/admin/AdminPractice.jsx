@@ -93,6 +93,16 @@ export default function AdminPractice({ clientMode = false, fixedKind = "" }) {
   const [stream, setStream] = useState(() => loadNav(NAV_KEY).stream || null);
   const [subject, setSubject] = useState(() => loadNav(NAV_KEY).subject || null);
   const [topic, setTopic] = useState(() => loadNav(NAV_KEY).topic || null);
+
+  // Level model per kind. My Quiz and Previous Papers have a 4th (topic) level;
+  // My Test goes straight stream → subject → items. For Previous Papers the
+  // levels are relabelled: subject = "Exam", topic = "Year", item = "Paper".
+  const hasTopics = kind === "quiz" || kind === "paper";
+  const L = kind === "paper"
+    ? { subjectPl: "Exams", subjectAdd: "Add Exam", topicPl: "Years", topicAdd: "Add Year", itemPl: "Papers", itemAdd: "Add Paper", openTopics: "Open years", itemsWord: "papers", groupWord: "year" }
+    : kind === "quiz"
+    ? { subjectPl: "Subjects", subjectAdd: "Add Subject", topicPl: "Topics", topicAdd: "Add Topic", itemPl: "Quizzes", itemAdd: "Add Quiz", openTopics: "Open topics", itemsWord: "quizzes", groupWord: "topic" }
+    : { subjectPl: "Subjects", subjectAdd: "Add Subject", topicPl: "Topics", topicAdd: "Add Topic", itemPl: "Tests", itemAdd: "Add Test", openTopics: "Open topics", itemsWord: "tests", groupWord: "subject" };
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -180,7 +190,7 @@ export default function AdminPractice({ clientMode = false, fixedKind = "" }) {
     const missingContext =
       (which === "subjects" && !stream) ||
       (which === "topics" && !subject) ||
-      (which === "items" && (kind === "quiz" ? !topic : !subject));
+      (which === "items" && (hasTopics ? !topic : !subject));
     if (missingContext) {
       if (view !== "streams") setView("streams", { replace: true });
       which = "streams";
@@ -191,7 +201,7 @@ export default function AdminPractice({ clientMode = false, fixedKind = "" }) {
       which === "streams" ? practiceService.adminStreams(kind)
       : which === "subjects" ? practiceService.adminSubjects(stream._id)
       : which === "topics" ? practiceService.adminTopics(subject._id)
-      : kind === "quiz" ? practiceService.adminTopicItems(topic._id)
+      : hasTopics ? practiceService.adminTopicItems(topic._id)
       : practiceService.adminItems(subject._id, kind);
     p.then(setItems).catch((e) => setError(e.message)).finally(() => setLoading(false));
   };
@@ -219,7 +229,7 @@ export default function AdminPractice({ clientMode = false, fixedKind = "" }) {
 
   const openStream = (s) => { setStream(s); setSubject(null); setTopic(null); setView("subjects"); };
   // My Quiz drills into Topics; My Test Series goes straight to items.
-  const openSubject = (s) => { setSubject(s); setTopic(null); setView(kind === "quiz" ? "topics" : "items"); };
+  const openSubject = (s) => { setSubject(s); setTopic(null); setView(hasTopics ? "topics" : "items"); };
   const openTopic = (t) => { setTopic(t); setView("items"); };
   const goTo = (v) => setView(v);
 
@@ -386,7 +396,7 @@ export default function AdminPractice({ clientMode = false, fixedKind = "" }) {
   // Open "Missing areas": resume a saved plan for this topic if one exists (no AI
   // call), otherwise run a fresh scan.
   const scanMissingAreas = async () => {
-    const topicName = (kind === "quiz" ? topic : subject)?.name || "";
+    const topicName = (hasTopics ? topic : subject)?.name || "";
     setScanOpen(true); setScanFull(false); setScanErr(""); setSeqMsg(""); seqStopRef.current = false;
     let saved = null;
     try { const raw = localStorage.getItem(scanStorageKey(topicName)); saved = raw ? JSON.parse(raw) : null; } catch { saved = null; }
@@ -655,7 +665,7 @@ export default function AdminPractice({ clientMode = false, fixedKind = "" }) {
         name,
         practiceStream: stream?._id,
         practiceSubject: subject?._id,
-        practiceTopic: kind === "quiz" ? topic?._id : undefined,
+        practiceTopic: hasTopics ? topic?._id : undefined,
         practiceKind: kind,
       });
       if (!created?._id) throw new Error(`Could not create the new ${kind}.`);
@@ -756,9 +766,9 @@ export default function AdminPractice({ clientMode = false, fixedKind = "" }) {
   };
 
   const H = view === "streams" ? { title: "Streams", add: "Add Stream", icon: GraduationCap }
-    : view === "subjects" ? { title: `Subjects in ${stream?.name || ""}`, add: "Add Subject", icon: FolderOpen }
-    : view === "topics" ? { title: `Topics in ${subject?.name || ""}`, add: "Add Topic", icon: HelpCircle }
-    : { title: `${kind === "quiz" ? "Quizzes" : "Tests"} in ${(kind === "quiz" ? topic : subject)?.name || ""}`, add: kind === "quiz" ? "Add Quiz" : "Add Test", icon: kind === "quiz" ? ListChecks : FileStack };
+    : view === "subjects" ? { title: `${L.subjectPl} in ${stream?.name || ""}`, add: L.subjectAdd, icon: FolderOpen }
+    : view === "topics" ? { title: `${L.topicPl} in ${subject?.name || ""}`, add: L.topicAdd, icon: HelpCircle }
+    : { title: `${L.itemPl} in ${(hasTopics ? topic : subject)?.name || ""}`, add: L.itemAdd, icon: kind === "quiz" ? ListChecks : kind === "paper" ? Files : FileStack };
 
   const addType = view === "streams" ? "stream" : view === "subjects" ? "subject" : view === "topics" ? "topic" : "item";
 
@@ -827,9 +837,9 @@ export default function AdminPractice({ clientMode = false, fixedKind = "" }) {
           </>)}
           {subject && (view === "topics" || view === "items") && (<>
             <ChevronRight className="h-4 w-4 text-slate-400" />
-            <button onClick={() => goTo(kind === "quiz" ? "topics" : "items")} className={`rounded px-2 py-1 font-medium ${view === "topics" ? "text-brand-600" : "text-slate-500 hover:text-brand-600"}`}>{subject.name}</button>
+            <button onClick={() => goTo(hasTopics ? "topics" : "items")} className={`rounded px-2 py-1 font-medium ${view === "topics" ? "text-brand-600" : "text-slate-500 hover:text-brand-600"}`}>{subject.name}</button>
           </>)}
-          {topic && view === "items" && kind === "quiz" && (<>
+          {topic && view === "items" && hasTopics && (<>
             <ChevronRight className="h-4 w-4 text-slate-400" />
             <span className="rounded px-2 py-1 font-medium text-brand-600">{topic.name}</span>
           </>)}
@@ -839,20 +849,20 @@ export default function AdminPractice({ clientMode = false, fixedKind = "" }) {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h2 className="flex items-center gap-2 text-lg font-bold"><H.icon className="h-5 w-5 text-brand-600" /> {H.title}</h2>
         <div className="flex flex-wrap items-center gap-2">
-          {view === "items" && (kind === "quiz" ? topic : subject) && items.length > 0 && (
+          {view === "items" && (hasTopics ? topic : subject) && items.length > 0 && (
             <button
               onClick={scanMissingAreas}
               className="btn-outline text-brand-600"
-              title={`Scan all ${kind === "quiz" ? "quizzes" : "tests"} here for syllabus areas not yet covered`}
+              title={`Scan all ${L.itemsWord} here for syllabus areas not yet covered`}
             >
               <ScanSearch className="h-4 w-4" /> Scan Missing Areas
             </button>
           )}
-          {view === "items" && (kind === "quiz" ? topic : subject) && items.length > 0 && (
+          {view === "items" && (hasTopics ? topic : subject) && items.length > 0 && (
             <button
               onClick={openTopicOtherTypes}
               className="btn-outline text-brand-600"
-              title={`Make other question types (assertion, statements, matching, pairs) from ALL ${kind === "quiz" ? "quizzes" : "tests"} in this ${kind === "quiz" ? "topic" : "subject"}`}
+              title={`Make other question types (assertion, statements, matching, pairs) from ALL ${L.itemsWord} in this ${L.groupWord}`}
             >
               <Sparkles className="h-4 w-4" /> Other question types
             </button>
@@ -905,9 +915,9 @@ export default function AdminPractice({ clientMode = false, fixedKind = "" }) {
                 >
                   <p className="font-bold">{item.name}</p>
                   <p className="mt-0.5 text-xs text-slate-400">
-                    {view === "streams" && `${item.subjects ?? 0} subjects`}
-                    {view === "subjects" && (kind === "quiz" ? "Open topics" : `${item.items ?? 0} tests`)}
-                    {view === "topics" && `${item.items ?? 0} quizzes`}
+                    {view === "streams" && `${item.subjects ?? 0} ${L.subjectPl.toLowerCase()}`}
+                    {view === "subjects" && (hasTopics ? L.openTopics : `${item.items ?? 0} tests`)}
+                    {view === "topics" && `${item.items ?? 0} ${L.itemsWord}`}
                     {view === "items" && `${item.questionCount ?? 0} questions · ${item.visibleToAll ? "Visible to all" : "Hidden by default"}`}
                   </p>
                 </button>
@@ -1551,7 +1561,12 @@ function EntityForm({ type, data, kind, saving, onClose, onSave }) {
     (data.subjectPlan || []).map((r) => ({ subject: r.subject || "", count: r.count ?? 0 }))
   );
   const isTestItem = type === "item" && kind === "test";
-  const title = type === "item" ? (kind === "quiz" ? "Quiz" : "Test") : type === "stream" ? "Stream" : type === "topic" ? "Topic" : "Subject";
+  // Previous Papers relabels the levels: subject = Exam, topic = Year, item = Paper.
+  const title = type === "item"
+    ? (kind === "quiz" ? "Quiz" : kind === "paper" ? "Paper" : "Test")
+    : type === "stream" ? "Stream"
+    : type === "topic" ? (kind === "paper" ? "Year" : "Topic")
+    : (kind === "paper" ? "Exam" : "Subject");
 
   const submit = (e) => {
     e.preventDefault();
