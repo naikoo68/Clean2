@@ -82,17 +82,16 @@
 /* Stop iOS Safari (and other mobile browsers) from auto-zooming the page when a
    form field is focused: it zooms whenever the focused control's font-size is
    below 16px, and our inputs use text-sm (14px). Force >=16px on TOUCH devices
-   only (phones/tablets), so the desktop design keeps its text-sm sizing and
-   users can still pinch-zoom. !important overrides Tailwind's text-sm/text-xs
-   utilities on inputs. */
+   only (phones/tablets). iOS only checks the font-size at the moment a field is
+   FOCUSED, so we bump to 16px on :focus only — the field keeps the app's normal
+   small text (matching the rest of the UI) when idle, and there's no zoom while
+   typing. !important overrides Tailwind's text-sm/text-xs utilities on inputs. */
 @media (hover: none) and (pointer: coarse) {
-  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
-  textarea,
-  select {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):focus,
+  textarea:focus,
+  select:focus {
     font-size: 16px !important;
-    /* Bumping to 16px without adjusting the line-height left the tight
-       utility line-height (e.g. text-sm's 1.25rem / text-xs's 1rem), which
-       cramped and clipped the taller text. Give it proportional leading. */
+    /* Proportional leading so the 16px focused text isn't cramped/clipped. */
     line-height: 1.5 !important;
   }
 }
