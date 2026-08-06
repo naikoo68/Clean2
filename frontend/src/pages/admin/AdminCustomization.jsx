@@ -1,7 +1,7 @@
 import { useState, useRef } from "react";
 import {
   Palette, Type, ImagePlus, Save, RotateCcw, CheckCircle2, Eye, EyeOff,
-  Share2, Phone, Plus, Trash2, Upload, X, Info, BarChart3, PanelTop, GripVertical, LayoutList,
+  Share2, Phone, Plus, Trash2, Upload, X, Info, BarChart3, PanelTop, GripVertical, LayoutList, Megaphone,
 } from "lucide-react";
 import { useSettings } from "../../context/SettingsContext";
 
@@ -148,6 +148,7 @@ const DEFAULTS = {
     { title: "Our Promise", desc: "Honest content, transparent analytics and relentless focus on student outcomes." },
   ],
   statsAuto: true,
+  clientAnnouncement: { enabled: false, title: "", message: "" },
   homeSections: HOME_ORDER.map((key) => ({ key, visible: true })),
   aboutStats: [
     { value: "1,20,000+", label: "Total Students" },
@@ -172,6 +173,7 @@ export default function AdminCustomization() {
     contacts: settings.contacts?.length ? settings.contacts : DEFAULTS.contacts,
     aboutValues: settings.aboutValues?.length ? settings.aboutValues : DEFAULTS.aboutValues,
     aboutStats: settings.aboutStats?.length ? settings.aboutStats : DEFAULTS.aboutStats,
+    clientAnnouncement: { ...DEFAULTS.clientAnnouncement, ...(settings.clientAnnouncement || {}) },
     homeSections: normalizeHomeSections(settings.homeSections),
   });
   const [saving, setSaving] = useState(false);
@@ -325,6 +327,44 @@ export default function AdminCustomization() {
           <p className="mt-4 rounded-xl bg-slate-50 p-4 text-lg dark:bg-slate-800/60" style={{ fontFamily: `'${form.fontFamily}', sans-serif` }}>
             The quick brown fox jumps over the lazy dog. 1234567890
           </p>
+        </div>
+
+        {/* Client welcome popup */}
+        <div className="card p-6 lg:col-span-2">
+          <h3 className="mb-1 flex items-center gap-2 font-bold"><Megaphone className="h-5 w-5 text-brand-600" /> Client welcome popup</h3>
+          <p className="mb-4 text-sm text-slate-500 dark:text-slate-400">
+            A popup shown to clients <span className="font-semibold">every time</span> they open their workspace. It always shows a welcome heading (your tagline); add an optional announcement below.
+          </p>
+          <label className="mb-4 flex items-center gap-3">
+            <input
+              type="checkbox"
+              className="h-4 w-4 rounded border-slate-300 text-brand-600"
+              checked={!!form.clientAnnouncement?.enabled}
+              onChange={(e) => set("clientAnnouncement", { ...form.clientAnnouncement, enabled: e.target.checked })}
+            />
+            <span className="text-sm font-medium">Show an announcement inside the welcome popup</span>
+          </label>
+          <div className="space-y-4">
+            <div>
+              <label className="mb-1.5 block text-sm font-medium">Announcement title</label>
+              <input
+                className="input"
+                value={form.clientAnnouncement?.title || ""}
+                onChange={(e) => set("clientAnnouncement", { ...form.clientAnnouncement, title: e.target.value })}
+                placeholder="e.g. New: AI Generator is live!"
+              />
+            </div>
+            <div>
+              <label className="mb-1.5 block text-sm font-medium">Announcement message</label>
+              <textarea
+                className="input min-h-[110px]"
+                value={form.clientAnnouncement?.message || ""}
+                onChange={(e) => set("clientAnnouncement", { ...form.clientAnnouncement, message: e.target.value })}
+                placeholder="Write the message clients will see in the popup…"
+              />
+            </div>
+            <p className="text-xs text-slate-400">The announcement appears only when enabled and has a title or message. Line breaks are preserved.</p>
+          </div>
         </div>
 
         {/* Colours */}

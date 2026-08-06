@@ -35,6 +35,7 @@ export async function updateSettings(req, res) {
     "navHeight", "navBrandSize", "navFontSize", "navFontWeight", "navFontFamily", "navTextTransform", "defaultZoom",
     "watermarkEnabled", "watermarkText", "watermarkOpacity", "watermarkSize", "watermarkMode", "restrictCopy", "screenshotGuard", "guardHoldMs", "statsAuto", "notifyOnNewContent",
     "homeSections",
+    "clientAnnouncement",
     "aboutHeading", "aboutIntro", "aboutValues", "aboutStats",
     "aiMaxPerBatch", "clientPlans",
     "fbEnabled", "fbPageId", "fbAutoOnNotice", "fbGraphVersion", "fbPageAccessToken",
@@ -79,6 +80,16 @@ export async function updateSettings(req, res) {
   if ("fbSelfieWatermarkShape" in update) {
     const sh = String(update.fbSelfieWatermarkShape || "").trim();
     update.fbSelfieWatermarkShape = ["circle", "rectangle"].includes(sh) ? sh : "circle";
+  }
+
+  // Client welcome popup announcement: coerce enabled + trim/limit text.
+  if ("clientAnnouncement" in update) {
+    const a = update.clientAnnouncement || {};
+    update.clientAnnouncement = {
+      enabled: !!a.enabled,
+      title: String(a.title || "").trim().slice(0, 200),
+      message: String(a.message || "").trim().slice(0, 4000),
+    };
   }
 
   // AI limits: clamp the admin's global per-batch ceiling.
