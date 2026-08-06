@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { GraduationCap, LogOut, Moon, Sun, ZoomIn, ZoomOut, LayoutDashboard, Wrench, ArrowRightLeft, Sparkles, FileText, Feather, BookOpen, Files, SearchCheck, Menu } from "lucide-react";
+import { GraduationCap, LogOut, Moon, Sun, ZoomIn, ZoomOut, LayoutDashboard, Wrench, ArrowRightLeft, Sparkles, FileText, Feather, BookOpen, Files, SearchCheck, Menu, User } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import { useTheme } from "../../context/ThemeContext";
 import { useSettings } from "../../context/SettingsContext";
@@ -9,6 +9,7 @@ import AdminPractice from "../admin/AdminPractice";
 import AdminMigration from "../admin/AdminMigration";
 import AdminChecker from "../admin/AdminChecker";
 import ClientDashboard from "./ClientDashboard";
+import ClientAccount from "./ClientAccount";
 import ClientUserManual from "./ClientUserManual";
 import ClientUpgrade from "./ClientUpgrade";
 import ClientAiSettings from "./ClientAiSettings";
@@ -64,6 +65,7 @@ export default function ClientWorkspace() {
     ...(user?.featDocuments !== false ? [{ key: "documents", label: "Documents", Icon: FileText }] : []),
     ...(user?.featNotes !== false ? [{ key: "notes", label: "Notes", Icon: Feather }] : []),
     ...(user?.featManual !== false ? [{ key: "manual", label: "User Manual", Icon: BookOpen }] : []),
+    { key: "account", label: "Account", Icon: User }, // always available — profile, validity, plan, referral
   ];
 
   // The active tab lives in the URL (?tab=…) so a refresh restores it. Unknown/
@@ -189,6 +191,8 @@ export default function ClientWorkspace() {
           <AdminPractice clientMode fixedKind="paper" />
         ) : tab === "checker" ? (
           <AdminChecker />
+        ) : tab === "account" ? (
+          <ClientAccount onUpgrade={() => setShowUpgrade(true)} />
         ) : (
           <AdminPractice clientMode />
         )}

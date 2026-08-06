@@ -2,11 +2,13 @@ import { useEffect, useState } from "react";
 import { Doughnut } from "react-chartjs-2";
 import "../../lib/chartSetup";
 import StatCard from "../../components/ui/StatCard";
+import AccountOverview from "../../components/ui/AccountOverview";
 import { analyticsService } from "../../services";
 import { Loading, ErrorState } from "../../components/ui/AsyncState";
 
 export default function AdminDashboard() {
   const [data, setData] = useState(null);
+  const [stats, setStats] = useState(null); // platform content counts for the overview card
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -18,6 +20,7 @@ export default function AdminDashboard() {
       .then(setData)
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false));
+    analyticsService.stats().then(setStats).catch(() => {});
   };
 
   useEffect(load, []);
@@ -50,6 +53,16 @@ export default function AdminDashboard() {
         <StatCard icon="FileStack" label="Total Tests" value={data.totalTests} accent="accent" />
         <StatCard icon="ListChecks" label="Total Attempts" value={data.totalAttempts} accent="violet" />
       </div>
+
+      {/* Live content overview — the same "What's on your account now" card the
+          clients see, but platform-wide (auto-updates as content changes). */}
+      {stats && (
+        <AccountOverview
+          title="What's on the platform now"
+          subtitle="Live content counts across the whole platform — updates automatically as content is added or removed."
+          counts={stats}
+        />
+      )}
 
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="card p-6 lg:col-span-2">
