@@ -17,6 +17,7 @@ import AdminDocuments from "../admin/AdminDocuments";
 import AdminNotes from "../admin/AdminNotes";
 import AdminAiStudio from "../admin/AdminAiStudio";
 import Footer from "../../components/layout/Footer";
+import ClientWelcomeModal from "../../components/client/ClientWelcomeModal";
 
 // The self-service CLIENT workspace. A client only ever sees the My Practice
 // section (their own private content) — no other part of the site. It reuses
@@ -32,6 +33,7 @@ export default function ClientWorkspace() {
 
   const [showUpgrade, setShowUpgrade] = useState(false); // opened voluntarily from the dashboard
   const [menuOpen, setMenuOpen] = useState(false); // hamburger menu (all tabs except Dashboard)
+  const [showWelcome, setShowWelcome] = useState(true); // welcome popup — shows on every open/mount
 
   // Pull the latest profile once when the workspace opens. This is a long-lived
   // single-page app, so a client who logged in earlier may be holding a stale
@@ -85,6 +87,7 @@ export default function ClientWorkspace() {
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
+      {showWelcome && <ClientWelcomeModal onClose={() => setShowWelcome(false)} />}
       <header className="sticky top-0 z-30 border-b border-slate-200 bg-white px-4 py-3 dark:border-slate-800 dark:bg-slate-900">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-3">
           <Link to="/client" className="flex items-center gap-2">
