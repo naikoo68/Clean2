@@ -201,7 +201,8 @@ export async function createItem(req, res) {
     practiceKind,
     practiceStream,
     practiceSubject,
-    practiceTopic: practiceKind === "quiz" ? practiceTopic : undefined,
+    // Quiz uses Topics; Previous Papers uses a Year level (also a PracticeTopic).
+    practiceTopic: (practiceKind === "quiz" || practiceKind === "paper") ? practiceTopic : undefined,
     category: "Full-Length", // required by schema; unused for practice
     duration,
     marks,
