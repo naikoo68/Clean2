@@ -90,6 +90,10 @@
   textarea,
   select {
     font-size: 16px !important;
+    /* Bumping to 16px without adjusting the line-height left the tight
+       utility line-height (e.g. text-sm's 1.25rem / text-xs's 1rem), which
+       cramped and clipped the taller text. Give it proportional leading. */
+    line-height: 1.5 !important;
   }
 }
 
