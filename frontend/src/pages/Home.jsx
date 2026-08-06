@@ -163,7 +163,7 @@ export default function Home() {
         <div className="absolute -right-20 -top-20 -z-10 h-72 w-72 rounded-full bg-accent-300/30 blur-3xl dark:bg-accent-600/10" />
         <div className="absolute -left-20 top-40 -z-10 h-72 w-72 rounded-full bg-brand-300/30 blur-3xl dark:bg-brand-700/10" />
 
-        <div className="container-page grid items-center gap-12 py-16 lg:grid-cols-2 lg:py-24">
+        <div className="container-page grid items-center gap-12 py-16 md:grid-cols-2 lg:py-24">
           <div className="animate-fade-in-up">
             <span className="badge bg-accent-100 text-accent-700 dark:bg-accent-900/40 dark:text-accent-300">
               <Star className="h-3.5 w-3.5" /> India's smart prep platform
