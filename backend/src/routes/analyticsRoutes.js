@@ -1,6 +1,7 @@
 import { Router } from "express";
 import {
   platformAnalytics,
+  adminContentOverview,
   studentDashboard,
   leaderboard,
   publicStats,
@@ -18,6 +19,7 @@ const admin = [protect, authorize("admin")];
 
 router.get("/stats", publicStats); // public live counts
 router.get("/admin/analytics", ...admin, platformAnalytics);
+router.get("/admin/content-overview", ...admin, adminContentOverview);
 router.get("/admin/performance", ...admin, adminPerformance);
 router.get("/admin/performance/user/:userId", ...admin, userPerformanceDetail);
 router.delete("/admin/performance/user/:userId", ...admin, clearUserPerformance);

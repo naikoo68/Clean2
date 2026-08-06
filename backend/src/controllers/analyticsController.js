@@ -6,6 +6,9 @@ import Question from "../models/Question.js";
 import Subject from "../models/Subject.js";
 import Topic from "../models/Topic.js";
 import Stream from "../models/Stream.js";
+import PracticeStream from "../models/PracticeStream.js";
+import PracticeSubject from "../models/PracticeSubject.js";
+import PracticeTopic from "../models/PracticeTopic.js";
 
 // GET /api/stats — public, live counts for the Home/About statistics section.
 // Recomputed on every request, so it updates the moment a user registers or
@@ -25,6 +28,51 @@ export async function publicStats(req, res) {
   // Never cache — always reflect the current counts.
   res.set("Cache-Control", "no-store");
   res.json({ students, users, quizzes, tests, questions, subjects, topics, streams, attempts });
+}
+
+// GET /api/admin/content-overview — live, split content counts for the admin
+// dashboard. Two clearly-separated groups so the numbers aren't conflated:
+//   • practice  → the "My Practice" side (PracticeStream/Subject/Topic +
+//                 TestSeries with practice=true, by kind), and its questions.
+//   • content   → the platform "Content & Test Series" side (Stream/Subject/
+//                 Topic/Quiz + regular TestSeries with practice!=true).
+export async function adminContentOverview(req, res) {
+  // Ids of every practice item, to attribute questions to practice vs content.
+  const practiceItems = await TestSeries.find({ practice: true }).select("_id").lean();
+  const practiceIds = practiceItems.map((i) => i._id);
+
+  const [
+    pStreams, pSubjects, pTopics, pQuizzes, pTests, pPapers, pQuestions,
+    cStreams, cSubjects, cTopics, cQuizzes, cTests, totalQuestions,
+  ] = await Promise.all([
+    PracticeStream.countDocuments(),
+    PracticeSubject.countDocuments(),
+    PracticeTopic.countDocuments(),
+    TestSeries.countDocuments({ practice: true, practiceKind: "quiz" }),
+    TestSeries.countDocuments({ practice: true, practiceKind: "test" }),
+    TestSeries.countDocuments({ practice: true, practiceKind: "paper" }),
+    Question.countDocuments({ testSeries: { $in: practiceIds } }),
+    Stream.countDocuments(),
+    Subject.countDocuments(),
+    Topic.countDocuments(),
+    Quiz.countDocuments(),
+    TestSeries.countDocuments({ practice: { $ne: true } }),
+    Question.countDocuments(),
+  ]);
+
+  res.set("Cache-Control", "no-store");
+  res.json({
+    practice: {
+      streams: pStreams, subjects: pSubjects, topics: pTopics,
+      quizzes: pQuizzes, tests: pTests, papers: pPapers, questions: pQuestions,
+    },
+    content: {
+      streams: cStreams, subjects: cSubjects, topics: cTopics,
+      quizzes: cQuizzes, tests: cTests,
+      // Content questions = everything not attributed to a practice item.
+      questions: Math.max(0, totalQuestions - pQuestions),
+    },
+  });
 }
 
 const initials = (name = "") =>

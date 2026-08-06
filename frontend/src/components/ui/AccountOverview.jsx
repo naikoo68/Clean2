@@ -19,20 +19,27 @@ export default function AccountOverview({
   title = "What's on your account now",
   subtitle = "This is read live — add or delete a quiz/test and it changes here automatically.",
   counts = {},
+  items = null,
   streamList = null,
   streamsLabel = "Your streams",
 }) {
+  // Either render a caller-provided list of cells, or the default six from counts.
+  const cells = items || [
+    { value: counts.quizzes, label: "Quizzes", Icon: ListChecks },
+    { value: counts.tests, label: "Tests", Icon: FileStack },
+    { value: counts.questions, label: "Questions", Icon: HelpCircle },
+    { value: counts.streams, label: "Streams", Icon: GraduationCap },
+    { value: counts.subjects, label: "Subjects", Icon: FolderOpen },
+    { value: counts.topics, label: "Topics", Icon: Layers },
+  ];
   return (
     <div className="card p-5">
       <h2 className="flex items-center gap-2 font-bold"><ShieldCheck className="h-4 w-4 text-emerald-600" /> {title}</h2>
       {subtitle && <p className="mt-0.5 text-xs text-slate-400">{subtitle}</p>}
       <div className="mt-4 grid grid-cols-3 gap-2 sm:grid-cols-6">
-        <Stat value={counts.quizzes} label="Quizzes" Icon={ListChecks} />
-        <Stat value={counts.tests} label="Tests" Icon={FileStack} />
-        <Stat value={counts.questions} label="Questions" Icon={HelpCircle} />
-        <Stat value={counts.streams} label="Streams" Icon={GraduationCap} />
-        <Stat value={counts.subjects} label="Subjects" Icon={FolderOpen} />
-        <Stat value={counts.topics} label="Topics" Icon={Layers} />
+        {cells.map((c, i) => (
+          <Stat key={i} value={c.value} label={c.label} Icon={c.Icon} />
+        ))}
       </div>
 
       {streamList && streamList.length > 0 && (
