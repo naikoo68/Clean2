@@ -10,6 +10,81 @@ import { authService, practiceService, aiService } from "../../services";
 import { useAuth } from "../../context/AuthContext";
 import { Loading, ErrorState } from "../../components/ui/AsyncState";
 
+// The workspace navigation rail, in order — used to draw the little "where am
+// I" sidebar inside each screen preview so users can see where the tool lives.
+const RAIL = [
+  { key: "dashboard", Icon: LayoutDashboard },
+  { key: "build", Icon: Wrench },
+  { key: "papers", Icon: Files },
+  { key: "checker", Icon: SearchCheck },
+  { key: "aigen", Icon: Sparkles },
+  { key: "documents", Icon: FileText },
+  { key: "notes", Icon: Feather },
+  { key: "account", Icon: User },
+];
+
+// A lightweight, self-contained "screenshot" of a feature's screen: an app
+// window frame with the workspace rail (current tool highlighted), the real
+// toolbar buttons that function uses, and a few placeholder content rows so it
+// reads like the actual page. It's drawn from markup — no image files — so it
+// stays crisp on any display, follows light/dark theme, and never goes stale
+// or 404s the way a static screenshot would.
+function ScreenMock({ tab, title, visual = [] }) {
+  return (
+    <figure className="mt-3 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-900">
+      {/* window title bar */}
+      <div className="flex items-center gap-1.5 border-b border-slate-200 bg-slate-100 px-3 py-1.5 dark:border-slate-700 dark:bg-slate-800">
+        <span className="h-2.5 w-2.5 rounded-full bg-red-400/80" />
+        <span className="h-2.5 w-2.5 rounded-full bg-amber-400/80" />
+        <span className="h-2.5 w-2.5 rounded-full bg-emerald-400/80" />
+        <span className="ml-2 truncate text-[10px] font-semibold text-slate-500 dark:text-slate-400">{title}</span>
+      </div>
+      <div className="flex">
+        {/* workspace rail — the screen you're on is highlighted */}
+        <div className="flex w-9 flex-shrink-0 flex-col items-center gap-1 border-r border-slate-100 bg-slate-50 py-2 dark:border-slate-800 dark:bg-slate-900/60">
+          {RAIL.map(({ key, Icon }) => (
+            <span
+              key={key}
+              className={`flex h-6 w-6 items-center justify-center rounded-md ${key === tab ? "bg-brand-600 text-white" : "text-slate-400 dark:text-slate-500"}`}
+            >
+              <Icon className="h-3.5 w-3.5" />
+            </span>
+          ))}
+        </div>
+        {/* content area */}
+        <div className="min-w-0 flex-1 p-3">
+          {/* toolbar = the actual buttons this function shows */}
+          {visual.length > 0 && (
+            <div className="flex flex-wrap gap-1.5">
+              {visual.map((v, i) => (
+                <span
+                  key={i}
+                  className={`inline-flex items-center gap-1 rounded-lg border px-2 py-1 text-[11px] font-semibold ${v.primary ? "border-brand-600 bg-brand-600 text-white" : "border-slate-300 text-slate-600 dark:border-slate-600 dark:text-slate-300"}`}
+                >
+                  <v.Icon className="h-3.5 w-3.5" /> {v.label}
+                </span>
+              ))}
+            </div>
+          )}
+          {/* placeholder content rows so the preview looks like a real page */}
+          <div className="mt-3 space-y-2">
+            {[0, 1, 2].map((r) => (
+              <div key={r} className="flex items-center gap-2 rounded-lg border border-slate-100 bg-slate-50/70 p-2 dark:border-slate-800 dark:bg-slate-800/40">
+                <span className="h-6 w-6 flex-shrink-0 rounded-md bg-brand-100 dark:bg-brand-900/40" />
+                <span className="h-2 rounded bg-slate-200 dark:bg-slate-700" style={{ width: `${70 - r * 15}%` }} />
+                <span className="ml-auto h-4 w-9 flex-shrink-0 rounded bg-slate-200 dark:bg-slate-700" />
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+      <figcaption className="border-t border-slate-100 px-3 py-1 text-center text-[10px] text-slate-400 dark:border-slate-800 dark:text-slate-500">
+        Preview of the {title} screen
+      </figcaption>
+    </figure>
+  );
+}
+
 // A living USER MANUAL for clients. Everything here reflects the account's
 // CURRENT state — the guides that show depend on which features are enabled for
 // this client (AI / Documents / Notes), and the "What's on your account"
@@ -292,7 +367,7 @@ export default function ClientUserManual({ onGoTab }) {
           </span>
           <div>
             <h1 className="text-2xl font-extrabold leading-none">User Manual</h1>
-            <p className="mt-1 text-sm text-slate-400">A guide to every tool you can use. The buttons shown look just like the real ones, and this manual updates automatically as your access or content changes.</p>
+            <p className="mt-1 text-sm text-slate-400">A guide to every tool you can use, with a preview picture of each screen so it's easy to follow. The previews use the real buttons, and this manual updates automatically as your access or content changes.</p>
           </div>
           <button onClick={load} title="Refresh" className="btn-ghost ml-auto"><RefreshCw className="h-4 w-4" /> <span className="hidden sm:inline">Refresh</span></button>
         </div>
@@ -372,20 +447,10 @@ export default function ClientUserManual({ onGoTab }) {
                     <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-100 text-brand-600 dark:bg-brand-900/40 dark:text-brand-300"><g.Icon className="h-4 w-4" /></span>
                     <h3 className="font-bold">{g.title}</h3>
                   </div>
-                  {/* "How it looks" — the real buttons/icons this function uses,
-                      styled like the live app (auto-updates with the UI). */}
-                  {g.visual?.length > 0 && (
-                    <div className="mt-3 flex flex-wrap gap-1.5">
-                      {g.visual.map((v, i) => (
-                        <span
-                          key={i}
-                          className={`inline-flex items-center gap-1 rounded-lg border px-2 py-1 text-[11px] font-semibold ${v.primary ? "border-brand-600 bg-brand-600 text-white" : "border-slate-300 text-slate-600 dark:border-slate-600 dark:text-slate-300"}`}
-                        >
-                          <v.Icon className="h-3.5 w-3.5" /> {v.label}
-                        </span>
-                      ))}
-                    </div>
-                  )}
+                  {/* "How it looks" — a preview image of the screen, drawn with
+                      the real buttons/icons this function uses and styled like
+                      the live app, so it stays in sync with the UI. */}
+                  <ScreenMock tab={g.tab} title={g.title.split(" — ")[0]} visual={g.visual} />
                   <ol className="mt-3 list-decimal space-y-1.5 pl-5 text-sm text-slate-600 dark:text-slate-300">
                     {g.steps.map((s, i) => <li key={i}>{s}</li>)}
                   </ol>
