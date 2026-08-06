@@ -14,9 +14,18 @@ import PracticeTopic from "../models/PracticeTopic.js";
 // Recomputed on every request, so it updates the moment a user registers or
 // content is added. Any of these keys can be bound to a stat row in admin.
 export async function publicStats(req, res) {
-  const [students, users, quizzes, tests, questions, subjects, topics, streams, attempts] = await Promise.all([
+  // Ids of all private "My Practice" (client) content, used to attribute
+  // client questions. Client quizzes/tests/papers are TestSeries(practice=true).
+  const practiceItems = await TestSeries.find({ practice: true }).select("_id").lean();
+  const practiceIds = practiceItems.map((i) => i._id);
+
+  const [
+    students, users, clients, quizzes, tests, questions, subjects, topics, streams, attempts,
+    clientQuizzes, clientTests, clientQuestions,
+  ] = await Promise.all([
     User.countDocuments({ role: "student" }),
     User.countDocuments(),
+    User.countDocuments({ role: "client" }),
     Quiz.countDocuments(),
     // Public "Total Test Series" must count only real platform test series —
     // NOT the private "My Practice" content (client quizzes/tests/papers are
@@ -29,10 +38,17 @@ export async function publicStats(req, res) {
     Topic.countDocuments(),
     Stream.countDocuments(),
     Attempt.countDocuments(),
+    // Combined across ALL clients (the "My Practice" content they build).
+    TestSeries.countDocuments({ practice: true, practiceKind: "quiz" }),
+    TestSeries.countDocuments({ practice: true, practiceKind: "test" }),
+    Question.countDocuments({ testSeries: { $in: practiceIds } }),
   ]);
   // Never cache — always reflect the current counts.
   res.set("Cache-Control", "no-store");
-  res.json({ students, users, quizzes, tests, questions, subjects, topics, streams, attempts });
+  res.json({
+    students, users, clients, quizzes, tests, questions, subjects, topics, streams, attempts,
+    clientQuizzes, clientTests, clientQuestions,
+  });
 }
 
 // GET /api/admin/content-overview — live, split content counts for the admin
