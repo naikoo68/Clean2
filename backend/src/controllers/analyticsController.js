@@ -19,10 +19,16 @@ export async function publicStats(req, res) {
   // content (admin-created practice content is ownerless and must be excluded).
   const clientDocs = await User.find({ role: "client", deleted: { $ne: true } }).select("_id").lean();
   const clientIds = clientDocs.map((u) => u._id);
+  // Ids of ALL private "My Practice" content (admin + client), so the public
+  // "Total Questions" can exclude practice questions and stay consistent with
+  // the other platform-content counts (quizzes/tests/subjects/streams), which
+  // already exclude practice content.
+  const practiceItems = await TestSeries.find({ practice: true }).select("_id").lean();
+  const practiceIds = practiceItems.map((i) => i._id);
 
   const [
-    students, users, quizzes, tests, questions, subjects, topics, streams, attempts,
-    clientQuizzes, clientTests, clientQuestions,
+    students, users, quizzes, tests, totalQuestions, subjects, topics, streams, attempts,
+    practiceQuestions, clientQuizzes, clientTests, clientQuestions,
   ] = await Promise.all([
     User.countDocuments({ role: "student" }),
     User.countDocuments(),
@@ -38,11 +44,16 @@ export async function publicStats(req, res) {
     Topic.countDocuments(),
     Stream.countDocuments(),
     Attempt.countDocuments(),
+    Question.countDocuments({ testSeries: { $in: practiceIds } }),
     // Combined across ALL clients — owned by client accounts (matches admin).
     TestSeries.countDocuments({ owner: { $in: clientIds }, practiceKind: "quiz" }),
     TestSeries.countDocuments({ owner: { $in: clientIds }, practiceKind: "test" }),
     Question.countDocuments({ owner: { $in: clientIds } }),
   ]);
+  // Platform "Total Questions" = all questions minus private practice
+  // questions, matching the admin dashboard's content.questions and keeping
+  // this block internally consistent (all platform-content counts).
+  const questions = Math.max(0, totalQuestions - practiceQuestions);
   const clients = clientIds.length;
   // Never cache — always reflect the current counts.
   res.set("Cache-Control", "no-store");
