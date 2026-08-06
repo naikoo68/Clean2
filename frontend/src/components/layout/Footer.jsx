@@ -100,20 +100,13 @@ export default function Footer({ hideProduct = false }) {
   return (
     <footer className="mt-20 border-t border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-950">
       <div className="container-page py-12">
-        {hideProduct ? (
-          // Client footer: keep the brand and the link columns side by side at
-          // ALL widths (portrait/mobile included) — never stacked vertically.
-          <div className="flex flex-row items-start gap-6 sm:gap-12">
-            <div className="min-w-0 flex-1">{brandBlock}</div>
-            <div className="flex shrink-0 gap-10 sm:gap-16">{columnEls}</div>
-          </div>
-        ) : (
-          // Public footer: responsive grid (stacks on small screens).
-          <div className="grid gap-10 md:grid-cols-2 lg:grid-cols-5">
-            <div className="lg:col-span-2">{brandBlock}</div>
-            {columnEls}
-          </div>
-        )}
+        {/* Brand + link columns stay side by side at ALL widths (portrait
+            included) — for both the public site and the client workspace.
+            `hideProduct` only controls which columns are shown. */}
+        <div className="flex flex-row items-start gap-6 sm:gap-12">
+          <div className="min-w-0 flex-1">{brandBlock}</div>
+          <div className="flex shrink-0 gap-6 sm:gap-16">{columnEls}</div>
+        </div>
 
         <div className="mt-10 flex flex-col items-center justify-between gap-4 border-t border-slate-200 pt-6 text-sm text-slate-500 sm:flex-row dark:border-slate-800 dark:text-slate-400">
           <p>© {new Date().getFullYear()} {settings.siteName}. All rights reserved.</p>
