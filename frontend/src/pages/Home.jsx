@@ -70,10 +70,23 @@ export default function Home() {
   const { settings } = useSettings();
   const { user } = useAuth();
 
-  // Live platform stats (real counts) — refreshed on every visit.
+  // Live platform stats (real counts). Refetched on load, on a 45s interval,
+  // and whenever the tab regains focus — so the numbers update automatically
+  // as clients add/delete questions, without a manual page reload.
   const [realStats, setRealStats] = useState(null);
   useEffect(() => {
-    analyticsService.stats().then(setRealStats).catch(() => {});
+    let active = true;
+    const load = () =>
+      analyticsService.stats().then((r) => active && setRealStats(r)).catch(() => {});
+    load();
+    const id = setInterval(load, 45000);
+    const onVisible = () => document.visibilityState === "visible" && load();
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      active = false;
+      clearInterval(id);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
   }, []);
 
   const fmt = (n) => Number(n || 0).toLocaleString("en-IN");
