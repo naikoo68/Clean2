@@ -215,6 +215,8 @@ export const analyticsService = {
   leaderboard: () => api.get("/leaderboard"),
   stats: () => api.get("/stats", { auth: false }),
   adminAnalytics: () => api.get("/admin/analytics"),
+  contentOverview: () => api.get("/admin/content-overview"), // split practice vs content counts
+
   performance: () => api.get("/admin/performance"),
   userPerformance: (userId) => api.get(`/admin/performance/user/${userId}`),
   clearUserPerformance: (userId) => api.del(`/admin/performance/user/${userId}`),

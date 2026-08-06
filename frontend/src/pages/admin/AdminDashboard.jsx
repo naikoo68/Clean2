@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Doughnut } from "react-chartjs-2";
 import "../../lib/chartSetup";
+import { ListChecks, FileStack, HelpCircle, GraduationCap, FolderOpen, Layers, Files } from "lucide-react";
 import StatCard from "../../components/ui/StatCard";
 import AccountOverview from "../../components/ui/AccountOverview";
 import { analyticsService } from "../../services";
@@ -8,7 +9,7 @@ import { Loading, ErrorState } from "../../components/ui/AsyncState";
 
 export default function AdminDashboard() {
   const [data, setData] = useState(null);
-  const [stats, setStats] = useState(null); // platform content counts for the overview card
+  const [overview, setOverview] = useState(null); // split practice vs content counts
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -20,7 +21,7 @@ export default function AdminDashboard() {
       .then(setData)
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false));
-    analyticsService.stats().then(setStats).catch(() => {});
+    analyticsService.contentOverview().then(setOverview).catch(() => {});
   };
 
   useEffect(load, []);
@@ -54,14 +55,36 @@ export default function AdminDashboard() {
         <StatCard icon="ListChecks" label="Total Attempts" value={data.totalAttempts} accent="violet" />
       </div>
 
-      {/* Live content overview — the same "What's on your account now" card the
-          clients see, but platform-wide (auto-updates as content changes). */}
-      {stats && (
-        <AccountOverview
-          title="What's on the platform now"
-          subtitle="Live content counts across the whole platform — updates automatically as content is added or removed."
-          counts={stats}
-        />
+      {/* Live content overview, split into two accurate sections so practice
+          and platform content are never conflated. */}
+      {overview && (
+        <div className="grid gap-4 lg:grid-cols-2">
+          <AccountOverview
+            title="My Practice"
+            subtitle="Live counts of the practice content (My Quiz / My Test / Previous Papers)."
+            items={[
+              { value: overview.practice.quizzes, label: "Quizzes", Icon: ListChecks },
+              { value: overview.practice.tests, label: "Tests", Icon: FileStack },
+              { value: overview.practice.papers, label: "Papers", Icon: Files },
+              { value: overview.practice.questions, label: "Questions", Icon: HelpCircle },
+              { value: overview.practice.streams, label: "Streams", Icon: GraduationCap },
+              { value: overview.practice.subjects, label: "Subjects", Icon: FolderOpen },
+              { value: overview.practice.topics, label: "Topics", Icon: Layers },
+            ]}
+          />
+          <AccountOverview
+            title="Content & Test Series"
+            subtitle="Live counts of the platform Content and Test Series."
+            items={[
+              { value: overview.content.quizzes, label: "Quizzes", Icon: ListChecks },
+              { value: overview.content.tests, label: "Test Series", Icon: FileStack },
+              { value: overview.content.questions, label: "Questions", Icon: HelpCircle },
+              { value: overview.content.streams, label: "Streams", Icon: GraduationCap },
+              { value: overview.content.subjects, label: "Subjects", Icon: FolderOpen },
+              { value: overview.content.topics, label: "Topics", Icon: Layers },
+            ]}
+          />
+        </div>
       )}
 
       <div className="grid gap-6 lg:grid-cols-3">
