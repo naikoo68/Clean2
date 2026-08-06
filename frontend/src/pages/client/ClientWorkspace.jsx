@@ -199,8 +199,8 @@ export default function ClientWorkspace() {
         )}
       </main>
 
-      {/* Site footer — same as the public site, shown below the workspace. */}
-      <Footer />
+      {/* Site footer below the workspace (without the public "Product" links). */}
+      <Footer hideProduct />
     </div>
   );
 }
