@@ -21,28 +21,46 @@ export async function publicStats(req, res) {
   const clientIds = clientDocs.map((u) => u._id);
 
   const [
-    students, users, quizzes, tests, questions, subjects, topics, streams, attempts,
+    students, users,
+    contentQuizzes, practiceQuizzes,
+    contentTests, practiceTests,
+    questions,
+    contentSubjects, practiceSubjects,
+    contentTopics, practiceTopics,
+    contentStreams, practiceStreams,
+    attempts,
     clientQuizzes, clientTests, clientQuestions,
   ] = await Promise.all([
     User.countDocuments({ role: "student" }),
     User.countDocuments(),
+    // Quizzes = platform content quizzes (Quiz) + all "My Practice" quizzes.
     Quiz.countDocuments(),
-    // Public "Total Test Series" must count only real platform test series —
-    // NOT the private "My Practice" content (client quizzes/tests/papers are
-    // stored as TestSeries with practice=true). This matches the admin
-    // dashboard's content.tests definition and stops practice content from
-    // inflating the public number.
+    TestSeries.countDocuments({ practice: true, practiceKind: "quiz" }),
+    // Test series = platform test series + all "My Practice" tests.
     TestSeries.countDocuments({ practice: { $ne: true } }),
+    TestSeries.countDocuments({ practice: true, practiceKind: "test" }),
+    // Questions = everything (admin content + all client content).
     Question.countDocuments(),
+    // Subjects / topics / streams = platform + "My Practice" equivalents.
     Subject.countDocuments(),
+    PracticeSubject.countDocuments(),
     Topic.countDocuments(),
+    PracticeTopic.countDocuments(),
     Stream.countDocuments(),
+    PracticeStream.countDocuments(),
     Attempt.countDocuments(),
-    // Combined across ALL clients — owned by client accounts (matches admin).
+    // The separate "all clients combined" block — client-owned only (admin).
     TestSeries.countDocuments({ owner: { $in: clientIds }, practiceKind: "quiz" }),
     TestSeries.countDocuments({ owner: { $in: clientIds }, practiceKind: "test" }),
     Question.countDocuments({ owner: { $in: clientIds } }),
   ]);
+  // Platform-wide GRAND TOTALS = admin content + all "My Practice" content, so
+  // every metric in this block counts admin and client data together.
+  const quizzes = contentQuizzes + practiceQuizzes;
+  const tests = contentTests + practiceTests;
+  const subjects = contentSubjects + practiceSubjects;
+  const topics = contentTopics + practiceTopics;
+  const streams = contentStreams + practiceStreams;
   const clients = clientIds.length;
   // Never cache — always reflect the current counts.
   res.set("Cache-Control", "no-store");
