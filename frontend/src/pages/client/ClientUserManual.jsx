@@ -4,7 +4,7 @@ import {
   ListChecks, FileStack, HelpCircle, Play, Download, Globe, RefreshCw, Wand2, Search,
   Crown, GraduationCap, FolderOpen, Layers, ShieldCheck,
   BarChart3, Plus, Upload, Library, Eye, Copy, ScanSearch, Scissors, GitMerge,
-  SearchCheck, User, Gift, Send, Share2,
+  SearchCheck, User, Gift, Send, Share2, Files,
 } from "lucide-react";
 import { authService, practiceService, aiService } from "../../services";
 import { useAuth } from "../../context/AuthContext";
