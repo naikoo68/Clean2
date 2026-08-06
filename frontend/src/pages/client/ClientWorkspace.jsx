@@ -16,6 +16,7 @@ import ClientAiSettings from "./ClientAiSettings";
 import AdminDocuments from "../admin/AdminDocuments";
 import AdminNotes from "../admin/AdminNotes";
 import AdminAiStudio from "../admin/AdminAiStudio";
+import Footer from "../../components/layout/Footer";
 
 // The self-service CLIENT workspace. A client only ever sees the My Practice
 // section (their own private content) — no other part of the site. It reuses
@@ -197,6 +198,9 @@ export default function ClientWorkspace() {
           <AdminPractice clientMode />
         )}
       </main>
+
+      {/* Site footer — same as the public site, shown below the workspace. */}
+      <Footer />
     </div>
   );
 }
