@@ -8,7 +8,11 @@ import { Download, X, Share } from "lucide-react";
 //   instructions.
 // • If the app is already installed (running standalone), it renders nothing.
 export default function InstallAppButton() {
-  const [deferred, setDeferred] = useState(null);
+  // Seed from the globally-captured prompt (main.jsx stashes it early so it's
+  // never missed if it fired before this component mounted).
+  const [deferred, setDeferred] = useState(() =>
+    typeof window !== "undefined" ? window.__deferredInstallPrompt || null : null
+  );
   const [iosHint, setIosHint] = useState(false);
 
   const isStandalone =
@@ -17,25 +21,36 @@ export default function InstallAppButton() {
   const isIos = typeof navigator !== "undefined" && /iphone|ipad|ipod/i.test(navigator.userAgent);
 
   useEffect(() => {
+    const sync = () => setDeferred(window.__deferredInstallPrompt || null);
     const onPrompt = (e) => {
       e.preventDefault(); // stop the mini-infobar; we show our own button
+      window.__deferredInstallPrompt = e;
       setDeferred(e);
     };
-    const onInstalled = () => setDeferred(null);
+    const onInstalled = () => {
+      window.__deferredInstallPrompt = null;
+      setDeferred(null);
+    };
     window.addEventListener("beforeinstallprompt", onPrompt);
+    window.addEventListener("pwa-installable", sync); // fired by the early global capture
     window.addEventListener("appinstalled", onInstalled);
+    window.addEventListener("pwa-installed", onInstalled);
     return () => {
       window.removeEventListener("beforeinstallprompt", onPrompt);
+      window.removeEventListener("pwa-installable", sync);
       window.removeEventListener("appinstalled", onInstalled);
+      window.removeEventListener("pwa-installed", onInstalled);
     };
   }, []);
 
   if (isStandalone) return null; // already installed
 
   const install = async () => {
-    if (!deferred) return;
-    deferred.prompt();
-    try { await deferred.userChoice; } catch { /* ignore */ }
+    const evt = deferred || (typeof window !== "undefined" ? window.__deferredInstallPrompt : null);
+    if (!evt) return;
+    evt.prompt();
+    try { await evt.userChoice; } catch { /* ignore */ }
+    window.__deferredInstallPrompt = null; // can only be used once
     setDeferred(null);
   };
 
