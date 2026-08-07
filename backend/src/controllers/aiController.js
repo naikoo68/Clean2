@@ -113,8 +113,11 @@ async function resolveModel(requested, scope = SYSTEM_SCOPE) {
   const supporting = []; // keys that serve the selected model (preferred, tried first)
   const others = [];     // every other enabled key, each on a model it supports
   for (const p of provs) {
-    if (p.models.includes(model)) supporting.push({ key: p.key, baseUrl: p.baseUrl, model });
-    else others.push({ key: p.key, baseUrl: p.baseUrl, model: p.models[0] || model });
+    // Carry a display label so bulk jobs can surface live per-key activity
+    // ("Keys working this run"), same as the question generator.
+    const label = p.label || `••••${String(p.key).slice(-4)}`;
+    if (p.models.includes(model)) supporting.push({ key: p.key, baseUrl: p.baseUrl, model, label });
+    else others.push({ key: p.key, baseUrl: p.baseUrl, model: p.models[0] || model, label });
   }
   return { model, endpoints: [...supporting, ...others] };
 }
@@ -3070,107 +3073,111 @@ async function runExtendJob(id, { endpoints, model, questions, owner = null, not
   const deadline = Date.now() + 12 * 60 * 1000; // overall time budget
   const save = (patch) => Object.assign(job, patch, { updatedAt: Date.now() });
   const total = questions.length;
+  if (!job.keyStats) job.keyStats = {}; // live per-key activity for THIS run
   let updated = 0;
   let lastError = null;
-  let keyDead = false;
   let parseFails = 0;   // calls that succeeded (HTTP ok) but yielded no usable explanation
   let emptyReplies = 0; // of those, how many returned empty content (safety filter / blank completion)
-  // Per-key rate-limit cooldown, shared by all workers: key value -> timestamp
-  // until which that key is limited. A 429 on one key parks ONLY that key, so
-  // the other keys keep working instead of the whole job pausing.
-  const keyCoolUntil = new Map();
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-  // Extend ONE question: call AI, parse (robustly), update in place. Returns
-  // true only when the DB was actually updated with a real explanation.
-  const extendOne = async (q, eps) => {
-    const r = await callWithFallback({
-      endpoints: eps && eps.length ? eps : endpoints,
-      model,
+  const MAX_QUOTA_WAITS = 6;  // per key: 429s we ride out before retiring the key
+  const MAX_EMPTY = 4;        // per key: empty replies we retry before retiring it
+  const MAX_ITEM_RETRIES = 4; // per question: soft failures before we give up on it
+
+  // Shared work queue — every worker (one per key) pulls from the SAME queue, so
+  // whichever key is free grabs the next question. Soft failures (bad JSON /
+  // empty / transient) are re-queued (bounded) so one blip doesn't drop a
+  // question. This mirrors the question generator, which uses all keys smoothly.
+  const queue = [...questions];
+  const itemTries = new Map(); // q._id -> soft-retry count
+  const reserveOne = () => (queue.length ? queue.shift() : null); // atomic: no await between check & shift
+  const requeue = (q) => {
+    const k = String(q._id);
+    const n = (itemTries.get(k) || 0) + 1;
+    itemTries.set(k, n);
+    if (n <= MAX_ITEM_RETRIES) queue.push(q); // else give up on this ONE question
+  };
+
+  // Run ONE question on ONE key. Returns an outcome the worker acts on.
+  const extendOnKey = async (q, ep, ks) => {
+    ks.requests += 1; save({}); // reflect the in-flight request immediately
+    const r = await callProvider({
+      key: ep.key,
+      baseUrl: ep.baseUrl,
+      model: ep.model || model,
       systemPrompt: fixOptions ? EXTEND_FIXOPTS_SYSTEM_PROMPT : EXTEND_SYSTEM_PROMPT,
       userPrompt: buildExtendPrompt(q, notes, fixOptions, extendQuestion),
       maxTokens: 8000, // the verified/step-by-step replies are long — avoid truncation
-      owner,
-      failOnEmpty: true, // an empty reply → try the next key/model instead of failing this question
-      cooldown: keyCoolUntil, // skip keys that are currently rate-limited
+      failOnEmpty: true, // an empty reply → retry/roll over instead of counting as done
     });
-    if (!r.ok) {
-      lastError = r;
-      if ([401, 403].includes(r.status)) keyDead = true;
-      return false;
+    if (r.ok) {
+      const parsed = parseExplanationJson(r.content);
+      if (!parsed || !parsed.explanation) {
+        // Call succeeded but the reply couldn't be turned into an explanation —
+        // track it so a 0-updated run can report the REAL reason.
+        parseFails += 1;
+        if (!String(r.content || "").trim()) emptyReplies += 1;
+        ks.error += 1; save({});
+        return "soft";
+      }
+      const set = buildExtendSet(q, parsed, extendQuestion, shuffleOptions); // may fix a wrong answer/options, lengthen the stem, and/or reshuffle options
+      await Question.updateOne({ _id: q._id }, { $set: set }).catch(() => {});
+      updated += 1;
+      ks.ok += 1; ks.questions += 1;
+      AiKey.updateOne({ key: ep.key, owner: owner ?? null }, { $inc: { usedRequests: 1, usedTokens: r.tokens || 0 } }).catch(() => {});
+      job.questions.push(1); // progress = actual successes (jobStatus reports count)
+      save({});
+      return "ok";
     }
-    const parsed = parseExplanationJson(r.content);
-    if (!parsed || !parsed.explanation) {
-      // Call succeeded but the reply couldn't be turned into an explanation —
-      // track it so a 0-updated run can report the REAL reason.
-      parseFails += 1;
-      if (!String(r.content || "").trim()) emptyReplies += 1;
-      return false; // require a real explanation
-    }
-    const set = buildExtendSet(q, parsed, extendQuestion, shuffleOptions); // may fix a wrong numerical answer/options, lengthen the stem, and/or reshuffle options
-    await Question.updateOne({ _id: q._id }, { $set: set }).catch(() => {});
-    updated += 1;
-    job.questions.push(1); // progress = actual successes (jobStatus reports count)
-    save({});
-    return true;
+    lastError = r;
+    if (r.status === 429) { ks.limited += 1; save({}); return "limited"; }
+    if (r.status === 520 && r.empty) { ks.error += 1; save({}); return "empty"; }
+    if ([401, 403, 404].includes(r.status)) { ks.error += 1; save({}); return "dead"; }
+    ks.error += 1; save({});
+    return "soft";
   };
 
-  // Multiple passes: any question that fails (bad/truncated JSON, transient
-  // error, or a momentary quota blip) is retried on the next pass, so NO
-  // question is left un-extended unless every attempt genuinely fails. With
-  // per-key cooldowns the between-pass wait is now tiny whenever any key is
-  // free, so more passes just mean stragglers get retried sooner within the
-  // overall time budget.
-  const MAX_PASSES = 12;
-  let pending = [...questions];
-  try {
-    for (let pass = 0; pass < MAX_PASSES && pending.length && !keyDead && Date.now() < deadline && !job.cancelled; pass++) {
-      const failed = [];
-      let idx = 0;
-      // One worker PER KEY (up to 24) — each starts on a DIFFERENT key (rotated
-      // endpoint order) so they don't all hammer the same key at once; a 429 on
-      // one still falls back to the others. This uses EVERY key in parallel
-      // (e.g. all 18 built-in keys at once), so bulk extend gets through the
-      // whole quiz fast instead of stalling on just the first few keys.
-      const rotate = (arr, k) => arr.slice(k).concat(arr.slice(0, k));
-      const nEps = endpoints?.length || 1;
-      const WORKERS = Math.min(Math.max(nEps, 1), 24);
-      const worker = async (wi) => {
-        const eps = nEps > 1 ? rotate(endpoints, wi % nEps) : endpoints;
-        while (idx < pending.length && !keyDead && Date.now() < deadline && !job.cancelled) {
-          const q = pending[idx++];
-          let ok = false;
-          try { ok = await extendOne(q, eps); } catch { ok = false; }
-          if (!ok) failed.push(q);
-        }
-      };
-      await Promise.all(Array.from({ length: WORKERS }, (_, wi) => worker(wi)));
-      pending = failed;
-      // Pause before retrying the stragglers — but ONLY as long as we truly must.
-      // Because 429s now park individual keys (keyCoolUntil), we don't freeze the
-      // whole job on a flat 60s: if ANY key is free right now, retry almost
-      // immediately on it. Only when EVERY key is cooling do we wait, and even
-      // then just until the soonest one recovers.
-      if (pending.length && pass < MAX_PASSES - 1 && !keyDead && Date.now() < deadline) {
-        const now = Date.now();
-        const cooling = [...keyCoolUntil.values()].filter((t) => t > now);
-        const allCooling = nEps > 0 && cooling.length >= nEps;
-        let wait;
-        if (allCooling) {
-          // Every key is rate-limited: wait only until the SOONEST one frees up.
-          wait = Math.min(Math.max(Math.min(...cooling) - now + 1000, 3000), 60000);
-        } else {
-          // At least one key is available — retry the stragglers on it now.
-          wait = cooling.length ? 1000 : 1500;
-        }
-        if (now + wait < deadline) {
-          // Show the live "auto-continuing in Ns…" countdown only when we're
-          // genuinely blocked on every key cooling down.
-          if (allCooling) save({ waitUntil: now + wait });
-          await new Promise((r) => setTimeout(r, wait));
-          save({ waitUntil: null });
-        }
+  // ONE worker PER API KEY → every key runs SIMULTANEOUSLY (same model as the
+  // question generator, which works smoothly with all keys). Each worker sticks
+  // to its OWN key; when that key hits its per-minute limit (429) it waits it out
+  // ALONE while every OTHER key keeps extending. There is NO global barrier and
+  // NO whole-job pause, so a rate limit on a few keys can't freeze the run.
+  const worker = async (ep) => {
+    let quotaWaits = 0;
+    let emptyOnKey = 0;
+    const _kl = ep.label || `••••${String(ep.key).slice(-4)}`;
+    const ks = job.keyStats[_kl] || (job.keyStats[_kl] = { requests: 0, ok: 0, limited: 0, error: 0, questions: 0 });
+    while (Date.now() < deadline && !job.cancelled) {
+      const q = reserveOne();
+      if (!q) break; // queue drained — this key retires cleanly
+      let outcome;
+      try { outcome = await extendOnKey(q, ep, ks); } catch { outcome = "soft"; }
+      if (outcome === "ok") continue;
+      if (outcome === "dead") { queue.push(q); break; } // key unauthorized / model invalid — retire it, let others take the question
+      if (outcome === "limited") {
+        // Hand this question to another (free) key right away, then ride out THIS
+        // key's per-minute limit. The other workers keep going meanwhile.
+        queue.push(q);
+        if (quotaWaits >= MAX_QUOTA_WAITS) break; // this key keeps getting limited — retire it
+        const waitMs = Math.min(retryWaitMs(null, lastError?.detail) || 30000, 60000);
+        if (Date.now() + waitMs >= deadline) break;
+        quotaWaits += 1;
+        await sleep(waitMs);
+        continue;
       }
+      if (outcome === "empty") {
+        requeue(q);
+        if (++emptyOnKey >= MAX_EMPTY) break; // key keeps emitting empty — retire it
+        continue;
+      }
+      requeue(q); // soft / transient — let any free key retry it (bounded)
     }
+  };
+
+  try {
+    // Launch EVERY key at once; join only when the queue is drained (or every
+    // key has retired / the time budget is spent).
+    await Promise.all((endpoints || []).map((ep) => worker(ep)));
 
     if (updated === 0) {
       save({
@@ -3641,82 +3648,95 @@ async function runRegenAllJob(id, { endpoints, model, questions, owner = null, n
   const deadline = Date.now() + 12 * 60 * 1000;
   const save = (patch) => Object.assign(job, patch, { updatedAt: Date.now() });
   const total = questions.length;
+  if (!job.keyStats) job.keyStats = {}; // live per-key activity for THIS run
   let updated = 0;
   let lastError = null;
-  let keyDead = false;
-  // Per-key rate-limit cooldown (see runExtendJob): a 429 parks ONLY that key,
-  // so every other key keeps working instead of the whole job pausing.
-  const keyCoolUntil = new Map();
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-  const regenOne = async (q, eps) => {
-    const r = await callWithFallback({
-      endpoints: eps && eps.length ? eps : endpoints,
-      model,
+  const MAX_QUOTA_WAITS = 6;
+  const MAX_EMPTY = 4;
+  const MAX_ITEM_RETRIES = 4;
+
+  // Shared work queue + one worker per key (see runExtendJob for the rationale).
+  const queue = [...questions];
+  const itemTries = new Map();
+  const reserveOne = () => (queue.length ? queue.shift() : null);
+  const requeue = (q) => {
+    const k = String(q._id);
+    const n = (itemTries.get(k) || 0) + 1;
+    itemTries.set(k, n);
+    if (n <= MAX_ITEM_RETRIES) queue.push(q);
+  };
+
+  const regenOnKey = async (q, ep, ks) => {
+    ks.requests += 1; save({});
+    const r = await callProvider({
+      key: ep.key,
+      baseUrl: ep.baseUrl,
+      model: ep.model || model,
       systemPrompt: REGEN_SYSTEM_PROMPT,
       userPrompt: buildRegenPrompt(q, notes),
       maxTokens: 8000,
-      owner,
-      failOnEmpty: true, // empty reply → roll over to the next key/model
-      cooldown: keyCoolUntil, // skip keys that are currently rate-limited
+      failOnEmpty: true,
     });
-    if (!r.ok) {
-      lastError = r;
-      if ([401, 403].includes(r.status)) keyDead = true;
-      return false;
+    if (r.ok) {
+      const parsed = parseExplanationJson(r.content);
+      if (!parsed || !(parsed.explanation || (Array.isArray(parsed.options) && parsed.options.length === 4) || parsed.text || parsed.tableRows)) {
+        ks.error += 1; save({});
+        return "soft";
+      }
+      const set = buildRegenSet(q, parsed);
+      if (!Object.keys(set).length) { ks.error += 1; save({}); return "soft"; }
+      await Question.updateOne({ _id: q._id }, { $set: set }).catch(() => {});
+      updated += 1;
+      ks.ok += 1; ks.questions += 1;
+      AiKey.updateOne({ key: ep.key, owner: owner ?? null }, { $inc: { usedRequests: 1, usedTokens: r.tokens || 0 } }).catch(() => {});
+      job.questions.push(1);
+      save({});
+      return "ok";
     }
-    const parsed = parseExplanationJson(r.content);
-    if (!parsed || !(parsed.explanation || (Array.isArray(parsed.options) && parsed.options.length === 4) || parsed.text || parsed.tableRows)) return false;
-    const set = buildRegenSet(q, parsed);
-    if (!Object.keys(set).length) return false;
-    await Question.updateOne({ _id: q._id }, { $set: set }).catch(() => {});
-    updated += 1;
-    job.questions.push(1);
-    save({});
-    return true;
+    lastError = r;
+    if (r.status === 429) { ks.limited += 1; save({}); return "limited"; }
+    if (r.status === 520 && r.empty) { ks.error += 1; save({}); return "empty"; }
+    if ([401, 403, 404].includes(r.status)) { ks.error += 1; save({}); return "dead"; }
+    ks.error += 1; save({});
+    return "soft";
   };
 
-  const MAX_PASSES = 12;
-  let pending = [...questions];
-  try {
-    for (let pass = 0; pass < MAX_PASSES && pending.length && !keyDead && Date.now() < deadline && !job.cancelled; pass++) {
-      const failed = [];
-      let idx = 0;
-      const rotate = (arr, k) => arr.slice(k).concat(arr.slice(0, k));
-      const nEps = endpoints?.length || 1;
-      // One worker PER KEY (up to 24) so all available keys (e.g. 18 built-in)
-      // run in parallel instead of only the first 10.
-      const WORKERS = Math.min(Math.max(nEps, 1), 24);
-      const worker = async (wi) => {
-        const eps = nEps > 1 ? rotate(endpoints, wi % nEps) : endpoints;
-        while (idx < pending.length && !keyDead && Date.now() < deadline && !job.cancelled) {
-          const q = pending[idx++];
-          let ok = false;
-          try { ok = await regenOne(q, eps); } catch { ok = false; }
-          if (!ok) failed.push(q);
-        }
-      };
-      await Promise.all(Array.from({ length: WORKERS }, (_, wi) => worker(wi)));
-      pending = failed;
-      // Only wait as long as we must: with per-key cooldowns, retry immediately
-      // whenever any key is free; wait (until the soonest recovers) only when
-      // EVERY key is currently rate-limited.
-      if (pending.length && pass < MAX_PASSES - 1 && !keyDead && Date.now() < deadline) {
-        const now = Date.now();
-        const cooling = [...keyCoolUntil.values()].filter((t) => t > now);
-        const allCooling = nEps > 0 && cooling.length >= nEps;
-        let wait;
-        if (allCooling) {
-          wait = Math.min(Math.max(Math.min(...cooling) - now + 1000, 3000), 60000);
-        } else {
-          wait = cooling.length ? 1000 : 1500;
-        }
-        if (now + wait < deadline) {
-          if (allCooling) save({ waitUntil: now + wait });
-          await new Promise((r) => setTimeout(r, wait));
-          save({ waitUntil: null });
-        }
+  // ONE worker PER API KEY — every key regenerates simultaneously; a 429 parks
+  // only that key while the others keep working (no global barrier/pause).
+  const worker = async (ep) => {
+    let quotaWaits = 0;
+    let emptyOnKey = 0;
+    const _kl = ep.label || `••••${String(ep.key).slice(-4)}`;
+    const ks = job.keyStats[_kl] || (job.keyStats[_kl] = { requests: 0, ok: 0, limited: 0, error: 0, questions: 0 });
+    while (Date.now() < deadline && !job.cancelled) {
+      const q = reserveOne();
+      if (!q) break;
+      let outcome;
+      try { outcome = await regenOnKey(q, ep, ks); } catch { outcome = "soft"; }
+      if (outcome === "ok") continue;
+      if (outcome === "dead") { queue.push(q); break; }
+      if (outcome === "limited") {
+        queue.push(q);
+        if (quotaWaits >= MAX_QUOTA_WAITS) break;
+        const waitMs = Math.min(retryWaitMs(null, lastError?.detail) || 30000, 60000);
+        if (Date.now() + waitMs >= deadline) break;
+        quotaWaits += 1;
+        await sleep(waitMs);
+        continue;
       }
+      if (outcome === "empty") {
+        requeue(q);
+        if (++emptyOnKey >= MAX_EMPTY) break;
+        continue;
+      }
+      requeue(q);
     }
+  };
+
+  try {
+    await Promise.all((endpoints || []).map((ep) => worker(ep)));
     if (updated === 0) {
       save({
         status: "error",
