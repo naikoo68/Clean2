@@ -16,7 +16,7 @@ import ExtendExplanationsModal from "../../components/admin/ExtendExplanationsMo
 import ExtendOneQuestionModal from "../../components/admin/ExtendOneQuestionModal";
 import RegenerateAllModal from "../../components/admin/RegenerateAllModal";
 import ScheduleQuestionModal from "../../components/admin/ScheduleQuestionModal";
-import { Sparkles, Files, Globe, Wand2, Loader2, ClipboardList, RefreshCw, Scissors, GitMerge } from "lucide-react";
+import { Sparkles, Files, Globe, Wand2, Loader2, ClipboardList, RefreshCw, Scissors, GitMerge, CheckCircle2 } from "lucide-react";
 
 const COLORS = [
   "from-blue-500 to-indigo-600",
@@ -74,20 +74,30 @@ export default function AdminContent() {
   const [viewAll, setViewAll] = useState(false); // preview all questions
   const [studentView, setStudentView] = useState(true); // View All: defaults to student view (answers hidden)
   const [selected, setSelected] = useState([]); // bulk-selected question ids
+  const [delProgress, setDelProgress] = useState(null); // real-time bulk-delete progress: { total, done, finished? }
   const [search, setSearch] = useState(""); // question search query
 
   const toggleSelect = (id) => setSelected((s) => (s.includes(id) ? s.filter((x) => x !== id) : [...s, id]));
   const allSelected = view === "questions" && items.length > 0 && selected.length === items.length;
   const toggleAll = () => setSelected(allSelected ? [] : items.map((i) => i._id));
   const deleteSelected = async () => {
-    if (!selected.length) return;
-    if (!window.confirm(`Delete ${selected.length} selected question(s)? This cannot be undone.`)) return;
+    if (!selected.length || delProgress) return;
+    const total = selected.length;
+    if (!window.confirm(`Delete ${total} selected question(s)? This cannot be undone.`)) return;
+    setDelProgress({ total, done: 0 });
     try {
-      for (const id of selected) await contentService.deleteQuestion(id);
+      let done = 0;
+      for (const id of selected) {
+        await contentService.deleteQuestion(id);
+        setDelProgress({ total, done: ++done }); // tick up in real time
+      }
+      setDelProgress({ total, done: total, finished: true });
       setSelected([]);
       load("questions");
+      setTimeout(() => setDelProgress(null), 3000);
     } catch (e) {
       setError(e.message);
+      setDelProgress(null);
     }
   };
 
@@ -456,12 +466,22 @@ export default function AdminContent() {
                 {questionResults && (
                   <span className="text-sm font-medium text-slate-500">{questionResults.length} match{questionResults.length === 1 ? "" : "es"} (40%+)</span>
                 )}
-                {selected.length > 0 && (
-                  <>
-                    <span className="text-sm text-slate-500">{selected.length} selected</span>
-                    <button onClick={deleteSelected} className="btn-outline py-1.5 text-rose-600"><Trash2 className="h-4 w-4" /> Delete selected</button>
-                    <button onClick={() => setSelected([])} className="text-sm text-slate-500 hover:underline">Clear</button>
-                  </>
+                {(selected.length > 0 || delProgress) && (
+                  delProgress ? (
+                    <span className={`inline-flex items-center gap-1.5 text-sm font-medium ${delProgress.finished ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600"}`}>
+                      {delProgress.finished ? (
+                        <><CheckCircle2 className="h-4 w-4" /> Deleted {delProgress.total} question{delProgress.total === 1 ? "" : "s"} — done</>
+                      ) : (
+                        <><Loader2 className="h-4 w-4 animate-spin" /> Deleting {delProgress.done} of {delProgress.total}…</>
+                      )}
+                    </span>
+                  ) : (
+                    <>
+                      <span className="text-sm text-slate-500">{selected.length} selected</span>
+                      <button onClick={deleteSelected} className="btn-outline py-1.5 text-rose-600"><Trash2 className="h-4 w-4" /> Delete selected</button>
+                      <button onClick={() => setSelected([])} className="text-sm text-slate-500 hover:underline">Clear</button>
+                    </>
+                  )
                 )}
               </div>
             </div>
