@@ -163,18 +163,23 @@ export default function Home() {
         <div className="absolute -right-20 -top-20 -z-10 h-72 w-72 rounded-full bg-accent-300/30 blur-3xl dark:bg-accent-600/10" />
         <div className="absolute -left-20 top-40 -z-10 h-72 w-72 rounded-full bg-brand-300/30 blur-3xl dark:bg-brand-700/10" />
 
-        <div className="container-page grid grid-cols-2 items-center gap-4 py-16 sm:gap-8 md:gap-12 lg:py-24">
+        <div className="container-page py-16 lg:py-24">
+          {/* Full-width centered header — spans across both columns (above the card too). */}
           <div className="animate-fade-in-up text-center">
             <span className="badge bg-accent-100 text-accent-700 dark:bg-accent-900/40 dark:text-accent-300">
               <Star className="h-3.5 w-3.5" /> India's smart prep platform
             </span>
-            <h1 className="mt-5 text-2xl font-extrabold leading-tight tracking-tight sm:text-4xl md:text-5xl lg:text-6xl">
+            <h1 className="mt-5 text-4xl font-extrabold leading-tight tracking-tight sm:text-5xl lg:text-6xl">
               Prepare Smart, <br />
               <span className="bg-gradient-to-r from-brand-600 to-accent-500 bg-clip-text text-transparent">
                 Achieve More.
               </span>
             </h1>
-            <p className="mt-5 text-justify text-sm text-slate-600 dark:text-slate-300 sm:text-lg">
+          </div>
+
+          <div className="mt-10 grid grid-cols-2 items-center gap-4 sm:gap-8 md:gap-12">
+            <div className="animate-fade-in-up text-center">
+              <p className="text-justify text-sm text-slate-600 dark:text-slate-300 sm:text-lg">
               Master every subject with adaptive quizzes, full-length test series,
               instant results and powerful analytics — built for serious aspirants.
             </p>
@@ -239,6 +244,7 @@ export default function Home() {
               <Trophy className="mb-1 h-5 w-5" />
               <p className="text-xs font-semibold">Top 5%</p>
             </div>
+          </div>
           </div>
         </div>
       </section>
