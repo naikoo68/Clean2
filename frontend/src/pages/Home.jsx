@@ -170,19 +170,19 @@ export default function Home() {
               <Star className="h-3.5 w-3.5" /> India's smart prep platform
             </span>
             <h1 className="mt-5 text-4xl font-extrabold leading-tight tracking-tight sm:text-5xl lg:text-6xl">
-              Prepare Smart, <br />
+              Prepare Smart,{" "}
               <span className="bg-gradient-to-r from-brand-600 to-accent-500 bg-clip-text text-transparent">
                 Achieve More.
               </span>
             </h1>
+            <p className="mx-auto mt-5 max-w-3xl text-center text-base text-slate-600 dark:text-slate-300 sm:text-lg">
+              Master every subject with adaptive quizzes, full-length test series,
+              instant results and powerful analytics — built for serious aspirants.
+            </p>
           </div>
 
           <div className="mt-10 grid grid-cols-2 items-center gap-4 sm:gap-8 md:gap-12">
             <div className="animate-fade-in-up text-center">
-              <p className="text-justify text-sm text-slate-600 dark:text-slate-300 sm:text-lg">
-              Master every subject with adaptive quizzes, full-length test series,
-              instant results and powerful analytics — built for serious aspirants.
-            </p>
             <div className="mt-8 flex flex-wrap justify-center gap-3">
               <Link to="/quiz" className="btn-primary text-base">
                 <Play className="h-5 w-5" /> Start Practicing
@@ -246,6 +246,26 @@ export default function Home() {
             </div>
           </div>
           </div>
+
+          {/* Hero boxes for the three products */}
+          <div className="mt-14 grid gap-5 sm:grid-cols-3">
+            {[
+              { to: "/quiz", label: "Quizzes", desc: "Subject-wise adaptive quizzes with instant solutions.", Icon: ListChecks, cls: "from-brand-600 to-indigo-600" },
+              { to: "/test-series", label: "Test Series", desc: "Full-length & sectional mocks with real exam timing.", Icon: FileText, cls: "from-accent-500 to-orange-600" },
+              { to: "/study", label: "Study Material", desc: "Curated notes, PDFs and resources to revise faster.", Icon: BookMarked, cls: "from-emerald-500 to-teal-600" },
+            ].map((p) => (
+              <Link key={p.to} to={p.to} className="card-hover group relative overflow-hidden p-6">
+                <span className={`flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br ${p.cls} text-white`}>
+                  <p.Icon className="h-7 w-7" />
+                </span>
+                <h3 className="mt-4 text-lg font-bold">{p.label}</h3>
+                <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{p.desc}</p>
+                <span className="mt-4 inline-flex items-center gap-1 text-sm font-semibold text-brand-600 dark:text-brand-400">
+                  Explore <ArrowRight className="h-4 w-4 transition group-hover:translate-x-0.5" />
+                </span>
+              </Link>
+            ))}
+          </div>
         </div>
       </section>
     ),
@@ -297,28 +317,6 @@ export default function Home() {
       </section>
     ) : null,
 
-    quickAccess: (
-      <section className="container-page pt-10">
-        <div className="grid gap-4 sm:grid-cols-3">
-          {[
-            { to: "/quiz", label: "Quiz", desc: "Subject-wise practice quizzes", Icon: ListChecks, cls: "from-brand-600 to-indigo-600" },
-            { to: "/test-series", label: "Test Series", desc: "Full-length & sectional mocks", Icon: FileText, cls: "from-accent-500 to-orange-600" },
-            { to: "/study", label: "Study Material", desc: "Notes, PDFs & resources", Icon: BookMarked, cls: "from-emerald-500 to-teal-600" },
-          ].map((q) => (
-            <Link key={q.to} to={q.to} className="card-hover flex items-center gap-4 p-5">
-              <span className={`flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br ${q.cls} text-white`}>
-                <q.Icon className="h-6 w-6" />
-              </span>
-              <div className="min-w-0 flex-1">
-                <p className="font-bold">{q.label}</p>
-                <p className="truncate text-sm text-slate-500 dark:text-slate-400">{q.desc}</p>
-              </div>
-              <ArrowRight className="h-5 w-5 flex-shrink-0 text-slate-400" />
-            </Link>
-          ))}
-        </div>
-      </section>
-    ),
 
     features: (
       <section className="container-page py-20">
