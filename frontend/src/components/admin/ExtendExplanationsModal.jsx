@@ -42,6 +42,7 @@ export default function ExtendExplanationsModal({ open, target, title, onClose, 
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState(null); // { done, total }
   const [msg, setMsg] = useState("");
+  const [keyStats, setKeyStats] = useState(null); // live per-key activity this run { label: {requests,ok,limited,error,questions} }
   const jobRef = useRef(null);      // current background job id (for Cancel)
   const cancelRef = useRef(false);  // set true when the user cancels → stops polling
 
@@ -77,6 +78,7 @@ export default function ExtendExplanationsModal({ open, target, title, onClose, 
     setBusy(true);
     setMsg("Starting…");
     setProgress(null);
+    setKeyStats(null);
     cancelRef.current = false;
     try {
       const { jobId, requested } = await aiService.extendExplanations({
@@ -104,6 +106,7 @@ export default function ExtendExplanationsModal({ open, target, title, onClose, 
         }
         let s;
         try { s = await aiService.job(jobId); } catch { continue; }
+        if (s.keyStats && Object.keys(s.keyStats).length) setKeyStats(s.keyStats);
         const total = s.requested || requested;
         lastCount = s.count ?? lastCount;
         if (s.status === "done") {
@@ -253,6 +256,28 @@ export default function ExtendExplanationsModal({ open, target, title, onClose, 
           <p className="mt-3 inline-flex items-center gap-1 text-sm font-medium">
             {msg.startsWith("✓") && <CheckCircle2 className="h-4 w-4 text-emerald-600" />} {msg}
           </p>
+        )}
+
+        {/* Live per-key activity — see every key working at once, in real time. */}
+        {keyStats && Object.keys(keyStats).length > 0 && (
+          <div className="mt-3 rounded-xl border border-slate-200 p-3 dark:border-slate-700">
+            <p className="mb-2 text-xs font-semibold text-slate-500 dark:text-slate-400">
+              Keys working this run ({Object.keys(keyStats).length}) · {Object.values(keyStats).reduce((a, s) => a + (s.requests || 0), 0)} requests · {Object.values(keyStats).reduce((a, s) => a + (s.questions || 0), 0)} updated
+            </p>
+            <div className="max-h-40 space-y-1 overflow-y-auto">
+              {Object.entries(keyStats).sort((a, b) => (b[1].requests || 0) - (a[1].requests || 0)).map(([label, s]) => (
+                <div key={label} className="flex items-center justify-between gap-2 text-xs">
+                  <span className="truncate font-medium text-slate-700 dark:text-slate-200">{label}</span>
+                  <span className="flex flex-shrink-0 items-center gap-2 whitespace-nowrap">
+                    <span className="text-slate-500 dark:text-slate-400">{s.requests || 0} req</span>
+                    <span className="font-semibold text-emerald-600 dark:text-emerald-400">{s.questions || 0} done</span>
+                    {s.limited > 0 && <span className="text-amber-600 dark:text-amber-400">{s.limited} limited</span>}
+                    {s.error > 0 && <span className="text-rose-600 dark:text-rose-400">{s.error} err</span>}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
         )}
 
         <div className="mt-6 flex justify-end">
