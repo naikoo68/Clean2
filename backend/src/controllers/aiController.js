@@ -3113,7 +3113,15 @@ async function runExtendJob(id, { endpoints, model, questions, owner = null, not
       // enough for the per-minute limit to recover, so a single run gets through
       // more before giving up; otherwise just a brief transient-error pause.
       if (pending.length && pass < MAX_PASSES - 1 && !keyDead && Date.now() < deadline) {
-        const wait = lastError?.status === 429 ? 60000 : 2000;
+        // On a rate limit, resume as soon as the provider says it's safe
+        // (Gemini returns e.g. "retryDelay":"27s") instead of a blind 60s, so
+        // the job doesn't look frozen longer than necessary. Fall back to 60s
+        // when there's no hint; clamp so we neither retry too early nor stall.
+        let wait = 2000;
+        if (lastError?.status === 429) {
+          const m = /"retryDelay"\s*:\s*"?(\d+)\s*s/i.exec(lastError.detail || "");
+          wait = m ? Math.min(Math.max(parseInt(m[1], 10) * 1000 + 1000, 5000), 60000) : 60000;
+        }
         if (Date.now() + wait < deadline) {
           // On a rate limit, expose the wait so the UI can show a live
           // "auto-continuing in Ns…" countdown instead of looking frozen.
