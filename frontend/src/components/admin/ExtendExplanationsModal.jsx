@@ -171,6 +171,13 @@ export default function ExtendExplanationsModal({ open, target, title, onClose, 
           </div>
         ) : (
           <>
+            {status?.enabled && (
+              <p className="mb-3 text-xs text-slate-500 dark:text-slate-400">
+                Using <b>{status.keys ?? 0}</b> API key{status.keys === 1 ? "" : "s"}
+                {status.model ? <> · <span className="font-mono">{status.model}</span></> : null}.
+                {" "}More keys spread the load, so bulk jobs hit rate-limit pauses less often.
+              </p>
+            )}
             <div className="mb-3 rounded-xl bg-slate-50 p-3 text-xs text-slate-500 dark:bg-slate-800/60 dark:text-slate-400">
               This rewrites the explanation and per-option notes for <b>every question</b> in this{" "}
               {target?.testSeries ? "test" : "quiz"}, making them detailed and complete. The questions,
