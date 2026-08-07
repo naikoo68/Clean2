@@ -1564,7 +1564,9 @@ function EntityForm({ type, data, kind, saving, onClose, onSave }) {
   const [composition, setComposition] = useState(() =>
     (data.subjectPlan || []).map((r) => ({ subject: r.subject || "", count: r.count ?? 0 }))
   );
-  const isTestItem = type === "item" && kind === "test";
+  // Tests AND Previous Papers support a per-subject question plan (subject +
+  // planned count) so their Questions modal shows per-subject progress.
+  const isTestItem = type === "item" && (kind === "test" || kind === "paper");
   // Previous Papers relabels the levels: subject = Exam, topic = Year, item = Paper.
   const title = type === "item"
     ? (kind === "quiz" ? "Quiz" : kind === "paper" ? "Paper" : "Test")
@@ -1602,7 +1604,7 @@ function EntityForm({ type, data, kind, saving, onClose, onSave }) {
             <div className="rounded-xl border border-slate-200 p-3 dark:border-slate-700">
               <label className="mb-1 block text-sm font-semibold">Subjects &amp; questions per subject (optional)</label>
               <p className="mb-2 text-xs text-slate-500 dark:text-slate-400">
-                Type your subjects and how many questions each. Afterwards, tap the test → tap a subject to add
+                Type your subjects and how many questions each. Afterwards, tap the {title.toLowerCase()} → tap a subject to add
                 questions (up to its limit).
               </p>
               <SubjectPlanEditor rows={composition} onChange={setComposition} />
