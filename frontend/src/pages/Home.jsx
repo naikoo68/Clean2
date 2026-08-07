@@ -164,7 +164,7 @@ export default function Home() {
         <div className="absolute -left-20 top-40 -z-10 h-72 w-72 rounded-full bg-brand-300/30 blur-3xl dark:bg-brand-700/10" />
 
         <div className="container-page grid grid-cols-2 items-center gap-4 py-16 sm:gap-8 md:gap-12 lg:py-24">
-          <div className="animate-fade-in-up">
+          <div className="animate-fade-in-up text-center">
             <span className="badge bg-accent-100 text-accent-700 dark:bg-accent-900/40 dark:text-accent-300">
               <Star className="h-3.5 w-3.5" /> India's smart prep platform
             </span>
@@ -174,11 +174,11 @@ export default function Home() {
                 Achieve More.
               </span>
             </h1>
-            <p className="mt-5 max-w-lg text-sm text-slate-600 dark:text-slate-300 sm:text-lg">
+            <p className="mt-5 text-justify text-sm text-slate-600 dark:text-slate-300 sm:text-lg">
               Master every subject with adaptive quizzes, full-length test series,
               instant results and powerful analytics — built for serious aspirants.
             </p>
-            <div className="mt-8 flex flex-wrap gap-3">
+            <div className="mt-8 flex flex-wrap justify-center gap-3">
               <Link to="/quiz" className="btn-primary text-base">
                 <Play className="h-5 w-5" /> Start Practicing
               </Link>
@@ -190,10 +190,10 @@ export default function Home() {
               </Link>
             </div>
             {/* Search all content — streams, subjects, topics, quizzes & tests */}
-            <div className="mt-6 max-w-lg">
+            <div className="mt-6 mx-auto max-w-lg">
               <GlobalSearch mode="public" placeholder="Search streams, subjects, topics, quizzes, tests…" />
             </div>
-            <div className="mt-8 flex flex-wrap items-center gap-x-6 gap-y-2 text-sm text-slate-500 dark:text-slate-400">
+            <div className="mt-8 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-sm text-slate-500 dark:text-slate-400">
               {["No credit card needed", "Free quizzes", "Detailed solutions"].map((t) => (
                 <span key={t} className="flex items-center gap-1.5">
                   <CheckCircle2 className="h-4 w-4 text-emerald-500" /> {t}
