@@ -160,3 +160,19 @@
   border-color: currentColor !important;
 }
 .katex .frac-line { border-bottom-color: currentColor !important; }
+
+
+/* ---------------------------------------------------------------------------
+   Installed PWA (iOS / Android standalone) — respect the device safe areas so
+   the sticky top bar doesn't sit under the status bar / notch, and page bottom
+   content clears the home indicator. Only applies when launched as an app.
+   (Requires <meta name="viewport" content="...viewport-fit=cover">, which is set.)
+   ------------------------------------------------------------------------ */
+@media (display-mode: standalone) {
+  header.sticky.top-0 {
+    padding-top: env(safe-area-inset-top);
+  }
+  body {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+}
