@@ -33,7 +33,19 @@ export default function ClientWorkspace() {
 
   const [showUpgrade, setShowUpgrade] = useState(false); // opened voluntarily from the dashboard
   const [menuOpen, setMenuOpen] = useState(false); // hamburger menu (all tabs except Dashboard)
-  const [showWelcome, setShowWelcome] = useState(true); // welcome popup — shows on every open/mount
+  // Welcome popup — shown only ONCE per browser session (not on refresh or
+  // back-navigation). Shared sessionStorage flag with the public site.
+  const [showWelcome, setShowWelcome] = useState(false);
+  useEffect(() => {
+    try {
+      if (!sessionStorage.getItem("mpm-welcome-seen")) {
+        sessionStorage.setItem("mpm-welcome-seen", "1");
+        setShowWelcome(true);
+      }
+    } catch {
+      setShowWelcome(true);
+    }
+  }, []);
 
   // Pull the latest profile once when the workspace opens. This is a long-lived
   // single-page app, so a client who logged in earlier may be holding a stale
