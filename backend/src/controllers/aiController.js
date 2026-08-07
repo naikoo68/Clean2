@@ -3091,13 +3091,14 @@ async function runExtendJob(id, { endpoints, model, questions, owner = null, not
     for (let pass = 0; pass < MAX_PASSES && pending.length && !keyDead && Date.now() < deadline && !job.cancelled; pass++) {
       const failed = [];
       let idx = 0;
-      // One worker PER KEY (up to 10) — each starts on a DIFFERENT key (rotated
+      // One worker PER KEY (up to 24) — each starts on a DIFFERENT key (rotated
       // endpoint order) so they don't all hammer the same key at once; a 429 on
-      // one still falls back to the others. This uses every key in parallel and
-      // is why bulk extend now gets through the whole quiz, not just a few.
+      // one still falls back to the others. This uses EVERY key in parallel
+      // (e.g. all 18 built-in keys at once), so bulk extend gets through the
+      // whole quiz fast instead of stalling on just the first few keys.
       const rotate = (arr, k) => arr.slice(k).concat(arr.slice(0, k));
       const nEps = endpoints?.length || 1;
-      const WORKERS = Math.min(Math.max(nEps, 1), 10);
+      const WORKERS = Math.min(Math.max(nEps, 1), 24);
       const worker = async (wi) => {
         const eps = nEps > 1 ? rotate(endpoints, wi % nEps) : endpoints;
         while (idx < pending.length && !keyDead && Date.now() < deadline && !job.cancelled) {
@@ -3639,7 +3640,9 @@ async function runRegenAllJob(id, { endpoints, model, questions, owner = null, n
       let idx = 0;
       const rotate = (arr, k) => arr.slice(k).concat(arr.slice(0, k));
       const nEps = endpoints?.length || 1;
-      const WORKERS = Math.min(Math.max(nEps, 1), 10);
+      // One worker PER KEY (up to 24) so all available keys (e.g. 18 built-in)
+      // run in parallel instead of only the first 10.
+      const WORKERS = Math.min(Math.max(nEps, 1), 24);
       const worker = async (wi) => {
         const eps = nEps > 1 ? rotate(endpoints, wi % nEps) : endpoints;
         while (idx < pending.length && !keyDead && Date.now() < deadline && !job.cancelled) {
