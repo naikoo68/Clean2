@@ -1076,8 +1076,12 @@ export default function AdminPractice({ clientMode = false, fixedKind = "" }) {
               onAddQuestion={(subject) => setTqModal({ mode: "add", data: null, forceSection: subject })}
               onEditQuestion={(item) => setTqModal({ mode: "edit", data: item })}
               onDeleteQuestion={removeTq}
-              onDeleteSelected={async (ids) => {
-                for (const id of ids) await testService.deleteQuestion(qItem._id, id);
+              onDeleteSelected={async (ids, onProgress) => {
+                let done = 0;
+                for (const id of ids) {
+                  await testService.deleteQuestion(qItem._id, id);
+                  onProgress?.(++done); // report real-time progress to the modal
+                }
                 await reloadTq();
                 load("items");
               }}
