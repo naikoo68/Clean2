@@ -123,10 +123,21 @@ async function resolveModel(requested, scope = SYSTEM_SCOPE) {
 // (429/401/403). Each endpoint uses the model it supports (ep.model), so keys on
 // a different model still work as fallbacks. Other errors aren't retried on
 // another key.
-async function callWithFallback({ endpoints, model, userPrompt, maxTokens, owner = null, systemPrompt, failOnEmpty = false }) {
+async function callWithFallback({ endpoints, model, userPrompt, maxTokens, owner = null, systemPrompt, failOnEmpty = false, cooldown = null }) {
   let last = { ok: false, status: 0, detail: "No AI key is configured." };
   let sawQuota = false; // at least one key failed with a recoverable rate-limit
+  let considered = 0;   // keys we actually tried (not skipped for cooldown)
+  let skippedCooling = 0;
   for (const ep of endpoints || []) {
+    // Per-key rate-limit cooldown: if THIS key was recently 429'd, skip it and
+    // let another key answer. Only bulk jobs pass `cooldown`; single calls don't,
+    // so their behaviour is unchanged. This is what lets every non-limited key
+    // keep working instead of the whole job freezing on one key's limit.
+    if (cooldown) {
+      const until = cooldown.get(ep.key) || 0;
+      if (until > Date.now()) { skippedCooling += 1; continue; }
+    }
+    considered += 1;
     const r = await callProvider({ key: ep.key, baseUrl: ep.baseUrl, model: ep.model || model, userPrompt, maxTokens, systemPrompt, failOnEmpty });
     if (r.ok) {
       // Record app-side usage on the matching DB key (env-only keys aren't in
@@ -135,12 +146,28 @@ async function callWithFallback({ endpoints, model, userPrompt, maxTokens, owner
       AiKey.updateOne({ key: ep.key, owner: owner ?? null }, { $inc: { usedRequests: 1, usedTokens: r.tokens || 0 } }).catch(() => {});
       return r;
     }
-    if (r.status === 429) sawQuota = true;
+    if (r.status === 429) {
+      sawQuota = true;
+      // Park THIS specific key until the provider says it's safe again
+      // (Gemini returns e.g. "retryDelay":"27s"), so bulk jobs stop sending it
+      // requests while it's limited but keep hammering every other key.
+      if (cooldown) {
+        const m = /"retryDelay"\s*:\s*"?(\d+)\s*s/i.exec(r.detail || "");
+        const ms = m ? Math.min(Math.max(parseInt(m[1], 10) * 1000 + 1000, 5000), 60000) : 60000;
+        cooldown.set(ep.key, Date.now() + ms);
+      }
+    }
     last = r;
     // 520 = a 200 with EMPTY content (safety filter / thinking-only reply). Like
     // a rate-limit, it's worth rolling over to the NEXT key/model rather than
     // giving up — another key on a stronger model may return real content.
     if (![429, 401, 403, 520].includes(r.status)) break;
+  }
+  // Every candidate key was in cooldown (none actually tried): report it as a
+  // 429 so the bulk job briefly backs off and retries, rather than treating it
+  // as a hard failure.
+  if (considered === 0 && skippedCooling > 0) {
+    return { ok: false, status: 429, detail: "All available keys are cooling down from rate limits." };
   }
   // Every key failed. If ANY failure was just a rate-limit (429, recoverable) but
   // the LAST key tried happened to be an unauthorized/disabled one (401/403),
@@ -3048,6 +3075,10 @@ async function runExtendJob(id, { endpoints, model, questions, owner = null, not
   let keyDead = false;
   let parseFails = 0;   // calls that succeeded (HTTP ok) but yielded no usable explanation
   let emptyReplies = 0; // of those, how many returned empty content (safety filter / blank completion)
+  // Per-key rate-limit cooldown, shared by all workers: key value -> timestamp
+  // until which that key is limited. A 429 on one key parks ONLY that key, so
+  // the other keys keep working instead of the whole job pausing.
+  const keyCoolUntil = new Map();
 
   // Extend ONE question: call AI, parse (robustly), update in place. Returns
   // true only when the DB was actually updated with a real explanation.
@@ -3060,6 +3091,7 @@ async function runExtendJob(id, { endpoints, model, questions, owner = null, not
       maxTokens: 8000, // the verified/step-by-step replies are long — avoid truncation
       owner,
       failOnEmpty: true, // an empty reply → try the next key/model instead of failing this question
+      cooldown: keyCoolUntil, // skip keys that are currently rate-limited
     });
     if (!r.ok) {
       lastError = r;
@@ -3084,8 +3116,11 @@ async function runExtendJob(id, { endpoints, model, questions, owner = null, not
 
   // Multiple passes: any question that fails (bad/truncated JSON, transient
   // error, or a momentary quota blip) is retried on the next pass, so NO
-  // question is left un-extended unless every attempt genuinely fails.
-  const MAX_PASSES = 6;
+  // question is left un-extended unless every attempt genuinely fails. With
+  // per-key cooldowns the between-pass wait is now tiny whenever any key is
+  // free, so more passes just mean stragglers get retried sooner within the
+  // overall time budget.
+  const MAX_PASSES = 12;
   let pending = [...questions];
   try {
     for (let pass = 0; pass < MAX_PASSES && pending.length && !keyDead && Date.now() < deadline && !job.cancelled; pass++) {
@@ -3110,23 +3145,27 @@ async function runExtendJob(id, { endpoints, model, questions, owner = null, not
       };
       await Promise.all(Array.from({ length: WORKERS }, (_, wi) => worker(wi)));
       pending = failed;
-      // Pause before retrying the stragglers. On a quota hit (429) wait long
-      // enough for the per-minute limit to recover, so a single run gets through
-      // more before giving up; otherwise just a brief transient-error pause.
+      // Pause before retrying the stragglers — but ONLY as long as we truly must.
+      // Because 429s now park individual keys (keyCoolUntil), we don't freeze the
+      // whole job on a flat 60s: if ANY key is free right now, retry almost
+      // immediately on it. Only when EVERY key is cooling do we wait, and even
+      // then just until the soonest one recovers.
       if (pending.length && pass < MAX_PASSES - 1 && !keyDead && Date.now() < deadline) {
-        // On a rate limit, resume as soon as the provider says it's safe
-        // (Gemini returns e.g. "retryDelay":"27s") instead of a blind 60s, so
-        // the job doesn't look frozen longer than necessary. Fall back to 60s
-        // when there's no hint; clamp so we neither retry too early nor stall.
-        let wait = 2000;
-        if (lastError?.status === 429) {
-          const m = /"retryDelay"\s*:\s*"?(\d+)\s*s/i.exec(lastError.detail || "");
-          wait = m ? Math.min(Math.max(parseInt(m[1], 10) * 1000 + 1000, 5000), 60000) : 60000;
+        const now = Date.now();
+        const cooling = [...keyCoolUntil.values()].filter((t) => t > now);
+        const allCooling = nEps > 0 && cooling.length >= nEps;
+        let wait;
+        if (allCooling) {
+          // Every key is rate-limited: wait only until the SOONEST one frees up.
+          wait = Math.min(Math.max(Math.min(...cooling) - now + 1000, 3000), 60000);
+        } else {
+          // At least one key is available — retry the stragglers on it now.
+          wait = cooling.length ? 1000 : 1500;
         }
-        if (Date.now() + wait < deadline) {
-          // On a rate limit, expose the wait so the UI can show a live
-          // "auto-continuing in Ns…" countdown instead of looking frozen.
-          if (lastError?.status === 429) save({ waitUntil: Date.now() + wait });
+        if (now + wait < deadline) {
+          // Show the live "auto-continuing in Ns…" countdown only when we're
+          // genuinely blocked on every key cooling down.
+          if (allCooling) save({ waitUntil: now + wait });
           await new Promise((r) => setTimeout(r, wait));
           save({ waitUntil: null });
         }
@@ -3605,6 +3644,9 @@ async function runRegenAllJob(id, { endpoints, model, questions, owner = null, n
   let updated = 0;
   let lastError = null;
   let keyDead = false;
+  // Per-key rate-limit cooldown (see runExtendJob): a 429 parks ONLY that key,
+  // so every other key keeps working instead of the whole job pausing.
+  const keyCoolUntil = new Map();
 
   const regenOne = async (q, eps) => {
     const r = await callWithFallback({
@@ -3615,6 +3657,7 @@ async function runRegenAllJob(id, { endpoints, model, questions, owner = null, n
       maxTokens: 8000,
       owner,
       failOnEmpty: true, // empty reply → roll over to the next key/model
+      cooldown: keyCoolUntil, // skip keys that are currently rate-limited
     });
     if (!r.ok) {
       lastError = r;
@@ -3632,7 +3675,7 @@ async function runRegenAllJob(id, { endpoints, model, questions, owner = null, n
     return true;
   };
 
-  const MAX_PASSES = 6;
+  const MAX_PASSES = 12;
   let pending = [...questions];
   try {
     for (let pass = 0; pass < MAX_PASSES && pending.length && !keyDead && Date.now() < deadline && !job.cancelled; pass++) {
@@ -3654,12 +3697,21 @@ async function runRegenAllJob(id, { endpoints, model, questions, owner = null, n
       };
       await Promise.all(Array.from({ length: WORKERS }, (_, wi) => worker(wi)));
       pending = failed;
+      // Only wait as long as we must: with per-key cooldowns, retry immediately
+      // whenever any key is free; wait (until the soonest recovers) only when
+      // EVERY key is currently rate-limited.
       if (pending.length && pass < MAX_PASSES - 1 && !keyDead && Date.now() < deadline) {
-        const wait = lastError?.status === 429 ? 60000 : 2000;
-        if (Date.now() + wait < deadline) {
-          // On a rate limit, expose the wait so the UI can show a live
-          // "auto-continuing in Ns…" countdown instead of looking frozen.
-          if (lastError?.status === 429) save({ waitUntil: Date.now() + wait });
+        const now = Date.now();
+        const cooling = [...keyCoolUntil.values()].filter((t) => t > now);
+        const allCooling = nEps > 0 && cooling.length >= nEps;
+        let wait;
+        if (allCooling) {
+          wait = Math.min(Math.max(Math.min(...cooling) - now + 1000, 3000), 60000);
+        } else {
+          wait = cooling.length ? 1000 : 1500;
+        }
+        if (now + wait < deadline) {
+          if (allCooling) save({ waitUntil: now + wait });
           await new Promise((r) => setTimeout(r, wait));
           save({ waitUntil: null });
         }
