@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Plus, Pencil, Trash2, Eye, X, Search, ChevronRight, Copy, Download, Clock, Upload, Sparkles, Globe, Library, Wand2, Loader2, RefreshCw } from "lucide-react";
+import { Plus, Pencil, Trash2, Eye, X, Search, ChevronRight, Copy, Download, Clock, Upload, Sparkles, Globe, Library, Wand2, Loader2, RefreshCw, CheckCircle2 } from "lucide-react";
 import { Files } from "lucide-react";
 import { questionDateText, searchQuestions } from "../../lib/questions";
 import Badge from "../ui/Badge";
@@ -41,6 +41,8 @@ export default function ManageTestQuestions({
   const [activeSubject, setActiveSubject] = useState(null);
   const [selectedTq, setSelectedTq] = useState([]);
   const [tqSearch, setTqSearch] = useState("");
+  // Real-time progress while bulk-deleting selected questions.
+  const [delProgress, setDelProgress] = useState(null); // { total, done, finished? } | null
 
   const toggleTqSelect = (id) => setSelectedTq((s) => (s.includes(id) ? s.filter((x) => x !== id) : [...s, id]));
 
@@ -68,10 +70,19 @@ export default function ManageTestQuestions({
   const toggleAll = () => setSelectedTq(allSelected ? [] : subjectQuestions.map((x) => x._id));
 
   const handleDeleteSelected = async () => {
-    if (!selectedTq.length) return;
-    if (!window.confirm(`Delete ${selectedTq.length} selected question(s)? This cannot be undone.`)) return;
-    await onDeleteSelected(selectedTq);
-    setSelectedTq([]);
+    if (!selectedTq.length || delProgress) return;
+    const total = selectedTq.length;
+    if (!window.confirm(`Delete ${total} selected question(s)? This cannot be undone.`)) return;
+    setDelProgress({ total, done: 0 });
+    try {
+      // The parent reports progress after each question is deleted.
+      await onDeleteSelected(selectedTq, (done) => setDelProgress({ total, done }));
+      setDelProgress({ total, done: total, finished: true });
+      setSelectedTq([]);
+      setTimeout(() => setDelProgress(null), 3000);
+    } catch {
+      setDelProgress(null);
+    }
   };
 
   // SUBJECT LIST VIEW
@@ -274,7 +285,15 @@ export default function ManageTestQuestions({
               <input type="checkbox" checked={allSelected} onChange={toggleAll} className="h-4 w-4 accent-brand-600" /> Select all
             </label>
             {tqSearch && filteredTq.length !== subjectQuestions.length && <span className="text-sm font-medium text-slate-500">{filteredTq.length} match{filteredTq.length === 1 ? "" : "es"}</span>}
-            {selectedTq.length > 0 && (
+            {delProgress ? (
+              <span className={`inline-flex items-center gap-1.5 text-sm font-medium ${delProgress.finished ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600"}`}>
+                {delProgress.finished ? (
+                  <><CheckCircle2 className="h-4 w-4" /> Deleted {delProgress.total} question{delProgress.total === 1 ? "" : "s"} — done</>
+                ) : (
+                  <><Loader2 className="h-4 w-4 animate-spin" /> Deleting {delProgress.done} of {delProgress.total}…</>
+                )}
+              </span>
+            ) : selectedTq.length > 0 && (
               <>
                 <span className="text-sm text-slate-500">{selectedTq.length} selected</span>
                 <button onClick={handleDeleteSelected} className="btn-outline py-1.5 text-rose-600"><Trash2 className="h-4 w-4" /> Delete</button>
