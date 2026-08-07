@@ -828,8 +828,12 @@ export default function AdminTests() {
               onAddQuestion={(subject) => setTqModal({ mode: "add", data: null, forceSection: subject })}
               onEditQuestion={(item) => setTqModal({ mode: "edit", data: item })}
               onDeleteQuestion={removeTq}
-              onDeleteSelected={async (ids) => {
-                for (const id of ids) await testService.deleteQuestion(qTest._id, id);
+              onDeleteSelected={async (ids, onProgress) => {
+                let done = 0;
+                for (const id of ids) {
+                  await testService.deleteQuestion(qTest._id, id);
+                  onProgress?.(++done); // real-time progress in the modal
+                }
                 await reloadTq();
                 load();
               }}
