@@ -348,7 +348,7 @@ export async function splitItem(req, res) {
       questions: chunks[k],
     });
     // Point each moved question at its new item.
-    await Question.updateMany({ _id: { $in: chunks[k] } }, { $set: { testSeries: newItem._id } });
+    await Question.updateMany({ _id: { $in: chunks[k] } }, { $set: { testSeries: newItem._id } }, { timestamps: false }); // split = association only, keep updatedAt
   }
   res.json({ message: `Split ${total} questions into ${chunks.length} quizzes.`, quizzes: chunks.length, created: chunks.length - 1 });
 }
@@ -381,7 +381,7 @@ export async function mergeItem(req, res) {
     for (const qid of src.questions || []) {
       if (!have.has(String(qid))) { target.questions.push(qid); have.add(String(qid)); }
     }
-    const r = await Question.updateMany({ _id: { $in: src.questions || [] } }, { $set: { testSeries: target._id } });
+    const r = await Question.updateMany({ _id: { $in: src.questions || [] } }, { $set: { testSeries: target._id } }, { timestamps: false }); // merge = association only, keep updatedAt
     moved += r.modifiedCount || 0;
     await TestSeries.deleteOne({ _id: src._id });
   }
@@ -414,7 +414,7 @@ export async function moveQuestions(req, res) {
   if (!ids.length) return res.status(400).json({ message: "Select at least one question in this quiz to move." });
 
   const idSet = new Set(ids);
-  const r = await Question.updateMany({ _id: { $in: ids } }, { $set: { testSeries: target._id } });
+  const r = await Question.updateMany({ _id: { $in: ids } }, { $set: { testSeries: target._id } }, { timestamps: false }); // move = association only, keep updatedAt
   source.questions = (source.questions || []).filter((q) => !idSet.has(String(q)));
   const have = new Set((target.questions || []).map((q) => String(q)));
   for (const qid of ids) { if (!have.has(qid)) { target.questions.push(qid); have.add(qid); } }
@@ -472,7 +472,7 @@ export async function splitTopic(req, res) {
       visibleToAll: false,
       questions: chunks[k],
     });
-    await Question.updateMany({ _id: { $in: chunks[k] } }, { $set: { testSeries: newItem._id } });
+    await Question.updateMany({ _id: { $in: chunks[k] } }, { $set: { testSeries: newItem._id } }, { timestamps: false }); // split = association only, keep updatedAt
   }
   res.json({ message: `Split ${total} questions into ${chunks.length} quizzes.`, quizzes: chunks.length, created: chunks.length });
 }

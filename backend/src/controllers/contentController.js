@@ -224,7 +224,8 @@ export async function moveQuiz(req, res) {
   quiz.session = session._id;
   quiz.subject = session.subject;
   await quiz.save();
-  await Question.updateMany({ quiz: quiz._id }, { $set: { session: session._id, subject: session.subject } });
+  // Association-only move — don't bump the questions' updatedAt (their content isn't changing), so the "Updated" stamp keeps meaning "content was edited".
+  await Question.updateMany({ quiz: quiz._id }, { $set: { session: session._id, subject: session.subject } }, { timestamps: false });
   res.json({ message: "Migrated", _id: quiz._id });
 }
 
@@ -267,7 +268,7 @@ export async function splitQuiz(req, res) {
   let index = await Quiz.countDocuments({ session: quiz.session });
   for (let k = 1; k < chunks.length; k++) {
     const newQuiz = await Quiz.create({ title: nextQuizTitle(), subject: quiz.subject, session: quiz.session, index: index++ });
-    await Question.updateMany({ _id: { $in: chunks[k] } }, { $set: { quiz: newQuiz._id, session: quiz.session, subject: quiz.subject } });
+    await Question.updateMany({ _id: { $in: chunks[k] } }, { $set: { quiz: newQuiz._id, session: quiz.session, subject: quiz.subject } }, { timestamps: false }); // split = association only, keep updatedAt
   }
   res.json({ message: `Split ${total} questions into ${chunks.length} quizzes.`, quizzes: chunks.length, created: chunks.length - 1 });
 }
@@ -291,7 +292,8 @@ export async function mergeQuiz(req, res) {
   for (const src of sources) {
     const r = await Question.updateMany(
       { quiz: src._id },
-      { $set: { quiz: target._id, session: target.session, subject: target.subject } }
+      { $set: { quiz: target._id, session: target.session, subject: target.subject } },
+      { timestamps: false } // merge = association only, don't bump questions' updatedAt
     );
     moved += r.modifiedCount || 0;
     await Quiz.deleteOne({ _id: src._id });
@@ -337,7 +339,8 @@ export async function splitTopic(req, res) {
     const newQuiz = await Quiz.create({ title: `Quiz ${k + 1}`, subject: targetSession.subject, session: targetSession._id, index: k });
     await Question.updateMany(
       { _id: { $in: chunks[k] } },
-      { $set: { quiz: newQuiz._id, session: targetSession._id, subject: targetSession.subject } }
+      { $set: { quiz: newQuiz._id, session: targetSession._id, subject: targetSession.subject } },
+      { timestamps: false } // split = association only, don't bump questions' updatedAt
     );
   }
 
