@@ -1,6 +1,7 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { X, Check, Loader2 } from "lucide-react";
 import { practiceService } from "../../services";
+import { runAcceptShareJob, acceptSharePercent } from "../../lib/acceptShareProgress";
 
 // Dialog shown when accepting a shared subject / topic / quiz / test. It asks,
 // for each container level the content needs (stream → subject → topic), whether
@@ -17,6 +18,9 @@ export default function AcceptShareModal({ share, onClose, onDone }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
+  const [progress, setProgress] = useState(null); // live { itemsSaved, itemsTotal, questionsSaved, questionsTotal } while the copy runs
+  const aliveRef = useRef(true);
+  useEffect(() => () => { aliveRef.current = false; }, []);
   const [chain, setChain] = useState([]); // [{ level, suggestedName }]
   const [choice, setChoice] = useState({}); // level -> { mode:'existing'|'new', id, name }
   const [options, setOptions] = useState({ stream: [], subject: [], topic: [] }); // existing containers per level
@@ -64,7 +68,6 @@ export default function AcceptShareModal({ share, onClose, onDone }) {
     }
   };
 
-  const levelIndex = (level) => chain.findIndex((c) => c.level === level);
   const parentLevel = (level) => (level === "subject" ? "stream" : level === "topic" ? "subject" : null);
 
   // A level can only reuse an EXISTING container when its parent is also an
@@ -131,11 +134,14 @@ export default function AcceptShareModal({ share, onClose, onDone }) {
           ? { mode: "existing", id: c.id }
           : { mode: "new", name: String(c.name || "").trim() };
       }
-      await practiceService.acceptShare(share._id, placement);
-      onDone?.();
+      const { jobId, itemsTotal = 0, questionsTotal = 0 } = await practiceService.acceptShare(share._id, placement);
+      setProgress({ status: "running", itemsSaved: 0, itemsTotal, questionsSaved: 0, questionsTotal });
+      await runAcceptShareJob(jobId, setProgress, () => aliveRef.current);
+      if (aliveRef.current) onDone?.();
     } catch (e) {
       setError(e.message || "Could not save. Please try again.");
       setSaving(false);
+      setProgress(null);
     }
   };
 
@@ -150,7 +156,37 @@ export default function AcceptShareModal({ share, onClose, onDone }) {
           <button onClick={onClose} className="rounded p-1 text-slate-400 hover:text-slate-600"><X className="h-5 w-5" /></button>
         </div>
 
-        {loading ? (
+        {progress ? (
+          (() => {
+            const pct = acceptSharePercent(progress);
+            const remaining = progress.questionsTotal > 0
+              ? progress.questionsTotal - progress.questionsSaved
+              : progress.itemsTotal - progress.itemsSaved;
+            const itemLabel = share.kind === "test" ? "Tests" : "Quizzes";
+            return (
+              <div className="mt-4">
+                <div className="mb-2 flex items-center justify-between text-sm">
+                  <span className="flex items-center gap-2 font-semibold"><Loader2 className="h-4 w-4 animate-spin text-brand-600" /> Saving to your library…</span>
+                  <span className="text-slate-500">{pct}%</span>
+                </div>
+                <div className="h-2.5 w-full overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700">
+                  <div className="h-full rounded-full bg-brand-600 transition-all duration-300" style={{ width: `${pct}%` }} />
+                </div>
+                <div className="mt-3 grid grid-cols-2 gap-2 text-center text-xs">
+                  <div className="rounded-lg bg-slate-50 p-2 dark:bg-slate-800/60">
+                    <p className="text-base font-bold text-brand-600 dark:text-brand-400">{progress.questionsSaved} / {progress.questionsTotal}</p>
+                    <p className="text-slate-500">Questions saved</p>
+                  </div>
+                  <div className="rounded-lg bg-slate-50 p-2 dark:bg-slate-800/60">
+                    <p className="text-base font-bold text-brand-600 dark:text-brand-400">{progress.itemsSaved} / {progress.itemsTotal}</p>
+                    <p className="text-slate-500">{itemLabel} saved</p>
+                  </div>
+                </div>
+                <p className="mt-2 text-center text-xs text-slate-400">{remaining} remaining · please keep this open until it finishes</p>
+              </div>
+            );
+          })()
+        ) : loading ? (
           <div className="flex items-center justify-center py-10 text-slate-400"><Loader2 className="h-6 w-6 animate-spin" /></div>
         ) : error && !chain.length ? (
           <p className="py-6 text-sm text-rose-600">{error}</p>
