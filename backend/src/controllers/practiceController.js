@@ -801,6 +801,25 @@ async function senderContentOwner(fromUserId) {
   return sender?.role === "client" ? fromUserId : null;
 }
 
+/* ---- Accept-share background jobs (in-memory, single instance) ----
+   Accepting a whole shared subject/topic can copy hundreds of questions, so the
+   duplication runs as a background job and the recipient polls for live
+   progress (saved / total / remaining) instead of staring at a frozen spinner.
+   Jobs are cleaned up 20 minutes after their last update. */
+const acceptJobs = new Map(); // id -> { user, status, itemsTotal, itemsSaved, questionsTotal, questionsSaved, error, updatedAt }
+const newAcceptJobId = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
+function guardAcceptJob(id, p) {
+  Promise.resolve(p).catch((e) => {
+    const j = acceptJobs.get(id);
+    if (j) { j.status = "error"; j.error = e?.message || "Could not save the shared content."; j.updatedAt = Date.now(); }
+    console.error("[acceptShare] background job failed:", e?.stack || e);
+  });
+}
+setInterval(() => {
+  const cutoff = Date.now() - 20 * 60 * 1000;
+  for (const [id, j] of acceptJobs) if (j.updatedAt < cutoff) acceptJobs.delete(id);
+}, 5 * 60 * 1000).unref();
+
 export async function acceptShare(req, res) {
   const share = await ContentShare.findOne({ _id: req.params.id, to: req.user._id, status: "pending" });
   if (!share) return res.status(404).json({ message: "Share not found." });
@@ -843,7 +862,31 @@ export async function acceptShare(req, res) {
     return res.status(err.status || 400).json({ message: err.message });
   }
 
-  let saved = 0;
+  // Count the questions across all source items up front so the recipient sees
+  // a real "saved / total / remaining" bar while the copy runs.
+  const questionsTotal = await Question.countDocuments({ testSeries: { $in: items.map((i) => i._id) } });
+
+  // Run the (potentially large) duplication in the background; return a job id
+  // the client polls for live progress.
+  const jobId = newAcceptJobId();
+  acceptJobs.set(jobId, {
+    user: String(req.user._id),
+    status: "running",
+    itemsTotal: items.length, itemsSaved: 0,
+    questionsTotal, questionsSaved: 0,
+    error: null, updatedAt: Date.now(),
+  });
+  guardAcceptJob(jobId, runAcceptJob(jobId, { share, items, placed, copyOwner, cache }));
+  return res.status(202).json({ jobId, itemsTotal: items.length, questionsTotal });
+}
+
+// Background worker: duplicate every shared item (and its questions) into the
+// recipient's account, updating the job's progress after each item. Marks the
+// share accepted once everything has been copied. Any throw is caught by
+// guardAcceptJob, which flags the job errored.
+async function runAcceptJob(jobId, { share, items, placed, copyOwner, cache }) {
+  const job = acceptJobs.get(jobId);
+  if (!job) return;
   for (const src of items) {
     const kind = src.practiceKind === "test" ? "test" : "quiz";
     // Recreate the hierarchy under the recipient — using the placed containers
@@ -894,12 +937,28 @@ export async function acceptShare(req, res) {
     });
     const created = await duplicateQuestions({ testSeries: src._id }, { testSeries: copy._id, owner: copyOwner });
     if (created.length) await TestSeries.findByIdAndUpdate(copy._id, { $push: { questions: { $each: created.map((c) => c._id) } } });
-    saved += 1;
+    job.itemsSaved += 1;
+    job.questionsSaved += created.length;
+    job.updatedAt = Date.now();
   }
 
   share.status = "accepted";
   await share.save();
-  res.json({ message: "Saved to your account", saved });
+  job.status = "done";
+  job.updatedAt = Date.now();
+}
+
+// GET /api/practice/shares/job/:id — poll accept-share progress. Scoped to the
+// recipient who started the job (the id is random, but we still check).
+export function acceptShareJob(req, res) {
+  const job = acceptJobs.get(req.params.id);
+  if (!job || String(job.user) !== String(req.user._id)) return res.status(404).json({ message: "Job not found or expired." });
+  res.json({
+    status: job.status, // "running" | "done" | "error"
+    itemsTotal: job.itemsTotal, itemsSaved: job.itemsSaved,
+    questionsTotal: job.questionsTotal, questionsSaved: job.questionsSaved,
+    error: job.error,
+  });
 }
 
 // Placement plan for the accept dialog: which container levels the recipient

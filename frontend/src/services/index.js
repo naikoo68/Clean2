@@ -140,7 +140,8 @@ export const practiceService = {
   share: (data) => api.post("/practice/share", data), // { level, id, email } → send a pending share to a registered user
   incomingShares: () => api.get("/practice/shares/incoming"), // pending shares awaiting my accept/decline
   sharePlacement: (id) => api.get(`/practice/shares/${id}/placement`), // which container levels to place (existing/new) + suggested names
-  acceptShare: (id, placement) => api.post(`/practice/shares/${id}/accept`, placement ? { placement } : {}), // save the shared content into my account (optionally choosing where)
+  acceptShare: (id, placement) => api.post(`/practice/shares/${id}/accept`, placement ? { placement } : {}), // starts a background copy job → { jobId, itemsTotal, questionsTotal }
+  acceptShareJob: (jobId) => api.get(`/practice/shares/job/${jobId}`), // poll accept progress → { status, itemsSaved, itemsTotal, questionsSaved, questionsTotal }
   declineShare: (id) => api.post(`/practice/shares/${id}/decline`),
   removeSharedWithMe: (data) => api.post("/practice/shared/remove", data), // { level, id } → remove content shared WITH me from my dashboard
   // flat list of all practice subjects (for composing a test from practice)
