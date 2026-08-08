@@ -4049,6 +4049,16 @@ export async function updateKey(req, res) {
   res.json(keyToClient(doc));
 }
 
+// GET /api/ai/keys/:id/reveal — return the RAW key so the owner can view/copy it
+// in the edit modal. Scoped by owner (a client only sees their own keys; admin
+// only platform keys), so no one can reveal another owner's key. Env/server
+// keys aren't stored in the DB and so are never revealed here.
+export async function revealKey(req, res) {
+  const doc = await AiKey.findOne({ _id: req.params.id, owner: keyOwner(req) ?? null }).lean();
+  if (!doc) return res.status(404).json({ message: "Key not found" });
+  res.json({ key: (doc.key || "").trim() });
+}
+
 // DELETE /api/ai/keys/:id — scoped to the caller's own pool.
 export async function deleteKey(req, res) {
   const doc = await AiKey.findOneAndDelete({ _id: req.params.id, owner: keyOwner(req) ?? null });
