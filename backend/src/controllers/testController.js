@@ -615,7 +615,8 @@ export async function toQuiz(req, res) {
 
   await Question.updateMany(
     { testSeries: item._id },
-    { $set: { quiz: quiz._id, subject: session.subject, session: session._id }, $unset: { testSeries: "" } }
+    { $set: { quiz: quiz._id, subject: session.subject, session: session._id }, $unset: { testSeries: "" } },
+    { timestamps: false } // conversion = association only, don't bump questions' updatedAt
   );
   await TestSeries.findByIdAndDelete(item._id);
   res.json({ message: "Migrated to Quiz", _id: quiz._id });
@@ -645,7 +646,8 @@ export async function quizToMyQuiz(req, res) {
   const qs = await Question.find({ quiz: quiz._id }).select("_id");
   await Question.updateMany(
     { quiz: quiz._id },
-    { $set: { testSeries: item._id }, $unset: { quiz: "", subject: "", session: "" } }
+    { $set: { testSeries: item._id }, $unset: { quiz: "", subject: "", session: "" } },
+    { timestamps: false } // conversion = association only, don't bump questions' updatedAt
   );
   if (qs.length) await TestSeries.findByIdAndUpdate(item._id, { $push: { questions: { $each: qs.map((q) => q._id) } } });
   await Quiz.findByIdAndDelete(quiz._id);
