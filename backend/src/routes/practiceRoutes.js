@@ -6,7 +6,7 @@ import {
   listItems, createItem,
   browseStreams, browseSubjects, browseTopics, browseItems, browseTopicItems, browseStreamItems,
   playQuiz, allSubjects, myItems, moveItem, updateItem, splitItem, splitTopic, mergeItem, moveQuestions, shareContent,
-  incomingShares, acceptShare, declineShare, sharePlacement, removeSharedWithMe,
+  incomingShares, acceptShare, acceptShareJob, declineShare, sharePlacement, removeSharedWithMe,
 } from "../controllers/practiceController.js";
 import { protect, authorize, optionalAuth } from "../middleware/auth.js";
 
@@ -35,8 +35,9 @@ router.get("/my-items", ...admin, myItems);
 router.post("/share", ...admin, shareContent);
 // Recipient's incoming shares + accept (duplicate into their account) / decline.
 router.get("/shares/incoming", ...admin, incomingShares);
+router.get("/shares/job/:id", ...admin, acceptShareJob); // poll accept progress (declared before "/shares/:id/...")
 router.get("/shares/:id/placement", ...admin, sharePlacement); // where-to-save options for the accept dialog
-router.post("/shares/:id/accept", ...admin, acceptShare);
+router.post("/shares/:id/accept", ...admin, acceptShare); // starts a background copy job, returns { jobId }
 router.post("/shares/:id/decline", ...admin, declineShare);
 // Remove content that was shared WITH me (reference/view access) from my
 // dashboard — un-shares it from my account without touching the owner's copy.
