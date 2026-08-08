@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from "react";
-import { KeyRound, Plus, Trash2, Pencil, X, CheckCircle2, XCircle, Loader2, RefreshCw, Power, PowerOff, Download, List, Layers, Wand2, AlertTriangle } from "lucide-react";
+import { KeyRound, Plus, Trash2, Pencil, X, CheckCircle2, XCircle, Loader2, RefreshCw, Power, PowerOff, Download, List, Layers, Wand2, AlertTriangle, Eye, EyeOff } from "lucide-react";
 import { aiService } from "../../services";
 import { Loading, ErrorState, EmptyState } from "../../components/ui/AsyncState";
 import AiPlansManager from "../../components/admin/AiPlansManager";
@@ -78,6 +78,8 @@ export default function AdminAiKeys({ clientMode = false }) {
   const [modal, setModal] = useState(null); // { mode:"add"|"edit", data }
   const [form, setForm] = useState(blank);
   const [saving, setSaving] = useState(false);
+  const [showKey, setShowKey] = useState(false); // reveal the API key text in the add/edit modal
+  const [revealing, setRevealing] = useState(false); // fetching the stored key for the edit modal
   const [detecting, setDetecting] = useState(false); // auto-detecting a working model after add
   const [bulkModal, setBulkModal] = useState(false);
   const [bulkForm, setBulkForm] = useState(blankBulk);
@@ -207,10 +209,25 @@ export default function AdminAiKeys({ clientMode = false }) {
     }
   };
 
-  const openAdd = () => { setForm(blank); setModal({ mode: "add" }); };
+  const openAdd = () => { setForm(blank); setShowKey(false); setModal({ mode: "add" }); };
   const openEdit = (k) => {
+    setShowKey(false);
     setForm({ label: k.label || "", baseUrl: k.baseUrl, models: k.models, key: "", creditLimit: k.creditLimit || "" }); // key blank = keep existing
     setModal({ mode: "edit", data: k });
+    // Env/server keys aren't stored in the DB, so there's nothing to reveal.
+    if (k.readOnly || k.source === "env") return;
+    // Pull the real stored key so the owner can see / copy / edit it. Falls back
+    // silently to the "leave blank to keep" behaviour if the fetch fails.
+    setRevealing(true);
+    aiService.keys
+      .reveal(k._id)
+      .then((res) => {
+        const real = typeof res === "string" ? res : res?.key || "";
+        // Only fill if the user hasn't already started typing a replacement.
+        setForm((f) => (f.key ? f : { ...f, key: real }));
+      })
+      .catch(() => { /* keep blank = keep existing */ })
+      .finally(() => setRevealing(false));
   };
 
   const save = async (e) => {
@@ -777,7 +794,25 @@ export default function AdminAiKeys({ clientMode = false }) {
 
               <div>
                 <label className="mb-1 block text-sm font-semibold">API key {modal.mode === "edit" && <span className="font-normal text-slate-400">(leave blank to keep the current one)</span>}</label>
-                <input className="input" value={form.key} onChange={(e) => setForm({ ...form, key: e.target.value })} placeholder={modal.mode === "edit" ? "•••• (unchanged)" : "Paste the API key"} autoComplete="off" />
+                <div className="relative">
+                  <input
+                    className="input pr-10"
+                    type={showKey ? "text" : "password"}
+                    value={form.key}
+                    onChange={(e) => setForm({ ...form, key: e.target.value })}
+                    placeholder={revealing ? "Loading current key…" : modal.mode === "edit" ? "•••• (unchanged)" : "Paste the API key"}
+                    autoComplete="off"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowKey((s) => !s)}
+                    title={showKey ? "Hide key" : "Show key"}
+                    aria-label={showKey ? "Hide key" : "Show key"}
+                    className="absolute inset-y-0 right-0 flex items-center px-3 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                  >
+                    {revealing ? <Loader2 className="h-4 w-4 animate-spin" /> : showKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </div>
               </div>
 
               <div>
