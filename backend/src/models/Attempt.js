@@ -20,6 +20,7 @@ const attemptSchema = new mongoose.Schema(
     correct: Number,
     incorrect: Number,
     score: Number,
+    maxScore: Number,
     percentage: Number,
     timeTaken: Number, // seconds
     rank: Number,
