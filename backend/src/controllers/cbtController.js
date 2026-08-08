@@ -472,7 +472,7 @@ export async function submitCbt(req, res) {
       name: cleanName,
       email: cleanEmail,
       total: g.total, attempted: g.attempted, correct: g.correct, incorrect: g.incorrect,
-      skipped: g.skipped, score: g.score, maxScore: test.marks, percentage: g.percentage,
+      skipped: g.skipped, score: g.score, maxScore: g.maxScore, percentage: g.percentage,
       timeTaken: Number(timeTaken) || 0,
       review: g.review,
       resultToken,
