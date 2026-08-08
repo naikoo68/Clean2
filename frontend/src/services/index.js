@@ -364,6 +364,7 @@ export const aiService = {
     bulkCreate: (data) => api.post("/ai/keys/bulk", data), // add many keys at once (shared preset)
     update: (id, data) => api.put(`/ai/keys/${id}`, data),
     remove: (id) => api.del(`/ai/keys/${id}`),
+    reveal: (id) => api.get(`/ai/keys/${id}/reveal`), // fetch the raw key to view/copy in the edit modal
     test: (id) => api.post(`/ai/keys/${id}/test`),
     models: (id) => api.post(`/ai/keys/${id}/models`), // which models this key can use
     autoModel: (id) => api.post(`/ai/keys/${id}/auto-model`), // auto-detect + set a working model

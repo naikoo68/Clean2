@@ -1,7 +1,7 @@
 import { Router } from "express";
 import {
   aiStatus, generateQuestions, jobStatus, cancelJob, extractQuestions, generateNotes, visualizeSpec, extendExplanations, extendOneExplanation, regenerateQuestion, regenerateAll,
-  listKeys, createKey, bulkCreateKeys, updateKey, deleteKey, testKey, importEnvKeys, testAllKeys, listKeyModels, autoDetectKeyModel,
+  listKeys, createKey, bulkCreateKeys, updateKey, deleteKey, revealKey, testKey, importEnvKeys, testAllKeys, listKeyModels, autoDetectKeyModel,
   getAiAccess, setAiMode, inferTopic, coverageGaps, outlineUnits, classifyUnits, parseSyllabus, autoDetectAllKeys, setAllKeysEnabled,
   checkQuestionsSemantic,
 } from "../controllers/aiController.js";
@@ -47,6 +47,7 @@ router.post("/keys/auto-model-all", ...manage, autoDetectAllKeys); // auto-pick 
 router.post("/keys/set-enabled-all", ...manage, setAllKeysEnabled); // enable/disable every key at once
 router.put("/keys/:id", ...manage, updateKey);
 router.delete("/keys/:id", ...manage, deleteKey);
+router.get("/keys/:id/reveal", ...manage, revealKey); // return the raw key so the owner can view/copy it
 router.post("/keys/:id/test", ...manage, testKey);
 router.post("/keys/:id/models", ...manage, listKeyModels); // list models this key can use
 router.post("/keys/:id/auto-model", ...manage, autoDetectKeyModel); // auto-find + set a working model
