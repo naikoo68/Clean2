@@ -163,6 +163,7 @@ export const QUESTION_TYPE_LABELS = {
   pairselect: "Pair-select",
   table: "Table",
   image: "Image",
+  journal: "Journal Entry & Ledger Posting",
 };
 
 // The canonical TYPE key for a question. A plain MCQ has no/blank/unknown type,

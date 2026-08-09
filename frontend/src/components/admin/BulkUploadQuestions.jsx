@@ -282,15 +282,16 @@ export function parseQuestionsCsv(text) {
       return;
     }
 
-    // ---- MCQ row (optionally prefixed with "mcq") ----
-    const cols = first === "mcq" ? cells.slice(1) : cells;
+    // ---- MCQ / Journal row (MCQ-shaped; optionally prefixed with "mcq" or "journal") ----
+    const isJournal = first === "journal";
+    const cols = first === "mcq" || isJournal ? cells.slice(1) : cells;
     if (cols.length < 5) { errors.push(`Row ${idx + 1}: needs a question + 4 options`); return; }
     const [qtext, a, b, c, d, correct, difficulty, explanation, wa, wb, wc, wd] = cols;
     if (!qtext || !a || !b || !c || !d) { errors.push(`Row ${idx + 1}: empty question or option`); return; }
     const ci = correctIndex(correct);
     const optExp = buildOptionExplanations([wa, wb, wc, wd], ci);
     rows.push({
-      type: "mcq",
+      type: isJournal ? "journal" : "mcq",
       text: qtext,
       options: [a, b, c, d],
       correct: ci,
@@ -336,6 +337,7 @@ export function questionsToCsv(questions) {
         case "table": cells = ["table", q.text, (q.tableRows || []).map((r) => (r || []).join(";")).join("|"), a, b, c, d, ...tail]; break;
         case "assertion": cells = ["assertion", q.assertion || "", q.reason || "", a, b, c, d, ...tail]; break;
         case "image": cells = ["image", q.image || "", q.text, a, b, c, d, ...tail]; break;
+        case "journal": cells = ["journal", q.text, a, b, c, d, ...tail]; break;
         default: cells = [q.text, a, b, c, d, ...tail];
       }
       while (cells.length && cells[cells.length - 1] === "") cells.pop(); // trim trailing empties
@@ -465,7 +467,7 @@ function parseQuestionsJson(text) {
     if (n >= 0 && n <= 3) return n;     // 0-based index
     return 0;
   };
-  const KNOWN = ["mcq", "matching", "statement", "pair", "pairselect", "assertion", "table", "image"];
+  const KNOWN = ["mcq", "matching", "statement", "pair", "pairselect", "assertion", "table", "image", "journal"];
 
   list.forEach((q, i) => {
     const type = KNOWN.includes(q?.type) ? q.type : "mcq";
