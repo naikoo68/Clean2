@@ -31,7 +31,7 @@ import AssertionReasonView from "../../components/ui/AssertionReasonView";
 import Watermark from "../../components/ui/Watermark";
 import FeedbackButton from "../../components/ui/FeedbackButton";
 import { useZoom } from "../../context/ZoomContext";
-import { questionDateText, searchQuestions } from "../../lib/questions";
+import { questionDateText, searchQuestions, displayOptions } from "../../lib/questions";
 import { shuffleAll, shuffleQuestion, shuffleQuestionOrder, toOriginalIndex, toDisplayIndex, makeSeed } from "../../lib/shuffleOptions";
 import PaperExport from "../../components/admin/PaperExport";
 
@@ -500,7 +500,7 @@ export default function TestAttempt() {
                   <AssertionReasonView q={r} />
 
                   <div className="mt-3 space-y-2">
-                    {(r.options || []).map((opt, idx) => {
+                    {displayOptions(r).map((opt, idx) => {
                       const isCorrect = idx === r.correct;
                       const isChosen = idx === r.chosen;
                       const optExp = r.optionExplanations?.[idx];
@@ -630,7 +630,7 @@ export default function TestAttempt() {
 
           <div className="mt-5 space-y-3">
             {q.type === "matching" && <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Choose the correct matching sequence:</p>}
-            {(q.options || []).map((opt, idx) => (
+            {displayOptions(q).map((opt, idx) => (
               <label
                 key={idx}
                 className={`flex cursor-pointer items-center gap-3 rounded-xl border-2 px-4 py-3.5 text-sm font-medium transition ${
