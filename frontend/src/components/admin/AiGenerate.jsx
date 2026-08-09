@@ -53,6 +53,7 @@ export default function AiGenerate({ open, onClose, onUpload, title = "Generate 
   const [inserting, setInserting] = useState(false);
   const [msg, setMsg] = useState("");
   const [keyStats, setKeyStats] = useState(null); // live per-key activity this run { label: {requests,ok,limited,error,questions} }
+  const [liveWave, setLiveWave] = useState({}); // in-progress wave's per-bucket "have" counts { "type|difficulty": n }
   const [destChoice, setDestChoice] = useState("current"); // "current" | "new" (where the batch is inserted)
   const [newName, setNewName] = useState("");
   const [inferring, setInferring] = useState(false); // detecting the topic from a quiz's existing questions
@@ -202,6 +203,16 @@ export default function AiGenerate({ open, onClose, onUpload, title = "Generate 
     );
   const total = TYPE_OPTIONS.reduce((s, t) => s + rowTotal(t.id), 0);
 
+  // "Generated so far" per type × difficulty for the results breakdown grid:
+  // completed waves are counted from the preview, plus the in-progress wave's
+  // live per-bucket counts (from the job status). Keyed "type|difficulty".
+  const genCounts = {};
+  for (const q of preview) {
+    const k = `${q?.type || "mcq"}|${q?.difficulty || "Medium"}`;
+    genCounts[k] = (genCounts[k] || 0) + 1;
+  }
+  for (const k in liveWave) genCounts[k] = (genCounts[k] || 0) + (liveWave[k] || 0);
+
   // Turn the free-text "Subtopics to cover" box into a clean list of items, so
   // coverage can track EXACTLY the subtopics you typed (e.g. "Skull",
   // "vertebral column", …) instead of an AI-invented syllabus. Handles a leading
@@ -297,7 +308,12 @@ export default function AiGenerate({ open, onClose, onUpload, title = "Generate 
     stopRef.current = false;
     jobIdRef.current = null;
     setKeyStats(null);
+    setLiveWave({});
     if (!append) setPreview([]);
+    // Track how many of each type|difficulty bucket we've produced across waves,
+    // so each auto-continue wave requests only the REMAINING buckets (keeping the
+    // grid's distribution instead of re-generating the whole plan every wave).
+    const producedByBucket = {};
 
     const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     // Accumulate the avoid-list LOCALLY across waves — React state updates are
@@ -314,6 +330,13 @@ export default function AiGenerate({ open, onClose, onUpload, title = "Generate 
     // Run ONE wave (start job + poll to completion). Appends its questions to the
     // preview and returns how it ended so the loop can decide to auto-continue.
     const runWave = async (isAppend, priorTotal = 0, target = 0) => {
+      // Request ONLY the buckets still short of the grid (subtract what earlier
+      // waves already produced), so the per-type/difficulty distribution is
+      // filled exactly instead of over-generating some buckets.
+      const wavePlan = plan
+        .map((b) => ({ ...b, count: Math.max(0, b.count - (producedByBucket[`${b.type}|${b.difficulty}`] || 0)) }))
+        .filter((b) => b.count > 0);
+      if (!wavePlan.length) return { produced: 0, done: true };
       let jobId, requested;
       try {
         ({ jobId, requested } = await aiService.generate({
@@ -322,7 +345,7 @@ export default function AiGenerate({ open, onClose, onUpload, title = "Generate 
           // on; otherwise use whatever is typed in the Subtopics box.
           subtopics: (overrideSubtopics != null ? overrideSubtopics : subtopics).trim() || undefined,
           url: url.trim() || undefined,
-          plan,
+          plan: wavePlan,
           notes: notes.trim(),
           numerical: numerical || undefined, // include calculation-based numerical questions only when ticked
           model: model || undefined,
@@ -340,6 +363,11 @@ export default function AiGenerate({ open, onClose, onUpload, title = "Generate 
         let s;
         try { s = await aiService.job(jobId); } catch { continue; }
         if (s.keyStats && Object.keys(s.keyStats).length) setKeyStats(s.keyStats);
+        if (Array.isArray(s.byBucket)) {
+          const m = {};
+          for (const b of s.byBucket) m[`${b.type}|${b.difficulty}`] = b.have;
+          setLiveWave(m);
+        }
         if (s.status === "done") {
           const qsAll = s.questions || [];
           // Cap this wave to the REMAINING needed so the total lands on the target
@@ -350,6 +378,13 @@ export default function AiGenerate({ open, onClose, onUpload, title = "Generate 
           // target; otherwise trim so the total lands on the requested count exactly.
           const qs = keepExtras ? qsAll : qsAll.slice(0, room);
           setPreview((prev) => (isAppend ? [...prev, ...qs] : qs));
+          // Fold this wave's kept questions into the cross-wave bucket tally, and
+          // clear the in-progress overlay (they're now counted via the preview).
+          for (const q of qs) {
+            const k = `${q?.type || "mcq"}|${q?.difficulty || "Medium"}`;
+            producedByBucket[k] = (producedByBucket[k] || 0) + 1;
+          }
+          setLiveWave({});
           const batchStems = qs.map((q) => q.text).filter(Boolean);
           avoidLocal = Array.from(new Set([...avoidLocal, ...batchStems]));
           setAvoidStems(avoidLocal);
@@ -743,6 +778,56 @@ export default function AiGenerate({ open, onClose, onUpload, title = "Generate 
                 {total} <span className="text-xs font-medium text-slate-400">/ {maxPerBatch}</span>
               </span>
             </div>
+
+            {/* Live results breakdown — how many of each type × difficulty have
+                been generated so far vs requested. Appears while generating and
+                after a batch completes. */}
+            {(busy || preview.length > 0) && total > 0 && (
+              <>
+                <div className="mt-3 flex items-center justify-between">
+                  <label className="block text-sm font-semibold">Generated by type &amp; difficulty</label>
+                  <span className="rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-bold text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300">
+                    {Object.values(genCounts).reduce((a, b) => a + b, 0)} / {total} generated
+                  </span>
+                </div>
+                <div className="mt-2 overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-700">
+                  <table className="w-full min-w-[380px] text-sm">
+                    <thead>
+                      <tr className="border-b border-slate-200 bg-slate-50 text-xs text-slate-500 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-400">
+                        <th className="px-3 py-2 text-left font-semibold">Type</th>
+                        {DIFFS.map((d) => (
+                          <th key={d} className="px-2 py-2 text-center font-semibold">{d}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {TYPE_OPTIONS.filter((t) => rowTotal(t.id) > 0).map((t) => (
+                        <tr key={t.id} className="border-b border-slate-100 last:border-0 dark:border-slate-800">
+                          <td className="px-3 py-1.5 font-medium text-slate-700 dark:text-slate-200">{t.label}</td>
+                          {DIFFS.map((d) => {
+                            const want = matrix[t.id]?.[d] || 0;
+                            const have = Math.min(genCounts[`${t.id}|${d}`] || 0, want || 0);
+                            const doneCell = want > 0 && have >= want;
+                            return (
+                              <td key={d} className="px-2 py-1.5 text-center tabular-nums">
+                                {want > 0 ? (
+                                  <span className={`font-semibold ${doneCell ? "text-emerald-600 dark:text-emerald-400" : "text-slate-600 dark:text-slate-300"}`}>
+                                    {have}/{want}
+                                  </span>
+                                ) : (
+                                  <span className="text-slate-300 dark:text-slate-600">—</span>
+                                )}
+                              </td>
+                            );
+                          })}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            )}
+
             <p className="mt-1 text-xs text-slate-400">
               Set a count in any cell — e.g. 3 Easy MCQs + 2 Medium Matching. Leave cells at 0 to skip.
               Up to {maxPerBatch} per batch (generated in the background in smaller groups). After a batch, use <b>Generate more</b> to add another set with no repeats.
