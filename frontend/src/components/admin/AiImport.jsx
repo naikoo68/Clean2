@@ -19,6 +19,7 @@ const Q_TYPES = [
   { id: "pairselect", label: "Pair select" },
   { id: "assertion", label: "Assertion & Reason" },
   { id: "table", label: "Table" },
+  { id: "journal", label: "Journal / Ledger" },
 ];
 const DIFFS = ["Easy", "Medium", "Hard"];
 
