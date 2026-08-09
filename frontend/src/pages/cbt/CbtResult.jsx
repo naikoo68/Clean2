@@ -8,6 +8,7 @@ import StatementPairView from "../../components/ui/StatementPairView";
 import TableView from "../../components/ui/TableView";
 import GraphView from "../../components/ui/GraphView";
 import AssertionReasonView from "../../components/ui/AssertionReasonView";
+import { displayOptions } from "../../lib/questions";
 
 function toRoman(n) {
   const m = [["X", 10], ["IX", 9], ["V", 5], ["IV", 4], ["I", 1]];
@@ -155,7 +156,7 @@ export default function CbtResult() {
               <AssertionReasonView q={r} />
 
               <div className="mt-3 space-y-2">
-                {(r.options || []).map((opt, idx) => {
+                {displayOptions(r).map((opt, idx) => {
                   const isCorrect = idx === r.correct;
                   const isChosen = idx === r.chosen;
                   const optExp = r.optionExplanations?.[idx];
