@@ -4,6 +4,7 @@ import { Trophy, CheckCircle2, XCircle, Printer, Award, User as UserIcon, Mail, 
 import { cbtService } from "../../services";
 import { Loading, ErrorState } from "../../components/ui/AsyncState";
 import MathText from "../../components/ui/MathText";
+import OptionContent from "../../components/ui/OptionContent";
 import StatementPairView from "../../components/ui/StatementPairView";
 import TableView from "../../components/ui/TableView";
 import GraphView from "../../components/ui/GraphView";
@@ -169,7 +170,7 @@ export default function CbtResult() {
                       <div className={cls}>
                         {isCorrect ? <CheckCircle2 className="h-4 w-4 flex-shrink-0" /> : isChosen ? <XCircle className="h-4 w-4 flex-shrink-0" /> : <span className="h-4 w-4" />}
                         {r.type === "matching" && <span className="font-bold">({String.fromCharCode(97 + idx)})</span>}
-                        <MathText>{opt}</MathText>
+                        <OptionContent>{opt}</OptionContent>
                       </div>
                       {isChosen && !isCorrect && optExp && optExp.trim() && (
                         <p className="ml-6 mt-0.5 text-xs text-rose-500 dark:text-rose-400"><MathText>{optExp}</MathText></p>

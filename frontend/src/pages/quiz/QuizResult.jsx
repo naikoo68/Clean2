@@ -21,6 +21,7 @@ import {
 import PaperExport from "../../components/admin/PaperExport";
 import StatCard from "../../components/ui/StatCard";
 import MathText from "../../components/ui/MathText";
+import OptionContent from "../../components/ui/OptionContent";
 import StatementPairView from "../../components/ui/StatementPairView";
 import TableView from "../../components/ui/TableView";
 import GraphView from "../../components/ui/GraphView";
@@ -294,7 +295,7 @@ export default function QuizResult() {
                               <span className="h-4 w-4" />
                             )}
                             {r.type === "matching" && <span className="font-bold">({String.fromCharCode(97 + idx)})</span>}
-                            <MathText>{opt}</MathText>
+                            <OptionContent>{opt}</OptionContent>
                           </div>
                           {!isCorrect && optExp && optExp.trim() && (
                             <p className={`ml-6 mt-0.5 text-xs ${isChosen ? "text-rose-500 dark:text-rose-400" : "text-slate-400 dark:text-slate-500"}`}><MathText>{optExp}</MathText></p>
