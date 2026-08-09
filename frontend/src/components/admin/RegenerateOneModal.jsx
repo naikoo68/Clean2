@@ -25,9 +25,19 @@ export default function RegenerateOneModal({ open, question, onClose, onDone }) 
   const [model, setModel] = useState("");
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState("");
+  // Toggles (default to the classic full-rebuild behaviour).
+  const [fixOptions, setFixOptions] = useState(true);
+  const [extendQuestion, setExtendQuestion] = useState(false);
+  const [shuffleOptions, setShuffleOptions] = useState(true);
   const abortRef = useRef(null);
 
-  useEffect(() => { if (open) { setMsg(""); setBusy(false); } }, [open]);
+  useEffect(() => {
+    if (open) { setMsg(""); setBusy(false); setFixOptions(true); setExtendQuestion(false); setShuffleOptions(true); }
+  }, [open]);
+
+  // Assertion & Reason questions have a FIXED four-line rubric, so "fix options"
+  // and "reshuffle" don't apply — those checkboxes are hidden for them.
+  const isAssertion = question?.type === "assertion";
 
   useEffect(() => {
     if (!open) return;
@@ -49,7 +59,14 @@ export default function RegenerateOneModal({ open, question, onClose, onDone }) 
     abortRef.current = controller;
     try {
       const updated = await aiService.regenerate(
-        { questionId: question._id, model: model || undefined, mode: isClient ? srcMode : undefined },
+        {
+          questionId: question._id,
+          fixOptions,
+          extendQuestion,
+          shuffleOptions: isAssertion ? false : shuffleOptions,
+          model: model || undefined,
+          mode: isClient ? srcMode : undefined,
+        },
         { signal: controller.signal }
       );
       onDone?.(updated);
@@ -72,6 +89,7 @@ export default function RegenerateOneModal({ open, question, onClose, onDone }) 
         <p className="mb-4 text-sm text-slate-500 dark:text-slate-400">
           AI rebuilds this question's <b>options, correct answer and explanation</b> to fit its stem
           (reshuffles pair/matching columns). The question wording &amp; meaning stay the same.
+          Use the options below to control what changes.
         </p>
 
         {canChooseSource && (
@@ -103,7 +121,39 @@ export default function RegenerateOneModal({ open, question, onClose, onDone }) 
               </div>
             )}
 
-            <div className="mt-2 flex justify-end gap-2">
+            <div className="space-y-2">
+              {!isAssertion && (
+                <label className="flex items-start gap-2 rounded-lg bg-slate-50 px-3 py-2 text-sm dark:bg-slate-800/60">
+                  <input type="checkbox" className="mt-0.5 h-4 w-4 accent-violet-600" checked={fixOptions} onChange={(e) => setFixOptions(e.target.checked)} disabled={busy} />
+                  <span>
+                    <b>Rebuild the options &amp; correct answer</b> — analyse the stem and replace any options
+                    that don't fit with correct ones. Untick to KEEP the current options &amp; answer and only
+                    refresh the explanation and per-option notes.
+                  </span>
+                </label>
+              )}
+
+              <label className="flex items-start gap-2 rounded-lg bg-slate-50 px-3 py-2 text-sm dark:bg-slate-800/60">
+                <input type="checkbox" className="mt-0.5 h-4 w-4 accent-violet-600" checked={extendQuestion} onChange={(e) => setExtendQuestion(e.target.checked)} disabled={busy} />
+                <span>
+                  Also <b>extend the question length</b> — only if the stem genuinely needs it (a bare/terse
+                  stem) it's rewritten into a clearer question (kept to <b>at most 3 lines</b>); an
+                  already-clear one is left unchanged. The meaning, options &amp; correct answer stay the same.
+                </span>
+              </label>
+
+              {!isAssertion && (
+                <label className="flex items-start gap-2 rounded-lg bg-slate-50 px-3 py-2 text-sm dark:bg-slate-800/60">
+                  <input type="checkbox" className="mt-0.5 h-4 w-4 accent-violet-600" checked={shuffleOptions} onChange={(e) => setShuffleOptions(e.target.checked)} disabled={busy} />
+                  <span>
+                    <b>Reshuffle the options</b> — move the correct answer to a new position so it isn't always
+                    in the same place. The same option stays correct.
+                  </span>
+                </label>
+              )}
+            </div>
+
+            <div className="mt-4 flex justify-end gap-2">
               {busy ? (
                 <button type="button" onClick={stop} className="btn-outline text-rose-600">
                   <StopCircle className="h-4 w-4" /> Stop
