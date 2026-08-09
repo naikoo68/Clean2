@@ -24,6 +24,7 @@ import { contentService, quizService } from "../../services";
 import ProgressBar from "../../components/ui/ProgressBar";
 import Badge from "../../components/ui/Badge";
 import MathText from "../../components/ui/MathText";
+import OptionContent from "../../components/ui/OptionContent";
 import StatementPairView from "../../components/ui/StatementPairView";
 import TableView from "../../components/ui/TableView";
 import GraphView from "../../components/ui/GraphView";
@@ -542,7 +543,7 @@ export default function QuizPlay() {
                     >
                       {isMatching ? `(${String.fromCharCode(97 + idx)})` : optionLabels[idx]}
                     </span>
-                    <span className="flex-1"><MathText>{opt}</MathText></span>
+                    <span className="flex-1"><OptionContent>{opt}</OptionContent></span>
                     {locked && idx === q.correct && <CheckCircle2 className="h-5 w-5 text-emerald-500" />}
                     {locked && idx === answers[current] && idx !== q.correct && <XCircle className="h-5 w-5 text-rose-500" />}
                   </button>
