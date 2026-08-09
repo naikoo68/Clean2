@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { CheckCircle2, Clock, Eye, EyeOff, RefreshCw, Loader2, Wand2, Send } from "lucide-react";
 import MathText from "../ui/MathText";
-import { questionDateText } from "../../lib/questions";
+import { questionDateText, displayOptions } from "../../lib/questions";
 import StatementPairView from "../ui/StatementPairView";
 import TableView from "../ui/TableView";
 import GraphView from "../ui/GraphView";
@@ -80,7 +80,7 @@ export default function QuestionView({ q, index, studentView = false, onRegenera
       <AssertionReasonView q={q} />
 
       <div className="mt-3 space-y-2">
-        {(q.options || []).map((opt, idx) => {
+        {displayOptions(q).map((opt, idx) => {
           const isCorrect = idx === q.correct;
           const optExp = q.optionExplanations?.[idx];
           const highlight = showAnswer && isCorrect;
