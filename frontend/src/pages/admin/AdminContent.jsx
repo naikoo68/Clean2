@@ -8,15 +8,17 @@ import BulkUploadQuestions, { questionsToCsv } from "../../components/admin/Bulk
 import AiGenerate from "../../components/admin/AiGenerate";
 import QuestionFormModal from "../../components/admin/QuestionFormModal";
 import QuestionView from "../../components/admin/QuestionView";
+import QuestionTypeFilter from "../../components/admin/QuestionTypeFilter";
 import AddToTestModal from "../../components/admin/AddToTestModal";
-import { questionDateText, searchQuestions } from "../../lib/questions";
+import { questionDateText, searchQuestions, questionTypeKey } from "../../lib/questions";
 import DuplicatesModal from "../../components/admin/DuplicatesModal";
 import AiImport from "../../components/admin/AiImport";
 import ExtendExplanationsModal from "../../components/admin/ExtendExplanationsModal";
 import ExtendOneQuestionModal from "../../components/admin/ExtendOneQuestionModal";
 import RegenerateAllModal from "../../components/admin/RegenerateAllModal";
+import RegenerateOneModal from "../../components/admin/RegenerateOneModal";
 import ScheduleQuestionModal from "../../components/admin/ScheduleQuestionModal";
-import { Sparkles, Files, Globe, Wand2, Loader2, ClipboardList, RefreshCw, Scissors, GitMerge } from "lucide-react";
+import { Sparkles, Files, Globe, Wand2, Loader2, ClipboardList, RefreshCw, Scissors, GitMerge, CheckCircle2 } from "lucide-react";
 
 const COLORS = [
   "from-blue-500 to-indigo-600",
@@ -57,7 +59,8 @@ export default function AdminContent() {
   const [scheduleQ, setScheduleQ] = useState(null); // question to post/schedule to Facebook
   const [extendingQId, setExtendingQId] = useState(null); // per-question extend in progress
   const [extendOneItem, setExtendOneItem] = useState(null); // per-question extend confirm modal target
-  const [regenId, setRegenId] = useState(null); // per-question regenerate in progress
+  const [regenId] = useState(null); // legacy inline spinner id — regenerate now runs in RegenerateOneModal
+  const [regenOneItem, setRegenOneItem] = useState(null); // per-question regenerate dialog target
   const [dupOpen, setDupOpen] = useState(false);
   const [dupScope, setDupScope] = useState({ id: "all", name: "" }); // which subject the duplicate scan targets
   // Split a topic/quiz into quizzes of N. { kind: "quiz"|"topic", id, name, count }
@@ -73,50 +76,58 @@ export default function AdminContent() {
   const [addToTestQ, setAddToTestQ] = useState(null); // question being copied into a test
   const [viewAll, setViewAll] = useState(false); // preview all questions
   const [studentView, setStudentView] = useState(true); // View All: defaults to student view (answers hidden)
+  const [typeFilter, setTypeFilter] = useState([]); // View All: which question types to show ([] = all)
   const [selected, setSelected] = useState([]); // bulk-selected question ids
+  const [delProgress, setDelProgress] = useState(null); // real-time bulk-delete progress: { total, done, finished? }
   const [search, setSearch] = useState(""); // question search query
 
   const toggleSelect = (id) => setSelected((s) => (s.includes(id) ? s.filter((x) => x !== id) : [...s, id]));
   const allSelected = view === "questions" && items.length > 0 && selected.length === items.length;
   const toggleAll = () => setSelected(allSelected ? [] : items.map((i) => i._id));
   const deleteSelected = async () => {
-    if (!selected.length) return;
-    if (!window.confirm(`Delete ${selected.length} selected question(s)? This cannot be undone.`)) return;
+    if (!selected.length || delProgress) return;
+    const total = selected.length;
+    if (!window.confirm(`Delete ${total} selected question(s)? This cannot be undone.`)) return;
+    setDelProgress({ total, done: 0 });
     try {
-      for (const id of selected) await contentService.deleteQuestion(id);
+      let done = 0;
+      for (const id of selected) {
+        await contentService.deleteQuestion(id);
+        setDelProgress({ total, done: ++done }); // tick up in real time
+      }
+      setDelProgress({ total, done: total, finished: true });
       setSelected([]);
       load("questions");
+      setTimeout(() => setDelProgress(null), 3000);
     } catch (e) {
       setError(e.message);
+      setDelProgress(null);
     }
   };
 
-  // Regenerate ONE question: AI analyses the stem and rebuilds its options/
-  // answer/explanations to fit, then refresh the list (and the open preview).
-  const regenerateQ = async (item) => {
-    setRegenId(item._id);
-    try {
-      const updated = await aiService.regenerate({ questionId: item._id });
-      // If this question is open in the preview modal, reflect the fix live.
-      setViewQ((prev) => (prev && prev._id === item._id ? { ...prev, ...updated } : prev));
-      await load("questions");
-    } catch (e) {
-      setError(e.message);
-    } finally {
-      setRegenId(null);
-    }
+  // Regenerate ONE question: open the dialog (options/answer rebuild toggles +
+  // AI source/model) — the modal runs the request itself.
+  const regenerateQ = (item) => setRegenOneItem(item);
+
+  // Apply a single-question regenerate result (from RegenerateOneModal) to the
+  // open preview and reload the list.
+  const applyRegenerated = async (updated) => {
+    const item = regenOneItem;
+    if (item) setViewQ((prev) => (prev && prev._id === item._id ? { ...prev, ...updated } : prev));
+    setRegenOneItem(null);
+    await load("questions");
   };
 
   // Extend ONE question's explanation with AI — open the confirm modal first.
   const extendOneQuestion = (item) => setExtendOneItem(item);
 
   // Run the actual extend once the user confirms in the modal.
-  const runExtendOne = async (fixOptions) => {
+  const runExtendOne = async ({ fixOptions, extendQuestion, shuffleOptions } = {}) => {
     const item = extendOneItem;
     if (!item) return;
     setExtendingQId(item._id);
     try {
-      const updated = await aiService.extendOne({ questionId: item._id, fixOptions });
+      const updated = await aiService.extendOne({ questionId: item._id, fixOptions, extendQuestion, shuffleOptions });
       // If this question is open in the preview modal, reflect the change live.
       setViewQ((prev) => (prev && prev._id === item._id ? { ...prev, ...updated } : prev));
       setExtendOneItem(null);
@@ -392,7 +403,7 @@ export default function AdminContent() {
           </button>
           {view === "questions" && (
             <>
-              <button onClick={() => setViewAll(true)} className="btn-outline">
+              <button onClick={() => { setTypeFilter([]); setViewAll(true); }} className="btn-outline">
                 <Eye className="h-4 w-4" /> View All
               </button>
               <button onClick={() => setBulkOpen(true)} className="btn-outline">
@@ -456,12 +467,22 @@ export default function AdminContent() {
                 {questionResults && (
                   <span className="text-sm font-medium text-slate-500">{questionResults.length} match{questionResults.length === 1 ? "" : "es"} (40%+)</span>
                 )}
-                {selected.length > 0 && (
-                  <>
-                    <span className="text-sm text-slate-500">{selected.length} selected</span>
-                    <button onClick={deleteSelected} className="btn-outline py-1.5 text-rose-600"><Trash2 className="h-4 w-4" /> Delete selected</button>
-                    <button onClick={() => setSelected([])} className="text-sm text-slate-500 hover:underline">Clear</button>
-                  </>
+                {(selected.length > 0 || delProgress) && (
+                  delProgress ? (
+                    <span className={`inline-flex items-center gap-1.5 text-sm font-medium ${delProgress.finished ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600"}`}>
+                      {delProgress.finished ? (
+                        <><CheckCircle2 className="h-4 w-4" /> Deleted {delProgress.total} question{delProgress.total === 1 ? "" : "s"} — done</>
+                      ) : (
+                        <><Loader2 className="h-4 w-4 animate-spin" /> Deleting {delProgress.done} of {delProgress.total}…</>
+                      )}
+                    </span>
+                  ) : (
+                    <>
+                      <span className="text-sm text-slate-500">{selected.length} selected</span>
+                      <button onClick={deleteSelected} className="btn-outline py-1.5 text-rose-600"><Trash2 className="h-4 w-4" /> Delete selected</button>
+                      <button onClick={() => setSelected([])} className="text-sm text-slate-500 hover:underline">Clear</button>
+                    </>
+                  )
                 )}
               </div>
             </div>
@@ -659,7 +680,7 @@ export default function AdminContent() {
             <p className="mb-4 text-sm text-slate-500 dark:text-slate-400">
               {splitTarget.kind === "topic"
                 ? <>Split all questions in the topic <b>“{splitTarget.name}”</b> into quizzes named Quiz 1, Quiz 2, …</>
-                : <>Split the quiz <b>“{splitTarget.name}”</b>{splitTarget.count != null ? <> ({splitTarget.count} questions)</> : null} into quizzes named Quiz 1, Quiz 2, …</>}
+                : <>Split the quiz <b>“{splitTarget.name}”</b>{splitTarget.count != null ? <> ({splitTarget.count} questions)</> : null} — it keeps its name and first chunk; the rest go into new quizzes numbered after your existing ones (e.g. splitting “Quiz 2” adds Quiz 3, Quiz 4, …).</>}
             </p>
             <label className="mb-1 block text-sm font-semibold">Questions per quiz</label>
             <input
@@ -705,8 +726,14 @@ export default function AdminContent() {
             {(() => {
               const others = items.filter((it) => it._id !== mergeTarget._id);
               if (!others.length) return <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-700 dark:bg-amber-900/20 dark:text-amber-300">There are no other quizzes in this session to merge.</p>;
+              const otherIds = others.map((o) => o._id);
+              const allSelected = otherIds.every((id) => mergeIds.includes(id));
               return (
                 <div className="max-h-64 space-y-1 overflow-y-auto rounded-lg border border-slate-200 p-2 dark:border-slate-700">
+                  <label className="flex cursor-pointer items-center gap-2 rounded-md border-b border-slate-200 px-2 py-1.5 font-semibold hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800">
+                    <input type="checkbox" checked={allSelected} onChange={() => setMergeIds(allSelected ? [] : otherIds)} />
+                    <span className="text-sm">Select all <span className="text-slate-400">· {others.length}</span></span>
+                  </label>
                   {others.map((it) => (
                     <label key={it._id} className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 hover:bg-slate-50 dark:hover:bg-slate-800">
                       <input type="checkbox" checked={mergeIds.includes(it._id)} onChange={() => setMergeIds((s) => (s.includes(it._id) ? s.filter((x) => x !== it._id) : [...s, it._id]))} />
@@ -758,6 +785,13 @@ export default function AdminContent() {
         onConfirm={runExtendOne}
       />
 
+      <RegenerateOneModal
+        open={!!regenOneItem}
+        question={regenOneItem}
+        onClose={() => setRegenOneItem(null)}
+        onDone={applyRegenerated}
+      />
+
       {/* View single question */}
       {viewQ && (
         <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/50 p-4" onClick={() => setViewQ(null)}>
@@ -787,8 +821,8 @@ export default function AdminContent() {
 
       {/* View all questions */}
       {viewAll && (
-        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/50 p-4" onClick={() => setViewAll(false)}>
-          <div onClick={(e) => e.stopPropagation()} className="my-8 w-full max-w-3xl animate-scale-in card p-6">
+        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/50 p-0 sm:p-4" onClick={() => setViewAll(false)}>
+          <div onClick={(e) => e.stopPropagation()} className="min-h-full w-full max-w-none animate-scale-in card m-0 rounded-none p-4 sm:rounded-2xl sm:p-6">
             <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
               <h3 className="text-lg font-bold">All questions {quiz ? `in ${quiz.title}` : ""} ({items.length})</h3>
               <div className="flex items-center gap-2">
@@ -804,8 +838,12 @@ export default function AdminContent() {
                 Student view — answers &amp; explanations are hidden. Use “Reveal answer” on any question to expose it.
               </p>
             )}
+            <QuestionTypeFilter questions={items} selected={typeFilter} onChange={setTypeFilter} />
             <div className="max-h-[70vh] space-y-4 overflow-y-auto pr-1">
-              {items.map((it, i) => (
+              {items
+                .map((it, i) => ({ it, i }))
+                .filter(({ it }) => !typeFilter.length || typeFilter.includes(questionTypeKey(it)))
+                .map(({ it, i }) => (
                 <div key={(studentView ? "s" : "a") + it._id} className="relative rounded-lg border border-slate-200 p-3 dark:border-slate-700">
                   <div className="absolute right-2 top-2 z-10 flex gap-1">
                     <button onClick={() => setAddToTestQ(it)} title="Add to test" className="rounded-lg bg-white p-1.5 text-emerald-600 shadow hover:bg-emerald-50 dark:bg-slate-800 dark:hover:bg-emerald-900/30">

@@ -30,6 +30,7 @@ export const contentService = {
   allQuestions: () => api.get("/questions"),
   moveQuiz: (id, data) => api.patch(`/quizzes/${id}/move`, data), // { session, copy }
   splitQuiz: (id, perQuiz) => api.post(`/quizzes/${id}/split`, { perQuiz }), // split one quiz into quizzes of N
+  checkQuestions: (data) => api.post("/questions/check", data, { timeout: 120000 }), // "did this question come from my bank?" → { total, found, summary, results }
   splitTopic: (id, perQuiz) => api.post(`/topics/${id}/split`, { perQuiz }), // split all a topic's questions into quizzes of N
   mergeQuiz: (id, sourceIds) => api.post(`/quizzes/${id}/merge`, { sourceIds }), // merge other quizzes (same session) into this one
   // streams (admin)
@@ -65,6 +66,7 @@ export const contentService = {
     const qs = new URLSearchParams();
     if (p.subject && p.subject !== "all") qs.set("subject", p.subject);
     if (p.practiceSubject) qs.set("practiceSubject", p.practiceSubject);
+    if (p.pool) qs.set("pool", "1"); // pool duplicates across all of a subject's topics/items
     if (p.testSeries) qs.set("testSeries", p.testSeries);
     const s = qs.toString();
     return api.get(`/questions/duplicates${s ? `?${s}` : ""}`);
@@ -130,10 +132,18 @@ export const practiceService = {
   topics: (kind, subjectId) => api.get(`/practice/browse/${kind}/subjects/${subjectId}/topics`), // My Quiz
   items: (kind, subjectId) => api.get(`/practice/browse/${kind}/subjects/${subjectId}/items`), // My Test Series
   topicItems: (kind, topicId) => api.get(`/practice/browse/${kind}/topics/${topicId}/items`), // My Quiz
+  streamItems: (kind, streamId) => api.get(`/practice/browse/${kind}/streams/${streamId}/items`), // Previous Papers — items directly under a stream
   // My Quiz play — full questions WITH answers for instant reveal (quiz-style)
   quizPlay: (id) => api.get(`/practice/quiz/${id}/play`),
   // The caller's own practice items (client dashboard) — flat quiz + test list
   myItems: () => api.get("/practice/my-items"),
+  share: (data) => api.post("/practice/share", data), // { level, id, email } → send a pending share to a registered user
+  incomingShares: () => api.get("/practice/shares/incoming"), // pending shares awaiting my accept/decline
+  sharePlacement: (id) => api.get(`/practice/shares/${id}/placement`), // which container levels to place (existing/new) + suggested names
+  acceptShare: (id, placement) => api.post(`/practice/shares/${id}/accept`, placement ? { placement } : {}), // starts a background copy job → { jobId, itemsTotal, questionsTotal }
+  acceptShareJob: (jobId) => api.get(`/practice/shares/job/${jobId}`), // poll accept progress → { status, itemsSaved, itemsTotal, questionsSaved, questionsTotal }
+  declineShare: (id) => api.post(`/practice/shares/${id}/decline`),
+  removeSharedWithMe: (data) => api.post("/practice/shared/remove", data), // { level, id } → remove content shared WITH me from my dashboard
   // flat list of all practice subjects (for composing a test from practice)
   allSubjects: () => api.get("/practice/all-subjects"),
   // admin — streams (kind-scoped so My Quiz & My Test Series stay separate)
@@ -201,9 +211,13 @@ export const cbtService = {
 // ---- Dashboard / analytics ----
 export const analyticsService = {
   dashboard: () => api.get("/me/dashboard"),
+  myPerformance: () => api.get("/me/performance"), // the logged-in user's own attempts + weak areas
+  attemptReview: (attemptId) => api.get(`/me/performance/attempt/${attemptId}`), // full question review of one attempt
   leaderboard: () => api.get("/leaderboard"),
   stats: () => api.get("/stats", { auth: false }),
   adminAnalytics: () => api.get("/admin/analytics"),
+  contentOverview: () => api.get("/admin/content-overview"), // split practice vs content counts
+
   performance: () => api.get("/admin/performance"),
   userPerformance: (userId) => api.get(`/admin/performance/user/${userId}`),
   clearUserPerformance: (userId) => api.del(`/admin/performance/user/${userId}`),
@@ -305,6 +319,24 @@ export const documentService = {
 };
 
 // ---- AI question generator (admin) ----
+// Retry a one-shot AI call after ~60s when the server reports a per-minute rate
+// limit / quota (429, or a 5xx whose message mentions quota/rate-limit) — so a
+// single "extend explanation" / "regenerate question" rides out the limit and
+// finishes instead of failing immediately (mirrors the syllabus-parse wait). The
+// bulk jobs already wait & retry server-side.
+const isRateLimit = (e) =>
+  e?.status === 429 || /\b(quota|rate[\s-]?limit|429|too many requests)\b/i.test(e?.message || "");
+const withRateLimitRetry = async (fn, { waitMs = 60000, tries = 2 } = {}) => {
+  for (let i = 0; i < tries; i++) {
+    try { return await fn(); }
+    catch (e) {
+      if (e?.aborted) throw e; // user pressed Stop — never retry
+      if (!isRateLimit(e) || i === tries - 1) throw e;
+      await new Promise((r) => setTimeout(r, waitMs)); // wait for the per-minute limit to reset, then retry
+    }
+  }
+};
+
 export const aiService = {
   status: (mode) => api.get(`/ai/status${mode ? `?mode=${encodeURIComponent(mode)}` : ""}`),
   generate: (data) => api.post("/ai/generate", data), // returns { jobId, requested }
@@ -319,9 +351,10 @@ export const aiService = {
   parseSyllabus: (data) => api.post("/ai/parse-syllabus", data, { timeout: 180000 }), // full syllabus → { subject, topics:[{title,subtopics}] }
   classifyUnits: (data) => api.post("/ai/classify-units", data), // file question stems under units → { assign: [...] }
   extendExplanations: (data) => api.post("/ai/extend-explanations", data), // enrich all explanations in a quiz/test → { jobId, requested }
-  extendOne: (data) => api.post("/ai/extend-explanation", data), // enrich ONE question's explanation → { explanation, optionExplanations }
-  regenerate: (data) => api.post("/ai/regenerate-question", data), // analyse ONE question → rebuild options/answer → { options, correct, explanation }
+  extendOne: (data, opts) => withRateLimitRetry(() => api.post("/ai/extend-explanation", data, opts)), // enrich ONE question's explanation → { explanation, optionExplanations }; opts.signal supports Stop
+  regenerate: (data, opts) => withRateLimitRetry(() => api.post("/ai/regenerate-question", data, opts)), // analyse ONE question → rebuild options/answer → { options, correct, explanation }; opts.signal supports Stop
   regenerateAll: (data) => api.post("/ai/regenerate-all", data), // regenerate EVERY question in a quiz/test → { jobId, requested }
+  checkSemantic: (data) => api.post("/ai/check-semantic", data, { timeout: 120000 }), // AI "deep check": match pasted questions to the bank BY MEANING, across formats → same shape as contentService.checkQuestions
   // Client AI access + pool selection (built-in vs own keys)
   access: () => api.get("/ai/access"), // { access, mode, allowInbuilt, allowSelf, ownKeys, inbuiltAvailable }
   setMode: (mode) => api.put("/ai/mode", { mode }), // "inbuilt" | "self"
@@ -332,6 +365,7 @@ export const aiService = {
     bulkCreate: (data) => api.post("/ai/keys/bulk", data), // add many keys at once (shared preset)
     update: (id, data) => api.put(`/ai/keys/${id}`, data),
     remove: (id) => api.del(`/ai/keys/${id}`),
+    reveal: (id) => api.get(`/ai/keys/${id}/reveal`), // fetch the raw key to view/copy in the edit modal
     test: (id) => api.post(`/ai/keys/${id}/test`),
     models: (id) => api.post(`/ai/keys/${id}/models`), // which models this key can use
     autoModel: (id) => api.post(`/ai/keys/${id}/auto-model`), // auto-detect + set a working model
@@ -352,10 +386,19 @@ export const uploadService = {
   },
 };
 
+// ---- User Manual (public read, admin write) ----
+export const userManualService = {
+  get: () => api.get("/manual", { auth: false }), // { sections: [...] }
+  update: (sections) => api.put("/manual", { sections }), // admin only
+};
+
 // ---- Users (admin) ----
 export const userService = {
   list: (search = "") => api.get(`/users${search ? `?search=${encodeURIComponent(search)}` : ""}`),
   clients: (search = "") => api.get(`/users/clients${search ? `?search=${encodeURIComponent(search)}` : ""}`),
+  deletedClients: () => api.get("/users/clients/deleted"), // Recycle bin (soft-deleted clients)
+  restore: (id) => api.post(`/users/${id}/restore`), // restore a soft-deleted client
+  deletePermanent: (id) => api.del(`/users/${id}/permanent`), // permanent delete (cannot be undone)
   create: (data) => api.post("/users", data),
   update: (id, data) => api.put(`/users/${id}`, data),
   remove: (id) => api.del(`/users/${id}`),

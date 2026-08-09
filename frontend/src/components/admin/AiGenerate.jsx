@@ -45,12 +45,15 @@ export default function AiGenerate({ open, onClose, onUpload, title = "Generate 
   const [busy, setBusy] = useState(false);
   const [stopping, setStopping] = useState(false); // user asked to stop the current generation
   const [autoContinue, setAutoContinue] = useState(false); // keep generating in waves until the full count is reached
+  const [keepExtras, setKeepExtras] = useState(false); // if a wave produces more than the target, keep ALL of them instead of trimming to the exact count
+  const [numerical, setNumerical] = useState(false); // opt-in: also include numerical/calculation questions (default off)
   const jobIdRef = useRef(null); // id of the running background job (so Stop can cancel it)
   const stopRef = useRef(false); // set when the user clicks Stop — breaks/short-circuits the poll loop
   const pendingDoneRef = useRef([]); // subtopics queued (via "Use selected") to hide after the next Generate
   const [inserting, setInserting] = useState(false);
   const [msg, setMsg] = useState("");
   const [keyStats, setKeyStats] = useState(null); // live per-key activity this run { label: {requests,ok,limited,error,questions} }
+  const [liveWave, setLiveWave] = useState({}); // in-progress wave's per-bucket "have" counts { "type|difficulty": n }
   const [destChoice, setDestChoice] = useState("current"); // "current" | "new" (where the batch is inserted)
   const [newName, setNewName] = useState("");
   const [inferring, setInferring] = useState(false); // detecting the topic from a quiz's existing questions
@@ -200,6 +203,30 @@ export default function AiGenerate({ open, onClose, onUpload, title = "Generate 
     );
   const total = TYPE_OPTIONS.reduce((s, t) => s + rowTotal(t.id), 0);
 
+  // "Generated so far" per type × difficulty for the results breakdown grid:
+  // completed waves are counted from the preview, plus the in-progress wave's
+  // live per-bucket counts (from the job status). Keyed "type|difficulty".
+  const genCounts = {};
+  for (const q of preview) {
+    const k = `${q?.type || "mcq"}|${q?.difficulty || "Medium"}`;
+    genCounts[k] = (genCounts[k] || 0) + 1;
+  }
+  for (const k in liveWave) genCounts[k] = (genCounts[k] || 0) + (liveWave[k] || 0);
+
+  // Turn the free-text "Subtopics to cover" box into a clean list of items, so
+  // coverage can track EXACTLY the subtopics you typed (e.g. "Skull",
+  // "vertebral column", …) instead of an AI-invented syllabus. Handles a leading
+  // "Header:-" label, bullets, commas, semicolons, newlines and sentence dots.
+  const parseManualSubtopics = (text) => {
+    let t = String(text || "").trim();
+    t = t.replace(/^[^\n:]{0,80}:-?\s*/, ""); // drop a leading "Header :-" label
+    return Array.from(new Set(
+      t.split(/[\n•;,]+|\.\s+/)
+        .map((s) => s.replace(/^[\s\-–—•*.]+/, "").replace(/[\s.]+$/, "").replace(/\s+/g, " ").trim())
+        .filter((s) => s.length >= 2)
+    )).slice(0, 60);
+  };
+
   // After a batch, summarise which syllabus subtopics are now covered vs still
   // missing — cumulative across the quiz's existing questions plus everything
   // generated in this session. Best-effort (one small AI call); silent on error.
@@ -213,10 +240,17 @@ export default function AiGenerate({ open, onClose, onUpload, title = "Generate 
     if (!t || !list.length) { setCoverage(null); return; }
     setCoverageLoading(true);
     try {
-      // Pass the fixed checklist (once we have it) so later batches classify the
-      // SAME list — covered grows and missing shrinks against a constant total.
-      const r = await aiService.coverageGaps({ topic: t, questions: list.slice(0, 300), syllabus: syllabus || undefined, mode: isClient ? source : undefined });
-      if (!syllabus && Array.isArray(r?.syllabus) && r.syllabus.length) setSyllabus(r.syllabus);
+      // If YOU typed subtopics, track coverage against EXACTLY those (they win
+      // over any AI-generated syllabus). Otherwise use the fixed AI checklist,
+      // passed back so later batches classify the SAME list (covered grows,
+      // missing shrinks against a constant total).
+      const manual = parseManualSubtopics(subtopics);
+      const useSyllabus = syllabus || (manual.length ? manual : undefined);
+      const r = await aiService.coverageGaps({ topic: t, questions: list.slice(0, 300), syllabus: useSyllabus, mode: isClient ? source : undefined });
+      if (!syllabus) {
+        if (manual.length) setSyllabus(manual);
+        else if (Array.isArray(r?.syllabus) && r.syllabus.length) setSyllabus(r.syllabus);
+      }
       setCoverage({ covered: r?.covered || [], missing: r?.missing || [] });
     } catch {
       /* coverage is a nice-to-have — ignore failures */
@@ -230,8 +264,42 @@ export default function AiGenerate({ open, onClose, onUpload, title = "Generate 
   // on, the main Generate runs in WAVES — after a wave is cut short (free-tier
   // quota / shortfall) it waits ~60s for the limit to reset and generates the
   // remainder, repeating until the full count is reached or you press Stop.
-  const generate = async (append = false, overrideSubtopics = null) => {
-    if (!topic.trim() && !url.trim()) { setMsg("Enter a topic/syllabus, or paste a source link (web page or YouTube video)."); return; }
+  // Serialize the existing questions (whole topic + this quiz) into source text
+  // the AI can reshape (A) or use as source material (B) for other question types.
+  const serializeExisting = () => {
+    const pool = [...(coverageQuestions || []), ...(existingQuestions || [])];
+    const seen = new Set();
+    const parts = [];
+    for (const q of pool) {
+      const text = typeof q === "string" ? q : q?.text;
+      if (!text) continue;
+      const key = String(text).trim().toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      if (typeof q === "string") { parts.push(`Q: ${text}`); continue; }
+      const opts = Array.isArray(q.options) ? q.options : [];
+      const ans = Number.isInteger(q.correct) && opts[q.correct] != null ? opts[q.correct] : "";
+      let s = `Q: ${text}`;
+      if (opts.length) s += `\nOptions: ${opts.join(" | ")}`;
+      if (ans) s += `\nAnswer: ${ans}`;
+      if (q.explanation) s += `\nExplanation: ${String(q.explanation).slice(0, 400)}`;
+      parts.push(s);
+    }
+    return parts.join("\n\n");
+  };
+
+  // Two buttons: (A) reshape=true recasts existing MCQ facts into the chosen
+  // types; (B) reshape=false writes fresh questions of those types from the same
+  // material (avoiding duplicates). Both use the type counts set in the grid and
+  // flow into the SAME preview → choose → insert.
+  const generateFromExisting = (reshape) => {
+    const src = serializeExisting();
+    if (!src) { setMsg("No existing questions found to build from — generate some MCQs first."); return; }
+    generate(false, null, { sourceText: src, reshape });
+  };
+
+  const generate = async (append = false, overrideSubtopics = null, extra = {}) => {
+    if (!topic.trim() && !url.trim() && !extra.sourceText) { setMsg("Enter a topic/syllabus, or paste a source link (web page or YouTube video)."); return; }
     const plan = buildPlan();
     if (!plan.length) { setMsg("Set at least one question count in the grid below."); return; }
     if (total > maxPerBatch) { setMsg(`Please keep the total to ${maxPerBatch} questions or fewer per batch.`); return; }
@@ -240,17 +308,35 @@ export default function AiGenerate({ open, onClose, onUpload, title = "Generate 
     stopRef.current = false;
     jobIdRef.current = null;
     setKeyStats(null);
+    setLiveWave({});
     if (!append) setPreview([]);
+    // Track how many of each type|difficulty bucket we've produced across waves,
+    // so each auto-continue wave requests only the REMAINING buckets (keeping the
+    // grid's distribution instead of re-generating the whole plan every wave).
+    const producedByBucket = {};
 
     const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     // Accumulate the avoid-list LOCALLY across waves — React state updates are
     // async, so relying on avoidStems would let the next wave repeat this wave's
     // questions. We still mirror it into state for later manual "Generate more".
-    let avoidLocal = Array.from(new Set([...(avoidStems || [])]));
+    // Seed the avoid-list with EVERY existing question in the whole topic (all
+    // its quizzes) — passed in via coverageQuestions — not just the current
+    // quiz, so a repeat generation in a topic that already has several quizzes
+    // (e.g. 4 quizzes / 200 questions) produces genuinely NEW questions instead
+    // of duplicating ones that already exist elsewhere in the topic.
+    const topicStems = (coverageQuestions || []).map((q) => (typeof q === "string" ? q : q?.text)).filter(Boolean);
+    let avoidLocal = Array.from(new Set([...(avoidStems || []), ...topicStems]));
 
     // Run ONE wave (start job + poll to completion). Appends its questions to the
     // preview and returns how it ended so the loop can decide to auto-continue.
     const runWave = async (isAppend, priorTotal = 0, target = 0) => {
+      // Request ONLY the buckets still short of the grid (subtract what earlier
+      // waves already produced), so the per-type/difficulty distribution is
+      // filled exactly instead of over-generating some buckets.
+      const wavePlan = plan
+        .map((b) => ({ ...b, count: Math.max(0, b.count - (producedByBucket[`${b.type}|${b.difficulty}`] || 0)) }))
+        .filter((b) => b.count > 0);
+      if (!wavePlan.length) return { produced: 0, done: true };
       let jobId, requested;
       try {
         ({ jobId, requested } = await aiService.generate({
@@ -259,11 +345,14 @@ export default function AiGenerate({ open, onClose, onUpload, title = "Generate 
           // on; otherwise use whatever is typed in the Subtopics box.
           subtopics: (overrideSubtopics != null ? overrideSubtopics : subtopics).trim() || undefined,
           url: url.trim() || undefined,
-          plan,
+          plan: wavePlan,
           notes: notes.trim(),
+          numerical: numerical || undefined, // include calculation-based numerical questions only when ticked
           model: model || undefined,
           avoid: avoidLocal, // don't repeat anything from earlier waves/batches
           mode: isClient ? source : undefined,
+          source: extra.sourceText || undefined, // existing questions as material (from-existing modes)
+          reshape: extra.reshape || undefined,   // true = recast existing MCQs into the chosen types
         }));
       } catch (e) { setMsg(e.message || "Generation failed."); return { produced: 0, errored: true }; }
       if (!jobId) { setMsg("Could not start generation."); return { produced: 0, errored: true }; }
@@ -274,14 +363,28 @@ export default function AiGenerate({ open, onClose, onUpload, title = "Generate 
         let s;
         try { s = await aiService.job(jobId); } catch { continue; }
         if (s.keyStats && Object.keys(s.keyStats).length) setKeyStats(s.keyStats);
+        if (Array.isArray(s.byBucket)) {
+          const m = {};
+          for (const b of s.byBucket) m[`${b.type}|${b.difficulty}`] = b.have;
+          setLiveWave(m);
+        }
         if (s.status === "done") {
           const qsAll = s.questions || [];
           // Cap this wave to the REMAINING needed so the total lands on the target
           // exactly — each wave requests the full plan, so without this the last
           // wave overshoots (e.g. 472 for a target of 400).
           const room = target > 0 ? Math.max(0, target - priorTotal) : qsAll.length;
-          const qs = qsAll.slice(0, room);
+          // "Keep all generated" → keep the whole wave even if it overshoots the
+          // target; otherwise trim so the total lands on the requested count exactly.
+          const qs = keepExtras ? qsAll : qsAll.slice(0, room);
           setPreview((prev) => (isAppend ? [...prev, ...qs] : qs));
+          // Fold this wave's kept questions into the cross-wave bucket tally, and
+          // clear the in-progress overlay (they're now counted via the preview).
+          for (const q of qs) {
+            const k = `${q?.type || "mcq"}|${q?.difficulty || "Medium"}`;
+            producedByBucket[k] = (producedByBucket[k] || 0) + 1;
+          }
+          setLiveWave({});
           const batchStems = qs.map((q) => q.text).filter(Boolean);
           avoidLocal = Array.from(new Set([...avoidLocal, ...batchStems]));
           setAvoidStems(avoidLocal);
@@ -414,7 +517,10 @@ export default function AiGenerate({ open, onClose, onUpload, title = "Generate 
     setMsg(`"Subtopics to cover" now holds only your ${picks.length} selected subtopic(s) — Generate will focus on just these, and they'll drop off the list once done.`);
   };
   // Generate a batch focused on ONE saved subtopic (uses the type/difficulty grid).
-  const generateSubtopic = (text) => { setSubtopics(text); generate(false, text); };
+  // Generate a focused subtopic / uncovered batch and APPEND it to whatever is
+  // already in the preview (so the previous batch isn't wiped) — deduped against
+  // it. Manually-typed subtopics still take precedence for the main Generate.
+  const generateSubtopic = (text) => { setSubtopics(text); generate(true, text); };
 
   // Stop the current generation. Tells the server to cancel the background job;
   // the poll loop then finalizes with whatever was produced so far, so the
@@ -455,8 +561,8 @@ export default function AiGenerate({ open, onClose, onUpload, title = "Generate 
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/50 p-4">
-      <div className="my-8 w-full max-w-2xl animate-scale-in card p-6">
+    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/50 p-0 sm:p-4">
+      <div className="min-h-full w-full max-w-none animate-scale-in card m-0 rounded-none p-4 sm:rounded-2xl sm:p-6">
         <div className="mb-4 flex items-center justify-between">
           <h3 className="flex items-center gap-2 text-lg font-bold">
             <Sparkles className="h-5 w-5 text-brand-600" /> {title}
@@ -672,6 +778,56 @@ export default function AiGenerate({ open, onClose, onUpload, title = "Generate 
                 {total} <span className="text-xs font-medium text-slate-400">/ {maxPerBatch}</span>
               </span>
             </div>
+
+            {/* Live results breakdown — how many of each type × difficulty have
+                been generated so far vs requested. Appears while generating and
+                after a batch completes. */}
+            {(busy || preview.length > 0) && total > 0 && (
+              <>
+                <div className="mt-3 flex items-center justify-between">
+                  <label className="block text-sm font-semibold">Generated by type &amp; difficulty</label>
+                  <span className="rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-bold text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300">
+                    {Object.values(genCounts).reduce((a, b) => a + b, 0)} / {total} generated
+                  </span>
+                </div>
+                <div className="mt-2 overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-700">
+                  <table className="w-full min-w-[380px] text-sm">
+                    <thead>
+                      <tr className="border-b border-slate-200 bg-slate-50 text-xs text-slate-500 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-400">
+                        <th className="px-3 py-2 text-left font-semibold">Type</th>
+                        {DIFFS.map((d) => (
+                          <th key={d} className="px-2 py-2 text-center font-semibold">{d}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {TYPE_OPTIONS.filter((t) => rowTotal(t.id) > 0).map((t) => (
+                        <tr key={t.id} className="border-b border-slate-100 last:border-0 dark:border-slate-800">
+                          <td className="px-3 py-1.5 font-medium text-slate-700 dark:text-slate-200">{t.label}</td>
+                          {DIFFS.map((d) => {
+                            const want = matrix[t.id]?.[d] || 0;
+                            const have = Math.min(genCounts[`${t.id}|${d}`] || 0, want || 0);
+                            const doneCell = want > 0 && have >= want;
+                            return (
+                              <td key={d} className="px-2 py-1.5 text-center tabular-nums">
+                                {want > 0 ? (
+                                  <span className={`font-semibold ${doneCell ? "text-emerald-600 dark:text-emerald-400" : "text-slate-600 dark:text-slate-300"}`}>
+                                    {have}/{want}
+                                  </span>
+                                ) : (
+                                  <span className="text-slate-300 dark:text-slate-600">—</span>
+                                )}
+                              </td>
+                            );
+                          })}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            )}
+
             <p className="mt-1 text-xs text-slate-400">
               Set a count in any cell — e.g. 3 Easy MCQs + 2 Medium Matching. Leave cells at 0 to skip.
               Up to {maxPerBatch} per batch (generated in the background in smaller groups). After a batch, use <b>Generate more</b> to add another set with no repeats.
@@ -692,6 +848,16 @@ export default function AiGenerate({ open, onClose, onUpload, title = "Generate 
             <label className="mt-4 flex items-start gap-2 rounded-lg border border-slate-200 p-2.5 text-xs text-slate-600 dark:border-slate-700 dark:text-slate-300">
               <input type="checkbox" checked={autoContinue} onChange={(e) => setAutoContinue(e.target.checked)} className="mt-0.5 h-4 w-4 flex-shrink-0 accent-brand-600" />
               <span><b>Auto-continue</b> until the full count is generated. When the free-tier limit stops a wave, it waits ~60s and keeps going (no duplicates) until it reaches {total || "the"} question(s) — press <b>Stop</b> to end early. Best for big batches.</span>
+            </label>
+
+            <label className="mt-2 flex items-start gap-2 rounded-lg border border-slate-200 p-2.5 text-xs text-slate-600 dark:border-slate-700 dark:text-slate-300">
+              <input type="checkbox" checked={keepExtras} onChange={(e) => setKeepExtras(e.target.checked)} className="mt-0.5 h-4 w-4 flex-shrink-0 accent-brand-600" />
+              <span><b>Keep all generated</b> — if a wave produces more than the {total || "target"} you asked for, keep them all instead of trimming to the exact count. Leave unticked to keep exactly {total || "the target"} (extras are dropped).</span>
+            </label>
+
+            <label className="mt-2 flex items-start gap-2 rounded-lg border border-slate-200 p-2.5 text-xs text-slate-600 dark:border-slate-700 dark:text-slate-300">
+              <input type="checkbox" checked={numerical} onChange={(e) => setNumerical(e.target.checked)} className="mt-0.5 h-4 w-4 flex-shrink-0 accent-brand-600" />
+              <span><b>Include numerical questions</b> that need calculation (solving with a formula/arithmetic). Off by default — leave unticked to keep questions conceptual/factual only.</span>
             </label>
 
             <button
@@ -725,6 +891,26 @@ export default function AiGenerate({ open, onClose, onUpload, title = "Generate 
               >
                 {busy ? <><Loader2 className="h-4 w-4 animate-spin" /> Generating more…</> : <><Sparkles className="h-4 w-4" /> Generate more from this topic (no duplicates)</>}
               </button>
+            )}
+
+            {(existingQuestions.length > 0 || coverageQuestions.length > 0) && (
+              <div className="mt-3 rounded-lg border border-slate-200 p-3 dark:border-slate-700">
+                <p className="text-xs font-semibold">Make other question types from your existing questions</p>
+                <p className="mt-0.5 text-[11px] text-slate-500 dark:text-slate-400">
+                  Set the counts for the types you want in the grid above (Assertion, Statements, Matching, Pair, Pair-select…), then choose:
+                </p>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  <button type="button" disabled={busy} onClick={() => generateFromExisting(true)} className="inline-flex items-center gap-1.5 rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-brand-700 disabled:opacity-50">
+                    <Wand2 className="h-3.5 w-3.5" /> Convert existing → these types
+                  </button>
+                  <button type="button" disabled={busy} onClick={() => generateFromExisting(false)} className="btn-outline text-xs">
+                    <Sparkles className="h-3.5 w-3.5" /> Generate new of these types (from existing)
+                  </button>
+                </div>
+                <p className="mt-1 text-[11px] text-slate-400">
+                  <b>Convert</b> = recast the same facts into the new formats. <b>Generate new</b> = fresh questions on the same content, avoiding duplicates. Both appear in the preview below to review &amp; insert (your original MCQs are untouched).
+                </p>
+              </div>
             )}
 
             {preview.length > 0 && (
@@ -788,8 +974,11 @@ export default function AiGenerate({ open, onClose, onUpload, title = "Generate 
                     </div>
                     {coverage.missing.length > 0 && (
                       <div className="mt-3 flex flex-wrap gap-2">
+                        <button type="button" onClick={() => generateSubtopic(coverage.missing.join(", "))} disabled={busy} className="inline-flex items-center gap-1.5 rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-brand-700 disabled:opacity-50">
+                          <Sparkles className="h-3.5 w-3.5" /> Generate the uncovered topics now
+                        </button>
                         <button type="button" onClick={() => setSubtopics(coverage.missing.join(", "))} className="btn-outline text-xs">
-                          <Sparkles className="h-3.5 w-3.5" /> Put uncovered ones in Subtopics → generate them next
+                          <Sparkles className="h-3.5 w-3.5" /> Put uncovered ones in Subtopics
                         </button>
                         <button type="button" onClick={() => addToPlan(coverage.missing)} className="btn-outline text-xs">
                           <Bookmark className="h-3.5 w-3.5" /> Save uncovered to my plan

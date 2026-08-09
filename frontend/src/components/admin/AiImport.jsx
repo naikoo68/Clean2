@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { X, Globe, Download, CheckCircle2, AlertTriangle, Loader2, Server, KeyRound, FileText, Upload, Files, ScanText, Maximize2, Minimize2, Plus, Sparkles, ListChecks, Circle } from "lucide-react";
+import { X, Globe, Download, CheckCircle2, AlertTriangle, Loader2, Server, KeyRound, FileText, Upload, Files, ScanText, Maximize2, Minimize2, Plus, Sparkles, ListChecks, Circle, Trash2 } from "lucide-react";
 import { aiService, documentService } from "../../services";
 import { useAuth } from "../../context/AuthContext";
 import GraphView from "../ui/GraphView";
@@ -200,12 +200,19 @@ export default function AiImport({ open, onClose, onUpload, title = "Import Ques
     }
   };
 
-  // De-dup key for merging a second pass — prefer the source question number
-  // (stable across re-runs), else a normalised stem. Mirrors the backend.
-  const dedupKey = (q) =>
-    q?.n != null
-      ? `n:${q.n}`
-      : String(q?.text || "").toLowerCase().replace(/[^a-z0-9]+/g, "").slice(0, 200);
+  // De-dup key for merging a second ("Extract remaining") pass. Mirrors the
+  // backend's content signature EXACTLY (normalised stem + sorted options +
+  // sorted columns). We deliberately do NOT key on the source number: papers can
+  // restart numbering per section, and a question can come back with/without a
+  // number between passes — both let duplicates through and inflated a re-run
+  // (e.g. 80 + re-added copies → 140). The signature is identical across passes.
+  const dedupKey = (q) => {
+    const norm = (s) => String(s || "").toLowerCase().replace(/[^a-z0-9]+/g, "");
+    const stem = norm(q?.text).slice(0, 200);
+    const opts = (Array.isArray(q?.options) ? q.options : []).map(norm).filter(Boolean).sort().join("|");
+    const cols = [...(q?.columnA || []), ...(q?.columnB || [])].map(norm).filter(Boolean).sort().join("|");
+    return `${stem}##${opts}##${cols}`;
+  };
 
   // Run extraction. `append` = a "get the missed ones" pass: we send the
   // questions we already have so the AI skips them and returns ONLY the missing
@@ -252,9 +259,13 @@ export default function AiImport({ open, onClose, onUpload, title = "Import Ques
             );
           } else {
             setPreview(qs);
+            const shortNote =
+              s.error === "quota" ? " (stopped early — quota reached; insert these, then click “Extract remaining”)"
+              : s.error === "partial" ? " (a few couldn’t be read this pass — insert these, then click “Extract remaining”)"
+              : "";
             setMsg(
               qs.length
-                ? `✓ Extracted ${qs.length}${questionsDetected ? ` of ~${questionsDetected} detected` : ""} question(s)${s.error === "quota" ? " (stopped early — quota reached; insert these, then run again)" : ""}. Review below, then insert.`
+                ? `✓ Extracted ${qs.length}${questionsDetected ? ` of ~${questionsDetected} detected` : ""} question(s)${shortNote}. Review below, then insert.`
                 : "No questions found — try pasting the text, or use OCR for scanned PDFs."
             );
           }
@@ -447,14 +458,21 @@ export default function AiImport({ open, onClose, onUpload, title = "Import Ques
   );
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/50 p-4">
+    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/50 p-0 sm:p-4">
       {textFull && (
         <div className="fixed inset-0 z-[60] flex flex-col bg-white p-4 dark:bg-slate-900">
           <div className="mb-2 flex items-center justify-between gap-2">
             <h3 className="flex items-center gap-2 text-lg font-bold"><FileText className="h-5 w-5 text-brand-600" /> Extracted or pasted text</h3>
-            <button type="button" onClick={() => setTextFull(false)} className="btn-outline !py-1 !text-xs">
-              <Minimize2 className="h-3.5 w-3.5" /> Exit full screen
-            </button>
+            <div className="flex items-center gap-2">
+              {text.trim() && (
+                <button type="button" onClick={() => setText("")} disabled={busy} className="btn-outline !py-1 !text-xs text-rose-600">
+                  <Trash2 className="h-3.5 w-3.5" /> Clear text
+                </button>
+              )}
+              <button type="button" onClick={() => setTextFull(false)} className="btn-outline !py-1 !text-xs">
+                <Minimize2 className="h-3.5 w-3.5" /> Exit full screen
+              </button>
+            </div>
           </div>
           <textarea
             className="input min-h-0 flex-1 resize-none font-mono text-sm"
@@ -465,7 +483,7 @@ export default function AiImport({ open, onClose, onUpload, title = "Import Ques
           <p className="mt-1 text-xs text-slate-400">{text.trim().length.toLocaleString()} characters</p>
         </div>
       )}
-      <div className="my-8 w-full max-w-2xl animate-scale-in card p-6">
+      <div className="min-h-full w-full max-w-none animate-scale-in card m-0 rounded-none p-4 sm:rounded-2xl sm:p-6">
         <div className="mb-4 flex items-center justify-between">
           <h3 className="flex items-center gap-2 text-lg font-bold"><Globe className="h-5 w-5 text-brand-600" /> {title}</h3>
           <button type="button" onClick={onClose}><X className="h-5 w-5" /></button>
@@ -607,9 +625,16 @@ export default function AiImport({ open, onClose, onUpload, title = "Import Ques
 
             <div className="mb-1 mt-3 flex items-center justify-between gap-2">
               <label className="block text-sm font-semibold">{task === "generate" ? "Paragraph / source text" : "Extracted or pasted text"}</label>
-              <button type="button" onClick={() => setTextFull(true)} className="btn-outline !py-1 !text-xs">
-                <Maximize2 className="h-3.5 w-3.5" /> Full screen
-              </button>
+              <div className="flex items-center gap-2">
+                {text.trim() && (
+                  <button type="button" onClick={() => setText("")} disabled={busy} className="btn-outline !py-1 !text-xs text-rose-600">
+                    <Trash2 className="h-3.5 w-3.5" /> Clear text
+                  </button>
+                )}
+                <button type="button" onClick={() => setTextFull(true)} className="btn-outline !py-1 !text-xs">
+                  <Maximize2 className="h-3.5 w-3.5" /> Full screen
+                </button>
+              </div>
             </div>
             <textarea
               rows={8}

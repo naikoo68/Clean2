@@ -1,5 +1,6 @@
 import { useEffect, useState, useRef, Fragment } from "react";
-import { Plus, Pencil, Trash2, X, ChevronRight, GraduationCap, FolderOpen, ListChecks, FileStack, HelpCircle, Users, Search, Share2, ClipboardList, ArrowRightLeft } from "lucide-react";
+import { useSearchParams } from "react-router-dom";
+import { Plus, Pencil, Trash2, X, ChevronRight, GraduationCap, FolderOpen, ListChecks, FileStack, HelpCircle, Users, Search, Share2, ClipboardList, ArrowRightLeft, Send } from "lucide-react";
 import { practiceService, testService, contentService, aiService } from "../../services";
 import { loadNav, saveNav } from "../../lib/navState";
 import Badge from "../../components/ui/Badge";
@@ -9,14 +10,20 @@ import BulkUploadQuestions, { questionsToCsv } from "../../components/admin/Bulk
 import AiGenerate from "../../components/admin/AiGenerate";
 import AiImport from "../../components/admin/AiImport";
 import DuplicatesModal from "../../components/admin/DuplicatesModal";
+import PaperFilesModal from "../../components/admin/PaperFilesModal";
 import QuestionView from "../../components/admin/QuestionView";
+import QuestionTypeFilter from "../../components/admin/QuestionTypeFilter";
+import { questionTypeKey } from "../../lib/questions";
 import AddToTestModal from "../../components/admin/AddToTestModal";
 import PickFromBank from "../../components/admin/PickFromBank";
 import ManageTestQuestions from "../../components/admin/ManageTestQuestions";
 import SubjectPlanEditor from "../../components/admin/SubjectPlanEditor";
 import ShareTestModal from "../../components/admin/ShareTestModal";
+import ShareByEmailModal from "../../components/client/ShareByEmailModal";
+import IncomingSharesInbox from "../../components/client/IncomingSharesInbox";
 import ExtendExplanationsModal from "../../components/admin/ExtendExplanationsModal";
 import ExtendOneQuestionModal from "../../components/admin/ExtendOneQuestionModal";
+import RegenerateOneModal from "../../components/admin/RegenerateOneModal";
 import RegenerateAllModal from "../../components/admin/RegenerateAllModal";
 import ScheduleQuestionModal from "../../components/admin/ScheduleQuestionModal";
 import MigrateQuizModal from "../../components/admin/MigrateQuizModal";
@@ -46,21 +53,58 @@ const normSection = (s) => (s && s !== "__unassigned__" ? s : "");
 const KINDS = [
   { key: "quiz", label: "My Quiz", icon: ListChecks },
   { key: "test", label: "My Test", icon: FileStack },
+  { key: "paper", label: "Previous Papers", icon: Files }, // built like a test (stream → subject → items), played like a quiz
 ];
 
 // `clientMode` renders this same manager for a self-service CLIENT account:
 // the backend scopes everything to that client's own content, so we just hide
 // the per-student "Visibility" control (irrelevant — a client is the only
 // viewer) and add a "Practice" button so they can take their own quizzes/tests.
-export default function AdminPractice({ clientMode = false }) {
+// `fixedKind` locks this manager to a single practice kind (e.g. "paper") and
+// hides the kind tab-bar — used to render "Previous Papers" as its own
+// standalone page (admin sidebar item + client workspace tab) rather than a
+// tab inside "My Practice".
+export default function AdminPractice({ clientMode = false, fixedKind = "" }) {
   // Remember drill-down position across refreshes (separate keys for the admin
-  // panel and the client workspace so they never clash).
-  const NAV_KEY = clientMode ? "mpm-client-practice-nav" : "mpm-admin-practice-nav";
-  const [kind, setKind] = useState(() => loadNav(NAV_KEY).kind || "quiz");
-  const [view, setView] = useState(() => loadNav(NAV_KEY).view || "streams"); // streams | subjects | topics | items
+  // panel and the client workspace so they never clash; a fixed-kind page also
+  // gets its own key so it never clobbers the main practice position).
+  const NAV_KEY =
+    (clientMode ? "mpm-client-practice-nav" : "mpm-admin-practice-nav") +
+    (fixedKind ? `-${fixedKind}` : "");
+  // The drill-down level lives in the URL (?v=subjects|topics|items) so the
+  // phone/browser BACK button steps UP one level (Streams > Subject > Topic >
+  // Quizzes) instead of leaving the page — each level is its own history entry.
+  // (Mirrors the ?tab= pattern used in the client workspace.)
+  const [searchParams, setSearchParams] = useSearchParams();
+  const view = searchParams.get("v") || "streams"; // streams | subjects | topics | items
+  // Update ONLY the `v` param, preserving any others (e.g. the client
+  // workspace's ?tab=build, which shares this URL) so we don't kick the client
+  // back to another tab.
+  const setView = (v, opts) => {
+    const next = new URLSearchParams(searchParams);
+    if (v && v !== "streams") next.set("v", v); else next.delete("v");
+    setSearchParams(next, opts);
+  };
+  const [kind, setKind] = useState(() => {
+    if (fixedKind) return fixedKind;
+    // Previous Papers is now its own standalone page, so it's no longer a tab
+    // here. Coerce a stale saved "paper" position back to a visible tab.
+    const saved = loadNav(NAV_KEY).kind;
+    return saved && saved !== "paper" ? saved : "quiz";
+  });
   const [stream, setStream] = useState(() => loadNav(NAV_KEY).stream || null);
   const [subject, setSubject] = useState(() => loadNav(NAV_KEY).subject || null);
   const [topic, setTopic] = useState(() => loadNav(NAV_KEY).topic || null);
+
+  // Level model per kind. My Quiz and Previous Papers have a 4th (topic) level;
+  // My Test goes straight stream → subject → items. For Previous Papers the
+  // levels are relabelled: subject = "Exam", topic = "Year", item = "Paper".
+  const hasTopics = kind === "quiz" || kind === "paper";
+  const L = kind === "paper"
+    ? { subjectPl: "Exams", subjectAdd: "Add Exam", topicPl: "Years", topicAdd: "Add Year", itemPl: "Papers", itemAdd: "Add Paper", openTopics: "Open years", itemsWord: "papers", groupWord: "year" }
+    : kind === "quiz"
+    ? { subjectPl: "Subjects", subjectAdd: "Add Subject", topicPl: "Topics", topicAdd: "Add Topic", itemPl: "Quizzes", itemAdd: "Add Quiz", openTopics: "Open topics", itemsWord: "quizzes", groupWord: "topic" }
+    : { subjectPl: "Subjects", subjectAdd: "Add Subject", topicPl: "Topics", topicAdd: "Add Topic", itemPl: "Tests", itemAdd: "Add Test", openTopics: "Open topics", itemsWord: "tests", groupWord: "subject" };
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -85,6 +129,7 @@ export default function AdminPractice({ clientMode = false }) {
   const [aiOpen, setAiOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [aiTarget, setAiTarget] = useState(null); // {id,name} — after AI creates a new quiz/test, later batches target it
+  const [otherTypesTopic, setOtherTypesTopic] = useState(false); // AI opened at TOPIC level to build other question types from ALL its quizzes
   // "Scan missing areas": analyse all quizzes in this topic for uncovered syllabus.
   const [scanOpen, setScanOpen] = useState(false);
   const [scanFull, setScanFull] = useState(false); // full-screen the Missing areas modal
@@ -113,18 +158,22 @@ export default function AdminPractice({ clientMode = false }) {
   const [addToTestQ, setAddToTestQ] = useState(null); // question being copied into a test
   const [viewAll, setViewAll] = useState(false);
   const [studentView, setStudentView] = useState(true); // View All: defaults to student view (answers hidden)
+  const [typeFilter, setTypeFilter] = useState([]); // View All: which question types to show ([] = all)
   const [selQ, setSelQ] = useState(() => new Set()); // ticked questions to move (full-quiz view)
   const [moveTargetId, setMoveTargetId] = useState(""); // destination quiz for the move
   const [movingQ, setMovingQ] = useState(false);
   const [shareItem, setShareItem] = useState(null); // public share-link modal target (tests)
+  const [shareEmailTarget, setShareEmailTarget] = useState(null); // account-to-account share (stream/subject/topic/item)
   const [migrateItem, setMigrateItem] = useState(null); // per-quiz migrate modal target (My Quiz)
+  const [paperFilesItem, setPaperFilesItem] = useState(null); // Previous Papers: paper/answer-key PDF + info modal target
   const [selTopics, setSelTopics] = useState({}); // checkbox selection in the topics view (id -> true)
   const [migrateTopicsOpen, setMigrateTopicsOpen] = useState(false); // bulk-topic migrate modal
   const [extendItem, setExtendItem] = useState(null); // AI extend-explanations target
   const [extendingQId, setExtendingQId] = useState(null); // per-question extend in progress
   const [extendOneItem, setExtendOneItem] = useState(null); // per-question extend confirm modal target
-  const [regenId, setRegenId] = useState(null); // per-question regenerate in progress
+  const [regenOneItem, setRegenOneItem] = useState(null); // per-question regenerate modal target
   const [regenAllItem, setRegenAllItem] = useState(null); // bulk "regenerate all" modal target
+  const extendAbortRef = useRef(null); // AbortController for the single-question extend (Stop button)
   const [scheduleQ, setScheduleQ] = useState(null); // question to post/schedule to Facebook
   // Which subject a question-adding tool should target (set when opened from a
   // subject inside the manager). "" / "__unassigned__" means no subject.
@@ -136,14 +185,27 @@ export default function AdminPractice({ clientMode = false }) {
   const [accessSearch, setAccessSearch] = useState("");
 
   const load = (which) => {
+    // The level (`view`) now comes from the URL, but the stream/subject/topic
+    // objects come from state/sessionStorage. If a deep URL (e.g. ?v=items) is
+    // opened without that context in memory — a fresh tab with empty
+    // sessionStorage — fall back to the streams list instead of dereferencing a
+    // null ._id.
+    const missingContext =
+      (which === "subjects" && !stream) ||
+      (which === "topics" && !subject) ||
+      (which === "items" && (hasTopics ? !topic : !subject));
+    if (missingContext) {
+      if (view !== "streams") setView("streams", { replace: true });
+      which = "streams";
+    }
     setLoading(true);
     setError("");
     const p =
       which === "streams" ? practiceService.adminStreams(kind)
       : which === "subjects" ? practiceService.adminSubjects(stream._id)
       : which === "topics" ? practiceService.adminTopics(subject._id)
-      : kind === "quiz" ? practiceService.adminTopicItems(topic._id)
-      : practiceService.adminItems(subject._id, "test");
+      : hasTopics ? practiceService.adminTopicItems(topic._id)
+      : practiceService.adminItems(subject._id, kind);
     p.then(setItems).catch((e) => setError(e.message)).finally(() => setLoading(false));
   };
   useEffect(() => { load(view); /* eslint-disable-next-line */ }, [view, kind]);
@@ -153,11 +215,35 @@ export default function AdminPractice({ clientMode = false }) {
     saveNav(NAV_KEY, { kind, view, stream, subject, topic });
   }, [NAV_KEY, kind, view, stream, subject, topic]);
 
+  // On first mount, restore the saved drill-down level into the URL (the
+  // stream/subject/topic objects above are already restored from navState), so
+  // a plain page refresh reopens where you were. `replace` avoids adding a
+  // spurious history entry.
+  const didRestore = useRef(false);
+  useEffect(() => {
+    if (didRestore.current) return;
+    didRestore.current = true;
+    const saved = loadNav(NAV_KEY);
+    if (!searchParams.get("v") && saved.view && saved.view !== "streams") {
+      setView(saved.view, { replace: true });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const openStream = (s) => { setStream(s); setSubject(null); setTopic(null); setView("subjects"); };
   // My Quiz drills into Topics; My Test Series goes straight to items.
-  const openSubject = (s) => { setSubject(s); setTopic(null); setView(kind === "quiz" ? "topics" : "items"); };
+  const openSubject = (s) => { setSubject(s); setTopic(null); setView(hasTopics ? "topics" : "items"); };
   const openTopic = (t) => { setTopic(t); setView("items"); };
   const goTo = (v) => setView(v);
+
+  // NOTE: device/browser "Back" navigation is handled by the URL-based `view`
+  // above (each drill level is a `?v=` history entry via setView), so a Back
+  // press steps up one level and a refresh reopens the exact level in the URL.
+  // A second, sentinel-based (history.pushState/popstate) back handler used to
+  // live here; it fought the URL approach (double history entries + a popstate
+  // handler that cleared stream/subject/topic), which made a refresh jump back
+  // down to a stale deeper level. It has been removed — the URL is the single
+  // source of truth.
 
   // Clear topic multi-select whenever we navigate.
   useEffect(() => { setSelTopics({}); }, [view, subject?._id, stream?._id, kind]);
@@ -313,7 +399,7 @@ export default function AdminPractice({ clientMode = false }) {
   // Open "Missing areas": resume a saved plan for this topic if one exists (no AI
   // call), otherwise run a fresh scan.
   const scanMissingAreas = async () => {
-    const topicName = (kind === "quiz" ? topic : subject)?.name || "";
+    const topicName = (hasTopics ? topic : subject)?.name || "";
     setScanOpen(true); setScanFull(false); setScanErr(""); setSeqMsg(""); seqStopRef.current = false;
     let saved = null;
     try { const raw = localStorage.getItem(scanStorageKey(topicName)); saved = raw ? JSON.parse(raw) : null; } catch { saved = null; }
@@ -356,6 +442,21 @@ export default function AdminPractice({ clientMode = false }) {
     } catch {
       setTopicStems([]);
     }
+  };
+
+  // Topic-level entry point for "other question types": open the generator with
+  // ALL quizzes in this topic as the source (coverageQuestions) and a NEW quiz
+  // as the destination, so the Convert / Generate-from-existing buttons work
+  // across the whole topic in one place (beside Add Quiz).
+  const openTopicOtherTypes = () => {
+    setQItem(null);
+    setAiTarget(null);
+    setForceSection("");
+    setGapPrefill(null);
+    setOtherTypesTopic(true);
+    setTopicStems([]);
+    gatherTopicStems();
+    setAiOpen(true);
   };
 
   // Open the generator pre-filled to build a NEW quiz covering the missing areas,
@@ -567,7 +668,7 @@ export default function AdminPractice({ clientMode = false }) {
         name,
         practiceStream: stream?._id,
         practiceSubject: subject?._id,
-        practiceTopic: kind === "quiz" ? topic?._id : undefined,
+        practiceTopic: hasTopics ? topic?._id : undefined,
         practiceKind: kind,
       });
       if (!created?._id) throw new Error(`Could not create the new ${kind}.`);
@@ -592,29 +693,30 @@ export default function AdminPractice({ clientMode = false }) {
     return res;
   };
   // Run the per-question extend once confirmed in the modal.
-  const runExtendOne = async (fixOptions) => {
+  const runExtendOne = async ({ fixOptions, extendQuestion, shuffleOptions, model, mode } = {}) => {
     const item = extendOneItem;
     if (!item) return;
     setExtendingQId(item._id);
+    const controller = new AbortController();
+    extendAbortRef.current = controller;
     try {
-      const updated = await aiService.extendOne({ questionId: item._id, fixOptions });
+      const updated = await aiService.extendOne(
+        { questionId: item._id, fixOptions, extendQuestion, shuffleOptions, model, mode },
+        { signal: controller.signal }
+      );
       setViewQ((prev) => (prev && prev._id === item._id ? { ...prev, ...updated } : prev));
       setExtendOneItem(null);
       await reloadTq();
-    } catch (e) { setError(e.message); setExtendOneItem(null); }
-    finally { setExtendingQId(null); }
+    } catch (e) { if (!e?.aborted) setError(e.message); setExtendOneItem(null); }
+    finally { extendAbortRef.current = null; setExtendingQId(null); }
   };
-  // Regenerate ONE question's options/answer to fit its stem, then reload
-  // (and update the open preview modal in place if it's the same question).
-  const regenerateQ = async (item) => {
-    setRegenId(item._id);
-    try {
-      const updated = await aiService.regenerate({ questionId: item._id });
-      setViewQ((prev) => (prev && prev._id === item._id ? { ...prev, ...updated } : prev));
-      await reloadTq();
-    }
-    catch (e) { setError(e.message); }
-    finally { setRegenId(null); }
+  // Apply a single-question regenerate result (from RegenerateOneModal) to the
+  // open preview and reload the list.
+  const applyRegenerated = async (updated) => {
+    const item = regenOneItem;
+    if (item) setViewQ((prev) => (prev && prev._id === item._id ? { ...prev, ...updated } : prev));
+    setRegenOneItem(null);
+    await reloadTq();
   };
   const saveTestQuestion = async (payload) => {
     setTqSaving(true);
@@ -667,14 +769,17 @@ export default function AdminPractice({ clientMode = false }) {
   };
 
   const H = view === "streams" ? { title: "Streams", add: "Add Stream", icon: GraduationCap }
-    : view === "subjects" ? { title: `Subjects in ${stream?.name || ""}`, add: "Add Subject", icon: FolderOpen }
-    : view === "topics" ? { title: `Topics in ${subject?.name || ""}`, add: "Add Topic", icon: HelpCircle }
-    : { title: `${kind === "quiz" ? "Quizzes" : "Tests"} in ${(kind === "quiz" ? topic : subject)?.name || ""}`, add: kind === "quiz" ? "Add Quiz" : "Add Test", icon: kind === "quiz" ? ListChecks : FileStack };
+    : view === "subjects" ? { title: `${L.subjectPl} in ${stream?.name || ""}`, add: L.subjectAdd, icon: FolderOpen }
+    : view === "topics" ? { title: `${L.topicPl} in ${subject?.name || ""}`, add: L.topicAdd, icon: HelpCircle }
+    : { title: `${L.itemPl} in ${(hasTopics ? topic : subject)?.name || ""}`, add: L.itemAdd, icon: kind === "quiz" ? ListChecks : kind === "paper" ? Files : FileStack };
 
   const addType = view === "streams" ? "stream" : view === "subjects" ? "subject" : view === "topics" ? "topic" : "item";
 
   return (
     <div className="space-y-5">
+      {/* Content other accounts shared with you — Accept saves an owned copy */}
+      <IncomingSharesInbox onAccepted={() => load(view)} />
+
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="text-2xl font-extrabold">My Practice</h1>
@@ -694,11 +799,26 @@ export default function AdminPractice({ clientMode = false }) {
         >
           <Files className="h-4 w-4" /> Find Duplicates{subject ? ` — ${subject.name}` : ""}
         </button>
+        {subject && kind === "quiz" && (
+          <button
+            onClick={() => {
+              setDupScope({ params: { practiceSubject: subject._id, pool: true }, name: `All topics in ${subject.name}` });
+              setDupOpen(true);
+            }}
+            className="btn-outline"
+            title={`Scan for the same question repeated across ALL topics of ${subject.name}`}
+          >
+            <Files className="h-4 w-4" /> Duplicates across all topics
+          </button>
+        )}
       </div>
 
-      {/* Kind tabs */}
+      {/* Kind tabs — hidden on a fixed-kind standalone page (e.g. Previous
+          Papers). Otherwise Previous Papers is its own section, so only the
+          My Quiz / My Test tabs are shown here. */}
+      {!fixedKind && (
       <div className="flex flex-wrap gap-2">
-        {KINDS.map((k) => (
+        {KINDS.filter((k) => k.key !== "paper").map((k) => (
           <button
             key={k.key}
             onClick={() => { setKind(k.key); setStream(null); setSubject(null); setTopic(null); setView("streams"); }}
@@ -708,6 +828,7 @@ export default function AdminPractice({ clientMode = false }) {
           </button>
         ))}
       </div>
+      )}
 
       {/* Breadcrumb */}
       <div className="card px-4 py-3">
@@ -719,9 +840,9 @@ export default function AdminPractice({ clientMode = false }) {
           </>)}
           {subject && (view === "topics" || view === "items") && (<>
             <ChevronRight className="h-4 w-4 text-slate-400" />
-            <button onClick={() => goTo(kind === "quiz" ? "topics" : "items")} className={`rounded px-2 py-1 font-medium ${view === "topics" ? "text-brand-600" : "text-slate-500 hover:text-brand-600"}`}>{subject.name}</button>
+            <button onClick={() => goTo(hasTopics ? "topics" : "items")} className={`rounded px-2 py-1 font-medium ${view === "topics" ? "text-brand-600" : "text-slate-500 hover:text-brand-600"}`}>{subject.name}</button>
           </>)}
-          {topic && view === "items" && kind === "quiz" && (<>
+          {topic && view === "items" && hasTopics && (<>
             <ChevronRight className="h-4 w-4 text-slate-400" />
             <span className="rounded px-2 py-1 font-medium text-brand-600">{topic.name}</span>
           </>)}
@@ -731,13 +852,22 @@ export default function AdminPractice({ clientMode = false }) {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h2 className="flex items-center gap-2 text-lg font-bold"><H.icon className="h-5 w-5 text-brand-600" /> {H.title}</h2>
         <div className="flex flex-wrap items-center gap-2">
-          {view === "items" && (kind === "quiz" ? topic : subject) && items.length > 0 && (
+          {view === "items" && (hasTopics ? topic : subject) && items.length > 0 && (
             <button
               onClick={scanMissingAreas}
               className="btn-outline text-brand-600"
-              title={`Scan all ${kind === "quiz" ? "quizzes" : "tests"} here for syllabus areas not yet covered`}
+              title={`Scan all ${L.itemsWord} here for syllabus areas not yet covered`}
             >
               <ScanSearch className="h-4 w-4" /> Scan Missing Areas
+            </button>
+          )}
+          {view === "items" && (hasTopics ? topic : subject) && items.length > 0 && (
+            <button
+              onClick={openTopicOtherTypes}
+              className="btn-outline text-brand-600"
+              title={`Make other question types (assertion, statements, matching, pairs) from ALL ${L.itemsWord} in this ${L.groupWord}`}
+            >
+              <Sparkles className="h-4 w-4" /> Other question types
             </button>
           )}
           <button onClick={() => setModal({ type: addType, mode: "add", data: {} })} className="btn-primary">
@@ -788,9 +918,9 @@ export default function AdminPractice({ clientMode = false }) {
                 >
                   <p className="font-bold">{item.name}</p>
                   <p className="mt-0.5 text-xs text-slate-400">
-                    {view === "streams" && `${item.subjects ?? 0} subjects`}
-                    {view === "subjects" && (kind === "quiz" ? "Open topics" : `${item.items ?? 0} tests`)}
-                    {view === "topics" && `${item.items ?? 0} quizzes`}
+                    {view === "streams" && `${item.subjects ?? 0} ${L.subjectPl.toLowerCase()}`}
+                    {view === "subjects" && (hasTopics ? L.openTopics : `${item.items ?? 0} tests`)}
+                    {view === "topics" && `${item.items ?? 0} ${L.itemsWord}`}
                     {view === "items" && `${item.questionCount ?? 0} questions · ${item.visibleToAll ? "Visible to all" : "Hidden by default"}`}
                   </p>
                 </button>
@@ -814,6 +944,9 @@ export default function AdminPractice({ clientMode = false }) {
                     </button>
                   )}
                   {view !== "items" && (
+                    <button onClick={() => setShareEmailTarget({ level: view === "streams" ? "stream" : view === "subjects" ? "subject" : "topic", id: item._id, name: item.name })} title="Send to another user by email (they must have an account)" className="rounded-lg p-2 text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-900/30"><Send className="h-4 w-4" /></button>
+                  )}
+                  {view !== "items" && (
                     <button onClick={() => setModal({ type: view === "streams" ? "stream" : view === "subjects" ? "subject" : "topic", mode: "edit", data: item })} className="rounded-lg p-2 text-brand-600 hover:bg-brand-50 dark:hover:bg-brand-900/30"><Pencil className="h-4 w-4" /></button>
                   )}
                   <button onClick={() => remove(view === "streams" ? "stream" : view === "subjects" ? "subject" : view === "topics" ? "topic" : "item", item._id, item.name)} className="rounded-lg p-2 text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-900/30"><Trash2 className="h-4 w-4" /></button>
@@ -822,6 +955,9 @@ export default function AdminPractice({ clientMode = false }) {
               {view === "items" && (
                 <div className="mt-3 flex flex-wrap gap-2">
                   <button onClick={() => openQuestions(item)} className="btn-outline py-1.5 text-xs"><HelpCircle className="h-3.5 w-3.5" /> Questions</button>
+                  {kind === "paper" && (
+                    <button onClick={() => setPaperFilesItem(item)} className="btn-outline py-1.5 text-xs text-brand-600" title="Upload the question-paper PDF, answer-key PDF and additional information"><Files className="h-3.5 w-3.5" /> Paper files</button>
+                  )}
                   {kind === "quiz" && (
                     <button onClick={() => setMigrateItem(item)} className="btn-outline py-1.5 text-xs" title="Move or copy this quiz (My Quiz → My Quiz, or My Quiz → Content)"><ArrowRightLeft className="h-3.5 w-3.5" /> Migrate</button>
                   )}
@@ -832,7 +968,9 @@ export default function AdminPractice({ clientMode = false }) {
                     <button onClick={() => { setMergeIds([]); setMergeTarget(item); }} className="btn-outline py-1.5 text-xs text-indigo-600" title="Merge other quizzes in this topic into this one"><GitMerge className="h-3.5 w-3.5" /> Merge</button>
                   )}
                   {/* Public share link (no login needed) — for My Quiz AND My Test */}
-                  <button onClick={() => setShareItem(item)} className={`btn-outline py-1.5 text-xs ${item.publicShare ? "text-emerald-600" : ""}`} title="Share a public link (anyone with the link can take this — no login/account needed)"><Share2 className="h-3.5 w-3.5" /> Share</button>
+                  <button onClick={() => setShareItem(item)} className={`btn-outline py-1.5 text-xs ${item.publicShare ? "text-emerald-600" : ""}`} title="Share a public link (anyone with the link can take this — no login/account needed)"><Share2 className="h-3.5 w-3.5" /> Share link</button>
+                  {/* Account-to-account: send to another registered user by email */}
+                  <button onClick={() => setShareEmailTarget({ level: "item", id: item._id, name: item.name })} className="btn-outline py-1.5 text-xs text-emerald-600" title="Send to another user by email (they must have an account)"><Send className="h-3.5 w-3.5" /> Send to user</button>
                   {!clientMode && (
                     <button onClick={() => openAccess(item)} className="btn-outline py-1.5 text-xs"><Users className="h-3.5 w-3.5" /> Visibility</button>
                   )}
@@ -856,7 +994,7 @@ export default function AdminPractice({ clientMode = false }) {
             <p className="mb-4 text-sm text-slate-500 dark:text-slate-400">
               {splitTarget.kind === "topic"
                 ? <>Split all questions in the topic <b>“{splitTarget.name}”</b> into quizzes named Quiz 1, Quiz 2, …</>
-                : <>Split the quiz <b>“{splitTarget.name}”</b>{splitTarget.count != null ? <> ({splitTarget.count} questions)</> : null} into quizzes named Quiz 1, Quiz 2, …</>}
+                : <>Split the quiz <b>“{splitTarget.name}”</b>{splitTarget.count != null ? <> ({splitTarget.count} questions)</> : null} — it keeps its name and first chunk; the rest go into new quizzes numbered after your existing ones (e.g. splitting “Quiz 2” adds Quiz 3, Quiz 4, …).</>}
             </p>
             <label className="mb-1 block text-sm font-semibold">Questions per quiz</label>
             <input type="number" min={1} max={500} value={splitPer} onChange={(e) => setSplitPer(e.target.value)} className="input" autoFocus />
@@ -894,8 +1032,14 @@ export default function AdminPractice({ clientMode = false }) {
             {(() => {
               const others = items.filter((it) => it._id !== mergeTarget._id);
               if (!others.length) return <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-700 dark:bg-amber-900/20 dark:text-amber-300">There are no other quizzes in this topic to merge.</p>;
+              const otherIds = others.map((o) => o._id);
+              const allSelected = otherIds.every((id) => mergeIds.includes(id));
               return (
                 <div className="max-h-64 space-y-1 overflow-y-auto rounded-lg border border-slate-200 p-2 dark:border-slate-700">
+                  <label className="flex cursor-pointer items-center gap-2 rounded-md border-b border-slate-200 px-2 py-1.5 font-semibold hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800">
+                    <input type="checkbox" checked={allSelected} onChange={() => setMergeIds(allSelected ? [] : otherIds)} />
+                    <span className="text-sm">Select all <span className="text-slate-400">· {others.length}</span></span>
+                  </label>
                   {others.map((it) => (
                     <label key={it._id} className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 hover:bg-slate-50 dark:hover:bg-slate-800">
                       <input type="checkbox" checked={mergeIds.includes(it._id)} onChange={() => setMergeIds((s) => (s.includes(it._id) ? s.filter((x) => x !== it._id) : [...s, it._id]))} />
@@ -935,13 +1079,17 @@ export default function AdminPractice({ clientMode = false }) {
               onAddQuestion={(subject) => setTqModal({ mode: "add", data: null, forceSection: subject })}
               onEditQuestion={(item) => setTqModal({ mode: "edit", data: item })}
               onDeleteQuestion={removeTq}
-              onDeleteSelected={async (ids) => {
-                for (const id of ids) await testService.deleteQuestion(qItem._id, id);
+              onDeleteSelected={async (ids, onProgress) => {
+                let done = 0;
+                for (const id of ids) {
+                  await testService.deleteQuestion(qItem._id, id);
+                  onProgress?.(++done); // report real-time progress to the modal
+                }
                 await reloadTq();
                 load("items");
               }}
               onViewQuestion={setViewQ}
-              onViewAll={() => setViewAll(true)}
+              onViewAll={() => { setTypeFilter([]); setViewAll(true); }}
               onDuplicates={() => { setDupScope({ params: { testSeries: qItem._id }, name: qItem.name }); setDupOpen(true); }}
               onCopyCsv={copyCsv}
               onDownloadCsv={downloadCsv}
@@ -952,8 +1100,8 @@ export default function AdminPractice({ clientMode = false }) {
               onExtendExplanations={() => setExtendItem(qItem)}
               onExtendQuestion={(item) => setExtendOneItem(item)}
               extendingId={extendingQId}
-              onRegenerateQuestion={(item) => regenerateQ(item)}
-              regeneratingId={regenId}
+              onRegenerateQuestion={(item) => setRegenOneItem(item)}
+              regeneratingId={null}
               onRegenerateAll={() => setRegenAllItem(qItem)}
             />
           </div>
@@ -976,7 +1124,7 @@ export default function AdminPractice({ clientMode = false }) {
         <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/50 p-4" onClick={() => setViewQ(null)}>
           <div onClick={(e) => e.stopPropagation()} className="my-8 w-full max-w-2xl animate-scale-in card p-6">
             <div className="mb-4 flex items-center justify-between"><h3 className="text-lg font-bold">Question</h3><button onClick={() => setViewQ(null)}><X className="h-5 w-5" /></button></div>
-            <QuestionView q={viewQ} {...(() => { const L = tq; const i = L.findIndex((x) => x._id === viewQ._id); return { position: i >= 0 ? `${i + 1} / ${L.length}` : undefined, onPrev: i > 0 ? () => setViewQ(L[i - 1]) : undefined, onNext: i >= 0 && i < L.length - 1 ? () => setViewQ(L[i + 1]) : undefined }; })()} onRegenerate={() => regenerateQ(viewQ)} regenerating={regenId === viewQ._id} onExtend={() => setExtendOneItem(viewQ)} extending={extendingQId === viewQ._id} onSchedule={clientMode ? undefined : () => setScheduleQ(viewQ)} />
+            <QuestionView q={viewQ} {...(() => { const L = tq; const i = L.findIndex((x) => x._id === viewQ._id); return { position: i >= 0 ? `${i + 1} / ${L.length}` : undefined, onPrev: i > 0 ? () => setViewQ(L[i - 1]) : undefined, onNext: i >= 0 && i < L.length - 1 ? () => setViewQ(L[i + 1]) : undefined }; })()} onRegenerate={() => setRegenOneItem(viewQ)} regenerating={false} onExtend={() => setExtendOneItem(viewQ)} extending={extendingQId === viewQ._id} onSchedule={clientMode ? undefined : () => setScheduleQ(viewQ)} />
             <div className="mt-6 flex justify-end gap-2">
               <button onClick={async () => { if (!window.confirm("Delete this question?")) return; await testService.deleteQuestion(qItem._id, viewQ._id); setViewQ(null); await reloadTq(); load("items"); }} className="btn-outline mr-auto text-rose-600"><Trash2 className="h-4 w-4" /> Delete</button>
               <button onClick={() => setAddToTestQ(viewQ)} className="btn-outline"><ClipboardList className="h-4 w-4" /> Add to test</button>
@@ -993,8 +1141,8 @@ export default function AdminPractice({ clientMode = false }) {
 
       {/* View all questions (with edit/delete per question) */}
       {viewAll && qItem && (
-        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/50 p-4" onClick={() => setViewAll(false)}>
-          <div onClick={(e) => e.stopPropagation()} className="my-8 w-full max-w-3xl animate-scale-in card p-6">
+        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/50 p-0 sm:p-4" onClick={() => setViewAll(false)}>
+          <div onClick={(e) => e.stopPropagation()} className="min-h-full w-full max-w-none animate-scale-in card m-0 rounded-none p-4 sm:rounded-2xl sm:p-6">
             <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
               <h3 className="text-lg font-bold">All questions — {qItem.name} ({tq.length})</h3>
               <div className="flex items-center gap-2">
@@ -1034,8 +1182,12 @@ export default function AdminPractice({ clientMode = false }) {
                 </div>
               );
             })()}
+            <QuestionTypeFilter questions={tq} selected={typeFilter} onChange={setTypeFilter} />
             <div className="max-h-[70vh] space-y-4 overflow-y-auto pr-1">
-              {tq.map((it, i) => (
+              {tq
+                .map((it, i) => ({ it, i }))
+                .filter(({ it }) => !typeFilter.length || typeFilter.includes(questionTypeKey(it)))
+                .map(({ it, i }) => (
                 <div key={(studentView ? "s" : "a") + it._id} className="relative rounded-lg border border-slate-200 p-3 dark:border-slate-700">
                   <div className="absolute right-2 top-2 z-10 flex items-center gap-1">
                     {!studentView && <input type="checkbox" checked={selQ.has(it._id)} onChange={() => toggleSelQ(it._id)} title="Select to move" className="mr-1 h-4 w-4 accent-brand-600" />}
@@ -1047,7 +1199,7 @@ export default function AdminPractice({ clientMode = false }) {
                       </>
                     )}
                   </div>
-                  <QuestionView q={it} index={i + 1} studentView={studentView} onRegenerate={() => regenerateQ(it)} regenerating={regenId === it._id} onExtend={() => setExtendOneItem(it)} extending={extendingQId === it._id} onSchedule={clientMode ? undefined : () => setScheduleQ(it)} />
+                  <QuestionView q={it} index={i + 1} studentView={studentView} onRegenerate={() => setRegenOneItem(it)} regenerating={false} onExtend={() => setExtendOneItem(it)} extending={extendingQId === it._id} onSchedule={clientMode ? undefined : () => setScheduleQ(it)} />
                 </div>
               ))}
             </div>
@@ -1090,15 +1242,15 @@ export default function AdminPractice({ clientMode = false }) {
         open={aiOpen}
         sections={sectionsOf(qItem)}
         defaultSection={normSection(forceSection)}
-        title={`Generate with AI — ${qItem?.name || (gapPrefill ? `new ${kind} (missing areas)` : "")}${normSection(forceSection) ? ` (${normSection(forceSection)})` : ""}`}
-        onClose={() => { setAiOpen(false); setForceSection(""); setGapPrefill(null); }}
+        title={`Generate with AI — ${qItem?.name || (gapPrefill ? `new ${kind} (missing areas)` : (otherTypesTopic ? "other question types (all quizzes)" : ""))}${normSection(forceSection) ? ` (${normSection(forceSection)})` : ""}`}
+        onClose={() => { setAiOpen(false); setForceSection(""); setGapPrefill(null); setOtherTypesTopic(false); }}
         allowNewTarget
         newLeafLabel={kind}
         currentTargetName={aiTarget?.name || qItem?.name || ""}
-        existingQuestions={gapPrefill ? gapPrefill.avoid : tq}
+        existingQuestions={otherTypesTopic ? [] : (gapPrefill ? gapPrefill.avoid : tq)}
         defaultTopic={gapPrefill ? gapPrefill.topic : (qItem?.aiTopic || (kind === "quiz" ? topic : subject)?.name || "")}
         defaultSubtopics={gapPrefill ? gapPrefill.subtopics : (qItem?.aiSubtopics || "")}
-        defaultDest={gapPrefill ? "new" : "current"}
+        defaultDest={(gapPrefill || otherTypesTopic) ? "new" : "current"}
         coverageQuestions={topicStems}
         onUpload={(questions, opts = {}) => saveAiBatch(questions, opts)}
       />
@@ -1297,6 +1449,14 @@ export default function AdminPractice({ clientMode = false }) {
         />
       )}
 
+      {paperFilesItem && (
+        <PaperFilesModal
+          item={paperFilesItem}
+          onClose={() => setPaperFilesItem(null)}
+          onSaved={() => { setPaperFilesItem(null); load("items"); }}
+        />
+      )}
+
       {/* Bulk-migrate selected topics to another subject */}
       {migrateTopicsOpen && (
         <MigrateTopicsModal
@@ -1307,6 +1467,8 @@ export default function AdminPractice({ clientMode = false }) {
       )}
 
       {/* Public share-link modal (My Test / Client Test) */}
+      {shareEmailTarget && <ShareByEmailModal target={shareEmailTarget} onClose={() => setShareEmailTarget(null)} />}
+
       {shareItem && (
         <ShareTestModal
           test={shareItem}
@@ -1329,8 +1491,17 @@ export default function AdminPractice({ clientMode = false }) {
       <ExtendOneQuestionModal
         open={!!extendOneItem}
         busy={!!extendingQId}
+        modelPicker
+        onStop={() => extendAbortRef.current?.abort()}
         onCancel={() => setExtendOneItem(null)}
         onConfirm={runExtendOne}
+      />
+
+      <RegenerateOneModal
+        open={!!regenOneItem}
+        question={regenOneItem}
+        onClose={() => setRegenOneItem(null)}
+        onDone={applyRegenerated}
       />
 
       <RegenerateAllModal
@@ -1400,8 +1571,15 @@ function EntityForm({ type, data, kind, saving, onClose, onSave }) {
   const [composition, setComposition] = useState(() =>
     (data.subjectPlan || []).map((r) => ({ subject: r.subject || "", count: r.count ?? 0 }))
   );
-  const isTestItem = type === "item" && kind === "test";
-  const title = type === "item" ? (kind === "quiz" ? "Quiz" : "Test") : type === "stream" ? "Stream" : type === "topic" ? "Topic" : "Subject";
+  // Tests AND Previous Papers support a per-subject question plan (subject +
+  // planned count) so their Questions modal shows per-subject progress.
+  const isTestItem = type === "item" && (kind === "test" || kind === "paper");
+  // Previous Papers relabels the levels: subject = Exam, topic = Year, item = Paper.
+  const title = type === "item"
+    ? (kind === "quiz" ? "Quiz" : kind === "paper" ? "Paper" : "Test")
+    : type === "stream" ? "Stream"
+    : type === "topic" ? (kind === "paper" ? "Year" : "Topic")
+    : (kind === "paper" ? "Exam" : "Subject");
 
   const submit = (e) => {
     e.preventDefault();
@@ -1433,7 +1611,7 @@ function EntityForm({ type, data, kind, saving, onClose, onSave }) {
             <div className="rounded-xl border border-slate-200 p-3 dark:border-slate-700">
               <label className="mb-1 block text-sm font-semibold">Subjects &amp; questions per subject (optional)</label>
               <p className="mb-2 text-xs text-slate-500 dark:text-slate-400">
-                Type your subjects and how many questions each. Afterwards, tap the test → tap a subject to add
+                Type your subjects and how many questions each. Afterwards, tap the {title.toLowerCase()} → tap a subject to add
                 questions (up to its limit).
               </p>
               <SubjectPlanEditor rows={composition} onChange={setComposition} />

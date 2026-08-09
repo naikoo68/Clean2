@@ -1,5 +1,30 @@
 // Shared helpers for question lists (used across Content, Tests, Practice).
 
+// The four FIXED options for an "assertion" (Assertion & Reason) question, in
+// their canonical order — (a)…(d). Their order is meaningful (the stored
+// `correct` index points into this exact sequence), so they are never shuffled.
+// Used as a display fallback when a question was saved without its option text
+// (older/imported assertion questions can have blank `options`), matching the
+// rubric the backend AI prompt requires.
+export const ASSERTION_REASON_OPTIONS = [
+  "Both A and R are true and R is the correct explanation of A",
+  "Both A and R are true but R is NOT the correct explanation of A",
+  "A is true but R is false",
+  "A is false but R is true",
+];
+
+// The options to DISPLAY for a question. Normally just `q.options`, but for an
+// assertion question whose options are missing/blank it falls back to the fixed
+// A/R rubric above so the answer choices always render (never bare letters).
+export function displayOptions(q) {
+  const opts = q?.options || [];
+  if (q?.type === "assertion") {
+    const hasText = opts.length === 4 && opts.every((o) => String(o || "").trim() !== "");
+    if (!hasText) return ASSERTION_REASON_OPTIONS.slice();
+  }
+  return opts;
+}
+
 // Format a date as "12 Jul 2026, 11:05 AM" — always 12-hour with AM/PM
 // (hour12:true) so it never shows 24-hour time regardless of browser locale.
 export const fmtDateTime = (d) =>
@@ -40,6 +65,21 @@ export const questionDateText = (item) => {
   const base = `Uploaded ${fmtDateTime(created)}`;
   return updated ? `${base} · Updated ${fmtDateTime(updated)}` : base;
 };
+
+// The stem to DISPLAY for a question. For an assertion question the Assertion (A)
+// and Reason (R) statements live in their own fields and render in dedicated
+// boxes — but some questions also carry a copy of them inside the stem `text`,
+// which then shows TWICE. This returns the stem with any embedded
+// "Assertion (A): …/Reason (R): …" block stripped (keeping just the intro line),
+// but ONLY when the A/R are present in their own fields (so nothing is lost).
+export function stemText(q) {
+  const text = q?.text || "";
+  if (q?.type !== "assertion" || !(q?.assertion && q?.reason)) return text;
+  const idx = text.search(/\bAssertion\b\s*(?:\([Aa]\))?\s*[:\-]/);
+  if (idx === -1) return text.trim();
+  const intro = text.slice(0, idx).trim();
+  return intro || "Consider the following Assertion (A) and Reason (R):";
+}
 
 // Every piece of searchable text for a question, covering ALL question types:
 //  - mcq:        text, options, per-option explanations, explanation
@@ -109,4 +149,34 @@ export function searchQuestions(list, query) {
     .map((it) => ({ ...it, _match: matchPercent(q, it) }))
     .filter((it) => it._match >= 40)
     .sort((a, b) => b._match - a._match);
+}
+
+
+// Human-readable labels for each question TYPE, used by the "View all" type
+// filter (and matching the badges shown on each question card).
+export const QUESTION_TYPE_LABELS = {
+  mcq: "MCQ",
+  assertion: "Assertion & Reason",
+  matching: "Matching",
+  statement: "Statement",
+  pair: "Pair",
+  pairselect: "Pair-select",
+  table: "Table",
+  image: "Image",
+};
+
+// The canonical TYPE key for a question. A plain MCQ has no/blank/unknown type,
+// so anything not in QUESTION_TYPE_LABELS collapses to "mcq".
+export function questionTypeKey(q) {
+  const t = q?.type;
+  return QUESTION_TYPE_LABELS[t] ? t : "mcq";
+}
+
+// Filter a question list to only the selected type keys. An empty/omitted
+// selection means "all types" (no filtering).
+export function filterByType(list, selectedTypes) {
+  const arr = Array.isArray(list) ? list : [];
+  if (!Array.isArray(selectedTypes) || selectedTypes.length === 0) return arr;
+  const set = new Set(selectedTypes);
+  return arr.filter((q) => set.has(questionTypeKey(q)));
 }

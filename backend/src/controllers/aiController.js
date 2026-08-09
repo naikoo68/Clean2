@@ -4,6 +4,7 @@ import Question from "../models/Question.js";
 import Settings from "../models/Settings.js";
 import { ownerFilter } from "../utils/ownership.js";
 import { DEFAULT_CLIENT_PLANS } from "../utils/plans.js";
+import { splitIntoStems, contentOfBlock, questionLocation } from "./contentController.js";
 
 // Works with any OpenAI-compatible provider (Gemini, TokenLab, OpenAI, Groq,
 // DeepSeek, …). Keys come from TWO places, both used together:
@@ -112,8 +113,11 @@ async function resolveModel(requested, scope = SYSTEM_SCOPE) {
   const supporting = []; // keys that serve the selected model (preferred, tried first)
   const others = [];     // every other enabled key, each on a model it supports
   for (const p of provs) {
-    if (p.models.includes(model)) supporting.push({ key: p.key, baseUrl: p.baseUrl, model });
-    else others.push({ key: p.key, baseUrl: p.baseUrl, model: p.models[0] || model });
+    // Carry a display label so bulk jobs can surface live per-key activity
+    // ("Keys working this run"), same as the question generator.
+    const label = p.label || `••••${String(p.key).slice(-4)}`;
+    if (p.models.includes(model)) supporting.push({ key: p.key, baseUrl: p.baseUrl, model, label });
+    else others.push({ key: p.key, baseUrl: p.baseUrl, model: p.models[0] || model, label });
   }
   return { model, endpoints: [...supporting, ...others] };
 }
@@ -122,10 +126,21 @@ async function resolveModel(requested, scope = SYSTEM_SCOPE) {
 // (429/401/403). Each endpoint uses the model it supports (ep.model), so keys on
 // a different model still work as fallbacks. Other errors aren't retried on
 // another key.
-async function callWithFallback({ endpoints, model, userPrompt, maxTokens, owner = null, systemPrompt, failOnEmpty = false }) {
+async function callWithFallback({ endpoints, model, userPrompt, maxTokens, owner = null, systemPrompt, failOnEmpty = false, cooldown = null }) {
   let last = { ok: false, status: 0, detail: "No AI key is configured." };
   let sawQuota = false; // at least one key failed with a recoverable rate-limit
+  let considered = 0;   // keys we actually tried (not skipped for cooldown)
+  let skippedCooling = 0;
   for (const ep of endpoints || []) {
+    // Per-key rate-limit cooldown: if THIS key was recently 429'd, skip it and
+    // let another key answer. Only bulk jobs pass `cooldown`; single calls don't,
+    // so their behaviour is unchanged. This is what lets every non-limited key
+    // keep working instead of the whole job freezing on one key's limit.
+    if (cooldown) {
+      const until = cooldown.get(ep.key) || 0;
+      if (until > Date.now()) { skippedCooling += 1; continue; }
+    }
+    considered += 1;
     const r = await callProvider({ key: ep.key, baseUrl: ep.baseUrl, model: ep.model || model, userPrompt, maxTokens, systemPrompt, failOnEmpty });
     if (r.ok) {
       // Record app-side usage on the matching DB key (env-only keys aren't in
@@ -134,12 +149,28 @@ async function callWithFallback({ endpoints, model, userPrompt, maxTokens, owner
       AiKey.updateOne({ key: ep.key, owner: owner ?? null }, { $inc: { usedRequests: 1, usedTokens: r.tokens || 0 } }).catch(() => {});
       return r;
     }
-    if (r.status === 429) sawQuota = true;
+    if (r.status === 429) {
+      sawQuota = true;
+      // Park THIS specific key until the provider says it's safe again
+      // (Gemini returns e.g. "retryDelay":"27s"), so bulk jobs stop sending it
+      // requests while it's limited but keep hammering every other key.
+      if (cooldown) {
+        const m = /"retryDelay"\s*:\s*"?(\d+)\s*s/i.exec(r.detail || "");
+        const ms = m ? Math.min(Math.max(parseInt(m[1], 10) * 1000 + 1000, 5000), 60000) : 60000;
+        cooldown.set(ep.key, Date.now() + ms);
+      }
+    }
     last = r;
     // 520 = a 200 with EMPTY content (safety filter / thinking-only reply). Like
     // a rate-limit, it's worth rolling over to the NEXT key/model rather than
     // giving up — another key on a stronger model may return real content.
     if (![429, 401, 403, 520].includes(r.status)) break;
+  }
+  // Every candidate key was in cooldown (none actually tried): report it as a
+  // 429 so the bulk job briefly backs off and retries, rather than treating it
+  // as a hard failure.
+  if (considered === 0 && skippedCooling > 0) {
+    return { ok: false, status: 429, detail: "All available keys are cooling down from rate limits." };
   }
   // Every key failed. If ANY failure was just a rate-limit (429, recoverable) but
   // the LAST key tried happened to be an unauthorized/disabled one (401/403),
@@ -327,9 +358,10 @@ Each question object uses these fields:
 - "options": array of EXACTLY 4 answer strings.
 - "correct": 0-based index (0-3) of the correct option in "options".
 - "difficulty": one of "Easy", "Medium", "Hard".
-- "explanation": a THOROUGH, self-contained explanation of the correct answer (3-6 sentences). Include EVERY relevant supporting fact a student needs — exact dates/years, historical background, definitions, full formulas WITH the actual calculation, laws/theorems/principles by name, cause-and-effect reasoning, and any key names, places or numbers. Never give a one-line answer or just restate the option; teach the concept as if to someone seeing it for the first time. FORMATTING: break the explanation into MULTIPLE short lines — put each sentence or distinct point on its OWN line (use a line break between points, and a blank line between grouped points); NEVER write it as one long paragraph.
-- LOCAL / ALTERNATIVE NAMES: whenever a term, concept, place, person, species, disease, chemical, unit, festival, law or any answer option ALSO has another name — a common or locally/regionally used name (including the vernacular / Hindi / local-language term), a synonym, an abbreviation's full form, or an old/renamed title — ALWAYS mention that alternative name in brackets right after it, so learners recognise it by the name they use locally. Examples: "Sodium bicarbonate (baking soda; 'khaane wala soda')", "Mumbai (formerly Bombay)", "Tuberculosis (TB)", "Vitamin C (ascorbic acid)". Add it in both "explanation" and the relevant "optionExplanations" entries.
-- "optionExplanations": array of EXACTLY 4 strings, one per option, clearly explaining why each specific option is right or wrong (for wrong ones, name the exact misconception or fact that makes it incorrect). Include the local/alternative name of an option in brackets where one exists. Leave the correct option's entry an empty string "".
+- "explanation": a THOROUGH, self-contained explanation of the correct answer (3-6 sentences). Include EVERY relevant supporting fact a student needs — exact dates/years, historical background, definitions, full formulas WITH the actual calculation, laws/theorems/principles by name, cause-and-effect reasoning, and any key names, places or numbers. Never give a one-line answer or just restate the option; teach the concept as if to someone seeing it for the first time. FORMATTING: break the explanation into MULTIPLE short lines — put each sentence or distinct point on its OWN line (use a line break between points, and a blank line between grouped points); NEVER write it as one long paragraph. EXPLANATION SCOPE BY TYPE (IMPORTANT): for a plain "mcq", the explanation must teach ONLY the correct option in depth — do NOT mention, compare or justify the three incorrect options in it. For EVERY OTHER type (matching, statement, pair, pairselect, assertion, table), the explanation MUST instead walk through each pairing / statement / sub-option and the assertion–reason relationship — the correct ones AND the incorrect ones — in detail, exactly as the type-specific rules below require.
+- LOCAL / ALTERNATIVE NAMES: whenever a term, concept, place, person, species, disease, chemical, unit, festival, law or any answer option ALSO has another name — a common or locally/regionally used name (including the vernacular / Hindi / local-language term), a synonym, an abbreviation's full form, or an old/renamed title — ALWAYS mention that alternative name in brackets right after it, so learners recognise it by the name they use locally. Examples: "Sodium bicarbonate (baking soda; 'khaane wala soda')", "Mumbai (formerly Bombay)", "Tuberculosis (TB)", "Vitamin C (ascorbic acid)". Add it in both the "explanation" and the relevant "optionExplanations" entries.
+- "optionExplanations": array of EXACTLY 4 strings, one per option, clearly explaining why each specific option is right or wrong — for the WRONG options name the exact misconception or fact that makes them incorrect. This applies to EVERY type INCLUDING plain "mcq": for an mcq each incorrect option MUST still get its own note here (these appear under each option), even though the "explanation" box itself stays focused only on the correct option. Include the local/alternative name of an option in brackets where one exists, and leave the truly-correct option's entry an empty string "". EXCEPTION — for CALCULATION-based questions (see "numerical" below), leave ALL FOUR entries as empty strings "".
+- "numerical": true ONLY when the question is answered by CALCULATION (arithmetic, applying a formula, or solving an equation to reach a value); otherwise false. When it is true, the step-by-step working in "explanation" IS the full justification — so set ALL FOUR "optionExplanations" to empty strings "" and do NOT write any per-option "why it is wrong" notes.
 - "correct": distribute the correct answer's position EVENLY and RANDOMLY across the four options over the whole set — do NOT keep putting the answer at option A. Aim for a roughly equal spread of correct answers landing on positions 0, 1, 2 and 3.
 Type-specific rules — each type needs specific extra fields AND a specific style of "options":
 - "mcq": a normal question with 4 plausible options; "correct" is the right one. No extra fields.
@@ -337,18 +369,19 @@ Type-specific rules — each type needs specific extra fields AND a specific sty
 - "statement": REQUIRED — put the individual statements in "columnA" as an array of 2-4 complete statement SENTENCES (e.g. ["The carbon cycle involves photosynthesis and respiration.","Nitrogen fixation is performed only by plants."]). "columnA" must NEVER be empty. "text" is ONLY the intro line ending with a colon (e.g. "Consider the following statements regarding the nitrogen cycle:") — do NOT put the numbered statements inside "text", and do NOT rely on the explanation alone to describe them. The 4 "options" are COMBINATIONS like "1 only", "2 only", "1 and 2 only", "Neither 1 nor 2". In "explanation", evaluate EACH statement (1, 2, …) as true/false with the reason.
 - "pair": include "columnA" (left items) and "columnB" (right items); item i is paired with item i. "text" is ONLY the intro line (e.g. "Consider the following pairs:") — the pairs themselves MUST be the arrays "columnA" and "columnB", each with 3-4 items and the SAME length. NEVER put the pair items inside "text", and NEVER use a different key such as "pairs"/"matches". The 4 "options" state HOW MANY pairs are correctly matched, e.g. "Only one pair", "Only two pairs", "Only three pairs", "All four pairs". In "explanation", go through EACH pair stating whether it is correctly matched and the fact behind it.
 - "pairselect": include "columnA" and "columnB" (candidate pairs), each with 3-4 items of the SAME length; put them ONLY in these arrays (NOT inside "text", NOT under any other key). "text" is only the intro line. The 4 "options" state WHICH pairs are correct, e.g. "1 and 2 only", "2 and 3 only", "1, 3 and 4 only", "All of the above". In "explanation", go through EACH pair stating whether it is correct or wrong and why.
-- "assertion": include "assertion" (Assertion A text) and "reason" (Reason R text); "text" may be empty. The 4 "options" MUST be exactly: "Both A and R are true and R is the correct explanation of A", "Both A and R are true but R is NOT the correct explanation of A", "A is true but R is false", "A is false but R is true". In "explanation", separately evaluate Assertion (A) — state true/false and WHY with supporting facts — then separately evaluate Reason (R) — true/false and WHY — and finally explain the RELATIONSHIP: whether R correctly explains A and why.
+- "assertion": REQUIRED — you MUST include BOTH "assertion" (the full Assertion A statement) and "reason" (the full Reason R statement) as NON-EMPTY, complete standalone sentences. NEVER leave "assertion" or "reason" blank, and NEVER put the A/R statements only inside "explanation" or "text" — the actual statements MUST be in the "assertion" and "reason" fields ("text" may be empty). The 4 "options" MUST be exactly: "Both A and R are true and R is the correct explanation of A", "Both A and R are true but R is NOT the correct explanation of A", "A is true but R is false", "A is false but R is true". In "explanation", separately evaluate Assertion (A) — state true/false and WHY with supporting facts — then separately evaluate Reason (R) — true/false and WHY — and finally explain the RELATIONSHIP: whether R correctly explains A and why.
 - "table": put the data table in "tableRows" (a 2D array; the first inner array is the header row) — NEVER write it as a markdown/pipe ("| a | b |") table inside "text". "text" is ONLY the question sentence. Wrap any math in a cell in $...$. 4 normal options that match a calculation done from the table.
 Do NOT prefix columnA / columnB / statement items with numbers or roman numerals (no "1.", "I.") — the app numbers Column A (1,2,3,4), Column B (I,II,III,IV) and statements (1,2,3) automatically.
 OPTIONAL DIAGRAM ("graph"): ONLY when a question genuinely needs a diagram to be answered or understood — e.g. an ECONOMICS supply/demand curve, a shift, an equilibrium, a cost curve, or any simple straight-line/curve relationship — include a "graph" object. The app DRAWS it as a labelled chart, so provide DATA, not prose. Shape: {"xLabel":"Quantity","yLabel":"Price","lines":[{"label":"Demand","points":[[0,100],[100,0]]},{"label":"Supply","points":[[0,0],[100,100]]}],"points":[{"label":"E (equilibrium)","x":50,"y":50}]}. Rules for "graph": use a consistent numeric scale for all points; each line needs a short "label" and at least two [x,y] points (use 3-6 points for a curve); put key intersections/equilibria in "points" with a short label; keep values simple (0-100 is ideal). If the question also refers to the diagram in words, keep "text" as the question itself (e.g. "In the diagram, the equilibrium price is:"). OMIT "graph" entirely for questions that don't need a visual (most questions) — never add a decorative or irrelevant graph.
 VARIETY IS MANDATORY: within the set, every question must test a DIFFERENT fact / sub-topic and a DIFFERENT angle (definition, cause, effect, date or number, example, comparison, application, exception, sequence). NEVER ask about the same fact, entity or correct answer more than once, and NEVER reword or rephrase another question — a different sentence with the same meaning counts as a duplicate and is forbidden. Spread the questions across the full breadth of the topic rather than clustering on the few most obvious facts.
 SAME-CATEGORY OPTIONS (CRITICAL FOR PLAUSIBILITY): all four "options" MUST belong to the SAME real-world category, type and format as the correct answer, so every wrong option is a genuine, closely-related distractor — never off-topic or an obvious give-away. If the answer is a plant/tree, ALL four options are real plant/tree names; if a person, all are people of the same field/era; if a river, all are rivers; if a place, all are comparable places; if a date/year, all are plausible nearby dates; and likewise for chemicals, diseases, units, languages, books, laws, awards, animals, festivals, etc. Match the grammatical form, language, length and level of specificity across the four options, and prefer real, well-known members of that category that a knowledgeable student could genuinely confuse with the answer. NEVER mix unrelated kinds (for example, for "the Kashmiri name of the Chinar TREE", every option must be a tree name — do NOT put a flower, a bird or an unrelated word among them).
 CALCULATIONS & SELF-VERIFICATION (do this for EVERY question before you finalise it):
-- NUMERICAL / QUANTITATIVE questions: pick the correct FORMULA for the concept, substitute the actual values, and COMPUTE the answer step by step. Mark as "correct" ONLY the option that EXACTLY equals your computed result; make the other three plausible but genuinely wrong (each reflecting a specific common mistake). In "explanation" show the full working — formula, then substitution, then each intermediate result, then the final value — each step on its OWN line. NEVER mark an answer your own calculation does not produce, and make sure the explanation's steps end at the marked option.
+- NUMERICAL / QUANTITATIVE questions: pick the correct FORMULA for the concept, substitute the actual values, and COMPUTE the answer step by step. Mark as "correct" ONLY the option that EXACTLY equals your computed result; make the other three plausible but genuinely wrong (each reflecting a specific common mistake). In "explanation" show the full working — formula, then substitution, then each intermediate result, then the final value — each step on its OWN line. NEVER mark an answer your own calculation does not produce, and make sure the explanation's steps end at the marked option. Set "numerical": true for these questions and leave ALL FOUR "optionExplanations" as empty strings "" (the working in the explanation is enough).
 - MATCHING / PAIR / STATEMENT questions: verify each pairing/statement individually and make "correct" reflect the TRUE count/combination (and provide an option that matches it).
 - Re-check every calculation and fact; the marked "correct" option and the "optionExplanations" must be mutually consistent.
 MATH RENDERING (so numericals display correctly): wrap EVERY mathematical element in $...$ (inline LaTeX) — in the "text", the "options" AND the "explanation". This includes each numeric ANSWER OPTION that is a number/quantity/expression (e.g. options "$12.5$", "$\\frac{3}{4}$", "$2^{10}$", "$25\\%$", "$\\sqrt{2}$", "$3:4$"), every fraction, power, root, ratio, percentage and equation, and each step of a calculation. A plain number that is only ordinary prose (a year, a page count) need not be wrapped, but any numeric option or math expression MUST be. Use $...$ only (never \\( \\) or \\[ \\]) and never write bare LaTeX commands outside dollar signs. NEVER wrap ordinary words, names, proper nouns, transliterated/Sanskrit/vernacular terms or whole phrases in $...$ (write Natya, abhinaya, Abhinaya Darpana — NOT $Natya$, $abhinaya$, $AbhinayaDarpana$); $...$ is EXCLUSIVELY for numbers, numeric values, units, scientific/chemical symbols, variables and formulas. For a simple arrow between items (a route/sequence such as "Lakhanpur → Samba → Udhampur → Banihal"), use the plain Unicode arrow character → directly — do NOT write \\rightarrow or \\to.
 CURRENCY: NEVER use the "$" character for money/amounts anywhere ("text", "options", "explanation", "optionExplanations") — "$" is reserved ONLY for wrapping inline math, and a stray "$" (e.g. "$300") corrupts the rendering of the whole field. Write money as a plain number with the currency word, e.g. "300 dollars" or "900 rupees" or just "300".
+LAWS / BILLS / ACTS / AMENDMENTS & DATES (accuracy is critical): base any question about a law, bill, act, amendment, ordinance, scheme, treaty, appointment, report or event ONLY on the REAL, verifiable item with its CORRECT details — never invent a hypothetical, fictional or unconfirmed one. When such an item is identified by a year, CONSIDER AND USE ITS EXACT DATE (day, month and year of introduction / passage / enactment / coming into force, as applicable) — do NOT rely on the year alone; state the precise date in the question and/or explanation where relevant. If the exact date or specific provisions of a very recent item are not reliably known to you, do NOT fabricate a date, a strength/number or a provision — instead ask about the established, verifiable facts (or omit that question). Never present an assumed year without the confirmed exact date as if it were fact.
 ${TOPIC_SCOPE_RULE}
 COMPLETE SYLLABUS COVERAGE (top priority for CHOOSING what to ask):
 You are an expert educational assessment designer and subject specialist. Before writing, mentally build a SYLLABUS MAP of the topic exactly as covered in NCERT, standard university textbooks and competitive examinations (and current affairs where relevant), listing its major concepts, subtopics and micro-topics across EVERY applicable category: introduction, definitions, terminology, components, classification, principles, causes, processes, mechanisms, types, characteristics, distribution, factors, effects, importance, advantages, disadvantages, applications, examples, exceptions, comparisons, frequently-confused concepts, numericals/formulas and maps/diagrams (where applicable), plus current affairs, recent research and government policies. Also cover, wherever they apply, the historical, geographical, scientific, economic, environmental, political, technological and current dimensions, and the regional, national and international aspects.
@@ -424,10 +457,12 @@ async function outlineSubtopics({ endpoints, model, topic, notes, source, want }
   return [];
 }
 
-function buildUserPrompt({ topic, count, difficulty, types, notes, plan, avoid, source, focus }) {
+function buildUserPrompt({ topic, count, difficulty, types, notes, plan, avoid, source, focus, numerical = false, reshape = false }) {
   const lines = [];
   if (source) {
-    lines.push(`Create the questions BASED ON the source material given at the end. Draw the facts and content from that material (you may use closely-related general knowledge to complete a question, but stay on the material's topics).`);
+    lines.push(reshape
+      ? `The SOURCE MATERIAL at the end is a set of EXISTING exam questions. RECAST / RESHAPE the FACTS in them into the requested question TYPES — e.g. bundle several related facts into a "consider the following statements" question, turn a single fact into an assertion–reason, or build a matching / pair question from related facts. REUSE the underlying knowledge but produce the NEW format requested: do NOT simply copy an MCQ unchanged, and do NOT alter the underlying facts. Spread across the material so different facts are used.`
+      : `Create the questions BASED ON the source material given at the end. Draw the facts and content from that material (you may use closely-related general knowledge to complete a question, but stay on the material's topics).`);
   }
   lines.push(`Topic / syllabus: ${topic}.`);
   lines.push(TOPIC_SCOPE_RULE);
@@ -460,6 +495,14 @@ function buildUserPrompt({ topic, count, difficulty, types, notes, plan, avoid, 
         : `Mix the difficulty across Easy, Medium and Hard.`
     );
   }
+
+  // Numerical/calculation questions are OPT-IN. By default keep the set purely
+  // conceptual/factual; only when the caller asks do we allow quantitative ones.
+  lines.push(
+    numerical
+      ? `You MAY include NUMERICAL / CALCULATION questions (problems solved with a formula or arithmetic to compute a numeric value) alongside conceptual ones, where they fit the topic.`
+      : `Do NOT create NUMERICAL / CALCULATION questions: no problems that require arithmetic, solving equations, applying a formula to compute a value, or any quantitative working-out. Keep EVERY question conceptual/factual/theoretical (definitions, facts, causes/effects, reasoning, matching) — not quantitative. (Genuine dates/years/quantities that are simply RECALLED facts are fine; questions that require the student to CALCULATE are not.)`
+  );
 
   if (notes) {
     lines.push(
@@ -630,6 +673,46 @@ function unwrapWordMath(s) {
   });
 }
 
+// Assertion–Reason questions MUST carry both the Assertion (A) and the Reason
+// (R) as their own statements. Models sometimes leave "reason" (or both) blank
+// and either pack "Assertion: … Reason: …" into a single field or dump them into
+// the stem, putting the real content only in "explanation". Such a question
+// renders as a broken A/R and later fails CSV re-import ("assertion needs an
+// Assertion, a Reason and 4 options"). Recover A and R from a packed field or
+// the stem so a complete pair is stored; whatever is still missing is dropped by
+// normalize() rather than saved broken.
+function recoverAssertionReason(assertion, reason, text) {
+  let a = String(assertion == null ? "" : assertion).trim();
+  let r = String(reason == null ? "" : reason).trim();
+  const splitOnReason = (s) => {
+    const str = String(s || "");
+    const m = str.match(/\bReason\b\s*(?:\([Rr]\))?\s*[:\-]/);
+    if (m && m.index > 0) return [str.slice(0, m.index).trim(), str.slice(m.index + m[0].length).trim()];
+    return null;
+  };
+  // Both packed into the assertion field ("Assertion (A): … Reason (R): …").
+  if (a && !r) { const p = splitOnReason(a); if (p) { a = p[0]; r = p[1]; } }
+  // Both dumped into the stem instead of the dedicated keys.
+  if ((!a || !r) && /\bReason\b\s*(?:\([Rr]\))?\s*[:\-]/.test(text || "")) {
+    const p = splitOnReason(text);
+    if (p) { if (!a) a = p[0]; if (!r) r = p[1]; }
+  }
+  // Strip any leading "Assertion (A):" / "Reason (R):" label.
+  a = a.replace(/^\s*Assertion\b\s*(?:\([Aa]\))?\s*[:\-]\s*/, "").trim();
+  r = r.replace(/^\s*Reason\b\s*(?:\([Rr]\))?\s*[:\-]\s*/, "").trim();
+  return { assertion: a, reason: r };
+}
+
+// Remove any Assertion (A) / Reason (R) statements the model embedded in an
+// assertion question's STEM — they belong only in the dedicated assertion/reason
+// fields (and their own boxes), so a copy in the stem renders the A/R twice.
+// Keeps just the intro line before the first "Assertion" label.
+function stripAssertionFromStem(text) {
+  const s = String(text || "");
+  const idx = s.search(/\bAssertion\b\s*(?:\([Aa]\))?\s*[:\-]/);
+  return idx === -1 ? s.trim() : s.slice(0, idx).trim();
+}
+
 // Coerce anything the model returned into a valid Question document shape.
 function normalize(list) {
   const clampIdx = (n) => Math.min(3, Math.max(0, parseInt(n, 10) || 0));
@@ -692,8 +775,12 @@ function normalize(list) {
         if (!out.text) out.text = "Consider the following statements:";
       }
       if (type === "assertion") {
-        out.assertion = asStr(q?.assertion).trim();
-        out.reason = asStr(q?.reason).trim();
+        const ar = recoverAssertionReason(q?.assertion, q?.reason, q?.text);
+        out.assertion = ar.assertion;
+        out.reason = ar.reason;
+        // The A/R now live in their own fields — remove any copy left in the
+        // stem so they don't render twice (keep only the intro line).
+        if (out.assertion && out.reason) out.text = stripAssertionFromStem(out.text);
         if (!out.text) out.text = "Consider the following Assertion (A) and Reason (R):";
       }
       if (type === "table") {
@@ -717,9 +804,16 @@ function normalize(list) {
       if (Array.isArray(out.columnA)) out.columnA = out.columnA.map(unwrapWordMath);
       if (Array.isArray(out.columnB)) out.columnB = out.columnB.map(unwrapWordMath);
       if (Array.isArray(out.tableRows)) out.tableRows = out.tableRows.map((r) => (Array.isArray(r) ? r.map(unwrapWordMath) : r));
+      // Calculation-based questions don't need per-option "why wrong" notes —
+      // the step-by-step working in the explanation covers it. Drop them when
+      // the model flags the question as numerical (calculation-based).
+      if (q?.numerical === true || q?.numerical === "true") out.optionExplanations = ["", "", "", ""];
       return out;
     })
-    .filter((q) => q.text); // drop empty questions
+    // Drop empty questions, and drop assertion questions still missing their
+    // Assertion or Reason (they render broken and fail CSV re-import) rather
+    // than saving them incomplete.
+    .filter((q) => q.text && (q.type !== "assertion" || (q.assertion && q.reason)));
 }
 
 // Spread the correct answer evenly + randomly across A/B/C/D so it isn't always
@@ -943,16 +1037,16 @@ async function callProvider({ key, baseUrl, model, userPrompt, maxTokens, system
   }
 }
 
-// Take a sub-plan of up to `size` questions off the front of a bucket plan.
+// Take the NEXT single bucket (one type + difficulty) off the front of a bucket
+// plan, up to `size` questions. Keeping each chunk to ONE bucket lets the worker
+// reliably stamp the requested difficulty and reject off-type replies, so the
+// grid's exact type × difficulty distribution is honoured (models otherwise
+// mislabel difficulty/type and quietly skew the mix).
 function takeChunk(planArr, size) {
-  const chunk = [];
-  let tot = 0;
-  for (const b of planArr) {
-    if (tot >= size) break;
-    const take = Math.min(b.count, size - tot);
-    if (take > 0) { chunk.push({ type: b.type, difficulty: b.difficulty, count: take }); tot += take; }
-  }
-  return chunk;
+  const b = planArr[0];
+  if (!b) return [];
+  const take = Math.min(b.count, size);
+  return take > 0 ? [{ type: b.type, difficulty: b.difficulty, count: take }] : [];
 }
 
 // Given the target plan and what we've collected so far, return the buckets
@@ -1024,7 +1118,7 @@ function planGaps(planArr, collected, reserved) {
 }
 
 async function runGenerationJob(id, ctx) {
-  const { workers, fallbackWorkers = [], model, topic, notes, plan, count, difficulty, types, target, avoid, owner = null, source = "", userSubtopics = [] } = ctx;
+  const { workers, fallbackWorkers = [], model, topic, notes, plan, count, difficulty, types, target, avoid, owner = null, source = "", userSubtopics = [], numerical = false, reshape = false } = ctx;
   const job = genJobs.get(id);
   const deadline = Date.now() + 8 * 60 * 1000; // overall time budget
   if (!job.keyStats) job.keyStats = {}; // live per-key activity for THIS run
@@ -1146,8 +1240,8 @@ async function runGenerationJob(id, ctx) {
       const res = reserveChunk();
       if (!res) break; // nothing left to generate
       const prompt = plan
-        ? buildUserPrompt({ topic, notes, plan: res.chunk, avoid: avoidNow(), source, focus: res.focus })
-        : buildUserPrompt({ topic, notes, count: res.n, difficulty, types, avoid: avoidNow(), source, focus: res.focus });
+        ? buildUserPrompt({ topic, notes, plan: res.chunk, avoid: avoidNow(), source, focus: res.focus, numerical, reshape })
+        : buildUserPrompt({ topic, notes, count: res.n, difficulty, types, avoid: avoidNow(), source, focus: res.focus, numerical, reshape });
       const maxTokens = Math.min(16000, 1800 + res.n * 1000);
       attempts += 1;
       // Live per-key activity for this run (surfaced via jobStatus.keyStats).
@@ -1162,13 +1256,27 @@ async function runGenerationJob(id, ctx) {
         _ks.ok += 1;
         AiKey.updateOne({ key: ep.key, owner: ep.owner ?? owner ?? null }, { $inc: { usedRequests: 1, usedTokens: r.tokens || 0 } }).catch(() => {});
         const beforeLen = collected.length;
+        // In plan mode each chunk is ONE bucket (type + difficulty). Accept only
+        // questions of the requested TYPE (reject the model's off-type replies so
+        // they don't wrongly fill the bucket), STAMP the requested difficulty
+        // (models mislabel it constantly), and stop at the bucket's count — so
+        // the grid's per-type/per-difficulty distribution is actually enforced,
+        // not just the grand total.
+        const bkt = plan ? res.chunk[0] : null;
+        let takenThisChunk = 0;
         for (const q of normalize(parseQuestions(r.content))) {
           if (collected.length >= target) break;
+          if (bkt) {
+            if (takenThisChunk >= res.n) break; // bucket already satisfied by this reply
+            if (q.type !== bkt.type) continue; // wrong type — don't count it toward this bucket
+          }
           const sig = qSig(q);
           if (!sig || seen.has(sig)) continue; // skip blanks + exact duplicates
           if (isSemanticDup(q)) continue; // skip the SAME fact reworded (semantic duplicate)
+          if (bkt) q.difficulty = bkt.difficulty; // enforce the requested difficulty
           seen.add(sig);
           collected.push(q);
+          takenThisChunk += 1;
         }
         _ks.questions += collected.length - beforeLen;
         save({ questions: collected.slice() });
@@ -1427,17 +1535,18 @@ export async function generateQuestions(req, res) {
     requested: target,
     error: null,
     model,
+    plan: plan || null, // per type × difficulty buckets — powers the live breakdown
     updatedAt: Date.now(),
   });
 
   // Stems of questions that already exist (from earlier batches) — the generator
   // must not repeat these. Capped to keep the request reasonable.
   const avoid = Array.isArray(req.body?.avoid)
-    ? req.body.avoid.filter((s) => typeof s === "string" && s.trim()).slice(0, 300)
-    : [];
+    ? req.body.avoid.filter((s) => typeof s === "string" && s.trim()).slice(0, 1000)
+    : []; // may include EVERY existing question in the whole topic (across its quizzes) so new questions don't duplicate them
 
   // Fire-and-forget — the client polls /api/ai/job/:id for progress.
-  guardJob(id, runGenerationJob(id, { workers, fallbackWorkers, model, topic, notes, plan, count, difficulty, types, target, avoid, owner: jobOwner, source, userSubtopics }));
+  guardJob(id, runGenerationJob(id, { workers, fallbackWorkers, model, topic, notes, plan, count, difficulty, types, target, avoid, owner: jobOwner, source, userSubtopics, numerical: !!req.body?.numerical, reshape: !!req.body?.reshape }));
 
   res.json({ jobId: id, requested: target, model });
 }
@@ -1446,16 +1555,31 @@ export async function generateQuestions(req, res) {
 export function jobStatus(req, res) {
   const job = genJobs.get(req.params.id);
   if (!job) return res.status(404).json({ message: "Job not found or expired." });
+  // Live per-type/per-difficulty breakdown ("have / want") from what's been
+  // produced so far, so the UI can show e.g. "Assertion & Reason — Hard 8/10".
+  let byBucket;
+  if (Array.isArray(job.plan) && job.plan.length) {
+    const have = {};
+    for (const q of job.questions) { const k = `${q.type}|${q.difficulty}`; have[k] = (have[k] || 0) + 1; }
+    byBucket = job.plan.map((b) => ({
+      type: b.type,
+      difficulty: b.difficulty,
+      want: b.count,
+      have: have[`${b.type}|${b.difficulty}`] || 0,
+    }));
+  }
   res.json({
     status: job.status, // pending | done | error
     count: job.questions.length,
     requested: job.requested,
+    byBucket, // [{ type, difficulty, want, have }] — undefined for legacy/count-mode jobs
     chunksTotal: job.chunksTotal, // for import jobs (source split into pieces)
     chunksDone: job.chunksDone,
     model: job.model,
     error: job.error,
     cancelled: !!job.cancelled,
     keyStats: job.keyStats || {}, // live per-key activity this run
+    waitUntil: job.waitUntil || null, // epoch ms until an auto-retry after a rate limit → UI shows a countdown
     questions: job.status === "done" ? job.questions : undefined,
   });
 }
@@ -1870,7 +1994,10 @@ function buildExtractPrompt(sourceText, notes = "") {
     "",
     "MOST IMPORTANT: capture EVERY question in the material below — do not skip, summarise or merge any. If the text contains 40 questions, return all 40, in their original order.",
     "Equally important: do NOT invent questions, do NOT repeat/duplicate a question, and do NOT split one question (or its sub-parts/options) into multiple questions. The number you return must NOT exceed the number actually present in the text.",
-    "The source questions are NUMBERED (1, 2, 3, …). For EACH question, include its exact source number as an integer field \"n\". Return EXACTLY ONE object per numbered question — if the text has questions numbered up to 50, return 50 objects with n = 1..50. Never merge two numbers into one object and never split one number into two.",
+    "The source questions are NUMBERED. For EACH question, include its printed source number as an integer field \"n\", and return EXACTLY ONE object per printed question, in the original order. Never merge two questions into one object, and NEVER split one question into two.",
+    "Question numbers may RESTART at 1 for every new SECTION / PART of the paper (e.g. several sections each beginning at \"Question No. 1\") — that is normal and expected, and the same number can appear in several sections. Treat EVERY printed question as its own separate object even when its number repeats across sections; never drop, merge or renumber a question just because that number appeared earlier.",
+    "A single question OFTEN CONTAINS internal structure — a data / frequency / marks table, x/y value rows, a \"Match the following\" list (I, II, III, IV), an assertion–reason pair, or numbered statements (1., 2., 3., …). ALL of that is PART OF ONE question. NEVER treat a table row, a match item, a statement line, a sub-part, or an answer option as a separate question. Keep the whole thing as exactly ONE object of the appropriate type.",
+    "The number of objects you return for this material must EQUAL the number of printed question stems in it — never more. If you are unsure whether something is a new question or a part of the previous one, keep it as part of the previous one.",
     "Write any mathematical or numerical content as INLINE MATH using $…$ (LaTeX) inside \"text\" and \"options\": equations, fractions, exponents/powers, roots, ratios, percentages, and the numbers used in quantitative questions. Examples: $2^{10}\\times5^{8}$, $\\frac{3}{4}$, $x\\%$ of $y$, $45678x9231$, $\\sqrt{2}$. (Numbers that are just part of ordinary prose need not be wrapped.)",
     "NEVER use the \"$\" character for money/currency — \"$\" is reserved only for wrapping math, and a stray \"$\" (e.g. \"$300\") corrupts rendering. Write money as \"300 dollars\"/\"900 rupees\"/just the number.",
     "",
@@ -1908,43 +2035,76 @@ async function runExtractionJob(id, { endpoints, model, chunks, owner = null, ha
   const deadline = Date.now() + 8 * 60 * 1000; // 8-minute budget (smaller chunks = more calls)
   const collected = [];
   const seen = new Set();
-  // Seed the de-dup set with the already-extracted questions so they are skipped.
-  // Numbered papers de-dup by source number (n:<num>) — stable across re-runs;
-  // otherwise by the fuzzy content signature.
+  // Seed the de-dup set with the already-extracted questions so they are skipped
+  // on a re-run ("Extract remaining"). Key by the STABLE CONTENT SIGNATURE, never
+  // the source number: (1) the same question can come back with or without an
+  // "n" between passes, and an n-key seeded from the first pass then fails to
+  // match a signature-keyed re-extraction — so the duplicates slip through and a
+  // re-run balloons far past the detected total (the "extract remaining 20 →
+  // 140" bug); (2) multi-section papers reuse numbers (Section A "1.", Section B
+  // "1."), so an n-key wrongly collapses two DISTINCT questions into one. The
+  // signature is identical across passes and unique per real question.
   for (const nq of normalize(Array.isArray(have) ? have : [])) {
-    seen.add(nq.n != null ? `n:${nq.n}` : extractSig(nq));
+    seen.add(extractSig(nq));
   }
   let lastError = null;
 
   const save = (patch) => Object.assign(job, patch, { updatedAt: Date.now() });
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+  // Process every chunk, but treat a failed / empty / quota-blocked chunk as
+  // RETRYABLE rather than losing it. The old loop dropped a whole chunk (~20
+  // questions) whenever ONE call had a transient error (it just `continue`d),
+  // and ABORTED the entire job on the first 429 (`break`) — both left the import
+  // far short of the detected total. Now we make several passes: any chunk that
+  // errors, is rate-limited, or parses to zero questions is retried on a later
+  // pass, and a 429 makes us WAIT for the per-minute limit to reset (surfaced via
+  // `waitUntil` for a live countdown) instead of giving up on the rest.
+  const MAX_ROUNDS = 4;
+  const doneIdx = new Set(); // chunks that returned a usable (parseable) reply
+  let pending = chunks.map((text, idx) => ({ text, idx }));
   try {
-    for (let c = 0; c < chunks.length; c++) {
-      if (Date.now() > deadline || job.cancelled) break;
-      const r = await callWithFallback({
-        endpoints,
-        model,
-        userPrompt: buildExtractPrompt(chunks[c], notes),
-        maxTokens: 16000,
-        owner,
-      });
-      save({ chunksDone: c + 1 });
-      if (!r.ok) {
-        lastError = r;
-        if (r.status === 429) break; // quota exhausted — stop, keep what we have
-        continue;
+    for (let round = 0; round < MAX_ROUNDS && pending.length && Date.now() < deadline && !job.cancelled; round++) {
+      const failed = [];
+      for (const item of pending) {
+        if (Date.now() > deadline || job.cancelled) { failed.push(item); continue; }
+        const r = await callWithFallback({
+          endpoints,
+          model,
+          userPrompt: buildExtractPrompt(item.text, notes),
+          maxTokens: 16000,
+          owner,
+        });
+        if (!r.ok) {
+          lastError = r;
+          failed.push(item); // retry this chunk on a later pass
+          if (r.status === 429) {
+            // Quota/rate limit — wait for it to reset, then keep going instead of
+            // abandoning every remaining chunk. Expose the wait for a countdown.
+            const wait = 60000;
+            if (Date.now() + wait < deadline) { save({ waitUntil: Date.now() + wait }); await sleep(wait); save({ waitUntil: null }); }
+          }
+          continue;
+        }
+        const parsed = normalize(parseQuestions(r.content));
+        if (!parsed.length) { failed.push(item); continue; } // parse failed / empty / truncated to nothing — retry
+        for (const q of parsed) {
+          if (!isRealQuestion(q)) continue; // keep ONLY genuine questions — drop headers/instructions/etc.
+          // De-duplicate by the STABLE CONTENT SIGNATURE (same key on every pass and
+          // section) so a re-run adds only the genuinely-missed questions and never
+          // re-piles ones we already have. (Source numbers are unreliable: they can
+          // restart per section and may be present in one pass but absent in another.)
+          const key = extractSig(q);
+          if (seen.has(key)) continue; // skip duplicates across chunks / re-runs
+          seen.add(key);
+          collected.push(q);
+        }
+        doneIdx.add(item.idx);
+        save({ questions: collected.slice(), chunksDone: doneIdx.size });
       }
-      for (const q of normalize(parseQuestions(r.content))) {
-        if (!isRealQuestion(q)) continue; // keep ONLY genuine questions — drop headers/instructions/etc.
-        // For numbered papers, de-duplicate by the SOURCE question number so the
-        // count matches exactly (no duplicate/split inflation). Fall back to the
-        // fuzzy text signature when there's no reliable number.
-        const key = q.n != null ? `n:${q.n}` : extractSig(q);
-        if (seen.has(key)) continue; // skip duplicates across chunks
-        seen.add(key);
-        collected.push(q);
-      }
-      save({ questions: collected.slice() });
+      pending = failed;
+      // Brief pause before retrying stragglers left by transient (non-quota) errors.
+      if (pending.length && round < MAX_ROUNDS - 1 && Date.now() < deadline && !job.cancelled) await sleep(1500);
     }
 
     if (job.cancelled) {
@@ -1958,7 +2118,10 @@ async function runExtractionJob(id, { endpoints, model, chunks, owner = null, ha
           : "No questions could be extracted. Make sure the source actually contains questions.";
       save({ status: "error", error: msg });
     } else {
-      save({ status: "done", questions: collected, error: lastError?.status === 429 ? "quota" : null });
+      // If any chunk is still unfinished (ran out of rounds/time), flag it so the
+      // UI nudges the user to click "Extract remaining" for the last few.
+      const incomplete = pending.length > 0;
+      save({ status: "done", questions: collected, error: incomplete ? (lastError?.status === 429 ? "quota" : "partial") : null });
     }
   } catch (err) {
     save(collected.length ? { status: "done", questions: collected } : { status: "error", error: err?.message || "Import failed." });
@@ -2549,7 +2712,7 @@ const EXTEND_SYSTEM_PROMPT = `You are an expert exam teacher. You are given ONE 
 
 CRITICAL — you MUST ALWAYS respond, for EVERY question, with ONE single valid JSON object and NOTHING else: no markdown, no code fences, no text before or after. The exact shape is:
 {"explanation":"...","optionExplanations":["","","",""]}
-(For a NUMERICAL question whose stored answer turns out wrong, ALSO include "correct":<0-3>, and, if an option value itself must change, "options":["A","B","C","D"] — see the NUMERICAL rules below.)
+(Whenever you determine the stored answer is WRONG — whether it is a numerical, a FACTUAL/conceptual, or a count-based question — ALSO include "correct":<0-3>, and, if the true answer is not among the current options, "options":["A","B","C","D"] — see the verification rules below.)
 JSON VALIDITY RULES (follow exactly or the answer is discarded):
 - Escape any double quote inside a string as \\". You MAY use normal line breaks inside the strings for readability.
 - MATH: write ALL mathematical/numeric content (equations, fractions, powers, roots, ratios, %) as inline LaTeX between single dollar signs — e.g. $x^2+2x-3=0$, $\\frac{3}{4}$, $2^{10}\\times5^{8}$, $\\sqrt{2}$. This ALSO includes every numeric ANSWER value in "optionExplanations" and any option value you return — wrap numbers/expressions in $...$ so they render as math (e.g. "$12.5$", "$\\frac{180}{13}$", "$25\\%$"). Do NOT use \\( \\) or \\[ \\] delimiters and do NOT write bare LaTeX outside dollar signs.
@@ -2558,9 +2721,17 @@ JSON VALIDITY RULES (follow exactly or the answer is discarded):
 - Never refuse and never return an empty object — always produce a full explanation.
 
 Content rules:
-- "explanation": a THOROUGH, self-contained explanation of the correct answer (3-6 sentences). Include EVERY relevant supporting fact — exact dates/years, historical background, definitions, full formulas WITH the actual calculation, laws/theorems/principles by name, and cause-and-effect reasoning. Teach the concept as if to someone seeing it for the first time; never just restate the option. Put each sentence or distinct point on its OWN line (a real line break between points), not one long paragraph.
+- "explanation": a THOROUGH, self-contained explanation of the correct answer (3-6 sentences). Include EVERY relevant supporting fact — exact dates/years, historical background, definitions, full formulas WITH the actual calculation, laws/theorems/principles by name, and cause-and-effect reasoning. Teach the concept as if to someone seeing it for the first time; never just restate the option. Put each sentence or distinct point on its OWN line (a real line break between points), not one long paragraph. SCOPE BY TYPE: for a plain "mcq", explain ONLY the correct option — do NOT mention or justify the incorrect options in the explanation. For every OTHER type (matching, statement, pair, pairselect, assertion, table), the explanation MUST go through each pairing / statement / sub-option and the assertion–reason relationship (correct and incorrect) in detail.
+- LAWS / BILLS / ACTS / AMENDMENTS & DATES: when the question or its answer concerns a law/bill/act/amendment/ordinance/scheme/treaty/appointment/report/event, the explanation MUST use its EXACT date (day, month and year of introduction/passage/enactment/coming into force) — NOT the year alone — and state only facts about the REAL, verifiable item. If the exact date or provisions of a very recent item are not reliably known, do NOT fabricate a date/number/provision; explain the established, verifiable facts instead.
 - LOCAL / ALTERNATIVE NAMES: whenever a term/place/concept/person/disease/chemical/unit/law has a common local or vernacular (Hindi/regional) name, synonym, abbreviation's full form or old name, add it in brackets right after it.
-- "optionExplanations": a real JSON array of EXACTLY 4 SEPARATE strings, in the same order as the options (entry 0 = option A, 1 = B, 2 = C, 3 = D). For EACH option state clearly whether it is correct or incorrect and WHY (for a wrong numeric option, show what mistake produces that value). Keep each to 1-2 short sentences. Do NOT prefix an entry with a label such as "A)", "(A)", "A." or "Option A", and do NOT put more than one option's note inside a single entry. Leave the truly-CORRECT option's entry an empty string "".
+- "optionExplanations": a real JSON array of EXACTLY 4 SEPARATE strings, in the same order as the options (entry 0 = option A, 1 = B, 2 = C, 3 = D). For EACH option state clearly whether it is correct or incorrect and WHY (for a wrong numeric option, show what mistake produces that value). This applies to EVERY type INCLUDING plain "mcq" — for an mcq each incorrect option MUST still get its own note here even though the "explanation" box stays focused only on the correct option. Keep each to 1-2 short sentences; do NOT prefix an entry with a label such as "A)", "(A)", "A." or "Option A", and do NOT put more than one option's note inside a single entry; leave the truly-CORRECT option's entry an empty string "".
+- CALCULATION-BASED questions: if the question is answered by CALCULATION (arithmetic, applying a formula, or solving an equation), ALSO include "numerical":true and leave ALL FOUR "optionExplanations" as empty strings "" — the step-by-step working in "explanation" is the full justification, so do NOT write any per-option "why it's wrong" notes.
+VERIFY THE ANSWER — do this for EVERY question, not only calculations: work out the correct answer yourself FIRST, then compare it with the option currently marked correct before writing the notes.
+FACTUAL / CONCEPTUAL QUESTIONS (dates, years, names, places, capitals, definitions, discoveries, science & general-knowledge facts, etc.):
+- Recall the ACTUAL established fact and decide which option is truly correct.
+- If the option marked correct is factually WRONG and the right answer IS one of the four options, return the corrected 0-based "correct" index (0=A,1=B,2=C,3=D), and in "explanation" state plainly why the previously-marked option is wrong and which option is right.
+- If NONE of the four options states the correct fact, return a corrected "options" array of EXACTLY 4 that INCLUDES the true answer (keep the other three as plausible, same-category distractors) and set "correct" to its index.
+- CONFIDENCE GUARD: correct the answer ONLY when you are genuinely certain of the fact (a well-established, verifiable fact). If you are unsure or it is debatable, leave "correct"/"options" unchanged and simply explain the intended answer — never guess a "correction".
 NUMERICAL / QUANTITATIVE QUESTIONS — you MUST verify by SOLVING, not just describe:
 - Solve the problem yourself from scratch. In "explanation" show the working STEP BY STEP: state the formula, substitute the actual values, and show each intermediate result on its OWN line, ending with the final computed value. Every arithmetic step must be correct and lead exactly to the answer you choose.
 - Compare your computed value with the four options and decide which option is TRULY correct.
@@ -2572,7 +2743,7 @@ MATCHING / PAIR / STATEMENT questions ("match the columns", "how many pairs are 
 - Then COUNT how many are correct and choose the option that states that exact count/combination.
 - If your verified count/combination DIFFERS from the marked answer, return the corrected "correct" index.
 - If NO option matches the true answer (e.g. ZERO pairs are correctly matched but there is no "None" option), return a corrected "options" array of EXACTLY 4 that INCLUDES the right choice (e.g. "None of the pairs are correctly matched") and set "correct" to its index.
-STRICT: Do NOT change the question's wording or meaning, and do NOT invent a different question. You MAY fix the "correct" index and option VALUES ONLY when your explicit verification (step-by-step calculation, or a pair-by-pair / statement-by-statement check) proves the stored answer is wrong — otherwise omit "correct"/"options" and leave them unchanged. Return ONLY the JSON object.`;
+STRICT: Do NOT change the question's wording or meaning, and do NOT invent a different question. You MAY fix the "correct" index and option VALUES ONLY when your explicit verification — a step-by-step calculation, a pair-by-pair / statement-by-statement check, OR a confident recall of a well-established fact — proves the stored answer is wrong; if you are not certain, omit "correct"/"options" and leave them unchanged. Return ONLY the JSON object.`;
 
 // Dedicated, FORCEFUL prompt for "extend + fix options". Unlike the conservative
 // EXTEND prompt, this one is explicitly told to REWRITE off-category distractors
@@ -2593,12 +2764,12 @@ OPTIONS — MANDATORY, this is the main task:
 - After your fix, ALL FOUR options must be plausible members of the one category. NEVER leave an off-category, unrelated or joke option, and never make a distractor an obvious give-away.
 - "correct": the 0-based index (0-3) of the correct option in the "options" array you return (it must still point to the original correct answer's text).
 
-EXPLANATION — "explanation": thorough and self-contained; put each point on its OWN line; add local/alternative names in brackets. "optionExplanations": a real JSON array of EXACTLY 4 SEPARATE notes, one per option in order (0=A,1=B,2=C,3=D), saying why each option is right/wrong; do NOT prefix entries with labels like "A)"/"Option A" and do NOT pack multiple options into one entry; leave the correct option's entry "". MATH: wrap any math/number in $...$ (never \\( \\) or \\[ \\]); NEVER use "$" for money. No markdown, no trailing commas. Return ONLY the JSON object.`;
+EXPLANATION — "explanation": thorough and self-contained; since this prompt is only for plain MCQs, the explanation box must teach ONLY the correct option and NOT discuss the incorrect options; put each point on its OWN line; add local/alternative names in brackets. "optionExplanations": a real JSON array of EXACTLY 4 SEPARATE notes, one per option in order (0=A,1=B,2=C,3=D) — for each WRONG option say why it is incorrect (name the misconception); do NOT prefix entries with labels like "A)"/"Option A" and do NOT pack multiple options into one entry; leave the correct option's entry "". For CALCULATION-based questions ALSO include "numerical":true and leave ALL FOUR "optionExplanations" empty "" (the working in "explanation" is enough). MATH: wrap any math/number in $...$ (never \\( \\) or \\[ \\]); NEVER use "$" for money. No markdown, no trailing commas. Return ONLY the JSON object.`;
 
 const EXT_LETTERS = ["A", "B", "C", "D"];
 const toRomanLite = (n) => { const m = [["X", 10], ["IX", 9], ["V", 5], ["IV", 4], ["I", 1]]; let r = ""; for (const [s, v] of m) while (n >= v) { r += s; n -= v; } return r; };
 
-function buildExtendPrompt(q, notes, fixOptions = false) {
+function buildExtendPrompt(q, notes, fixOptions = false, extendQuestion = false) {
   const lines = [`Question type: ${q.type || "mcq"}`];
   if (q.text) lines.push(`Question: ${q.text}`);
   if (q.assertion) lines.push(`Assertion (A): ${q.assertion}`);
@@ -2610,9 +2781,12 @@ function buildExtendPrompt(q, notes, fixOptions = false) {
   if (typeof q.correct === "number" && opts[q.correct] != null) lines.push(`CORRECT answer: ${EXT_LETTERS[q.correct]}) ${opts[q.correct]}`);
   if (q.explanation) lines.push(`Existing explanation (improve and expand it — keep anything correct): ${q.explanation}`);
   if (notes) lines.push(`MANDATORY user instructions (follow EXACTLY): ${notes}`);
-  lines.push(`Write a THOROUGH "explanation" and verify EACH of the 4 "optionExplanations" (state whether each option is correct or wrong and why). If this is a numerical/quantitative question, SOLVE it yourself step by step — put each calculation step on its own line in the explanation — then check which option is truly correct. If this is a matching / "how many pairs are correctly matched" / statement question, evaluate EACH pair or statement one by one and COUNT the correct ones. In either case, if the marked CORRECT answer is wrong, return the corrected "correct" index (0-3); if a value is wrong or no option matches the true answer (e.g. zero pairs match but there is no "None" option), return a fixed "options" array of 4 that includes the right choice. Do NOT change the question's wording. Write any math as inline LaTeX between $...$ (never \\( \\) or \\[ \\]). Return ONLY one valid JSON object.`);
+  lines.push(`Write a THOROUGH "explanation". For a plain mcq, the "explanation" box must explain ONLY the correct option (do NOT discuss the incorrect options in it), but STILL fill each of the 4 "optionExplanations" with why that option is right or wrong (leaving the correct option's entry ""). For every OTHER type (matching, statement, pair, pairselect, assertion, table), the "explanation" walks through all options AND fill each of the 4 "optionExplanations" — state whether each option is correct or wrong and why — leaving the correct option's entry "". If this is a numerical/quantitative question, SOLVE it yourself step by step — put each calculation step on its own line in the explanation — then check which option is truly correct. If this is a matching / "how many pairs are correctly matched" / statement question, evaluate EACH pair or statement one by one and COUNT the correct ones. If this is a plain FACTUAL/knowledge question, recall the actual established fact and decide which option is truly correct. In EVERY case, if the marked CORRECT answer is wrong, return the corrected "correct" index (0-3); if a value/fact is wrong or no option matches the true answer (e.g. zero pairs match but there is no "None" option, or the correct fact is not listed), return a fixed "options" array of 4 that includes the right choice. Only make such a correction when you are genuinely confident it is wrong; if unsure, leave the answer as-is and just explain. Do NOT change the question's wording. Write any math as inline LaTeX between $...$ (never \\( \\) or \\[ \\]). If the question is CALCULATION-based, set "numerical": true and leave all four "optionExplanations" empty "" (the step-by-step working in the explanation is enough — no per-option notes). Return ONLY one valid JSON object.`);
   if (fixOptions && (!q.type || q.type === "mcq")) {
     lines.push(`ALSO FIX THE OPTIONS (do this in addition): keep the question stem and the CORRECT option EXACTLY as given, but make sure all four options belong to the SAME real-world category/type as the correct answer. If any option is off-category, unrelated or an obvious give-away (for example a bird or a flower listed among tree names), REPLACE only those wrong options with real, closely-related same-category distractors that match their language, form, length and specificity. Return the full corrected "options" array of EXACTLY 4 (the correct option's text unchanged) plus the 0-based "correct" index for it. Do NOT change the stem or which answer is correct.`);
+  }
+  if (extendQuestion) {
+    lines.push(`ALSO EXTEND THE QUESTION LENGTH (this OVERRIDES the "do not change the wording" rule for the STEM ONLY): rewrite the question stem into a slightly LONGER, clearer, more descriptive version and return it as "text". ONLY EXTEND QUESTIONS THAT GENUINELY NEED IT — this is critical. Many stems are ALREADY clear, complete and self-contained and must be LEFT EXACTLY AS-IS (return the original "text" unchanged, do NOT reword or pad them): e.g. "What is the full form of NABARD?", "What is the SI unit of force?", "Who wrote …?", "In which year …?", "The capital of … is?", a simple definition, or any one-fact recall that already reads as a proper question. Extend a stem that is a bare fragment, label or too terse to read as a real question, by turning it into a proper full sentence. DECISIVE STRUCTURAL RULE: if the stem ENDS WITH A COLON (":") or is just a phrase/label that is NOT itself a complete question sentence — e.g. "Like magnetic poles:", "Lateral means:", "Newton's second law:", "Photosynthesis?" — you MUST rewrite it into a complete question; this is exactly the case that needs extending, so NEVER return a colon-ended or fragment stem unchanged. Conversely, if the stem is ALREADY a complete question sentence (it reads as a full question on its own), leave it EXACTLY as-is. Apply this structural test instead of guessing; only leave a stem unchanged when it is genuinely already a complete question. STRICT LENGTH LIMIT (when you do extend): the rewritten stem must be SHORT — AT MOST 3 lines, i.e. no more than 2 sentences / about 40 words. Do NOT expand it into a paragraph; brevity matters more than extra detail — stop as soon as it is a clear, full-sentence question, and never exceed 3 lines. You MUST keep the EXACT SAME meaning, the same thing being asked, the same options and the same correct answer — only make the phrasing fuller by adding a little neutral framing/context and turning a bare label like "Lateral means:" into a proper full sentence such as "In anatomical terminology, the directional term 'lateral' refers to which of the following?". CRITICAL — DO NOT lengthen by adding full forms or units: NEVER spell out an abbreviation/acronym into its full form and NEVER add an SI unit or any unit of measurement in the stem. Keep every acronym, abbreviation, symbol and term EXACTLY as written (e.g. keep "NABARD", "DNA", "GDP", "N", "kg" as-is) — expanding them can reveal the answer or change the question. Do NOT make the question harder, do NOT change the topic, do NOT add or reveal the answer, and do NOT turn it into a different question. Keep any real math/values wrapped in $...$ but never wrap ordinary words in $...$. For matching/assertion/statement/table questions, extend ONLY the intro sentence in "text" (still within the 3-line limit) and leave the columns/assertion/reason/table untouched.`);
   }
   return lines.join("\n");
 }
@@ -2836,7 +3010,9 @@ function parseExplanationJson(content) {
     // For PAIR questions: one short "why they match" reason per aligned pair,
     // used to build the explanation after the backend reshuffles Column B.
     const pairFacts = Array.isArray(obj.pairFacts) ? obj.pairFacts.map((x) => (x == null ? "" : String(x))) : null;
-    if (explanation || oe || options || text || tableRows) return { explanation, optionExplanations: oe, correct, options, text, columnA, columnB, tableRows, pairFacts };
+    // Calculation-based flag — when true, callers drop the per-option notes.
+    const numerical = obj.numerical === true || obj.numerical === "true";
+    if (explanation || oe || options || text || tableRows) return { explanation, optionExplanations: oe, correct, options, text, columnA, columnB, tableRows, pairFacts, numerical };
   }
 
   // Couldn't parse as JSON at all — salvage the explanation with regex (from the
@@ -2845,12 +3021,63 @@ function parseExplanationJson(content) {
   return salvaged ? deepReviveLatex(salvaged) : salvaged;
 }
 
+// Randomly REORDER a question's answer options while keeping the SAME correct
+// answer — moves the `correct` index and reorders `optionExplanations` to follow
+// their options, so the answer's POSITION changes but nothing becomes wrong.
+// Used by Extend when the caller ticks "Reshuffle options" (e.g. so the right
+// answer isn't always option B, or after two quizzes end up in the same order).
+// Skips assertion (its four options are a fixed A/R rubric whose order carries
+// meaning) and anything with fewer than 2 options. Works on the EFFECTIVE
+// options — a freshly fixed set from the AI if present, otherwise the stored
+// ones — so it composes correctly with "fix options"/numerical corrections.
+function applyOptionShuffle(set, q) {
+  if (q.type === "assertion") return; // fixed rubric — order is meaningful
+  // Shuffle the options we're actually going to store, and track the correct
+  // index that MATCHES that same array. IMPORTANT: when we're reordering the
+  // ORIGINAL options (the model didn't return a fixed options array), anchor to
+  // the ORIGINAL correct answer (q.correct) — NOT any `correct` the model may
+  // have returned, which can be relative to a different order and would move
+  // the answer to the wrong option (e.g. B → C). This guarantees a reshuffle
+  // never changes WHICH option is correct.
+  const usingSet = Array.isArray(set.options) && set.options.length;
+  const options = (usingSet ? set.options : (Array.isArray(q.options) ? q.options : [])).map((x) => String(x));
+  const n = options.length;
+  if (n < 2) return;
+  const correct = usingSet
+    ? (Number.isInteger(set.correct) ? set.correct : (Number.isInteger(q.correct) ? q.correct : null))
+    : (Number.isInteger(q.correct) ? q.correct : null);
+  const oe = Array.isArray(set.optionExplanations) ? set.optionExplanations.slice()
+    : (Array.isArray(q.optionExplanations) ? q.optionExplanations.slice() : null);
+  // A genuinely RANDOM permutation (not identity, not a simple rotation) that
+  // moves the correct answer to a random new slot; perm[newIndex] = oldIndex.
+  const perm = shuffledPermutation(n, (correct != null && correct >= 0 && correct < n) ? correct : null);
+  set.options = perm.map((p) => options[p]);
+  if (correct != null && correct >= 0 && correct < n) set.correct = perm.indexOf(correct);
+  if (oe) { while (oe.length < n) oe.push(""); set.optionExplanations = perm.map((p) => oe[p] ?? ""); }
+}
+
 // Build the Mongo $set for an extended question. Always updates the explanation
 // (+ per-option notes). For NUMERICAL corrections, when the AI returned a valid
 // corrected answer index it also updates `correct`; option VALUES are replaced
 // only together with a corrected index (so options and answer stay in sync).
-function buildExtendSet(q, parsed) {
+// When `shuffleOptions` is set, the final options are also reordered (answer
+// position changes, correctness preserved) as the LAST step.
+function buildExtendSet(q, parsed, extendQuestion = false, shuffleOptions = false) {
   const set = { explanation: parsed.explanation };
+  // When the caller asked to extend the question length, apply the AI's longer
+  // rewrite of the stem (same meaning/answer) — sanitising any $...$ the model
+  // wrongly wrapped around plain words. Ignored otherwise so Extend never
+  // touches the question wording.
+  if (extendQuestion && typeof parsed?.text === "string" && parsed.text.trim()) {
+    const rewritten = unwrapWordMath(parsed.text.trim());
+    // Backstop for the "at most 3 lines" rule: if the model ignored the limit
+    // and returned an over-long stem (roughly > 3 lines ≈ 45 words or explicit
+    // line breaks pushing past 3 lines), keep the ORIGINAL short stem instead of
+    // applying a wall of text.
+    const wordCount = rewritten.split(/\s+/).filter(Boolean).length;
+    const lineCount = rewritten.split(/\r?\n/).filter((l) => l.trim()).length;
+    if (wordCount <= 45 && lineCount <= 3) set.text = rewritten;
+  }
   const newCorrect =
     Number.isInteger(parsed?.correct) && parsed.correct >= 0 && parsed.correct <= 3 ? parsed.correct : null;
   const newOptions =
@@ -2873,88 +3100,126 @@ function buildExtendSet(q, parsed) {
     if (typeof effectiveCorrect === "number" && effectiveCorrect >= 0 && effectiveCorrect < 4) oe[effectiveCorrect] = "";
     set.optionExplanations = oe;
   }
+  // Calculation-based question → drop per-option "why wrong" notes (the
+  // step-by-step working in the explanation is enough). Clears any existing
+  // notes too, so re-extending a calc question also removes them.
+  if (parsed?.numerical) set.optionExplanations = ["", "", "", ""];
+  // LAST: optionally reorder the (possibly just-fixed) options, keeping the same
+  // correct answer — so the answer's position is shuffled without breaking it.
+  if (shuffleOptions) applyOptionShuffle(set, q);
   return set;
 }
 
-async function runExtendJob(id, { endpoints, model, questions, owner = null, notes = "", fixOptions = false }) {
+async function runExtendJob(id, { endpoints, model, questions, owner = null, notes = "", fixOptions = false, extendQuestion = false, shuffleOptions = false }) {
   const job = genJobs.get(id);
   const deadline = Date.now() + 12 * 60 * 1000; // overall time budget
   const save = (patch) => Object.assign(job, patch, { updatedAt: Date.now() });
   const total = questions.length;
+  if (!job.keyStats) job.keyStats = {}; // live per-key activity for THIS run
   let updated = 0;
   let lastError = null;
-  let keyDead = false;
   let parseFails = 0;   // calls that succeeded (HTTP ok) but yielded no usable explanation
   let emptyReplies = 0; // of those, how many returned empty content (safety filter / blank completion)
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-  // Extend ONE question: call AI, parse (robustly), update in place. Returns
-  // true only when the DB was actually updated with a real explanation.
-  const extendOne = async (q, eps) => {
-    const r = await callWithFallback({
-      endpoints: eps && eps.length ? eps : endpoints,
-      model,
-      systemPrompt: fixOptions ? EXTEND_FIXOPTS_SYSTEM_PROMPT : EXTEND_SYSTEM_PROMPT,
-      userPrompt: buildExtendPrompt(q, notes, fixOptions),
-      maxTokens: 8000, // the verified/step-by-step replies are long — avoid truncation
-      owner,
-      failOnEmpty: true, // an empty reply → try the next key/model instead of failing this question
-    });
-    if (!r.ok) {
-      lastError = r;
-      if ([401, 403].includes(r.status)) keyDead = true;
-      return false;
-    }
-    const parsed = parseExplanationJson(r.content);
-    if (!parsed || !parsed.explanation) {
-      // Call succeeded but the reply couldn't be turned into an explanation —
-      // track it so a 0-updated run can report the REAL reason.
-      parseFails += 1;
-      if (!String(r.content || "").trim()) emptyReplies += 1;
-      return false; // require a real explanation
-    }
-    const set = buildExtendSet(q, parsed); // may also fix a wrong numerical answer/options
-    await Question.updateOne({ _id: q._id }, { $set: set }).catch(() => {});
-    updated += 1;
-    job.questions.push(1); // progress = actual successes (jobStatus reports count)
-    save({});
-    return true;
+  const MAX_QUOTA_WAITS = 6;  // per key: 429s we ride out before retiring the key
+  const MAX_EMPTY = 4;        // per key: empty replies we retry before retiring it
+  const MAX_ITEM_RETRIES = 4; // per question: soft failures before we give up on it
+
+  // Shared work queue — every worker (one per key) pulls from the SAME queue, so
+  // whichever key is free grabs the next question. Soft failures (bad JSON /
+  // empty / transient) are re-queued (bounded) so one blip doesn't drop a
+  // question. This mirrors the question generator, which uses all keys smoothly.
+  const queue = [...questions];
+  const itemTries = new Map(); // q._id -> soft-retry count
+  const reserveOne = () => (queue.length ? queue.shift() : null); // atomic: no await between check & shift
+  const requeue = (q) => {
+    const k = String(q._id);
+    const n = (itemTries.get(k) || 0) + 1;
+    itemTries.set(k, n);
+    if (n <= MAX_ITEM_RETRIES) queue.push(q); // else give up on this ONE question
   };
 
-  // Multiple passes: any question that fails (bad/truncated JSON, transient
-  // error, or a momentary quota blip) is retried on the next pass, so NO
-  // question is left un-extended unless every attempt genuinely fails.
-  const MAX_PASSES = 4;
-  let pending = [...questions];
-  try {
-    for (let pass = 0; pass < MAX_PASSES && pending.length && !keyDead && Date.now() < deadline && !job.cancelled; pass++) {
-      const failed = [];
-      let idx = 0;
-      // One worker PER KEY (up to 10) — each starts on a DIFFERENT key (rotated
-      // endpoint order) so they don't all hammer the same key at once; a 429 on
-      // one still falls back to the others. This uses every key in parallel and
-      // is why bulk extend now gets through the whole quiz, not just a few.
-      const rotate = (arr, k) => arr.slice(k).concat(arr.slice(0, k));
-      const nEps = endpoints?.length || 1;
-      const WORKERS = Math.min(Math.max(nEps, 1), 10);
-      const worker = async (wi) => {
-        const eps = nEps > 1 ? rotate(endpoints, wi % nEps) : endpoints;
-        while (idx < pending.length && !keyDead && Date.now() < deadline && !job.cancelled) {
-          const q = pending[idx++];
-          let ok = false;
-          try { ok = await extendOne(q, eps); } catch { ok = false; }
-          if (!ok) failed.push(q);
-        }
-      };
-      await Promise.all(Array.from({ length: WORKERS }, (_, wi) => worker(wi)));
-      pending = failed;
-      // Pause before retrying the stragglers. On a quota hit (429) wait long
-      // enough for the per-minute limit to recover, so a single run gets through
-      // more before giving up; otherwise just a brief transient-error pause.
-      if (pending.length && pass < MAX_PASSES - 1 && !keyDead && Date.now() < deadline) {
-        const wait = lastError?.status === 429 ? 40000 : 2000;
-        if (Date.now() + wait < deadline) await new Promise((r) => setTimeout(r, wait));
+  // Run ONE question on ONE key. Returns an outcome the worker acts on.
+  const extendOnKey = async (q, ep, ks) => {
+    ks.requests += 1; save({}); // reflect the in-flight request immediately
+    const r = await callProvider({
+      key: ep.key,
+      baseUrl: ep.baseUrl,
+      model: ep.model || model,
+      systemPrompt: fixOptions ? EXTEND_FIXOPTS_SYSTEM_PROMPT : EXTEND_SYSTEM_PROMPT,
+      userPrompt: buildExtendPrompt(q, notes, fixOptions, extendQuestion),
+      maxTokens: 8000, // the verified/step-by-step replies are long — avoid truncation
+      failOnEmpty: true, // an empty reply → retry/roll over instead of counting as done
+    });
+    if (r.ok) {
+      const parsed = parseExplanationJson(r.content);
+      if (!parsed || !parsed.explanation) {
+        // Call succeeded but the reply couldn't be turned into an explanation —
+        // track it so a 0-updated run can report the REAL reason.
+        parseFails += 1;
+        if (!String(r.content || "").trim()) emptyReplies += 1;
+        ks.error += 1; save({});
+        return "soft";
       }
+      const set = buildExtendSet(q, parsed, extendQuestion, shuffleOptions); // may fix a wrong answer/options, lengthen the stem, and/or reshuffle options
+      await Question.updateOne({ _id: q._id }, { $set: set }).catch(() => {});
+      updated += 1;
+      ks.ok += 1; ks.questions += 1;
+      AiKey.updateOne({ key: ep.key, owner: owner ?? null }, { $inc: { usedRequests: 1, usedTokens: r.tokens || 0 } }).catch(() => {});
+      job.questions.push(1); // progress = actual successes (jobStatus reports count)
+      save({});
+      return "ok";
     }
+    lastError = r;
+    if (r.status === 429) { ks.limited += 1; save({}); return "limited"; }
+    if (r.status === 520 && r.empty) { ks.error += 1; save({}); return "empty"; }
+    if ([401, 403, 404].includes(r.status)) { ks.error += 1; save({}); return "dead"; }
+    ks.error += 1; save({});
+    return "soft";
+  };
+
+  // ONE worker PER API KEY → every key runs SIMULTANEOUSLY (same model as the
+  // question generator, which works smoothly with all keys). Each worker sticks
+  // to its OWN key; when that key hits its per-minute limit (429) it waits it out
+  // ALONE while every OTHER key keeps extending. There is NO global barrier and
+  // NO whole-job pause, so a rate limit on a few keys can't freeze the run.
+  const worker = async (ep) => {
+    let quotaWaits = 0;
+    let emptyOnKey = 0;
+    const _kl = ep.label || `••••${String(ep.key).slice(-4)}`;
+    const ks = job.keyStats[_kl] || (job.keyStats[_kl] = { requests: 0, ok: 0, limited: 0, error: 0, questions: 0 });
+    while (Date.now() < deadline && !job.cancelled) {
+      const q = reserveOne();
+      if (!q) break; // queue drained — this key retires cleanly
+      let outcome;
+      try { outcome = await extendOnKey(q, ep, ks); } catch { outcome = "soft"; }
+      if (outcome === "ok") continue;
+      if (outcome === "dead") { queue.push(q); break; } // key unauthorized / model invalid — retire it, let others take the question
+      if (outcome === "limited") {
+        // Hand this question to another (free) key right away, then ride out THIS
+        // key's per-minute limit. The other workers keep going meanwhile.
+        queue.push(q);
+        if (quotaWaits >= MAX_QUOTA_WAITS) break; // this key keeps getting limited — retire it
+        const waitMs = Math.min(retryWaitMs(null, lastError?.detail) || 30000, 60000);
+        if (Date.now() + waitMs >= deadline) break;
+        quotaWaits += 1;
+        await sleep(waitMs);
+        continue;
+      }
+      if (outcome === "empty") {
+        requeue(q);
+        if (++emptyOnKey >= MAX_EMPTY) break; // key keeps emitting empty — retire it
+        continue;
+      }
+      requeue(q); // soft / transient — let any free key retry it (bounded)
+    }
+  };
+
+  try {
+    // Launch EVERY key at once; join only when the queue is drained (or every
+    // key has retired / the time budget is spent).
+    await Promise.all((endpoints || []).map((ep) => worker(ep)));
 
     if (updated === 0) {
       save({
@@ -3012,19 +3277,23 @@ export async function extendExplanations(req, res) {
   if (req.body?.testSeries) filter = { testSeries: req.body.testSeries, ...own };
   else if (req.body?.quiz) filter = { quiz: req.body.quiz, ...own };
   if (!filter) return res.status(400).json({ message: "Provide a quiz or test to update." });
+  // Optional: restrict to ONE question type (e.g. only "matching" / only "pair").
+  // "all" (or any unknown value) means every type.
+  const onlyType = String(req.body?.type || "").trim();
+  if (onlyType && onlyType !== "all" && TYPES.includes(onlyType)) filter.type = onlyType;
 
   // Process LEAST-RECENTLY-UPDATED first. Extending a question bumps its
   // updatedAt, so when a run stops early on quota, clicking "Extend" again
   // starts with the questions that were NOT reached last time — so repeated runs
   // actually finish the whole quiz instead of re-doing the first few each time.
-  const questions = await Question.find(filter).sort("updatedAt").select("_id type text options correct columnA columnB tableRows assertion reason explanation").lean();
-  if (!questions.length) return res.status(400).json({ message: "No questions found to update (or not your content)." });
+  const questions = await Question.find(filter).sort("updatedAt").select("_id type text options correct columnA columnB tableRows assertion reason explanation optionExplanations").lean();
+  if (!questions.length) return res.status(400).json({ message: filter.type ? `No "${filter.type}" questions found here (try "All question types").` : "No questions found to update (or not your content)." });
 
   const notes = String(req.body?.notes || "").trim();
   cleanupJobs();
   const id = newJobId();
   genJobs.set(id, { status: "pending", questions: [], requested: questions.length, error: null, model: chosen.model, updatedAt: Date.now() });
-  guardJob(id, runExtendJob(id, { endpoints: chosen.endpoints, model: chosen.model, questions, owner: scope.owner, notes, fixOptions: !!req.body?.fixOptions }));
+  guardJob(id, runExtendJob(id, { endpoints: chosen.endpoints, model: chosen.model, questions, owner: scope.owner, notes, fixOptions: !!req.body?.fixOptions, extendQuestion: !!req.body?.extendQuestion, shuffleOptions: !!req.body?.shuffleOptions }));
   res.json({ jobId: id, requested: questions.length, model: chosen.model });
 }
 
@@ -3060,7 +3329,7 @@ export async function extendOneExplanation(req, res) {
       endpoints: chosen.endpoints,
       model: chosen.model,
       systemPrompt: req.body?.fixOptions ? EXTEND_FIXOPTS_SYSTEM_PROMPT : EXTEND_SYSTEM_PROMPT,
-      userPrompt: buildExtendPrompt(q, notes, !!req.body?.fixOptions),
+      userPrompt: buildExtendPrompt(q, notes, !!req.body?.fixOptions, !!req.body?.extendQuestion),
       maxTokens: 8000,
       owner: scope.owner,
     });
@@ -3080,7 +3349,7 @@ export async function extendOneExplanation(req, res) {
     return res.status(502).json({ message: msg });
   }
 
-  const set = buildExtendSet(q, parsed); // may also fix a wrong numerical answer/options
+  const set = buildExtendSet(q, parsed, !!req.body?.extendQuestion, !!req.body?.shuffleOptions); // may fix a wrong numerical answer/options, lengthen the stem, and/or reshuffle options
   await Question.updateOne({ _id: q._id }, { $set: set });
   res.json({
     _id: q._id,
@@ -3088,6 +3357,7 @@ export async function extendOneExplanation(req, res) {
     optionExplanations: set.optionExplanations || q.optionExplanations,
     correct: set.correct ?? q.correct, // reflect any answer correction so the UI updates
     options: set.options || q.options,
+    text: set.text ?? q.text, // reflect any extended/longer stem so the UI updates
   });
 }
 
@@ -3120,10 +3390,13 @@ RULES:
 - NUMERICAL: solve with the correct FORMULA step by step; the correct option MUST equal your computed value; show the working in "explanation" (each step on its own line).
 - MATCHING / PAIR / STATEMENT: evaluate EACH pair/statement individually and make the answer reflect the TRUE count/combination; if none of the standard options fit (e.g. zero pairs match), include the right one (e.g. "None of the pairs are correctly matched").
 - "correct": 0-based index (0-3) of the truly correct option; leave THAT option's "optionExplanations" entry an empty string "".
+- CALCULATION-BASED questions: if the answer is reached by calculation (arithmetic/formula/solving), ALSO include "numerical":true and leave ALL FOUR "optionExplanations" empty "" — the step-by-step working in "explanation" is enough; do NOT write per-option notes.
+- LAWS / BILLS / ACTS / AMENDMENTS & DATES: when the question or its answer concerns a law/bill/act/amendment/ordinance/scheme/treaty/appointment/report/event, use its EXACT date (day, month and year) in the explanation — NOT the year alone — and state only facts about the REAL, verifiable item; if the exact date/provisions of a very recent item are not reliably known, do NOT fabricate them.
+- EXPLANATION SCOPE BY TYPE: for a plain "mcq", the "explanation" box must teach ONLY the correct option (do NOT mention or justify the incorrect options in it) — but STILL fill each of the 4 "optionExplanations" with why that option is right or wrong (leaving the correct option's entry ""). For every OTHER type (matching, statement, pair, pairselect, assertion, table), the "explanation" must go through each pairing / statement / sub-option in detail, AND each of the 4 "optionExplanations" must explain why that option is right or wrong (leaving the correct option's entry ""). EXCEPTION — for CALCULATION-based questions, leave ALL FOUR "optionExplanations" empty "" (the working in "explanation" is enough).
 - "explanation": thorough, self-contained, each point/step on its own line. Write math as inline LaTeX between $...$ (never \\( \\) or \\[ \\]); NEVER use "$" for money. No trailing commas.
 Return ONLY the JSON object.`;
 
-function buildRegenPrompt(q, notes) {
+function buildRegenPrompt(q, notes, { fixOptions = true, extendQuestion = false } = {}) {
   const lines = [`Question type: ${q.type || "mcq"}`];
   if (q.text) lines.push(`Question: ${q.text}`);
   if (q.assertion) lines.push(`Assertion (A): ${q.assertion}`);
@@ -3132,13 +3405,26 @@ function buildRegenPrompt(q, notes) {
   if (Array.isArray(q.columnB) && q.columnB.length) lines.push(`Column B: ${q.columnB.map((x, i) => `${toRomanLite(i + 1)}. ${x}`).join("  |  ")}`);
   if (Array.isArray(q.tableRows) && q.tableRows.length) lines.push(`Current table (first row = header):\n${q.tableRows.map((r) => (Array.isArray(r) ? r.join(" | ") : String(r))).join("\n")}`);
   const opts = Array.isArray(q.options) ? q.options : [];
-  if (opts.length) lines.push(`Current options (may be WRONG — replace with correct ones that fit the question):\n${opts.map((o, i) => `${EXT_LETTERS[i] || i}) ${o}`).join("\n")}`);
+  if (opts.length) lines.push(
+    fixOptions
+      ? `Current options (may be WRONG — replace with correct ones that fit the question):\n${opts.map((o, i) => `${EXT_LETTERS[i] || i}) ${o}`).join("\n")}`
+      : `Current options (KEEP these EXACTLY — do NOT change them):\n${opts.map((o, i) => `${EXT_LETTERS[i] || i}) ${o}`).join("\n")}`
+  );
   if (notes) lines.push(`MANDATORY user instructions (follow EXACTLY): ${notes}`);
-  if (["pair", "matching", "pairselect"].includes(q.type)) {
+  if (fixOptions && ["pair", "matching", "pairselect"].includes(q.type)) {
     const kind = q.type === "pair" ? "count" : q.type === "matching" ? "mapping" : "which-pairs-are-correct";
     lines.push(`This is a ${q.type.toUpperCase()} question. Return "columnA" and "columnB" ALIGNED so that columnA[i] is the CORRECT match of columnB[i] for EVERY index i (i.e. all pairs correct as returned) — do NOT shuffle them yourself and keep the SAME number of items. Also return "pairFacts": an array with one SHORT reason per pair (pairFacts[i] = why columnA[i] correctly matches columnB[i]). Do NOT set the "options" or the "correct" index yourself — the app reshuffles Column B and builds the ${kind} answer to match.`);
   }
-  lines.push(`Analyse THIS question and FIX anything wrong: rebuild the 4 "options", the "correct" index, the "explanation" and the 4 "optionExplanations" so they are correct and fit the question, AND wrap any plain-text math so it renders. Return the SAME stem in "text" (and same-count "columnA"/"columnB" for matching/pair/statement) with math wrapped in $...$ — keep the meaning unchanged. Return ONLY one valid JSON object {"text":"...","options":["","","",""],"correct":0,"explanation":"...","optionExplanations":["","","",""]}.`);
+  // When the user ticks "Extend the question length", allow (only) the STEM to
+  // be rewritten a little longer — same rules and 3-line cap as Extend.
+  if (extendQuestion) {
+    lines.push(`ALSO EXTEND THE QUESTION LENGTH (this OVERRIDES "keep the meaning unchanged" for the STEM ONLY): rewrite the question stem into a slightly LONGER, clearer, full-sentence version and return it as "text" — but ONLY if it genuinely needs it. Many stems are ALREADY complete questions and MUST be returned EXACTLY as-is (e.g. "What is the full form of NABARD?", "What is the SI unit of force?", "Who wrote …?"). DECISIVE RULE: if the stem ends with a colon or is a bare phrase/label (e.g. "Lateral means:", "Newton's second law:"), you MUST turn it into a complete question; if it is already a full question sentence, leave it unchanged. STRICT LENGTH LIMIT when you do extend: AT MOST 3 lines (about 2 sentences / 40 words) — never a paragraph. Keep the EXACT SAME meaning, options and correct answer. NEVER spell out an abbreviation/acronym into its full form and NEVER add a unit of measurement in the stem (keep "NABARD", "DNA", "N", "kg" as-is). For matching/assertion/statement/table questions, extend ONLY the intro sentence in "text" (still within 3 lines) and leave the columns/assertion/reason/table untouched.`);
+  }
+  if (fixOptions) {
+    lines.push(`Analyse THIS question and FIX anything wrong: rebuild the 4 "options", the "correct" index, the "explanation" and the 4 "optionExplanations" so they are correct and fit the question, AND wrap any plain-text math so it renders. Return the SAME stem in "text" (and same-count "columnA"/"columnB" for matching/pair/statement) with math wrapped in $...$ — keep the meaning unchanged${extendQuestion ? " (except the allowed stem-lengthening above)" : ""}. If the question is CALCULATION-based, set "numerical": true and leave all four "optionExplanations" empty "" (the working in the explanation is enough). Return ONLY one valid JSON object {"text":"...","options":["","","",""],"correct":0,"explanation":"...","optionExplanations":["","","",""]}.`);
+  } else {
+    lines.push(`DO NOT change the options or the correct answer — keep them EXACTLY as given. Your ONLY job is to write a rich "explanation" and the 4 "optionExplanations" (why each option is right/wrong) for the EXISTING options, leaving the correct option's note "". Also return the SAME stem in "text" with any plain-text math wrapped in $...$ so it renders${extendQuestion ? " (you MAY apply the allowed stem-lengthening above)" : " — keep the meaning and wording unchanged"}. Do NOT return a "correct" index or a new "options" array that differs from the current ones. Return ONLY one valid JSON object {"text":"...","explanation":"...","optionExplanations":["","","",""]}.`);
+  }
   return lines.join("\n");
 }
 
@@ -3146,6 +3432,24 @@ const NUM_WORD = ["zero", "one", "two", "three", "four", "five", "six", "seven",
 const ROMAN = ["I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X"];
 const toRomanPos = (i0) => ROMAN[i0] || String(i0 + 1); // 0-based index → roman label
 const shuffleInPlace = (a) => { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+// A uniformly-random permutation (perm[newIndex] = oldIndex) for reshuffling
+// options that is genuinely RANDOM — never the identity, never a simple cyclic
+// rotation (so the answer doesn't just march A→B→C→D→A), and, when a correct
+// index is given, ALWAYS moves that answer to a different slot. Best-effort:
+// returns the last attempt after enough tries.
+function shuffledPermutation(n, mustMoveIndex = null) {
+  if (n < 2) return [...Array(n).keys()];
+  const isRotation = (p) => { for (let k = 1; k < n; k++) if (p.every((v, i) => v === (i + k) % n)) return true; return false; };
+  let perm = [...Array(n).keys()];
+  for (let g = 0; g < 80; g++) {
+    shuffleInPlace(perm);
+    const identity = perm.every((p, i) => p === i);
+    const rotated = n >= 4 && isRotation(perm); // only enforce for 4+ options (n<4 has too few perms)
+    const answerStuck = mustMoveIndex != null && perm.indexOf(mustMoveIndex) === mustMoveIndex;
+    if (!identity && !rotated && !answerStuck) break;
+  }
+  return perm;
+}
 // Return a derangement (permutation with NO element left in its original slot).
 function derange(arr) {
   if (arr.length < 2) return arr.slice();
@@ -3315,7 +3619,7 @@ function applyPairSelectReshuffle(set, q, parsed) {
 // Regenerate endpoint AND the bulk "Regenerate all" job. Applies the re-wrapped
 // stem/columns (same meaning, math wrapped so it renders), the reshuffled
 // Column B (same item count), fresh options + correct answer, and explanations.
-function buildRegenSet(q, parsed) {
+function buildRegenSet(q, parsed, { fixOptions = true, extendQuestion = false, shuffleOptions = true } = {}) {
   const set = {};
   if (parsed.explanation) set.explanation = parsed.explanation;
   // Column-based questions keep their items in columnA/columnB — never in the
@@ -3334,7 +3638,17 @@ function buildRegenSet(q, parsed) {
       set.tableRows = parsed.tableRows.map((r) => r.map((c) => (c == null ? "" : String(c))));
     }
   } else if (parsed.text) {
-    set.text = parsed.text;
+    // When "Extend the question length" was ticked, guard against the model
+    // ignoring the 3-line cap: keep the ORIGINAL stem if the rewrite ballooned
+    // past ~3 lines / 45 words (mirrors buildExtendSet's backstop).
+    if (extendQuestion) {
+      const rewritten = String(parsed.text).trim();
+      const wordCount = rewritten.split(/\s+/).filter(Boolean).length;
+      const lineCount = rewritten.split(/\r?\n/).filter((l) => l.trim()).length;
+      set.text = wordCount <= 45 && lineCount <= 3 ? rewritten : q.text;
+    } else {
+      set.text = parsed.text;
+    }
   }
   // Strip any leading "1."/"I." marker — the app auto-numbers the columns.
   if (Array.isArray(parsed.columnA) && Array.isArray(q.columnA) && parsed.columnA.length === q.columnA.length) set.columnA = parsed.columnA.map(stripListMarker);
@@ -3343,14 +3657,17 @@ function buildRegenSet(q, parsed) {
   const newOptions = Array.isArray(parsed.options) && parsed.options.length === 4 && parsed.options.every((s) => String(s).trim() !== "")
     ? parsed.options.map((x) => String(x)) : null;
   const canFixOptions = !q.type || ["mcq", "table", "pair", "pairselect", "statement", "matching"].includes(q.type);
-  if (canFixOptions) {
+  // "Fix options" (default on) gates whether the options/answer are rebuilt at
+  // all. When the user unticks it, the existing options & correct answer are
+  // kept untouched and only the explanation / per-option notes are refreshed.
+  if (fixOptions && canFixOptions) {
     // Move the correct-answer index ONLY together with a fresh, valid 4-option
     // set, so the marked answer always matches what is shown. Updating "correct"
     // on its own (when the model didn't return usable options) would point it at
     // an unrelated OLD option and BREAK the question instead of fixing it — the
     // reported "regenerate doesn't correct a wrong question" bug.
     if (newOptions && newCorrect != null) { set.options = newOptions; set.correct = newCorrect; }
-  } else if (newCorrect != null) {
+  } else if (fixOptions && newCorrect != null) {
     // Fixed-phrase types (e.g. assertion/reason) keep their canned options, so
     // the answer index can safely be corrected on its own.
     set.correct = newCorrect;
@@ -3362,11 +3679,37 @@ function buildRegenSet(q, parsed) {
     if (typeof eff === "number" && eff >= 0 && eff < 4) oe[eff] = "";
     set.optionExplanations = oe;
   }
+  // Calculation-based question → no per-option "why wrong" notes (the working in
+  // the explanation is enough). Clears existing ones too. (Pair/matching types
+  // below are never numerical, so this won't clash with their rebuilt notes.)
+  if (parsed.numerical) set.optionExplanations = ["", "", "", ""];
   // PAIR / MATCHING: reshuffle Column B deterministically and set the answer to
   // match exactly — fixes "shows the old answer after the columns are reshuffled".
-  if (q.type === "pair") applyPairReshuffle(set, q, parsed);
-  else if (q.type === "matching") applyMatchingReshuffle(set, q, parsed);
-  else if (q.type === "pairselect") applyPairSelectReshuffle(set, q, parsed);
+  // The pair/matching/pairselect reshuffles are STRUCTURAL — they build the
+  // count/mapping/which-pairs answer — so they only run when options are being
+  // rebuilt (fixOptions). When "fix options" is off, everything is left as-is.
+  if (fixOptions && q.type === "pair") applyPairReshuffle(set, q, parsed);
+  else if (fixOptions && q.type === "matching") applyMatchingReshuffle(set, q, parsed);
+  else if (fixOptions && q.type === "pairselect") applyPairSelectReshuffle(set, q, parsed);
+  else if (shuffleOptions && q.type !== "assertion") {
+    // PLAIN types (mcq / table / statement / untyped): the column types above
+    // already reshuffle, and assertion keeps its fixed A/R rubric — but a plain
+    // question's freshly rebuilt options can still come back with the answer in
+    // a predictable slot. Reorder them here so the correct answer lands in a
+    // random position, moving the `correct` index and the per-option notes with
+    // it (correctness preserved). Skipped when the user unticks "Reshuffle".
+    const opts = Array.isArray(set.options) && set.options.length ? set.options : null;
+    if (opts && opts.length >= 2 && Number.isInteger(set.correct) && set.correct >= 0 && set.correct < opts.length) {
+      const perm = shuffledPermutation(opts.length, set.correct); // random, non-rotation, answer moves
+      set.options = perm.map((p) => opts[p]);
+      set.correct = perm.indexOf(set.correct);
+      if (Array.isArray(set.optionExplanations)) {
+        const oe = set.optionExplanations.slice();
+        while (oe.length < opts.length) oe.push("");
+        set.optionExplanations = perm.map((p) => oe[p] ?? "");
+      }
+    }
+  }
   return set;
 }
 
@@ -3377,61 +3720,95 @@ async function runRegenAllJob(id, { endpoints, model, questions, owner = null, n
   const deadline = Date.now() + 12 * 60 * 1000;
   const save = (patch) => Object.assign(job, patch, { updatedAt: Date.now() });
   const total = questions.length;
+  if (!job.keyStats) job.keyStats = {}; // live per-key activity for THIS run
   let updated = 0;
   let lastError = null;
-  let keyDead = false;
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-  const regenOne = async (q, eps) => {
-    const r = await callWithFallback({
-      endpoints: eps && eps.length ? eps : endpoints,
-      model,
+  const MAX_QUOTA_WAITS = 6;
+  const MAX_EMPTY = 4;
+  const MAX_ITEM_RETRIES = 4;
+
+  // Shared work queue + one worker per key (see runExtendJob for the rationale).
+  const queue = [...questions];
+  const itemTries = new Map();
+  const reserveOne = () => (queue.length ? queue.shift() : null);
+  const requeue = (q) => {
+    const k = String(q._id);
+    const n = (itemTries.get(k) || 0) + 1;
+    itemTries.set(k, n);
+    if (n <= MAX_ITEM_RETRIES) queue.push(q);
+  };
+
+  const regenOnKey = async (q, ep, ks) => {
+    ks.requests += 1; save({});
+    const r = await callProvider({
+      key: ep.key,
+      baseUrl: ep.baseUrl,
+      model: ep.model || model,
       systemPrompt: REGEN_SYSTEM_PROMPT,
       userPrompt: buildRegenPrompt(q, notes),
       maxTokens: 8000,
-      owner,
-      failOnEmpty: true, // empty reply → roll over to the next key/model
+      failOnEmpty: true,
     });
-    if (!r.ok) {
-      lastError = r;
-      if ([401, 403].includes(r.status)) keyDead = true;
-      return false;
+    if (r.ok) {
+      const parsed = parseExplanationJson(r.content);
+      if (!parsed || !(parsed.explanation || (Array.isArray(parsed.options) && parsed.options.length === 4) || parsed.text || parsed.tableRows)) {
+        ks.error += 1; save({});
+        return "soft";
+      }
+      const set = buildRegenSet(q, parsed);
+      if (!Object.keys(set).length) { ks.error += 1; save({}); return "soft"; }
+      await Question.updateOne({ _id: q._id }, { $set: set }).catch(() => {});
+      updated += 1;
+      ks.ok += 1; ks.questions += 1;
+      AiKey.updateOne({ key: ep.key, owner: owner ?? null }, { $inc: { usedRequests: 1, usedTokens: r.tokens || 0 } }).catch(() => {});
+      job.questions.push(1);
+      save({});
+      return "ok";
     }
-    const parsed = parseExplanationJson(r.content);
-    if (!parsed || !(parsed.explanation || (Array.isArray(parsed.options) && parsed.options.length === 4) || parsed.text || parsed.tableRows)) return false;
-    const set = buildRegenSet(q, parsed);
-    if (!Object.keys(set).length) return false;
-    await Question.updateOne({ _id: q._id }, { $set: set }).catch(() => {});
-    updated += 1;
-    job.questions.push(1);
-    save({});
-    return true;
+    lastError = r;
+    if (r.status === 429) { ks.limited += 1; save({}); return "limited"; }
+    if (r.status === 520 && r.empty) { ks.error += 1; save({}); return "empty"; }
+    if ([401, 403, 404].includes(r.status)) { ks.error += 1; save({}); return "dead"; }
+    ks.error += 1; save({});
+    return "soft";
   };
 
-  const MAX_PASSES = 4;
-  let pending = [...questions];
-  try {
-    for (let pass = 0; pass < MAX_PASSES && pending.length && !keyDead && Date.now() < deadline && !job.cancelled; pass++) {
-      const failed = [];
-      let idx = 0;
-      const rotate = (arr, k) => arr.slice(k).concat(arr.slice(0, k));
-      const nEps = endpoints?.length || 1;
-      const WORKERS = Math.min(Math.max(nEps, 1), 10);
-      const worker = async (wi) => {
-        const eps = nEps > 1 ? rotate(endpoints, wi % nEps) : endpoints;
-        while (idx < pending.length && !keyDead && Date.now() < deadline && !job.cancelled) {
-          const q = pending[idx++];
-          let ok = false;
-          try { ok = await regenOne(q, eps); } catch { ok = false; }
-          if (!ok) failed.push(q);
-        }
-      };
-      await Promise.all(Array.from({ length: WORKERS }, (_, wi) => worker(wi)));
-      pending = failed;
-      if (pending.length && pass < MAX_PASSES - 1 && !keyDead && Date.now() < deadline) {
-        const wait = lastError?.status === 429 ? 40000 : 2000;
-        if (Date.now() + wait < deadline) await new Promise((r) => setTimeout(r, wait));
+  // ONE worker PER API KEY — every key regenerates simultaneously; a 429 parks
+  // only that key while the others keep working (no global barrier/pause).
+  const worker = async (ep) => {
+    let quotaWaits = 0;
+    let emptyOnKey = 0;
+    const _kl = ep.label || `••••${String(ep.key).slice(-4)}`;
+    const ks = job.keyStats[_kl] || (job.keyStats[_kl] = { requests: 0, ok: 0, limited: 0, error: 0, questions: 0 });
+    while (Date.now() < deadline && !job.cancelled) {
+      const q = reserveOne();
+      if (!q) break;
+      let outcome;
+      try { outcome = await regenOnKey(q, ep, ks); } catch { outcome = "soft"; }
+      if (outcome === "ok") continue;
+      if (outcome === "dead") { queue.push(q); break; }
+      if (outcome === "limited") {
+        queue.push(q);
+        if (quotaWaits >= MAX_QUOTA_WAITS) break;
+        const waitMs = Math.min(retryWaitMs(null, lastError?.detail) || 30000, 60000);
+        if (Date.now() + waitMs >= deadline) break;
+        quotaWaits += 1;
+        await sleep(waitMs);
+        continue;
       }
+      if (outcome === "empty") {
+        requeue(q);
+        if (++emptyOnKey >= MAX_EMPTY) break;
+        continue;
+      }
+      requeue(q);
     }
+  };
+
+  try {
+    await Promise.all((endpoints || []).map((ep) => worker(ep)));
     if (updated === 0) {
       save({
         status: "error",
@@ -3479,10 +3856,14 @@ export async function regenerateAll(req, res) {
   if (req.body?.testSeries) filter = { testSeries: req.body.testSeries, ...own };
   else if (req.body?.quiz) filter = { quiz: req.body.quiz, ...own };
   if (!filter) return res.status(400).json({ message: "Provide a quiz or test to update." });
+  // Optional: restrict to ONE question type (e.g. only "matching" / only "pair").
+  // "all" (or any unknown value) means every type.
+  const onlyType = String(req.body?.type || "").trim();
+  if (onlyType && onlyType !== "all" && TYPES.includes(onlyType)) filter.type = onlyType;
 
   // Least-recently-updated first so repeated runs finish the whole set.
   const questions = await Question.find(filter).sort("updatedAt").select("_id type text options correct columnA columnB tableRows assertion reason explanation optionExplanations").lean();
-  if (!questions.length) return res.status(400).json({ message: "No questions found to update (or not your content)." });
+  if (!questions.length) return res.status(400).json({ message: filter.type ? `No "${filter.type}" questions found here (try "All question types").` : "No questions found to update (or not your content)." });
 
   const notes = String(req.body?.notes || "").trim();
   cleanupJobs();
@@ -3516,6 +3897,14 @@ export async function regenerateQuestion(req, res) {
   if (!q) return res.status(404).json({ message: "Question not found (or not your content)." });
 
   const notes = String(req.body?.notes || "").trim();
+  // Optional toggles from the Regenerate dialog. Defaults preserve the original
+  // behaviour (full rebuild + reshuffle) so callers that send nothing are
+  // unaffected. `fixOptions=false` keeps the current options/answer and only
+  // refreshes the explanations; `extendQuestion` allows lengthening the stem;
+  // `shuffleOptions=false` keeps the answer in its current position.
+  const fixOptions = req.body?.fixOptions !== false;
+  const shuffleOptions = req.body?.shuffleOptions !== false;
+  const extendQuestion = req.body?.extendQuestion === true;
   let parsed = null;
   let lastError = null;
   for (let attempt = 0; attempt < 3 && !parsed; attempt++) {
@@ -3523,7 +3912,7 @@ export async function regenerateQuestion(req, res) {
       endpoints: chosen.endpoints,
       model: chosen.model,
       systemPrompt: REGEN_SYSTEM_PROMPT,
-      userPrompt: buildRegenPrompt(q, notes),
+      userPrompt: buildRegenPrompt(q, notes, { fixOptions, extendQuestion }),
       maxTokens: 8000, // full rebuild (stem + 4 options + explanation + 4 notes) — avoid truncation
       owner: scope.owner,
     });
@@ -3545,7 +3934,7 @@ export async function regenerateQuestion(req, res) {
   }
 
   // Apply everything the AI rebuilt (shared with the bulk "Regenerate all" job).
-  const set = buildRegenSet(q, parsed);
+  const set = buildRegenSet(q, parsed, { fixOptions, extendQuestion, shuffleOptions });
   if (!Object.keys(set).length) return res.status(502).json({ message: "The AI did not return any usable changes. Try again." });
 
   await Question.updateOne({ _id: q._id }, { $set: set });
@@ -3738,6 +4127,16 @@ export async function updateKey(req, res) {
   const doc = await AiKey.findOneAndUpdate({ _id: req.params.id, owner: keyOwner(req) ?? null }, patch, { new: true });
   if (!doc) return res.status(404).json({ message: "Key not found" });
   res.json(keyToClient(doc));
+}
+
+// GET /api/ai/keys/:id/reveal — return the RAW key so the owner can view/copy it
+// in the edit modal. Scoped by owner (a client only sees their own keys; admin
+// only platform keys), so no one can reveal another owner's key. Env/server
+// keys aren't stored in the DB and so are never revealed here.
+export async function revealKey(req, res) {
+  const doc = await AiKey.findOne({ _id: req.params.id, owner: keyOwner(req) ?? null }).lean();
+  if (!doc) return res.status(404).json({ message: "Key not found" });
+  res.json({ key: (doc.key || "").trim() });
 }
 
 // DELETE /api/ai/keys/:id — scoped to the caller's own pool.
@@ -4112,4 +4511,213 @@ export async function setAiMode(req, res) {
   user.aiMode = mode;
   await user.save();
   res.json({ mode: user.aiMode });
+}
+
+
+// ---------------------------------------------------------------------------
+// AI "deep check" — match pasted questions to the bank by MEANING, not words.
+// The lexical checker (POST /api/questions/check) finds questions that share
+// key words. This endpoint asks the model whether a candidate tests the SAME
+// underlying fact/concept as the pasted question EVEN WHEN the wording, the
+// options, or the whole FORMAT differs (a plain MCQ vs. a matching / pair /
+// assertion–reason / statement version of the same content). It is opt-in
+// (the admin ticks "Deep check with AI") because it spends AI quota.
+// ---------------------------------------------------------------------------
+const SEMANTIC_CHECK_SYSTEM =
+  "You are a strict exam-question matcher. You are given ONE question a teacher pasted and a numbered list of CANDIDATE questions taken from their question bank. Candidates may be in ANY format: plain MCQ, matching (two columns), pair / pair-count, assertion–reason, statement-based, or table. " +
+  "For EACH candidate decide whether it tests the SAME underlying fact, concept or answer as the pasted question — even if the wording, the options, or the entire FORMAT is different. Ignore phrasing, option order and question type; judge ONLY the knowledge being tested. " +
+  "Verdicts: \"same\" = it tests the same specific fact/answer (a genuine duplicate of the CONTENT, in any format); \"related\" = same topic and closely connected but a different specific fact; \"different\" = unrelated or only superficially similar. " +
+  "Reply with ONLY minified JSON — no prose, no markdown, no code fences — in exactly this shape: {\"matches\":[{\"i\":<candidate number>,\"verdict\":\"same|related|different\"}]}. Include an entry for every candidate you judge \"same\" or \"related\"; you may omit the \"different\" ones.";
+
+// One-line searchable/AI-readable rendering of a bank question's FULL content
+// (stem + assertion/reason + both columns + options), truncated for the prompt.
+function candidateContent(c) {
+  const parts = [
+    c.text,
+    c.assertion ? `Assertion: ${c.assertion}` : "",
+    c.reason ? `Reason: ${c.reason}` : "",
+    Array.isArray(c.columnA) && c.columnA.length ? `Column A: ${c.columnA.join("; ")}` : "",
+    Array.isArray(c.columnB) && c.columnB.length ? `Column B: ${c.columnB.join("; ")}` : "",
+    Array.isArray(c.options) && c.options.length ? `Options: ${c.options.join(" | ")}` : "",
+  ].filter(Boolean);
+  return parts.join(" ").replace(/\s+/g, " ").trim().slice(0, 500);
+}
+
+// Parse the model's verdict JSON robustly (tolerates code fences / stray prose).
+// Returns [{ i, verdict }] with i in range and verdict in {same, related}.
+function parseSemanticVerdicts(content, maxIndex) {
+  if (!content) return [];
+  let txt = String(content).trim().replace(/^```(?:json)?/i, "").replace(/```$/, "").trim();
+  let obj = null;
+  try { obj = JSON.parse(txt); } catch { /* fall through */ }
+  if (!obj) {
+    const s = txt.indexOf("{");
+    const e = txt.lastIndexOf("}");
+    if (s !== -1 && e > s) { try { obj = JSON.parse(txt.slice(s, e + 1)); } catch { /* ignore */ } }
+  }
+  const arr = obj && Array.isArray(obj.matches) ? obj.matches : [];
+  const out = [];
+  const seen = new Set();
+  for (const m of arr) {
+    const i = Number(m && m.i);
+    const v = String((m && m.verdict) || "").toLowerCase();
+    if (!Number.isInteger(i) || i < 0 || i >= maxIndex || seen.has(i)) continue;
+    if (v !== "same" && v !== "related") continue;
+    seen.add(i);
+    out.push({ i, verdict: v });
+  }
+  return out;
+}
+
+const semNorm = (s) => String(s || "").toLowerCase().replace(/\s+/g, " ").trim();
+
+// POST /api/ai/check-semantic  { content? , stems?[] , model? , mode? }
+// Same response shape as POST /api/questions/check, but matches are decided by
+// the AI (by meaning, across formats) instead of by shared words.
+export async function checkQuestionsSemantic(req, res) {
+  const scope = resolveScope(req.user, req.body?.mode);
+  if (scope.denied) {
+    return res.status(403).json({ message: "AI access is not enabled for your account. Please contact the administrator." });
+  }
+  const chosen = await resolveModel(String(req.body?.model || "").trim(), scope);
+  if (!chosen || !chosen.endpoints.length) {
+    return res.status(400).json({
+      message: scope.mode === "self"
+        ? "No API keys added yet. Add at least one key in the AI tab."
+        : "AI is not configured. Add an API key in Admin → AI Keys.",
+    });
+  }
+
+  const own = ownerFilter(req);
+  const provided = Array.isArray(req.body?.stems)
+    ? req.body.stems.map((s) => String(s || "").trim()).filter((s) => s.length >= 8).map((s) => ({ stem: s, block: s }))
+    : null;
+  // AI mode is capped tighter than the lexical checker (each item costs one AI
+  // call) so a huge paste can't blow the request timeout or the quota.
+  const items = (provided && provided.length ? provided : splitIntoStems(req.body?.content)).slice(0, 25);
+  if (!items.length) {
+    return res.status(400).json({ message: "Paste at least one question (or upload a file) to check." });
+  }
+
+  // For each pasted question: shortlist candidates from the bank with the text
+  // index, then let the AI decide which of them are the SAME content.
+  const perItem = async ({ stem, block }) => {
+    const fullContent = contentOfBlock(block);
+    const searchText = (fullContent || stem).slice(0, 400);
+    let candidates = [];
+    try {
+      candidates = await Question.find(
+        { $text: { $search: searchText }, ...own },
+        { score: { $meta: "textScore" }, text: 1, type: 1, options: 1, columnA: 1, columnB: 1, assertion: 1, reason: 1 }
+      ).sort({ score: { $meta: "textScore" } }).limit(12).lean();
+    } catch {
+      candidates = [];
+    }
+    if (!candidates.length) {
+      // Keyword fallback so a paste still finds candidates when the text index
+      // scores nothing (e.g. very short stems).
+      const words = [...contentTokens(fullContent || stem)].slice(0, 10).map((w) => w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+      if (words.length) {
+        candidates = await Question.find({ text: new RegExp(words.join("|"), "i"), ...own })
+          .select("text type options columnA columnB assertion reason").limit(12).lean();
+      }
+    }
+    if (!candidates.length) return { stem, block, matches: [] };
+
+    const list = candidates.map((c, i) => `[${i}] (${c.type || "mcq"}) ${candidateContent(c)}`).join("\n");
+    const userPrompt =
+      `PASTED QUESTION:\n${String(block || stem).slice(0, 900)}\n\n` +
+      `CANDIDATES:\n${list}\n\n` +
+      "Return JSON only, using the candidate numbers in [brackets].";
+    const r = await callWithFallback({
+      endpoints: chosen.endpoints,
+      model: chosen.model,
+      systemPrompt: SEMANTIC_CHECK_SYSTEM,
+      userPrompt,
+      maxTokens: 900,
+      owner: scope.owner,
+    });
+    if (!r.ok) return { stem, block, matches: [], error: r.status || 0 };
+
+    const verdicts = parseSemanticVerdicts(r.content, candidates.length);
+    const normStem = semNorm(stem);
+    const matches = verdicts.map(({ i, verdict }) => {
+      const c = candidates[i];
+      const isExact = verdict === "same" && normStem.length > 0 && semNorm(c.text) === normStem;
+      const status = isExact ? "exact" : verdict === "same" ? "strong" : "related";
+      const similarity = isExact ? 100 : verdict === "same" ? 90 : 60;
+      return { id: String(c._id), status, similarity };
+    });
+    // Best first: exact, then same/strong, then related.
+    matches.sort((a, b) => b.similarity - a.similarity);
+    return { stem, block, matches };
+  };
+
+  // Bounded concurrency so we don't fire 25 AI calls at once.
+  const CONCURRENCY = 4;
+  const scored = new Array(items.length);
+  let next = 0;
+  const worker = async () => {
+    for (;;) {
+      const idx = next++;
+      if (idx >= items.length) break;
+      scored[idx] = await perItem(items[idx]);
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(CONCURRENCY, items.length) }, worker));
+
+  // Resolve human-readable locations for every matched question in one query.
+  const ids = [...new Set(scored.flatMap((s) => s.matches.map((m) => m.id)))];
+  const locMap = new Map();
+  if (ids.length) {
+    const docs = await Question.find({ _id: { $in: ids } })
+      .select("text type options correct columnA columnB assertion reason tableRows image explanation difficulty subject quiz session testSeries topic")
+      .populate({ path: "subject", select: "name stream", populate: { path: "stream", select: "name" } })
+      .populate({ path: "session", select: "title topic", populate: { path: "topic", select: "title" } })
+      .populate("quiz", "title")
+      .populate("testSeries", "name practice practiceKind")
+      .lean();
+    for (const d of docs) locMap.set(String(d._id), d);
+  }
+
+  const buildMatch = (m) => {
+    const d = locMap.get(String(m.id));
+    if (!d) return null;
+    return {
+      id: String(d._id),
+      text: d.text,
+      type: d.type,
+      options: d.options || [],
+      correct: d.correct,
+      columnA: d.columnA || [],
+      columnB: d.columnB || [],
+      assertion: d.assertion,
+      reason: d.reason,
+      tableRows: d.tableRows,
+      image: d.image,
+      explanation: d.explanation,
+      difficulty: d.difficulty,
+      location: questionLocation(d),
+      status: m.status,
+      similarity: m.similarity,
+    };
+  };
+
+  const summary = { exact: 0, strong: 0, related: 0, none: 0 };
+  const results = scored.map((s) => {
+    const matches = s.matches.map(buildMatch).filter(Boolean);
+    const status = matches[0]?.status || "none";
+    summary[status] += 1;
+    return {
+      question: s.stem,
+      yourQuestion: s.block,
+      status,
+      similarity: matches[0]?.similarity || 0,
+      matches,
+      match: matches[0] || null,
+    };
+  });
+
+  const found = summary.exact + summary.strong + summary.related;
+  res.json({ total: items.length, found, summary, results, deep: true });
 }

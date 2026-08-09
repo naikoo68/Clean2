@@ -51,6 +51,7 @@ const ForgotPassword = lazy(() => import("./pages/auth/ForgotPassword"));
 const ResetPassword = lazy(() => import("./pages/auth/ResetPassword"));
 
 const ClientWorkspace = lazy(() => import("./pages/client/ClientWorkspace"));
+const ClientPerformanceDetails = lazy(() => import("./pages/client/ClientPerformanceDetails"));
 
 const AdminLogin = lazy(() => import("./pages/admin/AdminLogin"));
 const AdminLayout = lazy(() => import("./pages/admin/AdminLayout"));
@@ -62,10 +63,13 @@ const AdminFeedback = lazy(() => import("./pages/admin/AdminFeedback"));
 const AdminUsers = lazy(() => import("./pages/admin/AdminUsers"));
 const AdminMessages = lazy(() => import("./pages/admin/AdminMessages"));
 const AdminCustomization = lazy(() => import("./pages/admin/AdminCustomization"));
+const AdminUserManual = lazy(() => import("./pages/admin/AdminUserManual"));
 const AdminNotices = lazy(() => import("./pages/admin/AdminNotices"));
 const AdminFacebook = lazy(() => import("./pages/admin/AdminFacebook"));
 const AdminPerformance = lazy(() => import("./pages/admin/AdminPerformance"));
 const AdminPractice = lazy(() => import("./pages/admin/AdminPractice"));
+// Standalone "Previous Papers" = the practice manager locked to the paper kind.
+const AdminPreviousPapers = () => <AdminPractice fixedKind="paper" />;
 const AdminMigration = lazy(() => import("./pages/admin/AdminMigration"));
 const AdminClients = lazy(() => import("./pages/admin/AdminClients"));
 const AdminCoupons = lazy(() => import("./pages/admin/AdminCoupons"));
@@ -77,6 +81,7 @@ const AdminNotes = lazy(() => import("./pages/admin/AdminNotes"));
 const AdminPdfBuilder = lazy(() => import("./pages/admin/AdminPdfBuilder"));
 const AdminCbt = lazy(() => import("./pages/admin/AdminCbt"));
 const AdminVisualize = lazy(() => import("./pages/admin/AdminVisualize"));
+const AdminChecker = lazy(() => import("./pages/admin/AdminChecker"));
 const CbtResult = lazy(() => import("./pages/cbt/CbtResult"));
 const CbtPortal = lazy(() => import("./pages/cbt/CbtPortal"));
 
@@ -182,6 +187,15 @@ const router = createHashRouter([
       </ProtectedRoute>
     ),
   },
+  // Full-page performance details (opened from the dashboard's Attempts card)
+  {
+    path: "/client/performance",
+    element: (
+      <ProtectedRoute role="client">
+        {S(ClientPerformanceDetails)}
+      </ProtectedRoute>
+    ),
+  },
 
   // Admin (separate shell)
   { path: "/admin/login", element: S(AdminLogin) },
@@ -197,6 +211,8 @@ const router = createHashRouter([
       { path: "content", element: S(AdminContent) },
       { path: "tests", element: S(AdminTests) },
       { path: "practice", element: S(AdminPractice) },
+      { path: "previous-papers", element: S(AdminPreviousPapers) },
+      { path: "checker", element: S(AdminChecker) },
       { path: "shared", element: S(AdminSharedLinks) },
       { path: "migration", element: S(AdminMigration) },
       { path: "clients", element: S(AdminClients) },
@@ -217,6 +233,7 @@ const router = createHashRouter([
       { path: "cbt", element: S(AdminCbt) },
       { path: "ai-keys", element: S(AdminAiKeys) },
       { path: "customization", element: S(AdminCustomization) },
+      { path: "manual", element: S(AdminUserManual) },
     ],
   },
 

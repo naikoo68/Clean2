@@ -26,6 +26,17 @@ const homeSectionSchema = new mongoose.Schema(
   { _id: false }
 );
 
+// Admin-editable announcement shown in the client welcome popup (the modal that
+// appears every time a client opens their workspace).
+const clientAnnouncementSchema = new mongoose.Schema(
+  {
+    enabled: { type: Boolean, default: false },
+    title: { type: String, default: "" },
+    message: { type: String, default: "" },
+  },
+  { _id: false }
+);
+
 // A client subscription plan (admin-managed). Carries BOTH pricing
 // (label/months/price) AND the AI generation limits granted to a client on the
 // plan (maxPerBatch per generation, perWindow questions per windowMinutes).
@@ -81,6 +92,11 @@ const settingsSchema = new mongoose.Schema(
     guardHoldMs: { type: Number, default: 1500 }, // how long the screen-guard cover stays after a screenshot key (ms)
     // Email + notice-board announcement when a new quiz/test is added.
     notifyOnNewContent: { type: Boolean, default: false },
+    // Welcome popup shown to clients each time they open their workspace.
+    clientAnnouncement: {
+      type: clientAnnouncementSchema,
+      default: () => ({ enabled: false, title: "", message: "" }),
+    },
     // ---- Facebook Page auto-posting (Graph API) ----
     fbEnabled: { type: Boolean, default: false }, // master on/off for Facebook posting
     fbPageId: { type: String, default: "" }, // the Facebook Page's numeric ID

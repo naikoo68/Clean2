@@ -18,7 +18,25 @@ const testSeriesSchema = new mongoose.Schema(
     // PracticeStream → PracticeSubject instead of Exam → Post, and is excluded
     // from the normal Test Series listing. practiceKind is "quiz" or "test".
     practice: { type: Boolean, default: false },
-    practiceKind: { type: String, enum: ["quiz", "test"], default: "test" },
+    practiceKind: { type: String, enum: ["quiz", "test", "paper"], default: "test" },
+    // Previous Papers extras (used when practiceKind === "paper"): the uploaded
+    // question-paper PDF, the answer-key PDF, and free-text additional info that
+    // students can view alongside the paper.
+    paperPdfUrl: { type: String, default: "" },
+    // Legacy single answer key. Kept in sync with answerKeys[0] for backward
+    // compatibility; new code reads answerKeys (below).
+    answerKeyPdfUrl: { type: String, default: "" },
+    // Multiple answer keys (e.g. the original key plus a revised key). Each is
+    // { label, url }. Admins add as many as needed; students see one button
+    // per key, labelled accordingly.
+    answerKeys: [
+      {
+        _id: false,
+        label: { type: String, default: "" },
+        url: { type: String, default: "" },
+      },
+    ],
+    additionalInfo: { type: String, default: "" },
     practiceStream: { type: mongoose.Schema.Types.ObjectId, ref: "PracticeStream" },
     practiceSubject: { type: mongoose.Schema.Types.ObjectId, ref: "PracticeSubject" },
     practiceTopic: { type: mongoose.Schema.Types.ObjectId, ref: "PracticeTopic" }, // My Quiz only
@@ -106,6 +124,12 @@ const testSeriesSchema = new mongoose.Schema(
         validUntil: { type: Date, default: null },
       },
     ],
+    // Account-to-account sharing: registered users this practice item (quiz/test)
+    // has been shared with. A recipient sees it (with its full Stream › Subject ›
+    // Topic hierarchy) in their own dashboard and can play/take it, but cannot
+    // edit it. Sharing a stream/subject/topic simply adds the recipient here on
+    // every item beneath that node.
+    sharedWith: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
   },
   { timestamps: true }
 );

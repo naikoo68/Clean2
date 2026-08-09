@@ -63,6 +63,8 @@ const sanitize = (u) => ({
   // User-manual default ON; AI Generator default OFF).
   featDashboard: u.featDashboard !== false,
   featBuild: u.featBuild !== false,
+  featPapers: u.featPapers !== false,
+  featChecker: u.featChecker !== false,
   featNotes: u.featNotes !== false,
   featDocuments: u.featDocuments !== false,
   featManual: u.featManual !== false,
@@ -321,6 +323,9 @@ export async function login(req, res) {
   }
   if (user.status === "blocked") {
     return res.status(403).json({ message: "Account blocked" });
+  }
+  if (user.deleted) {
+    return res.status(403).json({ message: "This account has been deleted. Please contact the administrator." });
   }
   if (user.expiresAt && user.expiresAt.getTime() < Date.now()) {
     return res.status(403).json({ message: "This temporary account has expired. Please contact the administrator." });

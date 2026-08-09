@@ -33,18 +33,12 @@ export async function listUsers(req, res) {
 
 // GET /api/users/clients  (admin) — self-service client accounts, each with a
 // count of the private My Practice content they've created.
-export async function listClients(req, res) {
-  const { search = "" } = req.query;
-  const filter = { role: "client" };
-  if (search) {
-    const escaped = escapeRegex(search);
-    filter.$or = [{ name: new RegExp(escaped, "i") }, { email: new RegExp(escaped, "i") }];
-  }
-
+// Load clients matching `filter`, each annotated with their owned-content
+// counts (practice quizzes vs tests, and total questions). Shared by the normal
+// list and the Recycle bin so both show the same shape.
+async function clientsWithCounts(filter) {
   const clients = await User.find(filter).select("-password").sort("-createdAt").lean();
   const ids = clients.map((c) => c._id);
-
-  // Owned content counts (practice quizzes vs tests, and total questions).
   const [tsAgg, qAgg] = await Promise.all([
     TestSeries.aggregate([
       { $match: { owner: { $in: ids } } },
@@ -52,7 +46,6 @@ export async function listClients(req, res) {
     ]),
     Question.aggregate([{ $match: { owner: { $in: ids } } }, { $group: { _id: "$owner", count: { $sum: 1 } } }]),
   ]);
-
   const quizMap = {};
   const testMap = {};
   tsAgg.forEach((r) => {
@@ -61,16 +54,32 @@ export async function listClients(req, res) {
     else testMap[o] = (testMap[o] || 0) + r.count;
   });
   const qMap = Object.fromEntries(qAgg.map((r) => [String(r._id), r.count]));
+  return clients.map((c) => ({
+    ...c,
+    quizzes: quizMap[String(c._id)] || 0,
+    tests: testMap[String(c._id)] || 0,
+    questions: qMap[String(c._id)] || 0,
+  }));
+}
 
-  res.json({
-    clients: clients.map((c) => ({
-      ...c,
-      quizzes: quizMap[String(c._id)] || 0,
-      tests: testMap[String(c._id)] || 0,
-      questions: qMap[String(c._id)] || 0,
-    })),
-    total: clients.length,
-  });
+export async function listClients(req, res) {
+  const { search = "" } = req.query;
+  // `$ne: true` (not `false`) so existing docs with no `deleted` field still show.
+  const filter = { role: "client", deleted: { $ne: true } };
+  if (search) {
+    const escaped = escapeRegex(search);
+    filter.$or = [{ name: new RegExp(escaped, "i") }, { email: new RegExp(escaped, "i") }];
+  }
+  const clients = await clientsWithCounts(filter);
+  res.json({ clients, total: clients.length });
+}
+
+// GET /api/users/clients/deleted  (admin) — the Recycle bin: soft-deleted
+// clients that can be restored (or permanently deleted). Newest-deleted first.
+export async function listDeletedClients(req, res) {
+  const clients = (await clientsWithCounts({ role: "client", deleted: true }))
+    .sort((a, b) => new Date(b.deletedAt || 0) - new Date(a.deletedAt || 0));
+  res.json({ clients, total: clients.length });
 }
 
 // POST /api/users  (admin) — create a new user
@@ -131,7 +140,7 @@ export async function updateUser(req, res) {
   if ("aiAllowInbuilt" in req.body) user.aiAllowInbuilt = !!req.body.aiAllowInbuilt;
   if ("aiAllowSelf" in req.body) user.aiAllowSelf = !!req.body.aiAllowSelf;
   // Per-feature client workspace access (applied only when present).
-  for (const f of ["featDashboard", "featBuild", "featNotes", "featDocuments", "featManual", "featAiGenerator"]) {
+  for (const f of ["featDashboard", "featBuild", "featPapers", "featChecker", "featNotes", "featDocuments", "featManual", "featAiGenerator"]) {
     if (f in req.body) user[f] = !!req.body[f];
   }
   // Assign a subscription plan (admin override). Sets the plan key plus its
@@ -173,11 +182,40 @@ export async function updateUser(req, res) {
 }
 
 // DELETE /api/users/:id  (admin)
+// DELETE /api/users/:id  (admin) — SOFT delete for CLIENTS (recoverable): the
+// account is flagged deleted (can't log in, hidden from the list) but its
+// content is KEPT so it can be restored from the Recycle bin. Non-client users
+// are still hard-deleted (they own no private practice content).
 export async function deleteUser(req, res) {
   const user = await User.findById(req.params.id);
   if (!user) return res.status(404).json({ message: "User not found" });
-  // A client owns private My Practice content — remove it too so nothing is
-  // orphaned when the account is deleted.
+  if (user.role === "client") {
+    user.deleted = true;
+    user.deletedAt = new Date();
+    await user.save();
+    return res.json({ message: "Client moved to Recycle bin", softDeleted: true });
+  }
+  await User.findByIdAndDelete(req.params.id);
+  res.json({ message: "User deleted" });
+}
+
+// POST /api/users/:id/restore  (admin) — bring a soft-deleted client back. All
+// their content was kept, so restoring returns the account fully intact.
+export async function restoreUser(req, res) {
+  const user = await User.findById(req.params.id);
+  if (!user) return res.status(404).json({ message: "User not found" });
+  user.deleted = false;
+  user.deletedAt = null;
+  await user.save();
+  res.json({ message: "Client restored", id: user._id });
+}
+
+// DELETE /api/users/:id/permanent  (admin) — PERMANENTLY delete a client and
+// ALL their private My Practice content. This CANNOT be undone (empties the
+// Recycle bin).
+export async function permanentDeleteUser(req, res) {
+  const user = await User.findById(req.params.id);
+  if (!user) return res.status(404).json({ message: "User not found" });
   if (user.role === "client") {
     await Promise.all([
       Question.deleteMany({ owner: user._id }),
@@ -188,7 +226,7 @@ export async function deleteUser(req, res) {
     ]);
   }
   await User.findByIdAndDelete(req.params.id);
-  res.json({ message: "User deleted" });
+  res.json({ message: "User permanently deleted" });
 }
 
 // PATCH /api/users/:id/status  (admin) — block / unblock
@@ -206,7 +244,7 @@ export async function toggleStatus(req, res) {
 // Only the keys present are applied; the rest are left untouched.
 export async function applyClientFeatureAccess(req, res) {
   const f = req.body?.features || {};
-  const allowed = ["featDashboard", "featBuild", "featNotes", "featDocuments", "featManual", "aiAccess", "featAiGenerator"];
+  const allowed = ["featDashboard", "featBuild", "featPapers", "featChecker", "featNotes", "featDocuments", "featManual", "aiAccess", "featAiGenerator"];
   const set = {};
   for (const k of allowed) if (k in f) set[k] = !!f[k];
   if (!Object.keys(set).length) return res.status(400).json({ message: "No feature flags provided." });

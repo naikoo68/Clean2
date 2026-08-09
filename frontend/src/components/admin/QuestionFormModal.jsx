@@ -192,8 +192,8 @@ export default function QuestionFormModal({ question, saving, onClose, onSave, s
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/50 p-4">
-      <form onSubmit={submit} className="my-8 w-full max-w-lg animate-scale-in card p-6">
+    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/50 p-0 sm:p-4">
+      <form onSubmit={submit} className="min-h-full w-full max-w-none animate-scale-in card m-0 rounded-none p-4 sm:rounded-2xl sm:p-6">
         <div className="mb-4 flex items-center justify-between">
           <h3 className="text-lg font-bold">{question ? "Edit" : "Add"} Question</h3>
           <button type="button" onClick={onClose}><X className="h-5 w-5" /></button>

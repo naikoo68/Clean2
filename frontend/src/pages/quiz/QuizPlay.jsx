@@ -32,7 +32,7 @@ import Watermark from "../../components/ui/Watermark";
 import FeedbackButton from "../../components/ui/FeedbackButton";
 import { useZoom } from "../../context/ZoomContext";
 import { Loading, ErrorState, EmptyState } from "../../components/ui/AsyncState";
-import { questionDateText } from "../../lib/questions";
+import { questionDateText, stemText, displayOptions } from "../../lib/questions";
 import { shuffleAll, toOriginalIndex, makeSeed } from "../../lib/shuffleOptions";
 
 const optionLabels = ["A", "B", "C", "D"];
@@ -487,7 +487,7 @@ export default function QuizPlay() {
 
           {q.image && <img src={q.image} alt="" className="mb-4 max-h-64 rounded-xl object-contain" />}
           <h2 className="text-lg font-semibold leading-relaxed">
-            <MathText>{q.text}</MathText>
+            <MathText>{stemText(q)}</MathText>
           </h2>
 
           {/* Matching questions show the two columns above the answer options */}
@@ -526,7 +526,7 @@ export default function QuizPlay() {
 
           <div className="mt-5 space-y-3">
             {isMatching && <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Choose the correct matching sequence:</p>}
-            {(q.options || []).map((opt, idx) => {
+            {displayOptions(q).map((opt, idx) => {
               const optExp = q.optionExplanations?.[idx];
               return (
                 <div key={idx}>

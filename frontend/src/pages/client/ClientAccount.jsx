@@ -1,0 +1,133 @@
+import { useEffect, useState } from "react";
+import { AlarmClock, ShieldCheck, Clock, Crown, Gift, Copy, Sparkles, User } from "lucide-react";
+import { authService } from "../../services";
+import { useAuth } from "../../context/AuthContext";
+import Badge from "../../components/ui/Badge";
+
+const fmtDate = (d) =>
+  new Date(d).toLocaleString(undefined, { day: "2-digit", month: "short", year: "numeric", hour: "numeric", minute: "2-digit" });
+
+function relativeTo(d) {
+  const ms = new Date(d).getTime() - Date.now();
+  if (ms <= 0) return "Expired";
+  const mins = Math.round(ms / 60000);
+  if (mins < 60) return `in ${mins} min`;
+  const hrs = Math.round(mins / 60);
+  if (hrs < 48) return `in ${hrs} hr${hrs === 1 ? "" : "s"}`;
+  const days = Math.round(hrs / 24);
+  return `in ${days} day${days === 1 ? "" : "s"}`;
+}
+const isExpired = (d) => d && new Date(d).getTime() < Date.now();
+
+// The client's account details — name, email, validity, plan and referral.
+// Moved off the dashboard into its own "Account" menu item so the dashboard
+// stays focused on content; opened from the workspace hamburger menu.
+export default function ClientAccount({ onUpgrade }) {
+  const { user } = useAuth();
+  const [planInfo, setPlanInfo] = useState(null);
+  const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    if (!user?.subscriptionPlan) { setPlanInfo(null); return; }
+    authService
+      .plans()
+      .then((r) => setPlanInfo((r?.plans || []).find((p) => p.key === user.subscriptionPlan) || null))
+      .catch(() => {});
+  }, [user?.subscriptionPlan]);
+
+  const expired = isExpired(user?.expiresAt);
+
+  const copyReferral = () => {
+    if (!user?.referralCode) return;
+    navigator.clipboard?.writeText(user.referralCode).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    }).catch(() => {});
+  };
+
+  return (
+    <div className="grid gap-4 sm:grid-cols-3">
+      {/* Profile */}
+      <div className="card p-5 sm:col-span-2">
+        <div className="flex items-center gap-2">
+          <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand-100 text-brand-600 dark:bg-brand-900/40 dark:text-brand-300">
+            <User className="h-5 w-5" />
+          </span>
+          <div>
+            <h1 className="text-lg font-bold leading-none">{user?.name || "there"}</h1>
+            <p className="mt-0.5 text-sm text-slate-400">{user?.email}</p>
+          </div>
+        </div>
+        {user?.referralCode && (
+          <>
+            <div className="mt-4">
+              <button
+                onClick={copyReferral}
+                title="Copy your referral code to share with friends"
+                className="inline-flex items-center gap-1.5 rounded-lg border border-dashed border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-600 hover:border-brand-400 hover:text-brand-600 dark:border-slate-600 dark:text-slate-300"
+              >
+                <Gift className="h-4 w-4" />
+                Refer a friend: <span className="font-bold tracking-wide">{user.referralCode}</span>
+                {copied ? <span className="text-emerald-600">Copied!</span> : <Copy className="h-3.5 w-3.5" />}
+              </button>
+            </div>
+            <p className="mt-2 text-xs text-slate-400">
+              Share your code — for every friend who buys a plan, you get <b className="text-emerald-600">10 free days</b> added automatically.
+            </p>
+          </>
+        )}
+      </div>
+
+      {/* Validity */}
+      <div className={`card p-5 ${expired ? "border-rose-300 dark:border-rose-900/60" : ""}`}>
+        <div className="flex items-center gap-2">
+          <span className={`flex h-9 w-9 items-center justify-center rounded-xl ${expired ? "bg-rose-100 text-rose-600 dark:bg-rose-900/40 dark:text-rose-300" : "bg-emerald-100 text-emerald-600 dark:bg-emerald-900/40 dark:text-emerald-300"}`}>
+            {user?.expiresAt ? <AlarmClock className="h-5 w-5" /> : <ShieldCheck className="h-5 w-5" />}
+          </span>
+          <h2 className="font-bold">Account validity</h2>
+        </div>
+        {user?.expiresAt ? (
+          expired ? (
+            <div className="mt-3">
+              <Badge variant="Hard">Expired</Badge>
+              <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">Your access ended on {fmtDate(user.expiresAt)}. Contact the administrator to renew.</p>
+            </div>
+          ) : (
+            <div className="mt-3">
+              <Badge variant="accent"><Clock className="h-3 w-3" /> Active · expires {relativeTo(user.expiresAt)}</Badge>
+              <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">Valid until {fmtDate(user.expiresAt)}.</p>
+            </div>
+          )
+        ) : (
+          <div className="mt-3">
+            <Badge variant="Easy">Active · never expires</Badge>
+            <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">Your account has no expiry date.</p>
+          </div>
+        )}
+        {planInfo && (
+          <div className="mt-3 border-t border-slate-100 pt-3 dark:border-slate-800">
+            <p className="text-xs font-semibold text-slate-500 dark:text-slate-400">
+              Your plan: <span className="text-slate-700 dark:text-slate-200">{planInfo.label}</span>
+              {planInfo.price ? <span className="text-slate-400"> · ₹{planInfo.price}</span> : null}
+            </p>
+            {planInfo.maxPerBatch ? (
+              <>
+                <div className="mt-2 grid grid-cols-3 gap-2 text-center">
+                  <div className="rounded-lg bg-slate-50 p-2 dark:bg-slate-800/50"><p className="text-sm font-extrabold text-slate-700 dark:text-slate-200">{planInfo.maxPerBatch}</p><p className="text-[10px] text-slate-500 dark:text-slate-400">Questions / batch</p></div>
+                  <div className="rounded-lg bg-slate-50 p-2 dark:bg-slate-800/50"><p className="text-sm font-extrabold text-slate-700 dark:text-slate-200">{planInfo.perWindow}</p><p className="text-[10px] text-slate-500 dark:text-slate-400">Questions / window</p></div>
+                  <div className="rounded-lg bg-slate-50 p-2 dark:bg-slate-800/50"><p className="text-sm font-extrabold text-slate-700 dark:text-slate-200">{planInfo.windowMinutes || 5} min</p><p className="text-[10px] text-slate-500 dark:text-slate-400">Window</p></div>
+                </div>
+                <p className="mt-1.5 flex items-center gap-1 text-[11px] text-slate-400"><Sparkles className="h-3 w-3" /> Your AI question-generation limits.</p>
+              </>
+            ) : null}
+          </div>
+        )}
+        {onUpgrade && user?.expiresAt && (
+          <button onClick={onUpgrade} className="btn-primary mt-4 w-full py-1.5 text-xs">
+            <Crown className="h-3.5 w-3.5" /> {user?.isTrial ? "Upgrade plan" : "Renew / change plan"}
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}

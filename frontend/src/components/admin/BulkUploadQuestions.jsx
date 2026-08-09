@@ -37,6 +37,29 @@ function correctIndex(v) {
 }
 
 const asDifficulty = (d) => (["Easy", "Medium", "Hard"].includes(d) ? d : "Medium");
+
+// Assertion questions sometimes arrive with BOTH the Assertion and the Reason
+// packed into the single Assertion field — e.g. "Assertion (A): … Reason (R): …"
+// — leaving the Reason column empty (common in AI-generated CSV/JSON exports).
+// Recover them: when reason is empty and the assertion text contains a
+// "Reason (R):"/"Reason:" marker, split on it; also strip a leading
+// "Assertion (A):"/"Assertion:" label from the assertion part. Returns the
+// (possibly) repaired { assertion, reason } pair.
+function splitAssertionReason(assertion, reason) {
+  let a = String(assertion || "").trim();
+  let r = String(reason || "").trim();
+  if (!r && a) {
+    const m = a.match(/\bReason\b\s*(?:\([Rr]\))?\s*[:\-]/);
+    if (m && m.index > 0) {
+      r = a.slice(m.index + m[0].length).trim();
+      a = a.slice(0, m.index).trim();
+    }
+  }
+  a = a.replace(/^\s*Assertion\b\s*(?:\([Aa]\))?\s*[:\-]\s*/, "").trim();
+  r = r.replace(/^\s*Reason\b\s*(?:\([Rr]\))?\s*[:\-]\s*/, "").trim();
+  return { assertion: a, reason: r };
+}
+
 // Strip a leading list marker ("1.", "2)", "I.", "(iii)", "IV -") from an item,
 // since the app auto-numbers Column A (1,2,3,4) and Column B (I,II,III,IV) and
 // statement/pair lists. This avoids double numbering like "1  1. Constant MRT".
@@ -184,7 +207,9 @@ export function parseQuestionsCsv(text) {
 
     // ---- Assertion & Reason row ----
     if (first === "assertion") {
-      const [, assertion, reason, a, b, c, d, correct, difficulty, explanation, wa, wb, wc, wd] = cells;
+      const [, assertionRaw, reasonRaw, a, b, c, d, correct, difficulty, explanation, wa, wb, wc, wd] = cells;
+      // Recover rows where Assertion + Reason were packed into one field.
+      const { assertion, reason } = splitAssertionReason(assertionRaw, reasonRaw);
       if (!assertion || !reason || !a || !b || !c || !d) {
         errors.push(`Row ${idx + 1}: assertion needs an Assertion, a Reason and 4 options`);
         return;
@@ -457,7 +482,8 @@ function parseQuestionsJson(text) {
     };
     const need4 = () => opts4.every((o) => o.trim());
     if (type === "assertion") {
-      row.assertion = S(q?.assertion); row.reason = S(q?.reason);
+      const ar = splitAssertionReason(q?.assertion, q?.reason);
+      row.assertion = ar.assertion; row.reason = ar.reason;
       // The DB requires a `text` on every question, but an assertion carries its
       // meaning in assertion/reason — supply the standard stem when omitted (same
       // default the AI generator uses) so it isn't silently dropped on save.
@@ -570,8 +596,8 @@ export default function BulkUploadQuestions({ open, onClose, onUpload, title = "
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/50 p-4">
-      <div className="my-8 w-full max-w-2xl animate-scale-in card p-6">
+    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/50 p-0 sm:p-4">
+      <div className="min-h-full w-full max-w-none animate-scale-in card m-0 rounded-none p-4 sm:rounded-2xl sm:p-6">
         <div className="mb-4 flex items-center justify-between">
           <h3 className="flex items-center gap-2 text-lg font-bold"><Upload className="h-5 w-5" /> {title}</h3>
           <button type="button" onClick={onClose}><X className="h-5 w-5" /></button>

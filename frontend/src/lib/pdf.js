@@ -164,3 +164,19 @@ export async function ocrPdfText(file, onProgress) {
   }
   return stripBoilerplate(pages.join("\n\n").replace(/[ \t]+/g, " "));
 }
+
+
+// OCR a raw image file (PNG/JPG/WebP) to text. Tesseract accepts a File/Blob
+// directly, so no PDF rendering is needed. onProgress(1,1) fires once (kept for
+// a consistent progress signature with the PDF readers).
+export async function ocrImage(file, onProgress) {
+  const Tesseract = await loadTesseract();
+  const worker = await Tesseract.createWorker("eng");
+  try {
+    onProgress?.(1, 1);
+    const { data: { text } } = await worker.recognize(file);
+    return stripBoilerplate(String(text || "").replace(/[ \t]+/g, " "));
+  } finally {
+    try { await worker.terminate(); } catch { /* ignore */ }
+  }
+}
