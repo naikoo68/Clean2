@@ -12,6 +12,7 @@ const TYPE_OPTIONS = [
   { id: "pair", label: "Pair (count)" },
   { id: "pairselect", label: "Pair-select" },
   { id: "table", label: "Table-based" },
+  { id: "journal", label: "Journal Entry & Ledger Posting" },
 ];
 
 const LETTERS = ["A", "B", "C", "D"];
