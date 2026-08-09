@@ -8,8 +8,9 @@ import BulkUploadQuestions, { questionsToCsv } from "../../components/admin/Bulk
 import AiGenerate from "../../components/admin/AiGenerate";
 import QuestionFormModal from "../../components/admin/QuestionFormModal";
 import QuestionView from "../../components/admin/QuestionView";
+import QuestionTypeFilter from "../../components/admin/QuestionTypeFilter";
 import AddToTestModal from "../../components/admin/AddToTestModal";
-import { questionDateText, searchQuestions } from "../../lib/questions";
+import { questionDateText, searchQuestions, questionTypeKey } from "../../lib/questions";
 import DuplicatesModal from "../../components/admin/DuplicatesModal";
 import AiImport from "../../components/admin/AiImport";
 import ExtendExplanationsModal from "../../components/admin/ExtendExplanationsModal";
@@ -75,6 +76,7 @@ export default function AdminContent() {
   const [addToTestQ, setAddToTestQ] = useState(null); // question being copied into a test
   const [viewAll, setViewAll] = useState(false); // preview all questions
   const [studentView, setStudentView] = useState(true); // View All: defaults to student view (answers hidden)
+  const [typeFilter, setTypeFilter] = useState([]); // View All: which question types to show ([] = all)
   const [selected, setSelected] = useState([]); // bulk-selected question ids
   const [delProgress, setDelProgress] = useState(null); // real-time bulk-delete progress: { total, done, finished? }
   const [search, setSearch] = useState(""); // question search query
@@ -401,7 +403,7 @@ export default function AdminContent() {
           </button>
           {view === "questions" && (
             <>
-              <button onClick={() => setViewAll(true)} className="btn-outline">
+              <button onClick={() => { setTypeFilter([]); setViewAll(true); }} className="btn-outline">
                 <Eye className="h-4 w-4" /> View All
               </button>
               <button onClick={() => setBulkOpen(true)} className="btn-outline">
@@ -836,8 +838,12 @@ export default function AdminContent() {
                 Student view — answers &amp; explanations are hidden. Use “Reveal answer” on any question to expose it.
               </p>
             )}
+            <QuestionTypeFilter questions={items} selected={typeFilter} onChange={setTypeFilter} />
             <div className="max-h-[70vh] space-y-4 overflow-y-auto pr-1">
-              {items.map((it, i) => (
+              {items
+                .map((it, i) => ({ it, i }))
+                .filter(({ it }) => !typeFilter.length || typeFilter.includes(questionTypeKey(it)))
+                .map(({ it, i }) => (
                 <div key={(studentView ? "s" : "a") + it._id} className="relative rounded-lg border border-slate-200 p-3 dark:border-slate-700">
                   <div className="absolute right-2 top-2 z-10 flex gap-1">
                     <button onClick={() => setAddToTestQ(it)} title="Add to test" className="rounded-lg bg-white p-1.5 text-emerald-600 shadow hover:bg-emerald-50 dark:bg-slate-800 dark:hover:bg-emerald-900/30">
