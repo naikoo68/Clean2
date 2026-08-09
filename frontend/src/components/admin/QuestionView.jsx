@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { CheckCircle2, Clock, Eye, EyeOff, RefreshCw, Loader2, Wand2, Send } from "lucide-react";
 import MathText from "../ui/MathText";
+import OptionContent from "../ui/OptionContent";
 import { questionDateText, stemText, displayOptions } from "../../lib/questions";
 import StatementPairView from "../ui/StatementPairView";
 import TableView from "../ui/TableView";
@@ -92,7 +93,7 @@ export default function QuestionView({ q, index, studentView = false, onRegenera
               <div className={cls}>
                 {highlight ? <CheckCircle2 className="h-4 w-4 flex-shrink-0" /> : <span className="h-4 w-4" />}
                 <span className="font-bold">({String.fromCharCode(97 + idx)})</span>
-                <MathText>{opt}</MathText>
+                <OptionContent>{opt}</OptionContent>
               </div>
               {showAnswer && !isCorrect && optExp && optExp.trim() && (
                 <p className="ml-6 mt-0.5 text-xs text-slate-500 dark:text-slate-400"><MathText>{optExp}</MathText></p>

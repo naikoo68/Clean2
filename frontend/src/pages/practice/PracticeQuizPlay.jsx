@@ -28,6 +28,7 @@ import { useAuth } from "../../context/AuthContext";
 import ProgressBar from "../../components/ui/ProgressBar";
 import Badge from "../../components/ui/Badge";
 import MathText from "../../components/ui/MathText";
+import OptionContent from "../../components/ui/OptionContent";
 import StatementPairView from "../../components/ui/StatementPairView";
 import TableView from "../../components/ui/TableView";
 import GraphView from "../../components/ui/GraphView";
@@ -405,7 +406,7 @@ export default function PracticeQuizPlay() {
                         <div key={idx}>
                           <div className={`flex items-center gap-2 rounded-xl border-2 px-3 py-2 text-sm ${cls}`}>
                             <span className="flex h-6 w-6 items-center justify-center rounded-lg border text-xs font-bold">{optionLabels[idx]}</span>
-                            <span className="flex-1"><MathText>{opt}</MathText></span>
+                            <span className="flex-1"><OptionContent>{opt}</OptionContent></span>
                             {idx === q.correct && <CheckCircle2 className="h-4 w-4 text-emerald-500" />}
                             {idx === userAns && idx !== q.correct && <XCircle className="h-4 w-4 text-rose-500" />}
                           </div>
@@ -680,7 +681,7 @@ export default function PracticeQuizPlay() {
                       : "border-slate-300 dark:border-slate-600"}`}>
                       {isMatching ? `(${String.fromCharCode(97 + idx)})` : optionLabels[idx]}
                     </span>
-                    <span className="flex-1"><MathText>{opt}</MathText></span>
+                    <span className="flex-1"><OptionContent>{opt}</OptionContent></span>
                     {locked && idx === q.correct && <CheckCircle2 className="h-5 w-5 text-emerald-500" />}
                     {locked && idx === answers[current] && idx !== q.correct && <XCircle className="h-5 w-5 text-rose-500" />}
                   </button>
