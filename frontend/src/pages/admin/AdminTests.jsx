@@ -19,6 +19,7 @@ import ShareTestModal from "../../components/admin/ShareTestModal";
 import ExtendExplanationsModal from "../../components/admin/ExtendExplanationsModal";
 import ExtendOneQuestionModal from "../../components/admin/ExtendOneQuestionModal";
 import RegenerateAllModal from "../../components/admin/RegenerateAllModal";
+import RegenerateOneModal from "../../components/admin/RegenerateOneModal";
 import ScheduleQuestionModal from "../../components/admin/ScheduleQuestionModal";
 
 const blank = { name: "", category: "Full-Length", marks: 100, duration: 60, schedule: "", status: "draft", difficulty: "Medium" };
@@ -67,7 +68,8 @@ export default function AdminTests() {
   const [extendTest, setExtendTest] = useState(null); // AI extend-explanations target
   const [extendingQId, setExtendingQId] = useState(null); // per-question extend in progress
   const [extendOneItem, setExtendOneItem] = useState(null); // per-question extend confirm modal target
-  const [regenId, setRegenId] = useState(null); // per-question regenerate in progress
+  const [regenId] = useState(null); // legacy inline spinner id — regenerate now runs in RegenerateOneModal
+  const [regenOneItem, setRegenOneItem] = useState(null); // per-question regenerate dialog target
   const [regenAllTest, setRegenAllTest] = useState(null); // bulk "regenerate all" modal target
   const [scheduleQ, setScheduleQ] = useState(null); // question to post/schedule to Facebook
 
@@ -115,17 +117,16 @@ export default function AdminTests() {
     } catch (e) { setError(e.message); setExtendOneItem(null); }
     finally { setExtendingQId(null); }
   };
-  // Regenerate ONE question's options/answer to fit its stem, then reload
-  // (and update the open preview modal in place if it's the same question).
-  const regenerateQ = async (item) => {
-    setRegenId(item._id);
-    try {
-      const updated = await aiService.regenerate({ questionId: item._id });
-      setViewQ((prev) => (prev && prev._id === item._id ? { ...prev, ...updated } : prev));
-      await reloadTq();
-    }
-    catch (e) { setError(e.message); }
-    finally { setRegenId(null); }
+  // Regenerate ONE question: open the dialog (rebuild toggles + AI source/model);
+  // the modal runs the request itself and hands back the updated fields.
+  const regenerateQ = (item) => setRegenOneItem(item);
+
+  // Apply a single-question regenerate result to the open preview + reload.
+  const applyRegenerated = async (updated) => {
+    const item = regenOneItem;
+    if (item) setViewQ((prev) => (prev && prev._id === item._id ? { ...prev, ...updated } : prev));
+    setRegenOneItem(null);
+    await reloadTq();
   };
 
   // Copy a test's questions as CSV text to the clipboard.
@@ -722,6 +723,13 @@ export default function AdminTests() {
         busy={!!extendingQId}
         onCancel={() => setExtendOneItem(null)}
         onConfirm={runExtendOne}
+      />
+
+      <RegenerateOneModal
+        open={!!regenOneItem}
+        question={regenOneItem}
+        onClose={() => setRegenOneItem(null)}
+        onDone={applyRegenerated}
       />
 
       <RegenerateAllModal

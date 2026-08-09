@@ -36,7 +36,7 @@ import Watermark from "../../components/ui/Watermark";
 import FeedbackButton from "../../components/ui/FeedbackButton";
 import { useZoom } from "../../context/ZoomContext";
 import { Loading, ErrorState, EmptyState } from "../../components/ui/AsyncState";
-import { questionDateText, searchQuestions, stemText } from "../../lib/questions";
+import { questionDateText, searchQuestions, stemText, displayOptions } from "../../lib/questions";
 import { shuffleAll, toOriginalIndex, makeSeed } from "../../lib/shuffleOptions";
 import PaperExport from "../../components/admin/PaperExport";
 
@@ -393,7 +393,7 @@ export default function PracticeQuizPlay() {
                   <AssertionReasonView q={q} />
 
                   <div className="mt-3 space-y-2">
-                    {(q.options || []).map((opt, idx) => {
+                    {displayOptions(q).map((opt, idx) => {
                       const optExp = q.optionExplanations?.[idx];
                       const cls =
                         idx === q.correct
@@ -669,7 +669,7 @@ export default function PracticeQuizPlay() {
 
           <div className="mt-5 space-y-3">
             {isMatching && <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Choose the correct matching sequence:</p>}
-            {(q.options || []).map((opt, idx) => {
+            {displayOptions(q).map((opt, idx) => {
               const optExp = q.optionExplanations?.[idx];
               return (
                 <div key={idx}>

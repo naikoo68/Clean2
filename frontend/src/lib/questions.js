@@ -1,5 +1,30 @@
 // Shared helpers for question lists (used across Content, Tests, Practice).
 
+// The four FIXED options for an "assertion" (Assertion & Reason) question, in
+// their canonical order — (a)…(d). Their order is meaningful (the stored
+// `correct` index points into this exact sequence), so they are never shuffled.
+// Used as a display fallback when a question was saved without its option text
+// (older/imported assertion questions can have blank `options`), matching the
+// rubric the backend AI prompt requires.
+export const ASSERTION_REASON_OPTIONS = [
+  "Both A and R are true and R is the correct explanation of A",
+  "Both A and R are true but R is NOT the correct explanation of A",
+  "A is true but R is false",
+  "A is false but R is true",
+];
+
+// The options to DISPLAY for a question. Normally just `q.options`, but for an
+// assertion question whose options are missing/blank it falls back to the fixed
+// A/R rubric above so the answer choices always render (never bare letters).
+export function displayOptions(q) {
+  const opts = q?.options || [];
+  if (q?.type === "assertion") {
+    const hasText = opts.length === 4 && opts.every((o) => String(o || "").trim() !== "");
+    if (!hasText) return ASSERTION_REASON_OPTIONS.slice();
+  }
+  return opts;
+}
+
 // Format a date as "12 Jul 2026, 11:05 AM" — always 12-hour with AM/PM
 // (hour12:true) so it never shows 24-hour time regardless of browser locale.
 export const fmtDateTime = (d) =>
