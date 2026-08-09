@@ -703,6 +703,16 @@ function recoverAssertionReason(assertion, reason, text) {
   return { assertion: a, reason: r };
 }
 
+// Remove any Assertion (A) / Reason (R) statements the model embedded in an
+// assertion question's STEM — they belong only in the dedicated assertion/reason
+// fields (and their own boxes), so a copy in the stem renders the A/R twice.
+// Keeps just the intro line before the first "Assertion" label.
+function stripAssertionFromStem(text) {
+  const s = String(text || "");
+  const idx = s.search(/\bAssertion\b\s*(?:\([Aa]\))?\s*[:\-]/);
+  return idx === -1 ? s.trim() : s.slice(0, idx).trim();
+}
+
 // Coerce anything the model returned into a valid Question document shape.
 function normalize(list) {
   const clampIdx = (n) => Math.min(3, Math.max(0, parseInt(n, 10) || 0));
@@ -768,6 +778,9 @@ function normalize(list) {
         const ar = recoverAssertionReason(q?.assertion, q?.reason, q?.text);
         out.assertion = ar.assertion;
         out.reason = ar.reason;
+        // The A/R now live in their own fields — remove any copy left in the
+        // stem so they don't render twice (keep only the intro line).
+        if (out.assertion && out.reason) out.text = stripAssertionFromStem(out.text);
         if (!out.text) out.text = "Consider the following Assertion (A) and Reason (R):";
       }
       if (type === "table") {

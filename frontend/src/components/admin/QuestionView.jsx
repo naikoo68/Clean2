@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { CheckCircle2, Clock, Eye, EyeOff, RefreshCw, Loader2, Wand2, Send } from "lucide-react";
 import MathText from "../ui/MathText";
-import { questionDateText } from "../../lib/questions";
+import { questionDateText, stemText } from "../../lib/questions";
 import StatementPairView from "../ui/StatementPairView";
 import TableView from "../ui/TableView";
 import GraphView from "../ui/GraphView";
@@ -54,7 +54,7 @@ export default function QuestionView({ q, index, studentView = false, onRegenera
         )}
       </div>
 
-      <p className="font-semibold"><MathText>{q.text}</MathText></p>
+      <p className="font-semibold"><MathText>{stemText(q)}</MathText></p>
       {q.image && <img src={q.image} alt="" className="mt-2 max-h-48 rounded-lg object-contain" />}
 
       {q.type === "matching" && (

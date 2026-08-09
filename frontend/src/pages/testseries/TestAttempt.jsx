@@ -31,7 +31,7 @@ import AssertionReasonView from "../../components/ui/AssertionReasonView";
 import Watermark from "../../components/ui/Watermark";
 import FeedbackButton from "../../components/ui/FeedbackButton";
 import { useZoom } from "../../context/ZoomContext";
-import { questionDateText, searchQuestions } from "../../lib/questions";
+import { questionDateText, searchQuestions, stemText } from "../../lib/questions";
 import { shuffleAll, shuffleQuestion, shuffleQuestionOrder, toOriginalIndex, toDisplayIndex, makeSeed } from "../../lib/shuffleOptions";
 import PaperExport from "../../components/admin/PaperExport";
 
@@ -443,7 +443,7 @@ export default function TestAttempt() {
                   <div className="flex items-start justify-between gap-3">
                     <p className="font-semibold">
                       <span className="mr-2 text-slate-400">Q{i + 1}.</span>
-                      <MathText>{r.text}</MathText>
+                      <MathText>{stemText(r)}</MathText>
                     </p>
                     <div className="flex flex-shrink-0 flex-col items-end gap-1">
                       <span className={`text-xs font-semibold ${
@@ -602,7 +602,7 @@ export default function TestAttempt() {
           </div>
 
           {q.image && <img src={q.image} alt="" className="mt-4 max-h-64 rounded-xl object-contain" />}
-          <h2 className="mt-5 text-lg font-semibold leading-relaxed"><MathText>{q.text}</MathText></h2>
+          <h2 className="mt-5 text-lg font-semibold leading-relaxed"><MathText>{stemText(q)}</MathText></h2>
 
           {/* Matching questions show the two columns before the answer options. */}
           {q.type === "matching" && (

@@ -41,6 +41,21 @@ export const questionDateText = (item) => {
   return updated ? `${base} · Updated ${fmtDateTime(updated)}` : base;
 };
 
+// The stem to DISPLAY for a question. For an assertion question the Assertion (A)
+// and Reason (R) statements live in their own fields and render in dedicated
+// boxes — but some questions also carry a copy of them inside the stem `text`,
+// which then shows TWICE. This returns the stem with any embedded
+// "Assertion (A): …/Reason (R): …" block stripped (keeping just the intro line),
+// but ONLY when the A/R are present in their own fields (so nothing is lost).
+export function stemText(q) {
+  const text = q?.text || "";
+  if (q?.type !== "assertion" || !(q?.assertion && q?.reason)) return text;
+  const idx = text.search(/\bAssertion\b\s*(?:\([Aa]\))?\s*[:\-]/);
+  if (idx === -1) return text.trim();
+  const intro = text.slice(0, idx).trim();
+  return intro || "Consider the following Assertion (A) and Reason (R):";
+}
+
 // Every piece of searchable text for a question, covering ALL question types:
 //  - mcq:        text, options, per-option explanations, explanation
 //  - assertion:  assertion (A) + reason (R) statements

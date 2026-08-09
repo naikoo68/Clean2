@@ -36,7 +36,7 @@ import Watermark from "../../components/ui/Watermark";
 import FeedbackButton from "../../components/ui/FeedbackButton";
 import { useZoom } from "../../context/ZoomContext";
 import { Loading, ErrorState, EmptyState } from "../../components/ui/AsyncState";
-import { questionDateText, searchQuestions } from "../../lib/questions";
+import { questionDateText, searchQuestions, stemText } from "../../lib/questions";
 import { shuffleAll, toOriginalIndex, makeSeed } from "../../lib/shuffleOptions";
 import PaperExport from "../../components/admin/PaperExport";
 
@@ -372,7 +372,7 @@ export default function PracticeQuizPlay() {
                   </div>
 
                   {q.image && <img src={q.image} alt="" className="mb-3 max-h-56 rounded-xl object-contain" />}
-                  <p className="font-semibold leading-relaxed"><MathText>{q.text}</MathText></p>
+                  <p className="font-semibold leading-relaxed"><MathText>{stemText(q)}</MathText></p>
 
                   {(Array.isArray(q.columnA) && q.columnA.length > 0) || (Array.isArray(q.columnB) && q.columnB.length > 0) ? (
                     <div className="mt-3 grid grid-cols-2 gap-3">
@@ -633,7 +633,7 @@ export default function PracticeQuizPlay() {
           </div>
 
           {q.image && <img src={q.image} alt="" className="mb-4 max-h-64 rounded-xl object-contain" />}
-          <h2 className="text-lg font-semibold leading-relaxed"><MathText>{q.text}</MathText></h2>
+          <h2 className="text-lg font-semibold leading-relaxed"><MathText>{stemText(q)}</MathText></h2>
 
           {isMatching && (
             <div className="mt-4 grid grid-cols-2 gap-4">
