@@ -77,6 +77,7 @@ export default function AdminContent() {
   const [viewAll, setViewAll] = useState(false); // preview all questions
   const [studentView, setStudentView] = useState(true); // View All: defaults to student view (answers hidden)
   const [typeFilter, setTypeFilter] = useState([]); // View All: which question types to show ([] = all)
+  const [reopenAfterEdit, setReopenAfterEdit] = useState(null); // question _id to reopen in the preview after editing it there
   const [selected, setSelected] = useState([]); // bulk-selected question ids
   const [delProgress, setDelProgress] = useState(null); // real-time bulk-delete progress: { total, done, finished? }
   const [search, setSearch] = useState(""); // question search query
@@ -160,6 +161,16 @@ export default function AdminContent() {
   }, [stream, subject, topic, session, quiz]);
 
   useEffect(() => { setSelected([]); setSearch(""); load(view); /* eslint-disable-next-line */ }, [view]);
+
+  // After editing a question that was opened from the single-question preview,
+  // reopen the preview on that (now-reloaded, updated) question so you land back
+  // on the question you just edited instead of the list.
+  useEffect(() => {
+    if (!reopenAfterEdit) return;
+    const q = (items || []).find((x) => x._id === reopenAfterEdit);
+    if (q) { setViewQ(q); setReopenAfterEdit(null); }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [items]);
 
   // Save an AI-generated / imported batch. When opts.newTarget = { name } is set
   // (the "New quiz" option in the modal) we CREATE a new quiz under the current
@@ -616,7 +627,7 @@ export default function AdminContent() {
           key={modal.mode === "edit" ? modal.data?._id : "new-question"}
           question={modal.mode === "edit" ? modal.data : null}
           saving={saving}
-          onClose={() => setModal(null)}
+          onClose={() => { setModal(null); setReopenAfterEdit(null); }}
           onSave={saveQuestion}
         />
       ) : (
@@ -800,7 +811,7 @@ export default function AdminContent() {
               <h3 className="text-lg font-bold">Question</h3>
               <button onClick={() => setViewQ(null)}><X className="h-5 w-5" /></button>
             </div>
-            <QuestionView q={viewQ} {...(() => { const L = shown; const i = L.findIndex((x) => x._id === viewQ._id); return { position: i >= 0 ? `${i + 1} / ${L.length}` : undefined, onPrev: i > 0 ? () => setViewQ(L[i - 1]) : undefined, onNext: i >= 0 && i < L.length - 1 ? () => setViewQ(L[i + 1]) : undefined }; })()} onRegenerate={() => regenerateQ(viewQ)} regenerating={regenId === viewQ._id} onExtend={() => setExtendOneItem(viewQ)} extending={extendingQId === viewQ._id} onSchedule={() => setScheduleQ(viewQ)} onEdit={() => { const q = viewQ; setViewQ(null); openEdit(q); }} />
+            <QuestionView q={viewQ} {...(() => { const L = shown; const i = L.findIndex((x) => x._id === viewQ._id); return { position: i >= 0 ? `${i + 1} / ${L.length}` : undefined, onPrev: i > 0 ? () => setViewQ(L[i - 1]) : undefined, onNext: i >= 0 && i < L.length - 1 ? () => setViewQ(L[i + 1]) : undefined }; })()} onRegenerate={() => regenerateQ(viewQ)} regenerating={regenId === viewQ._id} onExtend={() => setExtendOneItem(viewQ)} extending={extendingQId === viewQ._id} onSchedule={() => setScheduleQ(viewQ)} onEdit={() => { const q = viewQ; setReopenAfterEdit(q._id); setViewQ(null); openEdit(q); }} />
             <div className="mt-5 flex justify-end gap-2">
               <button onClick={async () => { if (!window.confirm("Delete this question? This cannot be undone.")) return; await contentService.deleteQuestion(viewQ._id); setViewQ(null); load("questions"); }} className="btn-outline mr-auto text-rose-600">
                 <Trash2 className="h-4 w-4" /> Delete
