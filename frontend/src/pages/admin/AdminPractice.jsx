@@ -12,6 +12,8 @@ import AiImport from "../../components/admin/AiImport";
 import DuplicatesModal from "../../components/admin/DuplicatesModal";
 import PaperFilesModal from "../../components/admin/PaperFilesModal";
 import QuestionView from "../../components/admin/QuestionView";
+import QuestionTypeFilter from "../../components/admin/QuestionTypeFilter";
+import { questionTypeKey } from "../../lib/questions";
 import AddToTestModal from "../../components/admin/AddToTestModal";
 import PickFromBank from "../../components/admin/PickFromBank";
 import ManageTestQuestions from "../../components/admin/ManageTestQuestions";
@@ -156,6 +158,7 @@ export default function AdminPractice({ clientMode = false, fixedKind = "" }) {
   const [addToTestQ, setAddToTestQ] = useState(null); // question being copied into a test
   const [viewAll, setViewAll] = useState(false);
   const [studentView, setStudentView] = useState(true); // View All: defaults to student view (answers hidden)
+  const [typeFilter, setTypeFilter] = useState([]); // View All: which question types to show ([] = all)
   const [selQ, setSelQ] = useState(() => new Set()); // ticked questions to move (full-quiz view)
   const [moveTargetId, setMoveTargetId] = useState(""); // destination quiz for the move
   const [movingQ, setMovingQ] = useState(false);
@@ -1086,7 +1089,7 @@ export default function AdminPractice({ clientMode = false, fixedKind = "" }) {
                 load("items");
               }}
               onViewQuestion={setViewQ}
-              onViewAll={() => setViewAll(true)}
+              onViewAll={() => { setTypeFilter([]); setViewAll(true); }}
               onDuplicates={() => { setDupScope({ params: { testSeries: qItem._id }, name: qItem.name }); setDupOpen(true); }}
               onCopyCsv={copyCsv}
               onDownloadCsv={downloadCsv}
@@ -1179,8 +1182,12 @@ export default function AdminPractice({ clientMode = false, fixedKind = "" }) {
                 </div>
               );
             })()}
+            <QuestionTypeFilter questions={tq} selected={typeFilter} onChange={setTypeFilter} />
             <div className="max-h-[70vh] space-y-4 overflow-y-auto pr-1">
-              {tq.map((it, i) => (
+              {tq
+                .map((it, i) => ({ it, i }))
+                .filter(({ it }) => !typeFilter.length || typeFilter.includes(questionTypeKey(it)))
+                .map(({ it, i }) => (
                 <div key={(studentView ? "s" : "a") + it._id} className="relative rounded-lg border border-slate-200 p-3 dark:border-slate-700">
                   <div className="absolute right-2 top-2 z-10 flex items-center gap-1">
                     {!studentView && <input type="checkbox" checked={selQ.has(it._id)} onChange={() => toggleSelQ(it._id)} title="Select to move" className="mr-1 h-4 w-4 accent-brand-600" />}
