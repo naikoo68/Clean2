@@ -427,11 +427,14 @@ export default function AiGenerate({ open, onClose, onUpload, title = "Generate 
       const autoLoop = autoContinue && !append; // manual "Generate more" stays a single wave
       const MAX_WAVES = 60; // very high cap so a big target can grind through many quota windows
       const MAX_ZERO = 8;   // consecutive EMPTY waves before we conclude the quota is truly dead
+      const MIN_YIELD = 2;  // a wave adding 0–1 questions is "barely progressing"
+      const MAX_LOW = 4;    // consecutive barely-progressing waves → a bucket the model just can't fill (e.g. Assertion & Reason); stop instead of spinning forever
       setMsg(append ? `Generating ${total} more from this topic (no duplicates)…` : `Starting generation of ${total} question(s)…`);
       let producedTotal = 0;
       let firstWave = true;
       let wave = 0;
       let zeroWaves = 0; // consecutive waves that produced nothing (rate-limited)
+      let lowWaves = 0;  // consecutive waves that produced almost nothing (a type the model keeps failing)
       let last;
       while (true) {
         last = await runWave(firstWave ? append : true, producedTotal, target);
@@ -439,15 +442,29 @@ export default function AiGenerate({ open, onClose, onUpload, title = "Generate 
         firstWave = false;
         wave += 1;
         zeroWaves = (last.produced || 0) === 0 ? zeroWaves + 1 : 0; // reset the moment a wave produces anything
+        lowWaves = (last.produced || 0) < MIN_YIELD ? lowWaves + 1 : 0; // reset once a wave makes real progress
         const reached = producedTotal >= target;
         // Keep going through empty/small waves (waiting out the per-minute limit).
-        // Only give up when the quota is clearly dead (many empty waves in a row)
-        // or we hit the safety cap — otherwise persist until the target or Stop.
+        // Give up when the quota is clearly dead (many EMPTY waves), when a type
+        // can't be filled (many BARELY-progressing waves — e.g. the model keeps
+        // failing to make valid Assertion & Reason), or at the safety cap — so it
+        // stops gracefully instead of spinning forever a few short of the target.
         const dead = zeroWaves >= MAX_ZERO;
-        const canContinue = autoLoop && !stopRef.current && !reached && !last.errored && !last.timedOut && !dead && wave < MAX_WAVES;
+        const stalled = lowWaves >= MAX_LOW;
+        const canContinue = autoLoop && !stopRef.current && !reached && !last.errored && !last.timedOut && !dead && !stalled && wave < MAX_WAVES;
         if (!canContinue) {
-          if (autoLoop && !reached && !stopRef.current && !last.errored && !last.timedOut && (dead || wave >= MAX_WAVES)) {
-            setMsg(`⏸ Auto-continue stopped at ${producedTotal} of ${target}. The free-tier quota looks exhausted right now (many empty tries in a row) — Insert these, then Generate more later (the daily quota resets), or add keys from other Google accounts for more.`);
+          if (autoLoop && !reached && !stopRef.current && !last.errored && !last.timedOut && (dead || stalled || wave >= MAX_WAVES)) {
+            if (stalled && !dead) {
+              // Name the type(s) still short so the user knows what to retry.
+              const shortTypes = [...new Set(
+                plan
+                  .filter((b) => (producedByBucket[`${b.type}|${b.difficulty}`] || 0) < b.count)
+                  .map((b) => TYPE_OPTIONS.find((t) => t.id === b.type)?.label || b.type)
+              )];
+              setMsg(`⏸ Auto-continue stopped at ${producedTotal} of ${target}. The AI couldn't generate more ${shortTypes.join(", ")} on this topic (these types are the hardest for it). Insert these ${producedTotal} now, then use “Generate more” to retry the rest — it often succeeds on another try or with a fuller model.`);
+            } else {
+              setMsg(`⏸ Auto-continue stopped at ${producedTotal} of ${target}. The free-tier quota looks exhausted right now (many empty tries in a row) — Insert these, then Generate more later (the daily quota resets), or add keys from other Google accounts for more.`);
+            }
           } else {
             finalize(last, producedTotal, target);
           }
