@@ -1135,7 +1135,24 @@ async function runGenerationJob(id, ctx) {
   // neither within this batch nor against questions from an earlier batch
   // (the caller passes their stems in `avoid`). This is the reliable no-repeat
   // guarantee; the prompt instruction just reduces wasted regeneration.
-  const qSig = (q) => String(q?.text || q || "").toLowerCase().replace(/\s+/g, " ").trim();
+  // The content a duplicate check should key off. For ASSERTION questions the
+  // meaning is in `assertion`/`reason` — their `text` is usually blank or the
+  // generic "Consider the following Assertion (A) and Reason (R):" stem, so
+  // keying on `text` alone made EVERY assertion question share one signature and
+  // all but the first were dropped as "duplicates" (the reason a 50-A/R request
+  // only ever yielded 1). Column-based types likewise carry their content in
+  // columnA/columnB. Fall back to plain text for mcq/table and avoid-list strings.
+  const dedupText = (q) => {
+    if (typeof q === "string") return q;
+    if (!q) return "";
+    const parts = [q.text];
+    if (q.type === "assertion") parts.push(q.assertion, q.reason);
+    if (Array.isArray(q.columnA)) parts.push(...q.columnA);
+    if (Array.isArray(q.columnB)) parts.push(...q.columnB);
+    if (Array.isArray(q.tableRows)) parts.push(...q.tableRows.flat(Infinity));
+    return parts.filter(Boolean).join(" ");
+  };
+  const qSig = (q) => dedupText(q).toLowerCase().replace(/\s+/g, " ").trim();
   const seen = new Set((avoid || []).map(qSig).filter(Boolean));
   // Content signatures for semantic-ish de-duplication: catch the SAME fact
   // reworded (not just identical text). Seeded with the already-existing
@@ -1147,7 +1164,7 @@ async function runGenerationJob(id, ctx) {
   }
   // Is this question a reworded duplicate of one we already have?
   const isSemanticDup = (q) => {
-    const tk = contentTokens(q?.text);
+    const tk = contentTokens(dedupText(q));
     if (!tk.size) return false;
     const ans = ANSWER_DEDUP_TYPES.has(q?.type) ? correctAnswerNorm(q) : "";
     for (const e of sigList) {
