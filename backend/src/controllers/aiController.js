@@ -1037,16 +1037,16 @@ async function callProvider({ key, baseUrl, model, userPrompt, maxTokens, system
   }
 }
 
-// Take a sub-plan of up to `size` questions off the front of a bucket plan.
+// Take the NEXT single bucket (one type + difficulty) off the front of a bucket
+// plan, up to `size` questions. Keeping each chunk to ONE bucket lets the worker
+// reliably stamp the requested difficulty and reject off-type replies, so the
+// grid's exact type × difficulty distribution is honoured (models otherwise
+// mislabel difficulty/type and quietly skew the mix).
 function takeChunk(planArr, size) {
-  const chunk = [];
-  let tot = 0;
-  for (const b of planArr) {
-    if (tot >= size) break;
-    const take = Math.min(b.count, size - tot);
-    if (take > 0) { chunk.push({ type: b.type, difficulty: b.difficulty, count: take }); tot += take; }
-  }
-  return chunk;
+  const b = planArr[0];
+  if (!b) return [];
+  const take = Math.min(b.count, size);
+  return take > 0 ? [{ type: b.type, difficulty: b.difficulty, count: take }] : [];
 }
 
 // Given the target plan and what we've collected so far, return the buckets
@@ -1256,13 +1256,27 @@ async function runGenerationJob(id, ctx) {
         _ks.ok += 1;
         AiKey.updateOne({ key: ep.key, owner: ep.owner ?? owner ?? null }, { $inc: { usedRequests: 1, usedTokens: r.tokens || 0 } }).catch(() => {});
         const beforeLen = collected.length;
+        // In plan mode each chunk is ONE bucket (type + difficulty). Accept only
+        // questions of the requested TYPE (reject the model's off-type replies so
+        // they don't wrongly fill the bucket), STAMP the requested difficulty
+        // (models mislabel it constantly), and stop at the bucket's count — so
+        // the grid's per-type/per-difficulty distribution is actually enforced,
+        // not just the grand total.
+        const bkt = plan ? res.chunk[0] : null;
+        let takenThisChunk = 0;
         for (const q of normalize(parseQuestions(r.content))) {
           if (collected.length >= target) break;
+          if (bkt) {
+            if (takenThisChunk >= res.n) break; // bucket already satisfied by this reply
+            if (q.type !== bkt.type) continue; // wrong type — don't count it toward this bucket
+          }
           const sig = qSig(q);
           if (!sig || seen.has(sig)) continue; // skip blanks + exact duplicates
           if (isSemanticDup(q)) continue; // skip the SAME fact reworded (semantic duplicate)
+          if (bkt) q.difficulty = bkt.difficulty; // enforce the requested difficulty
           seen.add(sig);
           collected.push(q);
+          takenThisChunk += 1;
         }
         _ks.questions += collected.length - beforeLen;
         save({ questions: collected.slice() });
@@ -1521,6 +1535,7 @@ export async function generateQuestions(req, res) {
     requested: target,
     error: null,
     model,
+    plan: plan || null, // per type × difficulty buckets — powers the live breakdown
     updatedAt: Date.now(),
   });
 
@@ -1540,10 +1555,24 @@ export async function generateQuestions(req, res) {
 export function jobStatus(req, res) {
   const job = genJobs.get(req.params.id);
   if (!job) return res.status(404).json({ message: "Job not found or expired." });
+  // Live per-type/per-difficulty breakdown ("have / want") from what's been
+  // produced so far, so the UI can show e.g. "Assertion & Reason — Hard 8/10".
+  let byBucket;
+  if (Array.isArray(job.plan) && job.plan.length) {
+    const have = {};
+    for (const q of job.questions) { const k = `${q.type}|${q.difficulty}`; have[k] = (have[k] || 0) + 1; }
+    byBucket = job.plan.map((b) => ({
+      type: b.type,
+      difficulty: b.difficulty,
+      want: b.count,
+      have: have[`${b.type}|${b.difficulty}`] || 0,
+    }));
+  }
   res.json({
     status: job.status, // pending | done | error
     count: job.questions.length,
     requested: job.requested,
+    byBucket, // [{ type, difficulty, want, have }] — undefined for legacy/count-mode jobs
     chunksTotal: job.chunksTotal, // for import jobs (source split into pieces)
     chunksDone: job.chunksDone,
     model: job.model,
