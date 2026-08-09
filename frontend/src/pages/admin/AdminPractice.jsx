@@ -159,6 +159,7 @@ export default function AdminPractice({ clientMode = false, fixedKind = "" }) {
   const [viewAll, setViewAll] = useState(false);
   const [studentView, setStudentView] = useState(true); // View All: defaults to student view (answers hidden)
   const [typeFilter, setTypeFilter] = useState([]); // View All: which question types to show ([] = all)
+  const [reopenAfterEdit, setReopenAfterEdit] = useState(null); // question _id to reopen in the preview after editing it there
   const [selQ, setSelQ] = useState(() => new Set()); // ticked questions to move (full-quiz view)
   const [moveTargetId, setMoveTargetId] = useState(""); // destination quiz for the move
   const [movingQ, setMovingQ] = useState(false);
@@ -209,6 +210,15 @@ export default function AdminPractice({ clientMode = false, fixedKind = "" }) {
     p.then(setItems).catch((e) => setError(e.message)).finally(() => setLoading(false));
   };
   useEffect(() => { load(view); /* eslint-disable-next-line */ }, [view, kind]);
+
+  // After editing a question opened from the single-question preview, reopen the
+  // preview on that (now-reloaded, updated) question so you land back on it.
+  useEffect(() => {
+    if (!reopenAfterEdit) return;
+    const q = (tq || []).find((x) => x._id === reopenAfterEdit);
+    if (q) { setViewQ(q); setReopenAfterEdit(null); }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tq]);
 
   // Remember the current drill-down position so a page refresh restores it.
   useEffect(() => {
@@ -1115,7 +1125,7 @@ export default function AdminPractice({ clientMode = false, fixedKind = "" }) {
           saving={tqSaving}
           sections={sectionsOf(qItem)}
           defaultSection={normSection(tqModal.forceSection)}
-          onClose={() => setTqModal(null)}
+          onClose={() => { setTqModal(null); setReopenAfterEdit(null); }}
           onSave={saveTestQuestion}
         />
       )}
@@ -1124,7 +1134,7 @@ export default function AdminPractice({ clientMode = false, fixedKind = "" }) {
         <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/50 p-4" onClick={() => setViewQ(null)}>
           <div onClick={(e) => e.stopPropagation()} className="my-8 w-full max-w-2xl animate-scale-in card p-6">
             <div className="mb-4 flex items-center justify-between"><h3 className="text-lg font-bold">Question</h3><button onClick={() => setViewQ(null)}><X className="h-5 w-5" /></button></div>
-            <QuestionView q={viewQ} {...(() => { const L = tq; const i = L.findIndex((x) => x._id === viewQ._id); return { position: i >= 0 ? `${i + 1} / ${L.length}` : undefined, onPrev: i > 0 ? () => setViewQ(L[i - 1]) : undefined, onNext: i >= 0 && i < L.length - 1 ? () => setViewQ(L[i + 1]) : undefined }; })()} onRegenerate={() => setRegenOneItem(viewQ)} regenerating={false} onExtend={() => setExtendOneItem(viewQ)} extending={extendingQId === viewQ._id} onSchedule={clientMode ? undefined : () => setScheduleQ(viewQ)} onEdit={() => { const q = viewQ; setViewQ(null); setTqModal({ mode: "edit", data: q }); }} />
+            <QuestionView q={viewQ} {...(() => { const L = tq; const i = L.findIndex((x) => x._id === viewQ._id); return { position: i >= 0 ? `${i + 1} / ${L.length}` : undefined, onPrev: i > 0 ? () => setViewQ(L[i - 1]) : undefined, onNext: i >= 0 && i < L.length - 1 ? () => setViewQ(L[i + 1]) : undefined }; })()} onRegenerate={() => setRegenOneItem(viewQ)} regenerating={false} onExtend={() => setExtendOneItem(viewQ)} extending={extendingQId === viewQ._id} onSchedule={clientMode ? undefined : () => setScheduleQ(viewQ)} onEdit={() => { const q = viewQ; setReopenAfterEdit(q._id); setViewQ(null); setTqModal({ mode: "edit", data: q }); }} />
             <div className="mt-6 flex justify-end gap-2">
               <button onClick={async () => { if (!window.confirm("Delete this question?")) return; await testService.deleteQuestion(qItem._id, viewQ._id); setViewQ(null); await reloadTq(); load("items"); }} className="btn-outline mr-auto text-rose-600"><Trash2 className="h-4 w-4" /> Delete</button>
               <button onClick={() => setAddToTestQ(viewQ)} className="btn-outline"><ClipboardList className="h-4 w-4" /> Add to test</button>
