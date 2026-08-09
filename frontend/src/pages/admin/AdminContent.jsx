@@ -18,7 +18,7 @@ import ExtendOneQuestionModal from "../../components/admin/ExtendOneQuestionModa
 import RegenerateAllModal from "../../components/admin/RegenerateAllModal";
 import RegenerateOneModal from "../../components/admin/RegenerateOneModal";
 import ScheduleQuestionModal from "../../components/admin/ScheduleQuestionModal";
-import { Sparkles, Files, Globe, Wand2, Loader2, ClipboardList, RefreshCw, Scissors, GitMerge, CheckCircle2 } from "lucide-react";
+import { Sparkles, Files, Globe, Wand2, Loader2, ClipboardList, RefreshCw, Scissors, GitMerge, CheckCircle2, Maximize2, Minimize2 } from "lucide-react";
 
 const COLORS = [
   "from-blue-500 to-indigo-600",
@@ -73,6 +73,7 @@ export default function AdminContent() {
   const [merging, setMerging] = useState(false);
   const [saving, setSaving] = useState(false);
   const [viewQ, setViewQ] = useState(null); // single question to preview
+  const [viewFull, setViewFull] = useState(true); // single-question viewer opens full-screen (toggle to shrink)
   const [addToTestQ, setAddToTestQ] = useState(null); // question being copied into a test
   const [viewAll, setViewAll] = useState(false); // preview all questions
   const [studentView, setStudentView] = useState(true); // View All: defaults to student view (answers hidden)
@@ -805,13 +806,20 @@ export default function AdminContent() {
 
       {/* View single question */}
       {viewQ && (
-        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/50 p-4" onClick={() => setViewQ(null)}>
-          <div onClick={(e) => e.stopPropagation()} className="my-8 w-full max-w-2xl animate-scale-in card p-6">
+        <div className={`fixed inset-0 z-50 flex justify-center overflow-y-auto bg-black/50 ${viewFull ? "items-stretch p-0 sm:p-4" : "items-start p-4"}`} onClick={() => setViewQ(null)}>
+          <div onClick={(e) => e.stopPropagation()} className={`card flex flex-col animate-scale-in ${viewFull ? "m-0 min-h-full w-full max-w-none rounded-none p-4 sm:min-h-0 sm:h-full sm:rounded-2xl sm:p-6" : "my-8 w-full max-w-2xl p-6"}`}>
             <div className="mb-4 flex items-center justify-between">
               <h3 className="text-lg font-bold">Question</h3>
-              <button onClick={() => setViewQ(null)}><X className="h-5 w-5" /></button>
+              <div className="flex items-center gap-1">
+                <button onClick={() => setViewFull((v) => !v)} title={viewFull ? "Exit full screen" : "Full screen"} className="rounded-lg p-1.5 text-slate-500 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800">
+                  {viewFull ? <Minimize2 className="h-5 w-5" /> : <Maximize2 className="h-5 w-5" />}
+                </button>
+                <button onClick={() => setViewQ(null)}><X className="h-5 w-5" /></button>
+              </div>
             </div>
+            <div className={viewFull ? "min-h-0 flex-1 overflow-y-auto" : ""}>
             <QuestionView q={viewQ} {...(() => { const L = shown; const i = L.findIndex((x) => x._id === viewQ._id); return { position: i >= 0 ? `${i + 1} / ${L.length}` : undefined, onPrev: i > 0 ? () => setViewQ(L[i - 1]) : undefined, onNext: i >= 0 && i < L.length - 1 ? () => setViewQ(L[i + 1]) : undefined }; })()} onRegenerate={() => regenerateQ(viewQ)} regenerating={regenId === viewQ._id} onExtend={() => setExtendOneItem(viewQ)} extending={extendingQId === viewQ._id} onSchedule={() => setScheduleQ(viewQ)} onEdit={() => { const q = viewQ; setReopenAfterEdit(q._id); setViewQ(null); openEdit(q); }} />
+            </div>
             <div className="mt-5 flex justify-end gap-2">
               <button onClick={async () => { if (!window.confirm("Delete this question? This cannot be undone.")) return; await contentService.deleteQuestion(viewQ._id); setViewQ(null); load("questions"); }} className="btn-outline mr-auto text-rose-600">
                 <Trash2 className="h-4 w-4" /> Delete
