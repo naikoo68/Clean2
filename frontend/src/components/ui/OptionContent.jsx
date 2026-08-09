@@ -7,56 +7,88 @@ function parsePipeRows(s) {
     .split(/\r?\n/)
     .map((l) => l.trim())
     .filter((l) => l.includes("|"))
-    .map((l) => l.replace(/^\s*\|/, "").replace(/\|\s*$/, "").split("|").map((c) => c.trim()))
+    .map((l) => {
+      // Markdown-style rows wrap every row in outer "|" delimiters ("| a | b |").
+      // Drop ONLY those two delimiter artifacts so inner empty cells (e.g. an
+      // empty Debit or Credit column) are preserved and columns stay aligned.
+      const outer = l.startsWith("|") && l.endsWith("|");
+      let parts = l.split("|");
+      if (outer) parts = parts.slice(1, -1);
+      return parts.map((c) => c.trim());
+    })
     .filter((cells) => !cells.every((c) => c === "" || /^:?-{2,}:?$/.test(c)));
 }
 
 /**
  * Renders a single question OPTION.
  *
- * Journal Entry / Ledger Posting options are supplied as a small
- * Account | Debit | Credit table (pipe-delimited, one row per account line).
- * Rendering them with plain text shows the raw "| ... |" pipes, so here we
- * detect that shape and render a real, aligned table instead. Any other option
- * (plain MCQ, matching sequence, etc.) renders as normal math-aware text.
+ * Journal Entry / Ledger Posting options are supplied as a pipe-delimited table
+ * in the standard textbook layout — columns "Date | Particulars | LF |
+ * Amount(Dr.) | Amount(Cr.)" (older ones use "Account | Debit | Credit"). Plain
+ * text would show the raw "| ... |" pipes, so we detect that shape and render a
+ * real, aligned journal table: amount columns right-aligned, credit lines
+ * ("To …") indented in Particulars, and the "(Being …)" narration italicised.
+ * Any other option (plain MCQ, matching sequence, etc.) renders as normal
+ * math-aware text.
  */
 export default function OptionContent({ children }) {
   const s = typeof children === "string" ? children : "";
   const pipeLines = s.split(/\r?\n/).filter((l) => l.includes("|"));
 
-  // Need at least two pipe rows to be a table (header/separator + data, or two
-  // account lines); otherwise treat "|" as ordinary text.
+  // Need at least two pipe rows to be a table (header + data, or two account
+  // lines); otherwise treat "|" as ordinary text.
   if (pipeLines.length >= 2) {
     const rows = parsePipeRows(s);
     if (rows.length && rows.some((r) => r.length >= 2)) {
-      const looksHeader = /account|particular|debit|credit|amount|dr\.?|cr\.?/i.test(rows[0].join(" "));
+      const looksHeader = /account|particular|debit|credit|amount|dr\.?|cr\.?|date|\blf\b/i.test(rows[0].join(" "));
       const header = looksHeader ? rows[0] : ["Account", "Debit", "Credit"];
       const body = looksHeader ? rows.slice(1) : rows;
       const cols = Math.max(header.length, ...body.map((r) => r.length), 1);
       const idx = Array.from({ length: cols });
+
+      // Per-column hints for a journal-style layout.
+      const isAmountCol = idx.map((_, i) => /amount|debit|credit|\bdr\.?\b|\bcr\.?\b/i.test(header[i] || ""));
+      const particularsCol = header.findIndex((h) => /particular/i.test(h || ""));
+
       return (
-        <table className="w-full max-w-md border-collapse text-xs">
-          <thead>
-            <tr>
-              {idx.map((_, i) => (
-                <th key={i} className="border border-slate-300 px-2 py-1 text-left font-semibold text-slate-600 dark:border-slate-600 dark:text-slate-300">
-                  {header[i] || ""}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {body.map((r, ri) => (
-              <tr key={ri}>
-                {idx.map((_, ci) => (
-                  <td key={ci} className="border border-slate-200 px-2 py-1 align-top dark:border-slate-700">
-                    <MathText>{r[ci] || ""}</MathText>
-                  </td>
+        <div className="max-w-full overflow-x-auto">
+          <table className="min-w-[16rem] border-collapse text-xs">
+            <thead>
+              <tr>
+                {idx.map((_, i) => (
+                  <th
+                    key={i}
+                    className={`border border-slate-300 px-2 py-1 font-semibold text-slate-600 dark:border-slate-600 dark:text-slate-300 ${isAmountCol[i] ? "text-right" : "text-left"}`}
+                  >
+                    {header[i] || ""}
+                  </th>
                 ))}
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {body.map((r, ri) => (
+                <tr key={ri}>
+                  {idx.map((_, ci) => {
+                    const cell = r[ci] || "";
+                    const isParticulars = ci === particularsCol;
+                    const isCredit = isParticulars && /^to\s/i.test(cell); // "To Capital A/c" → indent
+                    const isNarration = isParticulars && /^\(/.test(cell); // "(Being …)" → italic/muted
+                    return (
+                      <td
+                        key={ci}
+                        className={`border border-slate-200 px-2 py-1 align-top dark:border-slate-700 ${
+                          isAmountCol[ci] ? "whitespace-nowrap text-right tabular-nums" : "text-left"
+                        } ${isCredit ? "pl-5" : ""} ${isNarration ? "italic text-slate-500 dark:text-slate-400" : ""}`}
+                      >
+                        <MathText>{cell}</MathText>
+                      </td>
+                    );
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       );
     }
   }
