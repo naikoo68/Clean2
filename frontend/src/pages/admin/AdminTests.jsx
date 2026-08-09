@@ -87,6 +87,7 @@ export default function AdminTests() {
   const [viewQ, setViewQ] = useState(null); // single question preview
   const [viewAllQ, setViewAllQ] = useState(false); // all questions preview
   const [studentView, setStudentView] = useState(true); // View All: defaults to student view (answers hidden)
+  const [reopenAfterEdit, setReopenAfterEdit] = useState(null); // question _id to reopen in the preview after editing it there
   const [typeFilter, setTypeFilter] = useState([]); // View All: which question types to show ([] = all)
 
 
@@ -233,6 +234,15 @@ export default function AdminTests() {
   useEffect(() => {
     saveNav(NAV_KEY, { view, exam, post });
   }, [view, exam, post]);
+
+  // After editing a question opened from the single-question preview, reopen the
+  // preview on that (now-reloaded, updated) question so you land back on it.
+  useEffect(() => {
+    if (!reopenAfterEdit) return;
+    const q = (tq || []).find((x) => x._id === reopenAfterEdit);
+    if (q) { setViewQ(q); setReopenAfterEdit(null); }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tq]);
 
   // Navigation
   const openExam = (e) => { setExam(e); setPost(null); setView("posts"); };
@@ -874,7 +884,7 @@ export default function AdminTests() {
           saving={tqSaving}
           sections={sectionsOf(qTest)}
           defaultSection={tqModal.forceSection && tqModal.forceSection !== "__unassigned__" ? tqModal.forceSection : ""}
-          onClose={() => setTqModal(null)}
+          onClose={() => { setTqModal(null); setReopenAfterEdit(null); }}
           onSave={saveTestQuestion}
         />
       )}
@@ -887,7 +897,7 @@ export default function AdminTests() {
               <h3 className="text-lg font-bold">Question</h3>
               <button onClick={() => setViewQ(null)}><X className="h-5 w-5" /></button>
             </div>
-            <QuestionView q={viewQ} {...(() => { const L = tq; const i = L.findIndex((x) => x._id === viewQ._id); return { position: i >= 0 ? `${i + 1} / ${L.length}` : undefined, onPrev: i > 0 ? () => setViewQ(L[i - 1]) : undefined, onNext: i >= 0 && i < L.length - 1 ? () => setViewQ(L[i + 1]) : undefined }; })()} onRegenerate={() => regenerateQ(viewQ)} regenerating={regenId === viewQ._id} onExtend={() => setExtendOneItem(viewQ)} extending={extendingQId === viewQ._id} onSchedule={() => setScheduleQ(viewQ)} onEdit={() => { const q = viewQ; setViewQ(null); setTqModal({ mode: "edit", data: q }); }} />
+            <QuestionView q={viewQ} {...(() => { const L = tq; const i = L.findIndex((x) => x._id === viewQ._id); return { position: i >= 0 ? `${i + 1} / ${L.length}` : undefined, onPrev: i > 0 ? () => setViewQ(L[i - 1]) : undefined, onNext: i >= 0 && i < L.length - 1 ? () => setViewQ(L[i + 1]) : undefined }; })()} onRegenerate={() => regenerateQ(viewQ)} regenerating={regenId === viewQ._id} onExtend={() => setExtendOneItem(viewQ)} extending={extendingQId === viewQ._id} onSchedule={() => setScheduleQ(viewQ)} onEdit={() => { const q = viewQ; setReopenAfterEdit(q._id); setViewQ(null); setTqModal({ mode: "edit", data: q }); }} />
             <div className="mt-5 flex justify-end gap-2">
               <button onClick={async () => { if (!window.confirm("Delete this question from the test?")) return; await testService.deleteQuestion(qTest._id, viewQ._id); setViewQ(null); await reloadTq(); load(); }} className="btn-outline mr-auto text-rose-600"><Trash2 className="h-4 w-4" /> Delete</button>
               <button onClick={() => setViewQ(null)} className="btn-primary">Close</button>
