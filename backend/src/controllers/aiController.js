@@ -3735,7 +3735,7 @@ function buildRegenSet(q, parsed, { fixOptions = true, extendQuestion = false, s
 
 // Background job: regenerate EVERY question in a quiz/test (mirrors runExtendJob).
 // Multi-pass, one worker per key, so the whole set gets through despite quota.
-async function runRegenAllJob(id, { endpoints, model, questions, owner = null, notes = "" }) {
+async function runRegenAllJob(id, { endpoints, model, questions, owner = null, notes = "", fixOptions = true, extendQuestion = false, shuffleOptions = true }) {
   const job = genJobs.get(id);
   const deadline = Date.now() + 12 * 60 * 1000;
   const save = (patch) => Object.assign(job, patch, { updatedAt: Date.now() });
@@ -3767,7 +3767,7 @@ async function runRegenAllJob(id, { endpoints, model, questions, owner = null, n
       baseUrl: ep.baseUrl,
       model: ep.model || model,
       systemPrompt: REGEN_SYSTEM_PROMPT,
-      userPrompt: buildRegenPrompt(q, notes),
+      userPrompt: buildRegenPrompt(q, notes, { fixOptions, extendQuestion }),
       maxTokens: 8000,
       failOnEmpty: true,
     });
@@ -3777,7 +3777,7 @@ async function runRegenAllJob(id, { endpoints, model, questions, owner = null, n
         ks.error += 1; save({});
         return "soft";
       }
-      const set = buildRegenSet(q, parsed);
+      const set = buildRegenSet(q, parsed, { fixOptions, extendQuestion, shuffleOptions });
       if (!Object.keys(set).length) { ks.error += 1; save({}); return "soft"; }
       await Question.updateOne({ _id: q._id }, { $set: set }).catch(() => {});
       updated += 1;
@@ -3886,10 +3886,18 @@ export async function regenerateAll(req, res) {
   if (!questions.length) return res.status(400).json({ message: filter.type ? `No "${filter.type}" questions found here (try "All question types").` : "No questions found to update (or not your content)." });
 
   const notes = String(req.body?.notes || "").trim();
+  // Optional toggles from the Regenerate-all dialog (defaults preserve the old
+  // full-rebuild + reshuffle behaviour so callers that send nothing are
+  // unaffected). fixOptions=false keeps each question's options/answer and only
+  // refreshes explanations; extendQuestion lengthens bare stems; shuffleOptions
+  // controls the answer-position reshuffle.
+  const fixOptions = req.body?.fixOptions !== false;
+  const shuffleOptions = req.body?.shuffleOptions !== false;
+  const extendQuestion = req.body?.extendQuestion === true;
   cleanupJobs();
   const id = newJobId();
   genJobs.set(id, { status: "pending", questions: [], requested: questions.length, error: null, model: chosen.model, updatedAt: Date.now() });
-  guardJob(id, runRegenAllJob(id, { endpoints: chosen.endpoints, model: chosen.model, questions, owner: scope.owner, notes }));
+  guardJob(id, runRegenAllJob(id, { endpoints: chosen.endpoints, model: chosen.model, questions, owner: scope.owner, notes, fixOptions, extendQuestion, shuffleOptions }));
   res.json({ jobId: id, requested: questions.length, model: chosen.model });
 }
 

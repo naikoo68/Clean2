@@ -13,6 +13,7 @@ const Q_TYPE_OPTIONS = [
   { value: "pairselect", label: "Only Pair-select" },
   { value: "assertion", label: "Only Assertion" },
   { value: "table", label: "Only Table" },
+  { value: "journal", label: "Only Journal / Ledger" },
 ];
 
 /**
@@ -38,6 +39,10 @@ export default function RegenerateAllModal({ open, target, title, onClose, onDon
   const [model, setModel] = useState("");
   const [notes, setNotes] = useState("");
   const [qType, setQType] = useState("all"); // limit to one question type, or "all"
+  // Per-run toggles (default to the classic full-rebuild + reshuffle behaviour).
+  const [fixOptions, setFixOptions] = useState(true);
+  const [extendQuestion, setExtendQuestion] = useState(false);
+  const [shuffleOptions, setShuffleOptions] = useState(true);
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState(null); // { done, total }
   const [msg, setMsg] = useState("");
@@ -52,6 +57,9 @@ export default function RegenerateAllModal({ open, target, title, onClose, onDon
     setBusy(false);
     setNotes("");
     setQType("all");
+    setFixOptions(true);
+    setExtendQuestion(false);
+    setShuffleOptions(true);
   }, [open]);
 
   useEffect(() => {
@@ -83,6 +91,9 @@ export default function RegenerateAllModal({ open, target, title, onClose, onDon
         notes: notes.trim() || undefined,
         mode: isClient ? srcMode : undefined,
         type: qType !== "all" ? qType : undefined,
+        fixOptions,
+        extendQuestion,
+        shuffleOptions,
       });
       if (!jobId) throw new Error("Could not start.");
       jobRef.current = jobId;
@@ -200,6 +211,32 @@ export default function RegenerateAllModal({ open, target, title, onClose, onDon
               onChange={(e) => setNotes(e.target.value)}
               disabled={busy}
             />
+
+            <div className="mt-3 space-y-2">
+              <label className="flex items-start gap-2 rounded-lg bg-slate-50 px-3 py-2 text-sm dark:bg-slate-800/60">
+                <input type="checkbox" className="mt-0.5 h-4 w-4 accent-violet-600" checked={fixOptions} onChange={(e) => setFixOptions(e.target.checked)} disabled={busy} />
+                <span>
+                  <b>Rebuild the options &amp; correct answer</b> — analyse each stem and replace options that
+                  don't fit. Untick to KEEP every question's current options &amp; answer and only refresh the
+                  explanation and per-option notes. (Assertion questions keep their fixed A/R options either way.)
+                </span>
+              </label>
+              <label className="flex items-start gap-2 rounded-lg bg-slate-50 px-3 py-2 text-sm dark:bg-slate-800/60">
+                <input type="checkbox" className="mt-0.5 h-4 w-4 accent-violet-600" checked={extendQuestion} onChange={(e) => setExtendQuestion(e.target.checked)} disabled={busy} />
+                <span>
+                  Also <b>extend the question length</b> — only where a stem genuinely needs it (a bare/terse
+                  stem) it's rewritten into a clearer question (kept to <b>at most 3 lines</b>); already-clear
+                  stems are left unchanged. The meaning, options &amp; correct answer stay the same.
+                </span>
+              </label>
+              <label className="flex items-start gap-2 rounded-lg bg-slate-50 px-3 py-2 text-sm dark:bg-slate-800/60">
+                <input type="checkbox" className="mt-0.5 h-4 w-4 accent-violet-600" checked={shuffleOptions} onChange={(e) => setShuffleOptions(e.target.checked)} disabled={busy} />
+                <span>
+                  <b>Reshuffle the options</b> — move each correct answer to a new position so it isn't always
+                  in the same place. The same option stays correct (assertion questions are left as-is).
+                </span>
+              </label>
+            </div>
 
             {progress && (
               <div className="mt-4">
