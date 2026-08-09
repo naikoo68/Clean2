@@ -150,3 +150,33 @@ export function searchQuestions(list, query) {
     .filter((it) => it._match >= 40)
     .sort((a, b) => b._match - a._match);
 }
+
+
+// Human-readable labels for each question TYPE, used by the "View all" type
+// filter (and matching the badges shown on each question card).
+export const QUESTION_TYPE_LABELS = {
+  mcq: "MCQ",
+  assertion: "Assertion & Reason",
+  matching: "Matching",
+  statement: "Statement",
+  pair: "Pair",
+  pairselect: "Pair-select",
+  table: "Table",
+  image: "Image",
+};
+
+// The canonical TYPE key for a question. A plain MCQ has no/blank/unknown type,
+// so anything not in QUESTION_TYPE_LABELS collapses to "mcq".
+export function questionTypeKey(q) {
+  const t = q?.type;
+  return QUESTION_TYPE_LABELS[t] ? t : "mcq";
+}
+
+// Filter a question list to only the selected type keys. An empty/omitted
+// selection means "all types" (no filtering).
+export function filterByType(list, selectedTypes) {
+  const arr = Array.isArray(list) ? list : [];
+  if (!Array.isArray(selectedTypes) || selectedTypes.length === 0) return arr;
+  const set = new Set(selectedTypes);
+  return arr.filter((q) => set.has(questionTypeKey(q)));
+}

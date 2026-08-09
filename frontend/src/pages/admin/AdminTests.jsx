@@ -14,6 +14,8 @@ import DuplicatesModal from "../../components/admin/DuplicatesModal";
 import { Files } from "lucide-react";
 import QuestionFormModal from "../../components/admin/QuestionFormModal";
 import QuestionView from "../../components/admin/QuestionView";
+import QuestionTypeFilter from "../../components/admin/QuestionTypeFilter";
+import { questionTypeKey } from "../../lib/questions";
 import ManageTestQuestions from "../../components/admin/ManageTestQuestions";
 import ShareTestModal from "../../components/admin/ShareTestModal";
 import ExtendExplanationsModal from "../../components/admin/ExtendExplanationsModal";
@@ -85,6 +87,7 @@ export default function AdminTests() {
   const [viewQ, setViewQ] = useState(null); // single question preview
   const [viewAllQ, setViewAllQ] = useState(false); // all questions preview
   const [studentView, setStudentView] = useState(true); // View All: defaults to student view (answers hidden)
+  const [typeFilter, setTypeFilter] = useState([]); // View All: which question types to show ([] = all)
 
 
   const openQuestions = async (t) => {
@@ -846,7 +849,7 @@ export default function AdminTests() {
                 load();
               }}
               onViewQuestion={setViewQ}
-              onViewAll={() => setViewAllQ(true)}
+              onViewAll={() => { setTypeFilter([]); setViewAllQ(true); }}
               onDuplicates={() => setDupTest(qTest)}
               onCopyCsv={copyCsv}
               onDownloadCsv={(qs) => downloadCsv(qs, qTest?.name || "test")}
@@ -912,8 +915,12 @@ export default function AdminTests() {
                 Student view — answers &amp; explanations are hidden. Use “Reveal answer” on any question to expose it.
               </p>
             )}
+            <QuestionTypeFilter questions={tq} selected={typeFilter} onChange={setTypeFilter} />
             <div className="max-h-[70vh] space-y-4 overflow-y-auto pr-1">
-              {tq.map((it, i) => (
+              {tq
+                .map((it, i) => ({ it, i }))
+                .filter(({ it }) => !typeFilter.length || typeFilter.includes(questionTypeKey(it)))
+                .map(({ it, i }) => (
                 <div key={(studentView ? "s" : "a") + it._id} className="relative rounded-lg border border-slate-200 p-3 dark:border-slate-700">
                   <div className="absolute right-2 top-2 z-10 flex gap-1">
                     {!studentView && (
