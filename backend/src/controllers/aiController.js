@@ -3354,7 +3354,7 @@ RULES:
 - "explanation": thorough, self-contained, each point/step on its own line. Write math as inline LaTeX between $...$ (never \\( \\) or \\[ \\]); NEVER use "$" for money. No trailing commas.
 Return ONLY the JSON object.`;
 
-function buildRegenPrompt(q, notes) {
+function buildRegenPrompt(q, notes, { fixOptions = true, extendQuestion = false } = {}) {
   const lines = [`Question type: ${q.type || "mcq"}`];
   if (q.text) lines.push(`Question: ${q.text}`);
   if (q.assertion) lines.push(`Assertion (A): ${q.assertion}`);
@@ -3363,13 +3363,26 @@ function buildRegenPrompt(q, notes) {
   if (Array.isArray(q.columnB) && q.columnB.length) lines.push(`Column B: ${q.columnB.map((x, i) => `${toRomanLite(i + 1)}. ${x}`).join("  |  ")}`);
   if (Array.isArray(q.tableRows) && q.tableRows.length) lines.push(`Current table (first row = header):\n${q.tableRows.map((r) => (Array.isArray(r) ? r.join(" | ") : String(r))).join("\n")}`);
   const opts = Array.isArray(q.options) ? q.options : [];
-  if (opts.length) lines.push(`Current options (may be WRONG — replace with correct ones that fit the question):\n${opts.map((o, i) => `${EXT_LETTERS[i] || i}) ${o}`).join("\n")}`);
+  if (opts.length) lines.push(
+    fixOptions
+      ? `Current options (may be WRONG — replace with correct ones that fit the question):\n${opts.map((o, i) => `${EXT_LETTERS[i] || i}) ${o}`).join("\n")}`
+      : `Current options (KEEP these EXACTLY — do NOT change them):\n${opts.map((o, i) => `${EXT_LETTERS[i] || i}) ${o}`).join("\n")}`
+  );
   if (notes) lines.push(`MANDATORY user instructions (follow EXACTLY): ${notes}`);
-  if (["pair", "matching", "pairselect"].includes(q.type)) {
+  if (fixOptions && ["pair", "matching", "pairselect"].includes(q.type)) {
     const kind = q.type === "pair" ? "count" : q.type === "matching" ? "mapping" : "which-pairs-are-correct";
     lines.push(`This is a ${q.type.toUpperCase()} question. Return "columnA" and "columnB" ALIGNED so that columnA[i] is the CORRECT match of columnB[i] for EVERY index i (i.e. all pairs correct as returned) — do NOT shuffle them yourself and keep the SAME number of items. Also return "pairFacts": an array with one SHORT reason per pair (pairFacts[i] = why columnA[i] correctly matches columnB[i]). Do NOT set the "options" or the "correct" index yourself — the app reshuffles Column B and builds the ${kind} answer to match.`);
   }
-  lines.push(`Analyse THIS question and FIX anything wrong: rebuild the 4 "options", the "correct" index, the "explanation" and the 4 "optionExplanations" so they are correct and fit the question, AND wrap any plain-text math so it renders. Return the SAME stem in "text" (and same-count "columnA"/"columnB" for matching/pair/statement) with math wrapped in $...$ — keep the meaning unchanged. If the question is CALCULATION-based, set "numerical": true and leave all four "optionExplanations" empty "" (the working in the explanation is enough). Return ONLY one valid JSON object {"text":"...","options":["","","",""],"correct":0,"explanation":"...","optionExplanations":["","","",""]}.`);
+  // When the user ticks "Extend the question length", allow (only) the STEM to
+  // be rewritten a little longer — same rules and 3-line cap as Extend.
+  if (extendQuestion) {
+    lines.push(`ALSO EXTEND THE QUESTION LENGTH (this OVERRIDES "keep the meaning unchanged" for the STEM ONLY): rewrite the question stem into a slightly LONGER, clearer, full-sentence version and return it as "text" — but ONLY if it genuinely needs it. Many stems are ALREADY complete questions and MUST be returned EXACTLY as-is (e.g. "What is the full form of NABARD?", "What is the SI unit of force?", "Who wrote …?"). DECISIVE RULE: if the stem ends with a colon or is a bare phrase/label (e.g. "Lateral means:", "Newton's second law:"), you MUST turn it into a complete question; if it is already a full question sentence, leave it unchanged. STRICT LENGTH LIMIT when you do extend: AT MOST 3 lines (about 2 sentences / 40 words) — never a paragraph. Keep the EXACT SAME meaning, options and correct answer. NEVER spell out an abbreviation/acronym into its full form and NEVER add a unit of measurement in the stem (keep "NABARD", "DNA", "N", "kg" as-is). For matching/assertion/statement/table questions, extend ONLY the intro sentence in "text" (still within 3 lines) and leave the columns/assertion/reason/table untouched.`);
+  }
+  if (fixOptions) {
+    lines.push(`Analyse THIS question and FIX anything wrong: rebuild the 4 "options", the "correct" index, the "explanation" and the 4 "optionExplanations" so they are correct and fit the question, AND wrap any plain-text math so it renders. Return the SAME stem in "text" (and same-count "columnA"/"columnB" for matching/pair/statement) with math wrapped in $...$ — keep the meaning unchanged${extendQuestion ? " (except the allowed stem-lengthening above)" : ""}. If the question is CALCULATION-based, set "numerical": true and leave all four "optionExplanations" empty "" (the working in the explanation is enough). Return ONLY one valid JSON object {"text":"...","options":["","","",""],"correct":0,"explanation":"...","optionExplanations":["","","",""]}.`);
+  } else {
+    lines.push(`DO NOT change the options or the correct answer — keep them EXACTLY as given. Your ONLY job is to write a rich "explanation" and the 4 "optionExplanations" (why each option is right/wrong) for the EXISTING options, leaving the correct option's note "". Also return the SAME stem in "text" with any plain-text math wrapped in $...$ so it renders${extendQuestion ? " (you MAY apply the allowed stem-lengthening above)" : " — keep the meaning and wording unchanged"}. Do NOT return a "correct" index or a new "options" array that differs from the current ones. Return ONLY one valid JSON object {"text":"...","explanation":"...","optionExplanations":["","","",""]}.`);
+  }
   return lines.join("\n");
 }
 
@@ -3564,7 +3577,7 @@ function applyPairSelectReshuffle(set, q, parsed) {
 // Regenerate endpoint AND the bulk "Regenerate all" job. Applies the re-wrapped
 // stem/columns (same meaning, math wrapped so it renders), the reshuffled
 // Column B (same item count), fresh options + correct answer, and explanations.
-function buildRegenSet(q, parsed) {
+function buildRegenSet(q, parsed, { fixOptions = true, extendQuestion = false, shuffleOptions = true } = {}) {
   const set = {};
   if (parsed.explanation) set.explanation = parsed.explanation;
   // Column-based questions keep their items in columnA/columnB — never in the
@@ -3583,7 +3596,17 @@ function buildRegenSet(q, parsed) {
       set.tableRows = parsed.tableRows.map((r) => r.map((c) => (c == null ? "" : String(c))));
     }
   } else if (parsed.text) {
-    set.text = parsed.text;
+    // When "Extend the question length" was ticked, guard against the model
+    // ignoring the 3-line cap: keep the ORIGINAL stem if the rewrite ballooned
+    // past ~3 lines / 45 words (mirrors buildExtendSet's backstop).
+    if (extendQuestion) {
+      const rewritten = String(parsed.text).trim();
+      const wordCount = rewritten.split(/\s+/).filter(Boolean).length;
+      const lineCount = rewritten.split(/\r?\n/).filter((l) => l.trim()).length;
+      set.text = wordCount <= 45 && lineCount <= 3 ? rewritten : q.text;
+    } else {
+      set.text = parsed.text;
+    }
   }
   // Strip any leading "1."/"I." marker — the app auto-numbers the columns.
   if (Array.isArray(parsed.columnA) && Array.isArray(q.columnA) && parsed.columnA.length === q.columnA.length) set.columnA = parsed.columnA.map(stripListMarker);
@@ -3592,14 +3615,17 @@ function buildRegenSet(q, parsed) {
   const newOptions = Array.isArray(parsed.options) && parsed.options.length === 4 && parsed.options.every((s) => String(s).trim() !== "")
     ? parsed.options.map((x) => String(x)) : null;
   const canFixOptions = !q.type || ["mcq", "table", "pair", "pairselect", "statement", "matching"].includes(q.type);
-  if (canFixOptions) {
+  // "Fix options" (default on) gates whether the options/answer are rebuilt at
+  // all. When the user unticks it, the existing options & correct answer are
+  // kept untouched and only the explanation / per-option notes are refreshed.
+  if (fixOptions && canFixOptions) {
     // Move the correct-answer index ONLY together with a fresh, valid 4-option
     // set, so the marked answer always matches what is shown. Updating "correct"
     // on its own (when the model didn't return usable options) would point it at
     // an unrelated OLD option and BREAK the question instead of fixing it — the
     // reported "regenerate doesn't correct a wrong question" bug.
     if (newOptions && newCorrect != null) { set.options = newOptions; set.correct = newCorrect; }
-  } else if (newCorrect != null) {
+  } else if (fixOptions && newCorrect != null) {
     // Fixed-phrase types (e.g. assertion/reason) keep their canned options, so
     // the answer index can safely be corrected on its own.
     set.correct = newCorrect;
@@ -3617,16 +3643,19 @@ function buildRegenSet(q, parsed) {
   if (parsed.numerical) set.optionExplanations = ["", "", "", ""];
   // PAIR / MATCHING: reshuffle Column B deterministically and set the answer to
   // match exactly — fixes "shows the old answer after the columns are reshuffled".
-  if (q.type === "pair") applyPairReshuffle(set, q, parsed);
-  else if (q.type === "matching") applyMatchingReshuffle(set, q, parsed);
-  else if (q.type === "pairselect") applyPairSelectReshuffle(set, q, parsed);
-  else if (q.type !== "assertion") {
+  // The pair/matching/pairselect reshuffles are STRUCTURAL — they build the
+  // count/mapping/which-pairs answer — so they only run when options are being
+  // rebuilt (fixOptions). When "fix options" is off, everything is left as-is.
+  if (fixOptions && q.type === "pair") applyPairReshuffle(set, q, parsed);
+  else if (fixOptions && q.type === "matching") applyMatchingReshuffle(set, q, parsed);
+  else if (fixOptions && q.type === "pairselect") applyPairSelectReshuffle(set, q, parsed);
+  else if (shuffleOptions && q.type !== "assertion") {
     // PLAIN types (mcq / table / statement / untyped): the column types above
     // already reshuffle, and assertion keeps its fixed A/R rubric — but a plain
     // question's freshly rebuilt options can still come back with the answer in
     // a predictable slot. Reorder them here so the correct answer lands in a
     // random position, moving the `correct` index and the per-option notes with
-    // it (correctness preserved).
+    // it (correctness preserved). Skipped when the user unticks "Reshuffle".
     const opts = Array.isArray(set.options) && set.options.length ? set.options : null;
     if (opts && opts.length >= 2 && Number.isInteger(set.correct) && set.correct >= 0 && set.correct < opts.length) {
       const perm = shuffledPermutation(opts.length, set.correct); // random, non-rotation, answer moves
@@ -3826,6 +3855,14 @@ export async function regenerateQuestion(req, res) {
   if (!q) return res.status(404).json({ message: "Question not found (or not your content)." });
 
   const notes = String(req.body?.notes || "").trim();
+  // Optional toggles from the Regenerate dialog. Defaults preserve the original
+  // behaviour (full rebuild + reshuffle) so callers that send nothing are
+  // unaffected. `fixOptions=false` keeps the current options/answer and only
+  // refreshes the explanations; `extendQuestion` allows lengthening the stem;
+  // `shuffleOptions=false` keeps the answer in its current position.
+  const fixOptions = req.body?.fixOptions !== false;
+  const shuffleOptions = req.body?.shuffleOptions !== false;
+  const extendQuestion = req.body?.extendQuestion === true;
   let parsed = null;
   let lastError = null;
   for (let attempt = 0; attempt < 3 && !parsed; attempt++) {
@@ -3833,7 +3870,7 @@ export async function regenerateQuestion(req, res) {
       endpoints: chosen.endpoints,
       model: chosen.model,
       systemPrompt: REGEN_SYSTEM_PROMPT,
-      userPrompt: buildRegenPrompt(q, notes),
+      userPrompt: buildRegenPrompt(q, notes, { fixOptions, extendQuestion }),
       maxTokens: 8000, // full rebuild (stem + 4 options + explanation + 4 notes) — avoid truncation
       owner: scope.owner,
     });
@@ -3855,7 +3892,7 @@ export async function regenerateQuestion(req, res) {
   }
 
   // Apply everything the AI rebuilt (shared with the bulk "Regenerate all" job).
-  const set = buildRegenSet(q, parsed);
+  const set = buildRegenSet(q, parsed, { fixOptions, extendQuestion, shuffleOptions });
   if (!Object.keys(set).length) return res.status(502).json({ message: "The AI did not return any usable changes. Try again." });
 
   await Question.updateOne({ _id: q._id }, { $set: set });

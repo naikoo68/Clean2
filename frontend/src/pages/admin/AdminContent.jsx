@@ -15,6 +15,7 @@ import AiImport from "../../components/admin/AiImport";
 import ExtendExplanationsModal from "../../components/admin/ExtendExplanationsModal";
 import ExtendOneQuestionModal from "../../components/admin/ExtendOneQuestionModal";
 import RegenerateAllModal from "../../components/admin/RegenerateAllModal";
+import RegenerateOneModal from "../../components/admin/RegenerateOneModal";
 import ScheduleQuestionModal from "../../components/admin/ScheduleQuestionModal";
 import { Sparkles, Files, Globe, Wand2, Loader2, ClipboardList, RefreshCw, Scissors, GitMerge, CheckCircle2 } from "lucide-react";
 
@@ -57,7 +58,8 @@ export default function AdminContent() {
   const [scheduleQ, setScheduleQ] = useState(null); // question to post/schedule to Facebook
   const [extendingQId, setExtendingQId] = useState(null); // per-question extend in progress
   const [extendOneItem, setExtendOneItem] = useState(null); // per-question extend confirm modal target
-  const [regenId, setRegenId] = useState(null); // per-question regenerate in progress
+  const [regenId] = useState(null); // legacy inline spinner id — regenerate now runs in RegenerateOneModal
+  const [regenOneItem, setRegenOneItem] = useState(null); // per-question regenerate dialog target
   const [dupOpen, setDupOpen] = useState(false);
   const [dupScope, setDupScope] = useState({ id: "all", name: "" }); // which subject the duplicate scan targets
   // Split a topic/quiz into quizzes of N. { kind: "quiz"|"topic", id, name, count }
@@ -101,20 +103,17 @@ export default function AdminContent() {
     }
   };
 
-  // Regenerate ONE question: AI analyses the stem and rebuilds its options/
-  // answer/explanations to fit, then refresh the list (and the open preview).
-  const regenerateQ = async (item) => {
-    setRegenId(item._id);
-    try {
-      const updated = await aiService.regenerate({ questionId: item._id });
-      // If this question is open in the preview modal, reflect the fix live.
-      setViewQ((prev) => (prev && prev._id === item._id ? { ...prev, ...updated } : prev));
-      await load("questions");
-    } catch (e) {
-      setError(e.message);
-    } finally {
-      setRegenId(null);
-    }
+  // Regenerate ONE question: open the dialog (options/answer rebuild toggles +
+  // AI source/model) — the modal runs the request itself.
+  const regenerateQ = (item) => setRegenOneItem(item);
+
+  // Apply a single-question regenerate result (from RegenerateOneModal) to the
+  // open preview and reload the list.
+  const applyRegenerated = async (updated) => {
+    const item = regenOneItem;
+    if (item) setViewQ((prev) => (prev && prev._id === item._id ? { ...prev, ...updated } : prev));
+    setRegenOneItem(null);
+    await load("questions");
   };
 
   // Extend ONE question's explanation with AI — open the confirm modal first.
@@ -782,6 +781,13 @@ export default function AdminContent() {
         busy={!!extendingQId}
         onCancel={() => setExtendOneItem(null)}
         onConfirm={runExtendOne}
+      />
+
+      <RegenerateOneModal
+        open={!!regenOneItem}
+        question={regenOneItem}
+        onClose={() => setRegenOneItem(null)}
+        onDone={applyRegenerated}
       />
 
       {/* View single question */}
