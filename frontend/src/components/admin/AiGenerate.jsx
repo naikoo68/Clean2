@@ -407,12 +407,22 @@ export default function AiGenerate({ open, onClose, onUpload, title = "Generate 
 
     // Final summary once the loop ends.
     const finalize = (res, producedTotal, target) => {
-      if (res?.errored || res?.timedOut) return; // their own message already stands
+      // Only leave the wave's own hard error / timeout message when we produced
+      // NOTHING at all. If earlier waves already made questions, never surface a
+      // scary "no usable questions" error over a full preview — summarise what we
+      // have so the user can still insert it.
+      if ((res?.errored || res?.timedOut) && producedTotal === 0) return;
       const model = res?.model ? ` with ${res.model}` : "";
       if (stopRef.current || res?.cancelled) { setMsg(`⏹ Stopped. Kept ${producedTotal} question(s) so far${model} — review & Insert below, or Generate more.`); return; }
       const short = producedTotal < target;
       if (append && !autoContinue) {
         setMsg(`✓ Added ${producedTotal} more question(s)${model}.` + (short ? " (Some couldn't be generated — click “Generate more” to top up.)" : " No duplicates of the earlier questions. Review & Insert."));
+        return;
+      }
+      // A wave errored/timed out but earlier waves DID produce questions — report
+      // the partial success instead of the failure.
+      if (res?.errored || res?.timedOut) {
+        setMsg(`✓ Generated ${producedTotal} of ${target} question(s)${model}. The AI stopped before finishing the rest — Insert these now, then use “Generate more” to top up (it often works on another try or with a fuller model).`);
         return;
       }
       let tail;
