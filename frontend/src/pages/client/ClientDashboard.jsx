@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import * as Icons from "lucide-react";
 import {
@@ -20,6 +20,9 @@ import {
   Crown,
   Search,
   X,
+  BarChart3,
+  Share2,
+  Trash2,
 } from "lucide-react";
 import { authService, practiceService, searchService, testService } from "../../services";
 import { loadNav, saveNav } from "../../lib/navState";
@@ -27,7 +30,11 @@ import { useAuth } from "../../context/AuthContext";
 import Badge from "../../components/ui/Badge";
 import QuestionView from "../../components/admin/QuestionView";
 import PaperExport from "../../components/admin/PaperExport";
+import AccountOverview from "../../components/ui/AccountOverview";
 import { Loading, ErrorState } from "../../components/ui/AsyncState";
+import ClientPerformance from "./ClientPerformance";
+import IncomingSharesInbox from "../../components/client/IncomingSharesInbox";
+import ShareByEmailModal from "../../components/client/ShareByEmailModal";
 
 const previewText = (t, n = 100) => {
   const s = String(t || "").replace(/\$/g, "").replace(/\s+/g, " ").trim();
@@ -66,9 +73,16 @@ function uniqueNodes(list, key) {
   const map = new Map();
   for (const it of list) {
     const node = it[key];
-    if (node && node._id && !map.has(String(node._id))) map.set(String(node._id), node);
+    if (!node || !node._id) continue;
+    const k = String(node._id);
+    if (!map.has(k)) map.set(k, { node, owned: false, shared: false });
+    const e = map.get(k);
+    if (it.sharedByOther) e.shared = true; else e.owned = true;
   }
-  return [...map.values()];
+  // Flag a grouping node as shared-with-you only when EVERY item under it was
+  // shared by someone else (so you can safely "remove" the whole node); mixed
+  // nodes that also contain your own content keep the normal (share) controls.
+  return [...map.values()].map((e) => ({ ...e.node, sharedByOther: e.shared && !e.owned }));
 }
 
 // Remembers the client's practice-browser drill-down position across refreshes
@@ -99,7 +113,14 @@ export default function ClientDashboard({ onBuild, onUpgrade }) {
   // topic define how deep we've navigated. Switching kind resets the path.
   // Restored from sessionStorage so a refresh — or returning after finishing a
   // practice — keeps you where you were instead of jumping back to the top.
-  const [kind, setKind] = useState(() => loadNav(DASH_NAV_KEY).kind || "quiz");
+  // Restore the saved tab, but only if it's still a valid kind. A stale value
+  // (e.g. "performance" saved before that tab was removed) must NOT survive, or
+  // KINDS.find(...) below returns undefined and the whole dashboard crashes on
+  // `.label`. Fall back to "quiz".
+  const [kind, setKind] = useState(() => {
+    const saved = loadNav(DASH_NAV_KEY).kind;
+    return KINDS.some((k) => k.key === saved) ? saved : "quiz";
+  });
   const [stream, setStream] = useState(() => loadNav(DASH_NAV_KEY).stream || null);
   const [subject, setSubject] = useState(() => loadNav(DASH_NAV_KEY).subject || null);
   const [topic, setTopic] = useState(() => loadNav(DASH_NAV_KEY).topic || null);
@@ -108,6 +129,7 @@ export default function ClientDashboard({ onBuild, onUpgrade }) {
   const [qResults, setQResults] = useState([]); // question matches (backend search)
   const [qLoading, setQLoading] = useState(false);
   const [detail, setDetail] = useState(null); // question shown in the detail panel
+  const [shareTarget, setShareTarget] = useState(null); // { level, id, name } for the Share-by-email modal
 
   const copyReferral = () => {
     if (!user?.referralCode) return;
@@ -127,6 +149,18 @@ export default function ClientDashboard({ onBuild, onUpgrade }) {
       .finally(() => setLoading(false));
   };
   useEffect(load, []);
+
+  // Remove content that was shared WITH you (reference access) from your
+  // dashboard. Doesn't delete the owner's copy — just un-shares it from you.
+  const removeShared = async (level, id, name) => {
+    if (!window.confirm(`Remove "${name}" from your dashboard? It was shared with you — this only removes it from your account; the owner keeps their copy.`)) return;
+    try {
+      await practiceService.removeSharedWithMe({ level, id });
+      load();
+    } catch (e) {
+      setError(e.message);
+    }
+  };
 
   // Remember the current drill-down position so a refresh or a return trip from
   // a quiz/test restores it instead of dropping back to the top.
@@ -182,6 +216,29 @@ export default function ClientDashboard({ onBuild, onUpgrade }) {
   const quizzes = items.filter((i) => i.kind === "quiz");
   const tests = items.filter((i) => i.kind === "test");
 
+  // Live "What's on your account now" overview — recomputed from the fresh
+  // items each load, so it auto-updates when content is added/deleted.
+  const overview = useMemo(() => {
+    const distinct = (arr, key) => new Set(arr.map((x) => x[key]?._id).filter(Boolean)).size;
+    const streamMap = new Map();
+    for (const it of items) {
+      const s = it.stream;
+      if (!s?._id) continue;
+      const cur = streamMap.get(String(s._id)) || { name: s.name, quizzes: 0, tests: 0 };
+      if (it.kind === "quiz") cur.quizzes += 1; else cur.tests += 1;
+      streamMap.set(String(s._id), cur);
+    }
+    return {
+      quizzes: quizzes.length,
+      tests: tests.length,
+      questions: items.reduce((s, i) => s + (i.questionCount || 0), 0),
+      streams: distinct(items, "stream"),
+      subjects: distinct(quizzes, "subject"),
+      topics: distinct(quizzes, "topic"),
+      streamList: [...streamMap.values()],
+    };
+  }, [items, quizzes, tests]);
+
   // Search across everything the client has built — matches an item by its own
   // name OR the name of its stream / subject / topic, so searching a subject
   // surfaces all its quizzes. Spans BOTH My Quiz and My Test.
@@ -216,10 +273,19 @@ export default function ClientDashboard({ onBuild, onUpgrade }) {
     else rows = tests.filter((t) => eq(t.stream?._id, stream._id));
   }
 
+  // Order EVERY level alphabetically/naturally by name so subjects, streams,
+  // topics and the quizzes/tests read A, B, C… (and "Quiz 2" before "Quiz 10")
+  // instead of the order they happened to be created in — which is why the
+  // "Choose a subject" list showed B, E, A, C, D. `numeric` keeps embedded
+  // numbers in human order; `sensitivity:"base"` makes it case-insensitive.
+  rows = [...rows].sort((a, b) =>
+    String(a?.name || "").localeCompare(String(b?.name || ""), undefined, { numeric: true, sensitivity: "base" })
+  );
+
   const isItems = level === "items";
 
   // Breadcrumb trail for the active kind.
-  const crumbs = [{ label: KINDS.find((k) => k.key === kind).label, onClick: resetPath }];
+  const crumbs = [{ label: (KINDS.find((k) => k.key === kind) || KINDS[0]).label, onClick: resetPath }];
   if (stream) crumbs.push({ label: stream.name, onClick: () => { setSubject(null); setTopic(null); } });
   if (subject) crumbs.push({ label: subject.name, onClick: () => setTopic(null) });
   if (topic) crumbs.push({ label: topic.name, onClick: null });
@@ -241,11 +307,13 @@ export default function ClientDashboard({ onBuild, onUpgrade }) {
 
   return (
     <div className="space-y-6">
-      {/* Profile + validity */}
-      <div className="grid gap-4 lg:grid-cols-3">
-        <div className="card p-5 lg:col-span-2">
+      {/* Profile + validity — side by side (name left, validity right) from the
+          sm breakpoint (640px) up, so it's beside the name on tablets too; only
+          stacks on small phones. */}
+      <div className="grid gap-4 sm:grid-cols-3">
+        <div className="card p-5 sm:col-span-2">
           <p className="text-sm text-slate-500 dark:text-slate-400">Welcome back,</p>
-          <h1 className="text-2xl font-extrabold">{user?.name || "there"}</h1>
+          <h1 className="text-lg font-bold">{user?.name || "there"}</h1>
           <p className="mt-0.5 text-sm text-slate-400">{user?.email}</p>
           <div className="mt-4 flex flex-wrap items-center gap-2">
             <button onClick={onBuild} className="btn-outline">
@@ -323,6 +391,9 @@ export default function ClientDashboard({ onBuild, onUpgrade }) {
         </div>
       </div>
 
+      {/* Live overview of everything you've built (auto-updates on add/delete). */}
+      <AccountOverview counts={overview} streamList={overview.streamList} />
+
       {/* Trial banner — nudge trial users to upgrade before it ends */}
       {user?.isTrial && !expired && onUpgrade && (
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 dark:border-amber-900/50 dark:bg-amber-900/20">
@@ -334,6 +405,18 @@ export default function ClientDashboard({ onBuild, onUpgrade }) {
           </button>
         </div>
       )}
+
+      {/* Incoming — content other users sent you; Accept to save your own copy
+          (whole-stream saves directly; smaller shares ask where to save). */}
+      <IncomingSharesInbox onAccepted={load} />
+
+      {/* Performance — always visible, right below the profile */}
+      <div className="card p-5">
+        <h2 className="flex items-center gap-2 text-lg font-bold">
+          <BarChart3 className="h-5 w-5 text-emerald-600" /> Performance
+        </h2>
+        <ClientPerformance />
+      </div>
 
       {/* Practice browser */}
       <div className="card p-5">
@@ -491,6 +574,7 @@ export default function ClientDashboard({ onBuild, onUpgrade }) {
                     <span className="inline-flex items-center gap-1"><HelpCircle className="h-3 w-3" /> {item.questionCount} Qs</span>
                     {item.kind === "test" && <span className="inline-flex items-center gap-1"><Clock className="h-3 w-3" /> {item.duration} min</span>}
                     {item.difficulty && <Badge variant={item.difficulty}>{item.difficulty}</Badge>}
+                    {item.sharedByOther && <Badge variant="accent"><Share2 className="h-3 w-3" /> Shared with you</Badge>}
                   </div>
                   <div className="mt-3 flex items-center gap-2">
                     <button
@@ -501,6 +585,23 @@ export default function ClientDashboard({ onBuild, onUpgrade }) {
                     >
                       <Play className="h-3.5 w-3.5" /> {empty ? "No questions" : cta}
                     </button>
+                    {item.sharedByOther ? (
+                      <button
+                        onClick={() => removeShared("item", item._id, item.name)}
+                        title="Remove this shared item from your dashboard"
+                        className="rounded-lg border border-slate-200 p-2 text-rose-500 hover:bg-rose-50 dark:border-slate-700 dark:hover:bg-rose-900/20"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => setShareTarget({ level: "item", id: item._id, name: item.name })}
+                        title="Share with another user by email"
+                        className="rounded-lg border border-slate-200 p-2 text-slate-500 hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800"
+                      >
+                        <Share2 className="h-3.5 w-3.5" />
+                      </button>
+                    )}
                     {!empty && <PaperExport compact title={item.name} load={paperLoad(item)} />}
                   </div>
                 </div>
@@ -512,25 +613,51 @@ export default function ClientDashboard({ onBuild, onUpgrade }) {
           <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {rows.map((node) => {
               const Icon = Icons[node.icon] || fallbackIcon;
+              // Map the current drill-down level to a share level.
+              const shareLevel = level === "streams" ? "stream" : level === "subjects" ? "subject" : "topic";
               return (
-                <button
-                  key={node._id}
-                  onClick={() => openNode(node)}
-                  className="card-hover group p-5 text-left"
-                >
-                  <div className={`flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br ${node.color || "from-violet-500 to-fuchsia-600"} text-white shadow-soft`}>
-                    <Icon className="h-6 w-6" />
-                  </div>
-                  <h3 className="mt-3 font-bold">{node.name}</h3>
-                  <span className="mt-3 inline-flex items-center gap-1 text-sm font-semibold text-brand-600 transition group-hover:gap-2 dark:text-brand-400">
-                    Open <ArrowRight className="h-4 w-4" />
-                  </span>
-                </button>
+                <div key={node._id} className="relative">
+                  <button
+                    onClick={() => openNode(node)}
+                    className="card-hover group w-full p-5 text-left"
+                  >
+                    <div className={`flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br ${node.color || "from-violet-500 to-fuchsia-600"} text-white shadow-soft`}>
+                      <Icon className="h-6 w-6" />
+                    </div>
+                    <h3 className="mt-3 font-bold">{node.name}</h3>
+                    {node.sharedByOther && (
+                      <span className="mt-1 inline-flex items-center gap-1 text-[11px] font-semibold text-brand-600 dark:text-brand-400"><Share2 className="h-3 w-3" /> Shared with you</span>
+                    )}
+                    <span className="mt-3 inline-flex items-center gap-1 text-sm font-semibold text-brand-600 transition group-hover:gap-2 dark:text-brand-400">
+                      Open <ArrowRight className="h-4 w-4" />
+                    </span>
+                  </button>
+                  {node.sharedByOther ? (
+                    <button
+                      onClick={() => removeShared(shareLevel, node._id, node.name)}
+                      title={`Remove this shared ${shareLevel} from your dashboard`}
+                      className="absolute right-3 top-3 rounded-lg bg-white/80 p-1.5 text-rose-500 shadow-sm hover:bg-rose-50 dark:bg-slate-800/80 dark:hover:bg-rose-900/20"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => setShareTarget({ level: shareLevel, id: node._id, name: node.name })}
+                      title={`Share this ${shareLevel} with another user by email`}
+                      className="absolute right-3 top-3 rounded-lg bg-white/80 p-1.5 text-slate-500 shadow-sm hover:bg-slate-100 dark:bg-slate-800/80 dark:hover:bg-slate-700"
+                    >
+                      <Share2 className="h-4 w-4" />
+                    </button>
+                  )}
+                </div>
               );
             })}
           </div>
         )}
       </div>
+
+      {/* Share practice content with another registered user by email. */}
+      {shareTarget && <ShareByEmailModal target={shareTarget} onClose={() => setShareTarget(null)} />}
 
       {/* Question detail — opens on tap, shows the full question + its location. */}
       {detail && (

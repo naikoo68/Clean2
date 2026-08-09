@@ -5,6 +5,7 @@ import { useTheme } from "../../context/ThemeContext";
 import { useAuth } from "../../context/AuthContext";
 import { useZoom } from "../../context/ZoomContext";
 import Brand from "./Brand";
+import InstallAppButton from "../client/InstallAppButton";
 
 const links = [
   { to: "/", label: "Home", end: true },
@@ -80,6 +81,7 @@ export default function Navbar() {
         </div>
 
         <div className="flex items-center gap-2">
+          <InstallAppButton />
           <button
             onClick={toggleTheme}
             aria-label="Toggle theme"

@@ -1,7 +1,19 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { X, RefreshCw, Loader2, CheckCircle2, AlertTriangle, Server, KeyRound } from "lucide-react";
 import { aiService } from "../../services";
 import { useAuth } from "../../context/AuthContext";
+
+// Which question types the bulk action can be limited to. "all" = every type.
+const Q_TYPE_OPTIONS = [
+  { value: "all", label: "All question types" },
+  { value: "mcq", label: "Only MCQ" },
+  { value: "matching", label: "Only Matching" },
+  { value: "statement", label: "Only Statement" },
+  { value: "pair", label: "Only Pair" },
+  { value: "pairselect", label: "Only Pair-select" },
+  { value: "assertion", label: "Only Assertion" },
+  { value: "table", label: "Only Table" },
+];
 
 /**
  * RegenerateAllModal — AI-regenerates EVERY question in one quiz or test in
@@ -25,9 +37,13 @@ export default function RegenerateAllModal({ open, target, title, onClose, onDon
   const [status, setStatus] = useState(null);
   const [model, setModel] = useState("");
   const [notes, setNotes] = useState("");
+  const [qType, setQType] = useState("all"); // limit to one question type, or "all"
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState(null); // { done, total }
   const [msg, setMsg] = useState("");
+  const [keyStats, setKeyStats] = useState(null); // live per-key activity this run
+  const jobRef = useRef(null);      // current background job id (for Cancel)
+  const cancelRef = useRef(false);  // set true when the user cancels → stops polling
 
   useEffect(() => {
     if (!open) return;
@@ -35,6 +51,7 @@ export default function RegenerateAllModal({ open, target, title, onClose, onDon
     setProgress(null);
     setBusy(false);
     setNotes("");
+    setQType("all");
   }, [open]);
 
   useEffect(() => {
@@ -47,31 +64,49 @@ export default function RegenerateAllModal({ open, target, title, onClose, onDon
 
   if (!open) return null;
 
+  const cancel = async () => {
+    cancelRef.current = true;
+    setMsg("Cancelling…");
+    try { if (jobRef.current) await aiService.cancelJob(jobRef.current); } catch { /* ignore */ }
+  };
+
   const run = async () => {
     setBusy(true);
     setMsg("Starting…");
     setProgress(null);
+    setKeyStats(null);
+    cancelRef.current = false;
     try {
       const { jobId, requested } = await aiService.regenerateAll({
         ...target,
         model: model || undefined,
         notes: notes.trim() || undefined,
         mode: isClient ? srcMode : undefined,
+        type: qType !== "all" ? qType : undefined,
       });
       if (!jobId) throw new Error("Could not start.");
+      jobRef.current = jobId;
       setProgress({ done: 0, total: requested });
       const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
       let done = false;
+      let lastCount = 0;
       for (let i = 0; i < 400 && !done; i++) {
         await sleep(2000);
+        if (cancelRef.current) {
+          setMsg(`✓ Cancelled — kept the ${lastCount} question(s) already regenerated.`);
+          onDone?.();
+          break;
+        }
         let s;
         try { s = await aiService.job(jobId); } catch { continue; }
+        if (s.keyStats && Object.keys(s.keyStats).length) setKeyStats(s.keyStats);
         const total = s.requested || requested;
+        lastCount = s.count ?? lastCount;
         if (s.status === "done") {
           const doneCount = s.updatedCount ?? s.count ?? total;
           setProgress({ done: doneCount, total });
           const note = s.error === "quota"
-            ? " — stopped early (AI quota reached). Click again to finish the rest."
+            ? " — the AI kept hitting its rate/quota limit even after waiting (often a DAILY free-tier limit). Add another API key or try later, then click “Regenerate all questions” to resume."
             : s.error === "partial" || doneCount < total
             ? ` — ${total - doneCount} couldn't be regenerated. Click “Regenerate all” again to finish them.`
             : "";
@@ -83,13 +118,17 @@ export default function RegenerateAllModal({ open, target, title, onClose, onDon
           done = true;
         } else {
           setProgress({ done: s.count || 0, total });
-          setMsg(`Regenerating… ${s.count || 0} of ${total}`);
+          const waitLeft = s.waitUntil ? Math.ceil((s.waitUntil - Date.now()) / 1000) : 0;
+          setMsg(waitLeft > 0
+            ? `⏳ AI rate limit reached at ${s.count || 0} of ${total} — auto-continuing in ${waitLeft}s…`
+            : `Regenerating… ${s.count || 0} of ${total}`);
         }
       }
       if (!done) setMsg("Still working — this is taking longer than expected. It keeps running in the background; reopen later.");
     } catch (e) {
       setMsg(e.message || "Failed.");
     } finally {
+      jobRef.current = null;
       setBusy(false);
     }
   };
@@ -97,8 +136,8 @@ export default function RegenerateAllModal({ open, target, title, onClose, onDon
   const pct = progress && progress.total ? Math.min(100, Math.round((progress.done / progress.total) * 100)) : 0;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/50 p-4" onClick={busy ? undefined : onClose}>
-      <div onClick={(e) => e.stopPropagation()} className="my-8 w-full max-w-lg animate-scale-in card p-6">
+    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/50 p-0 sm:p-4" onClick={busy ? undefined : onClose}>
+      <div onClick={(e) => e.stopPropagation()} className="min-h-full w-full max-w-none animate-scale-in card m-0 rounded-none p-4 sm:rounded-2xl sm:p-6">
         <div className="mb-1 flex items-center justify-between">
           <h3 className="flex items-center gap-2 text-lg font-bold"><RefreshCw className="h-5 w-5 text-violet-600" /> Regenerate all questions</h3>
           <button onClick={onClose} disabled={busy}><X className="h-5 w-5" /></button>
@@ -135,6 +174,14 @@ export default function RegenerateAllModal({ open, target, title, onClose, onDon
               The question wording &amp; meaning are kept.
             </div>
 
+            <div className="mb-3">
+              <label className="mb-1 block text-sm font-semibold">Apply to</label>
+              <select className="input" value={qType} onChange={(e) => setQType(e.target.value)} disabled={busy}>
+                {Q_TYPE_OPTIONS.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+              </select>
+              <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">Choose a single question type to regenerate only those (e.g. only Matching or only Pair), or leave on "All question types".</p>
+            </div>
+
             {status?.models && status.models.length > 1 && (
               <div className="mb-3">
                 <label className="mb-1 block text-sm font-semibold">AI model</label>
@@ -169,6 +216,11 @@ export default function RegenerateAllModal({ open, target, title, onClose, onDon
             <button type="button" onClick={run} disabled={busy} className="btn-primary mt-4 w-full">
               {busy ? <><Loader2 className="h-4 w-4 animate-spin" /> Regenerating…</> : <><RefreshCw className="h-4 w-4" /> Regenerate all questions</>}
             </button>
+            {busy && (
+              <button type="button" onClick={cancel} className="btn-outline mt-2 w-full text-rose-600">
+                <X className="h-4 w-4" /> Cancel (keep what's done)
+              </button>
+            )}
           </>
         )}
 
@@ -176,6 +228,28 @@ export default function RegenerateAllModal({ open, target, title, onClose, onDon
           <p className="mt-3 inline-flex items-center gap-1 text-sm font-medium">
             {msg.startsWith("✓") && <CheckCircle2 className="h-4 w-4 text-emerald-600" />} {msg}
           </p>
+        )}
+
+        {/* Live per-key activity — see every key working at once, in real time. */}
+        {keyStats && Object.keys(keyStats).length > 0 && (
+          <div className="mt-3 rounded-xl border border-slate-200 p-3 dark:border-slate-700">
+            <p className="mb-2 text-xs font-semibold text-slate-500 dark:text-slate-400">
+              Keys working this run ({Object.keys(keyStats).length}) · {Object.values(keyStats).reduce((a, s) => a + (s.requests || 0), 0)} requests · {Object.values(keyStats).reduce((a, s) => a + (s.questions || 0), 0)} done
+            </p>
+            <div className="max-h-40 space-y-1 overflow-y-auto">
+              {Object.entries(keyStats).sort((a, b) => (b[1].requests || 0) - (a[1].requests || 0)).map(([label, s]) => (
+                <div key={label} className="flex items-center justify-between gap-2 text-xs">
+                  <span className="truncate font-medium text-slate-700 dark:text-slate-200">{label}</span>
+                  <span className="flex flex-shrink-0 items-center gap-2 whitespace-nowrap">
+                    <span className="text-slate-500 dark:text-slate-400">{s.requests || 0} req</span>
+                    <span className="font-semibold text-emerald-600 dark:text-emerald-400">{s.questions || 0} done</span>
+                    {s.limited > 0 && <span className="text-amber-600 dark:text-amber-400">{s.limited} limited</span>}
+                    {s.error > 0 && <span className="text-rose-600 dark:text-rose-400">{s.error} err</span>}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
         )}
 
         <div className="mt-6 flex justify-end">

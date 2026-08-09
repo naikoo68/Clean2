@@ -6,25 +6,113 @@ import Question from "../models/Question.js";
 import Subject from "../models/Subject.js";
 import Topic from "../models/Topic.js";
 import Stream from "../models/Stream.js";
+import PracticeStream from "../models/PracticeStream.js";
+import PracticeSubject from "../models/PracticeSubject.js";
+import PracticeTopic from "../models/PracticeTopic.js";
 
 // GET /api/stats — public, live counts for the Home/About statistics section.
 // Recomputed on every request, so it updates the moment a user registers or
 // content is added. Any of these keys can be bound to a stat row in admin.
 export async function publicStats(req, res) {
-  const [students, users, quizzes, tests, questions, subjects, topics, streams, attempts] = await Promise.all([
+  // The client-combined totals must match the admin Clients page, which counts
+  // content OWNED by (active, non-deleted) client accounts — not all practice
+  // content (admin-created practice content is ownerless and must be excluded).
+  const clientDocs = await User.find({ role: "client", deleted: { $ne: true } }).select("_id").lean();
+  const clientIds = clientDocs.map((u) => u._id);
+
+  const [
+    students, users,
+    contentQuizzes, practiceQuizzes,
+    contentTests, practiceTests,
+    questions,
+    contentSubjects, practiceSubjects,
+    contentTopics, practiceTopics,
+    contentStreams, practiceStreams,
+    attempts,
+    clientQuizzes, clientTests, clientQuestions,
+  ] = await Promise.all([
     User.countDocuments({ role: "student" }),
     User.countDocuments(),
+    // Quizzes = platform content quizzes (Quiz) + all "My Practice" quizzes.
     Quiz.countDocuments(),
-    TestSeries.countDocuments(),
+    TestSeries.countDocuments({ practice: true, practiceKind: "quiz" }),
+    // Test series = platform test series + all "My Practice" tests.
+    TestSeries.countDocuments({ practice: { $ne: true } }),
+    TestSeries.countDocuments({ practice: true, practiceKind: "test" }),
+    // Questions = everything (admin content + all client content).
     Question.countDocuments(),
+    // Subjects / topics / streams = platform + "My Practice" equivalents.
     Subject.countDocuments(),
+    PracticeSubject.countDocuments(),
     Topic.countDocuments(),
+    PracticeTopic.countDocuments(),
     Stream.countDocuments(),
+    PracticeStream.countDocuments(),
     Attempt.countDocuments(),
+    // The separate "all clients combined" block — client-owned only (admin).
+    TestSeries.countDocuments({ owner: { $in: clientIds }, practiceKind: "quiz" }),
+    TestSeries.countDocuments({ owner: { $in: clientIds }, practiceKind: "test" }),
+    Question.countDocuments({ owner: { $in: clientIds } }),
   ]);
+  // Platform-wide GRAND TOTALS = admin content + all "My Practice" content, so
+  // every metric in this block counts admin and client data together.
+  const quizzes = contentQuizzes + practiceQuizzes;
+  const tests = contentTests + practiceTests;
+  const subjects = contentSubjects + practiceSubjects;
+  const topics = contentTopics + practiceTopics;
+  const streams = contentStreams + practiceStreams;
+  const clients = clientIds.length;
   // Never cache — always reflect the current counts.
   res.set("Cache-Control", "no-store");
-  res.json({ students, users, quizzes, tests, questions, subjects, topics, streams, attempts });
+  res.json({
+    students, users, clients, quizzes, tests, questions, subjects, topics, streams, attempts,
+    clientQuizzes, clientTests, clientQuestions,
+  });
+}
+
+// GET /api/admin/content-overview — live, split content counts for the admin
+// dashboard. Two clearly-separated groups so the numbers aren't conflated:
+//   • practice  → the "My Practice" side (PracticeStream/Subject/Topic +
+//                 TestSeries with practice=true, by kind), and its questions.
+//   • content   → the platform "Content & Test Series" side (Stream/Subject/
+//                 Topic/Quiz + regular TestSeries with practice!=true).
+export async function adminContentOverview(req, res) {
+  // Ids of every practice item, to attribute questions to practice vs content.
+  const practiceItems = await TestSeries.find({ practice: true }).select("_id").lean();
+  const practiceIds = practiceItems.map((i) => i._id);
+
+  const [
+    pStreams, pSubjects, pTopics, pQuizzes, pTests, pPapers, pQuestions,
+    cStreams, cSubjects, cTopics, cQuizzes, cTests, totalQuestions,
+  ] = await Promise.all([
+    PracticeStream.countDocuments(),
+    PracticeSubject.countDocuments(),
+    PracticeTopic.countDocuments(),
+    TestSeries.countDocuments({ practice: true, practiceKind: "quiz" }),
+    TestSeries.countDocuments({ practice: true, practiceKind: "test" }),
+    TestSeries.countDocuments({ practice: true, practiceKind: "paper" }),
+    Question.countDocuments({ testSeries: { $in: practiceIds } }),
+    Stream.countDocuments(),
+    Subject.countDocuments(),
+    Topic.countDocuments(),
+    Quiz.countDocuments(),
+    TestSeries.countDocuments({ practice: { $ne: true } }),
+    Question.countDocuments(),
+  ]);
+
+  res.set("Cache-Control", "no-store");
+  res.json({
+    practice: {
+      streams: pStreams, subjects: pSubjects, topics: pTopics,
+      quizzes: pQuizzes, tests: pTests, papers: pPapers, questions: pQuestions,
+    },
+    content: {
+      streams: cStreams, subjects: cSubjects, topics: cTopics,
+      quizzes: cQuizzes, tests: cTests,
+      // Content questions = everything not attributed to a practice item.
+      questions: Math.max(0, totalQuestions - pQuestions),
+    },
+  });
 }
 
 const initials = (name = "") =>
@@ -262,4 +350,223 @@ export async function leaderboard(req, res) {
     isCurrentUser: row._id.toString() === currentId,
   }));
   res.json(rows);
+}
+
+
+// GET /api/me/performance  (any logged-in user — client or student)
+// A personal, real-time performance view scoped to req.user._id:
+//   • every attempted quiz AND test, grouped by item, with the full per-attempt
+//     history (score, %, correct/incorrect, time, timestamp) — a quiz/test can
+//     be attempted many times, so each submission is its own row;
+//   • weak areas derived from the questions the user got WRONG, aggregated by
+//     subject (Question.section) and topic (Question.topic).
+// Client "My Quiz" / "My Test" practice items are stored as Attempt{type:"test"}
+// with a TestSeries ref, so we read the quiz-vs-test kind from the test series'
+// practiceKind. Attempts are scoped by `user` (Attempt has no owner field).
+export async function myPerformance(req, res) {
+  const list = await Attempt.find({ user: req.user._id })
+    .sort("-createdAt")
+    .limit(2000) // generous cap so a huge history can't blow up the response
+    // Pull the location so each item can show its Stream › Subject › Topic path.
+    // Client practice items (TestSeries) carry practiceStream/Subject/Topic;
+    // platform quizzes derive Subject from the quiz and Topic from its session.
+    .populate({
+      path: "testSeries",
+      select: "name practiceKind practice practiceStream practiceSubject practiceTopic",
+      populate: [
+        { path: "practiceStream", select: "name" },
+        { path: "practiceSubject", select: "name" },
+        { path: "practiceTopic", select: "name" },
+      ],
+    })
+    .populate({
+      path: "quiz",
+      select: "title subject session",
+      populate: [
+        { path: "subject", select: "name" },
+        { path: "session", select: "title topic", populate: { path: "topic", select: "name" } },
+      ],
+    })
+    .lean();
+
+  // Group attempts by the item they belong to (newest attempt first, because the
+  // list is already sorted -createdAt, so the first time we meet an item is its
+  // most recent attempt → items end up ordered by most-recent activity).
+  const itemsMap = new Map();
+  for (const a of list) {
+    const ts = a.testSeries;
+    const isTest = a.type === "test";
+    // Kind: platform quiz → "quiz"; client practice → the test series' practiceKind.
+    const kind = isTest ? (ts?.practiceKind === "test" ? "test" : "quiz") : "quiz";
+    const itemId = String(ts?._id || a.quiz?._id || a._id);
+    const title = isTest ? ts?.name || "Untitled test" : a.quiz?.title || "Untitled quiz";
+    // Where the item lives, so the UI can show the full Stream › Subject › Topic.
+    const location = isTest
+      ? { stream: ts?.practiceStream?.name || null, subject: ts?.practiceSubject?.name || null, topic: ts?.practiceTopic?.name || null }
+      : { stream: null, subject: a.quiz?.subject?.name || null, topic: a.quiz?.session?.topic?.name || null };
+    if (!itemsMap.has(itemId)) itemsMap.set(itemId, { id: itemId, title, kind, location, attempts: [] });
+    itemsMap.get(itemId).attempts.push({
+      _id: a._id,
+      score: a.score,
+      percentage: a.percentage,
+      correct: a.correct,
+      incorrect: a.incorrect,
+      attempted: a.attempted,
+      total: a.total,
+      timeTaken: a.timeTaken,
+      createdAt: a.createdAt,
+    });
+  }
+  const items = [...itemsMap.values()].map((it) => {
+    const best = it.attempts.reduce((m, x) => Math.max(m, x.percentage || 0), 0);
+    const latest = it.attempts[0]; // attempts are newest-first
+    return {
+      ...it,
+      count: it.attempts.length,
+      best,
+      lastAt: latest?.createdAt || null,
+      lastPct: latest?.percentage ?? null,
+    };
+  });
+
+  // ---- Weak areas: tally attempted vs wrong PER QUESTION, then join each
+  // question to its subject (section) / topic so we can group and rank areas by
+  // accuracy. Only answered questions (chosen != null) count toward accuracy.
+  const perQ = new Map(); // questionId -> { attempted, wrong }
+  for (const a of list) {
+    for (const r of a.responses || []) {
+      if (!r?.question || r.chosen == null) continue;
+      const id = String(r.question);
+      const e = perQ.get(id) || { attempted: 0, wrong: 0 };
+      e.attempted += 1;
+      if (r.isCorrect === false) e.wrong += 1;
+      perQ.set(id, e);
+    }
+  }
+  const qIds = [...perQ.keys()];
+  const qDocs = qIds.length
+    ? await Question.find({ _id: { $in: qIds } }).select("section topic subject").populate("subject", "name").lean()
+    : [];
+
+  const subjAgg = new Map(); // subject name -> { name, attempted, wrong }
+  const topicAgg = new Map(); // "subject › topic" -> { name, subject, attempted, wrong }
+  for (const q of qDocs) {
+    const e = perQ.get(String(q._id));
+    if (!e) continue;
+    const subjName = (q.section && q.section.trim()) || q.subject?.name || "General";
+    const topicName = (q.topic && String(q.topic).trim()) || "";
+    const sa = subjAgg.get(subjName) || { name: subjName, attempted: 0, wrong: 0 };
+    sa.attempted += e.attempted;
+    sa.wrong += e.wrong;
+    subjAgg.set(subjName, sa);
+    if (topicName) {
+      const key = `${subjName} › ${topicName}`;
+      const ta = topicAgg.get(key) || { name: topicName, subject: subjName, attempted: 0, wrong: 0 };
+      ta.attempted += e.attempted;
+      ta.wrong += e.wrong;
+      topicAgg.set(key, ta);
+    }
+  }
+  // Rank weakest first: lowest accuracy, then most wrong answers.
+  const toAreas = (m) =>
+    [...m.values()]
+      .map((x) => ({ ...x, accuracy: x.attempted ? Math.round(((x.attempted - x.wrong) / x.attempted) * 100) : 0 }))
+      .sort((a, b) => a.accuracy - b.accuracy || b.wrong - a.wrong);
+  const subjects = toAreas(subjAgg);
+  const topics = toAreas(topicAgg);
+  const weakSubjects = subjects.filter((s) => s.wrong > 0 && s.accuracy < 70);
+  const weakTopics = topics.filter((t) => t.wrong > 0 && t.accuracy < 70);
+
+  // ---- Overall summary
+  const totalAttempts = list.length;
+  const quizzesTaken = items.filter((i) => i.kind === "quiz").length;
+  const testsTaken = items.filter((i) => i.kind === "test").length;
+  const avgPct = totalAttempts ? Math.round(list.reduce((s, a) => s + (a.percentage || 0), 0) / totalAttempts) : 0;
+  const totalAnswered = list.reduce((s, a) => s + (a.attempted || 0), 0);
+  const totalCorrect = list.reduce((s, a) => s + (a.correct || 0), 0);
+  const overallAccuracy = totalAnswered ? Math.round((totalCorrect / totalAnswered) * 100) : 0;
+  const best = list.reduce((m, a) => Math.max(m, a.percentage || 0), 0);
+
+  res.json({
+    summary: {
+      totalAttempts,
+      itemsAttempted: items.length,
+      quizzesTaken,
+      testsTaken,
+      avgPct,
+      overallAccuracy,
+      best,
+      totalAnswered,
+      totalCorrect,
+    },
+    items,
+    subjects,
+    topics,
+    weakSubjects,
+    weakTopics,
+  });
+}
+
+
+// GET /api/me/performance/attempt/:attemptId  (owner-scoped)
+// The full question-by-question review of ONE completed attempt: every question
+// with the option the user chose, the correct option, whether it was right, and
+// the explanation — so a client can see exactly which questions they got right
+// and wrong. Scoped by `user` (an Attempt has no owner field).
+export async function myAttemptReview(req, res) {
+  const attempt = await Attempt.findOne({ _id: req.params.attemptId, user: req.user._id })
+    .populate("testSeries", "name practiceKind")
+    .populate("quiz", "title")
+    .lean();
+  if (!attempt) return res.status(404).json({ message: "Attempt not found." });
+
+  // Load the questions referenced by this attempt's responses, then join each
+  // stored { chosen, isCorrect } with its question to build a review row that
+  // mirrors the post-submit review shape (so the same renderer works).
+  const ids = (attempt.responses || []).map((r) => r.question).filter(Boolean);
+  const qDocs = ids.length
+    ? await Question.find({ _id: { $in: ids } })
+        .select("type text image options correct columnA columnB tableRows assertion reason graph explanation optionExplanations difficulty section")
+        .lean()
+    : [];
+  const qMap = new Map(qDocs.map((q) => [String(q._id), q]));
+
+  const review = (attempt.responses || []).map((r, i) => {
+    const q = qMap.get(String(r.question)) || {};
+    return {
+      _id: String(r.question || i),
+      type: q.type || "mcq",
+      section: q.section,
+      text: q.text || "(this question is no longer available)",
+      image: q.image,
+      options: q.options || [],
+      columnA: q.columnA || [],
+      columnB: q.columnB || [],
+      tableRows: q.tableRows,
+      assertion: q.assertion,
+      reason: q.reason,
+      graph: q.graph,
+      correct: q.correct,
+      difficulty: q.difficulty,
+      explanation: q.explanation,
+      optionExplanations: q.optionExplanations || [],
+      chosen: r.chosen ?? null, // option index the user picked (null = skipped)
+      isCorrect: !!r.isCorrect,
+    };
+  });
+
+  res.json({
+    _id: String(attempt._id),
+    title: attempt.type === "test" ? attempt.testSeries?.name || "Test" : attempt.quiz?.title || "Quiz",
+    kind: attempt.type === "test" ? (attempt.testSeries?.practiceKind === "test" ? "test" : "quiz") : "quiz",
+    createdAt: attempt.createdAt,
+    score: attempt.score,
+    percentage: attempt.percentage,
+    correct: attempt.correct,
+    incorrect: attempt.incorrect,
+    attempted: attempt.attempted,
+    total: attempt.total,
+    timeTaken: attempt.timeTaken,
+    review,
+  });
 }

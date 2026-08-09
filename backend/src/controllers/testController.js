@@ -5,7 +5,7 @@ import Question from "../models/Question.js";
 import Attempt from "../models/Attempt.js";
 import PublicAttempt from "../models/PublicAttempt.js";
 import User from "../models/User.js";
-import { isTestVisibleToUser, findAccessEntry } from "../utils/accessControl.js";
+import { isTestVisibleToUser, findAccessEntry, isSharedWithUser } from "../utils/accessControl.js";
 import { notifyNewContent } from "../utils/notify.js";
 import { ownerValue, ownerFilter } from "../utils/ownership.js";
 import PracticeStream from "../models/PracticeStream.js";
@@ -149,8 +149,8 @@ export async function getTest(req, res) {
   const isOwner = req.user?.role === "client" && String(test.owner || "") === String(req.user._id);
   // Additive master grant for practice content: myQuizAccess unlocks all My-Quiz
   // items, myTestAccess unlocks all My-Test items.
-  const masterGrant = test.practice === true && (test.practiceKind === "quiz" ? req.user?.myQuizAccess === true : req.user?.myTestAccess === true);
-  if (req.user?.role !== "admin" && !isOwner && !masterGrant && !isTestVisibleToUser(test.toObject(), req.user?._id)) {
+  const masterGrant = test.practice === true && ((test.practiceKind === "quiz" || test.practiceKind === "paper") ? req.user?.myQuizAccess === true : req.user?.myTestAccess === true);
+  if (req.user?.role !== "admin" && !isOwner && !masterGrant && !isTestVisibleToUser(test.toObject(), req.user?._id) && !isSharedWithUser(test, req.user?._id)) {
     return res.status(403).json({ message: "You don't have access to this test, or your access has expired." });
   }
   const obj = test.toObject();
@@ -286,11 +286,18 @@ export function gradeSubmission(test, answers = {}) {
 
   const skipped = total - attempted;
   const incorrect = attempted - correct;
-  const perQuestion = total ? test.marks / total : 0;
-  const score = Math.round(correct * perQuestion - incorrect * (test.negativeMarking || 0));
+  // Marks per question: use the test's configured total marks when set,
+  // otherwise default to 1 mark per question. Practice quizzes leave `marks`
+  // at 0 — previously that made every correct answer worth nothing while
+  // negative marking still applied, producing a negative score out of 0
+  // (e.g. "-1/0"). Defaulting to 1 mark/question makes the score sensible.
+  const perQuestion = test.marks > 0 && total ? test.marks / total : 1;
+  const round2 = (n) => Math.round(n * 100) / 100; // negative marking (e.g. 0.25) yields fractional scores
+  const maxScore = round2(perQuestion * total);
+  const score = round2(correct * perQuestion - incorrect * (test.negativeMarking || 0));
   const percentage = total ? Math.round((correct / total) * 100) : 0;
 
-  return { responses, review, total, attempted, skipped, correct, incorrect, score, percentage };
+  return { responses, review, total, attempted, skipped, correct, incorrect, score, maxScore, percentage };
 }
 
 // POST /api/tests/:id/submit — grade a submitted test attempt (logged-in user)
@@ -311,6 +318,7 @@ export async function submitTest(req, res) {
     correct: g.correct,
     incorrect: g.incorrect,
     score: g.score,
+    maxScore: g.maxScore,
     percentage: g.percentage,
     timeTaken,
   });
@@ -325,7 +333,7 @@ export async function submitTest(req, res) {
     correct: g.correct,
     incorrect: g.incorrect,
     score: g.score,
-    maxScore: test.marks,
+    maxScore: g.maxScore,
     percentage: g.percentage,
     timeTaken,
     review: g.review,
@@ -385,7 +393,7 @@ export async function getPublicTest(req, res) {
   // An exam-style TEST hides the answers (anti-cheat). A shared QUIZ is played
   // reveal-style (the correct option + explanation show after each tap, exactly
   // like a student's My Quiz), so it KEEPS answers/explanations.
-  if (obj.practiceKind !== "quiz") {
+  if (obj.practiceKind !== "quiz" && obj.practiceKind !== "paper") {
     obj.questions = (obj.questions || []).map((q) => {
       const { correct, explanation, optionExplanations, ...rest } = q;
       return rest;
@@ -409,7 +417,7 @@ export async function submitPublicTest(req, res) {
   PublicAttempt.create({
     testSeries: test._id,
     total: g.total, attempted: g.attempted, correct: g.correct, incorrect: g.incorrect,
-    skipped: g.skipped, score: g.score, maxScore: test.marks, percentage: g.percentage,
+    skipped: g.skipped, score: g.score, maxScore: g.maxScore, percentage: g.percentage,
     timeTaken: Number(timeTaken) || 0,
   }).catch(() => {}); // never let tracking break the taker's result
   res.status(201).json({
@@ -419,7 +427,7 @@ export async function submitPublicTest(req, res) {
     correct: g.correct,
     incorrect: g.incorrect,
     score: g.score,
-    maxScore: test.marks,
+    maxScore: g.maxScore,
     percentage: g.percentage,
     timeTaken,
     review: g.review,
@@ -615,7 +623,8 @@ export async function toQuiz(req, res) {
 
   await Question.updateMany(
     { testSeries: item._id },
-    { $set: { quiz: quiz._id, subject: session.subject, session: session._id }, $unset: { testSeries: "" } }
+    { $set: { quiz: quiz._id, subject: session.subject, session: session._id }, $unset: { testSeries: "" } },
+    { timestamps: false } // conversion = association only, don't bump questions' updatedAt
   );
   await TestSeries.findByIdAndDelete(item._id);
   res.json({ message: "Migrated to Quiz", _id: quiz._id });
@@ -645,7 +654,8 @@ export async function quizToMyQuiz(req, res) {
   const qs = await Question.find({ quiz: quiz._id }).select("_id");
   await Question.updateMany(
     { quiz: quiz._id },
-    { $set: { testSeries: item._id }, $unset: { quiz: "", subject: "", session: "" } }
+    { $set: { testSeries: item._id }, $unset: { quiz: "", subject: "", session: "" } },
+    { timestamps: false } // conversion = association only, don't bump questions' updatedAt
   );
   if (qs.length) await TestSeries.findByIdAndUpdate(item._id, { $push: { questions: { $each: qs.map((q) => q._id) } } });
   await Quiz.findByIdAndDelete(quiz._id);

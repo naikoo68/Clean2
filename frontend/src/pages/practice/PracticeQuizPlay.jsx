@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
+  FileText,
   ChevronLeft,
   ChevronRight,
   Bookmark,
@@ -35,7 +36,7 @@ import Watermark from "../../components/ui/Watermark";
 import FeedbackButton from "../../components/ui/FeedbackButton";
 import { useZoom } from "../../context/ZoomContext";
 import { Loading, ErrorState, EmptyState } from "../../components/ui/AsyncState";
-import { questionDateText, searchQuestions } from "../../lib/questions";
+import { questionDateText, searchQuestions, stemText, displayOptions } from "../../lib/questions";
 import { shuffleAll, toOriginalIndex, makeSeed } from "../../lib/shuffleOptions";
 import PaperExport from "../../components/admin/PaperExport";
 
@@ -93,6 +94,7 @@ export default function PracticeQuizPlay() {
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState(null);
+  const [paper, setPaper] = useState({ paperPdfUrl: "", answerKeyPdfUrl: "", answerKeys: [], additionalInfo: "" }); // Previous Papers extras
   const [showReview, setShowReview] = useState(false);
   const [reviewSearch, setReviewSearch] = useState("");
   // Per-attempt option-shuffle seed — persisted so "Continue" keeps the SAME
@@ -132,6 +134,7 @@ export default function PracticeQuizPlay() {
       .then((data) => {
         setQuestions(shuffleAll(data.questions || [], seed)); // reshuffle options
         setTitle(data.name || "Practice Quiz");
+        setPaper({ paperPdfUrl: data.paperPdfUrl || "", answerKeyPdfUrl: data.answerKeyPdfUrl || "", answerKeys: Array.isArray(data.answerKeys) ? data.answerKeys : [], additionalInfo: data.additionalInfo || "" });
       })
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false));
@@ -231,6 +234,35 @@ export default function PracticeQuizPlay() {
   if (!questions.length)
     return <div className="container-page"><EmptyState message="No questions in this quiz yet." /></div>;
 
+  // Effective answer-key list: the new multi-key array if present, else the
+  // legacy single key as one entry.
+  const answerKeyList = (paper.answerKeys && paper.answerKeys.length)
+    ? paper.answerKeys.filter((k) => k && k.url)
+    : (paper.answerKeyPdfUrl ? [{ label: "Answer key", url: paper.answerKeyPdfUrl }] : []);
+
+  // Uploaded Previous-Papers resources (question paper PDF, answer-key PDFs and
+  // additional information). Shown on BOTH the start screen and the results
+  // screen when present; empty/hidden for normal quizzes.
+  const paperResources = (paper.paperPdfUrl || answerKeyList.length || paper.additionalInfo) ? (
+    <div className="mx-auto mt-4 max-w-lg card p-5 text-left">
+      <h2 className="flex items-center gap-2 text-sm font-bold"><FileText className="h-4 w-4 text-brand-600" /> Paper resources</h2>
+      {(paper.paperPdfUrl || answerKeyList.length > 0) && (
+        <div className="mt-3 flex flex-wrap gap-2">
+          {paper.paperPdfUrl && <a href={paper.paperPdfUrl} target="_blank" rel="noreferrer" className="btn-outline text-sm"><FileText className="h-4 w-4" /> View question paper (PDF)</a>}
+          {answerKeyList.map((k, i) => (
+            <a key={i} href={k.url} target="_blank" rel="noreferrer" className="btn-outline text-sm"><FileText className="h-4 w-4" /> View {k.label || "answer key"} (PDF)</a>
+          ))}
+        </div>
+      )}
+      {paper.additionalInfo && (
+        <div className="mt-3 whitespace-pre-line rounded-xl bg-slate-50 p-3 text-sm text-slate-600 dark:bg-slate-800/60 dark:text-slate-300">
+          <p className="mb-1 font-semibold text-slate-700 dark:text-slate-200">Additional information</p>
+          {paper.additionalInfo}
+        </div>
+      )}
+    </div>
+  ) : null;
+
   // ---- Result screen ----
   if (result) {
     const mmss = `${String(Math.floor((result.timeTaken || 0) / 60)).padStart(2, "0")}:${String((result.timeTaken || 0) % 60).padStart(2, "0")}`;
@@ -266,6 +298,9 @@ export default function PracticeQuizPlay() {
             <button onClick={() => setShowReview((v) => !v)} className="btn-accent">
               <Lightbulb className="h-4 w-4" /> {showReview ? "Hide Answers" : "Review Answers"}
             </button>
+            {/* Generated "Paper / Key" (built from the questions) — always
+                shown. For Previous Papers, the admin-uploaded paper/answer keys
+                also appear in the Paper resources panel below. */}
             <PaperExport title={title || "Practice Quiz"} questions={questions} />
             {isPublic ? (
               <button onClick={() => navigate("/")} className="btn-primary">Done</button>
@@ -279,6 +314,9 @@ export default function PracticeQuizPlay() {
             )}
           </div>
         </div>
+
+        {/* Uploaded question paper / answer key / additional info (papers) */}
+        {paperResources}
 
         {/* Answer review */}
         {showReview && (
@@ -334,7 +372,7 @@ export default function PracticeQuizPlay() {
                   </div>
 
                   {q.image && <img src={q.image} alt="" className="mb-3 max-h-56 rounded-xl object-contain" />}
-                  <p className="font-semibold leading-relaxed"><MathText>{q.text}</MathText></p>
+                  <p className="font-semibold leading-relaxed"><MathText>{stemText(q)}</MathText></p>
 
                   {(Array.isArray(q.columnA) && q.columnA.length > 0) || (Array.isArray(q.columnB) && q.columnB.length > 0) ? (
                     <div className="mt-3 grid grid-cols-2 gap-3">
@@ -355,7 +393,7 @@ export default function PracticeQuizPlay() {
                   <AssertionReasonView q={q} />
 
                   <div className="mt-3 space-y-2">
-                    {(q.options || []).map((opt, idx) => {
+                    {displayOptions(q).map((opt, idx) => {
                       const optExp = q.optionExplanations?.[idx];
                       const cls =
                         idx === q.correct
@@ -483,6 +521,8 @@ export default function PracticeQuizPlay() {
             With a timer, each question reveals its answer when time runs out. You can still review and continue.
           </p>
         </div>
+
+        {paperResources}
       </div>
     );
   }
@@ -593,7 +633,7 @@ export default function PracticeQuizPlay() {
           </div>
 
           {q.image && <img src={q.image} alt="" className="mb-4 max-h-64 rounded-xl object-contain" />}
-          <h2 className="text-lg font-semibold leading-relaxed"><MathText>{q.text}</MathText></h2>
+          <h2 className="text-lg font-semibold leading-relaxed"><MathText>{stemText(q)}</MathText></h2>
 
           {isMatching && (
             <div className="mt-4 grid grid-cols-2 gap-4">
@@ -629,7 +669,7 @@ export default function PracticeQuizPlay() {
 
           <div className="mt-5 space-y-3">
             {isMatching && <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Choose the correct matching sequence:</p>}
-            {(q.options || []).map((opt, idx) => {
+            {displayOptions(q).map((opt, idx) => {
               const optExp = q.optionExplanations?.[idx];
               return (
                 <div key={idx}>

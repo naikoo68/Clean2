@@ -77,6 +77,14 @@ export default function ResumeBuilder() {
     setDocId(id); setResume(loadDoc(id) || emptyResume()); setDocs(listDocs());
   };
 
+  // Selecting a template applies its full look — layout + colour + serif/sans
+  // font — so each of the presets is visibly distinct (not just a layout tweak).
+  const applyTemplate = (t) => patch((n) => {
+    n.theme.templateId = t.id;
+    n.theme.accent = t.style.accent;
+    n.theme.font = t.style.serif ? "Georgia" : "Inter";
+  });
+
   // ---- dark / light toggle (this page is outside the app shell) ----------
   const toggleDark = () => setDark((d) => { const nd = !d; document.documentElement.classList.toggle("dark", nd); return nd; });
 
@@ -222,15 +230,16 @@ export default function ResumeBuilder() {
           {tab === "design" && (
             <div className="card space-y-4 p-4">
               <div>
-                <h3 className="mb-2 font-bold">Template</h3>
-                <div className="grid grid-cols-2 gap-2">
+                <h3 className="mb-2 font-bold">Template <span className="font-normal text-slate-400">({TEMPLATES.length})</span></h3>
+                <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
                   {TEMPLATES.map((t) => (
-                    <button key={t.id} onClick={() => setTheme("templateId", t.id)} className={`rounded-lg border p-2 text-left text-sm ${resume.theme.templateId === t.id ? "border-brand-500 ring-2 ring-brand-300" : "border-slate-200 dark:border-slate-700"}`}>
-                      <span className="inline-block h-3 w-3 rounded-full align-middle" style={{ background: t.style.accent }} /> <span className="align-middle">{t.name}</span>
+                    <button key={t.id} onClick={() => applyTemplate(t)} title={t.name} className={`overflow-hidden rounded-lg border text-left ${resume.theme.templateId === t.id ? "border-brand-500 ring-2 ring-brand-300" : "border-slate-200 dark:border-slate-700"}`}>
+                      <TemplateThumb style={t.style} />
+                      <span className="block truncate px-1 py-0.5 text-[11px] font-medium text-slate-600 dark:text-slate-300">{t.name}</span>
                     </button>
                   ))}
                 </div>
-                <p className="mt-1 text-xs text-slate-400">More templates are just presets — easy to add.</p>
+                <p className="mt-1 text-xs text-slate-400">Picking a template sets its colour &amp; font — tweak them below.</p>
               </div>
               <label className="flex items-center justify-between text-sm font-semibold">Accent colour
                 <input type="color" value={resume.theme.accent} onChange={(e) => setTheme("accent", e.target.value)} className="h-8 w-12 rounded border" />
@@ -361,6 +370,44 @@ export default function ResumeBuilder() {
 // structuredClone with a fallback for older browsers (keeps autosave safe).
 function structuredCloneSafe(obj) {
   try { return structuredClone(obj); } catch { return JSON.parse(JSON.stringify(obj)); }
+}
+
+// A tiny schematic preview of a template so the picker is a real visual gallery
+// (reflects the layout, accent colour, header alignment and section-title style).
+function TemplateThumb({ style }) {
+  const ac = style.accent || "#2563eb";
+  const line = (w, c = "#d1d5db", mt = 2) => <div style={{ height: 2, width: w, background: c, marginTop: mt, borderRadius: 1 }} />;
+  const titleBar = () => {
+    if (style.titleStyle === "bar") return <div style={{ display: "flex", alignItems: "center", gap: 2, marginTop: 3 }}><div style={{ width: 2, height: 5, background: ac }} /><div style={{ height: 2, width: "40%", background: ac, borderRadius: 1 }} /></div>;
+    if (style.titleStyle === "underline") return <div style={{ marginTop: 3 }}><div style={{ height: 2, width: "40%", background: ac, borderRadius: 1 }} /><div style={{ height: 1, width: "100%", background: ac, marginTop: 1 }} /></div>;
+    if (style.titleStyle === "caps") return <div style={{ height: 2, width: "50%", background: ac, marginTop: 3, borderRadius: 1 }} />;
+    return <div style={{ height: 2, width: "40%", background: "#9ca3af", marginTop: 3, borderRadius: 1 }} />;
+  };
+  const wrap = { position: "relative", height: 60, background: "#fff", fontSize: 0 };
+  if (style.columns === 2) {
+    const side = (
+      <div style={{ width: "34%", background: `${ac}22`, padding: 4, boxSizing: "border-box" }}>
+        {style.showPhoto ? <div style={{ width: 12, height: 12, borderRadius: "50%", background: ac, margin: "0 auto 3px" }} /> : null}
+        {line("80%", ac)}{line("60%")}{line("70%")}{line("50%")}
+      </div>
+    );
+    const main = (
+      <div style={{ flex: 1, padding: 4, boxSizing: "border-box" }}>
+        <div style={{ height: 3, width: "70%", background: "#111827", borderRadius: 1 }} />
+        <div style={{ height: 2, width: "45%", background: ac, marginTop: 2, borderRadius: 1 }} />
+        {titleBar()}{line("95%")}{line("90%")}{line("80%")}
+      </div>
+    );
+    return <div style={{ ...wrap, display: "flex", flexDirection: style.sidebar === "right" ? "row-reverse" : "row" }}>{side}{main}</div>;
+  }
+  const center = style.headerAlign === "center";
+  return (
+    <div style={{ ...wrap, padding: 5, boxSizing: "border-box" }}>
+      <div style={{ height: 3, width: "60%", background: "#111827", borderRadius: 1, margin: center ? "0 auto" : undefined }} />
+      <div style={{ height: 2, width: "35%", background: ac, marginTop: 2, borderRadius: 1, margin: center ? "2px auto 0" : undefined }} />
+      {titleBar()}{line("95%")}{line("88%")}{line("92%")}{line("70%")}
+    </div>
+  );
 }
 
 // Module-scope input atom. MUST live outside the page component: if it were

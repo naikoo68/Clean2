@@ -4,8 +4,9 @@ import {
   listSubjects, createSubject, updateSubject, deleteSubject,
   listTopics, createTopic, updateTopic, deleteTopic, moveTopic, listTopicItems,
   listItems, createItem,
-  browseStreams, browseSubjects, browseTopics, browseItems, browseTopicItems,
-  playQuiz, allSubjects, myItems, moveItem, updateItem, splitItem, splitTopic, mergeItem, moveQuestions,
+  browseStreams, browseSubjects, browseTopics, browseItems, browseTopicItems, browseStreamItems,
+  playQuiz, allSubjects, myItems, moveItem, updateItem, splitItem, splitTopic, mergeItem, moveQuestions, shareContent,
+  incomingShares, acceptShare, acceptShareJob, declineShare, sharePlacement, removeSharedWithMe,
 } from "../controllers/practiceController.js";
 import { protect, authorize, optionalAuth } from "../middleware/auth.js";
 
@@ -17,6 +18,7 @@ const admin = [protect, authorize("admin", "client")];
 // Student browse (visibility-filtered). Attempting an item reuses /tests/:id.
 router.get("/browse/:kind/streams", optionalAuth, browseStreams);
 router.get("/browse/:kind/streams/:streamId/subjects", optionalAuth, browseSubjects);
+router.get("/browse/:kind/streams/:streamId/items", optionalAuth, browseStreamItems); // Previous Papers: papers directly under a stream
 router.get("/browse/:kind/subjects/:subjectId/topics", optionalAuth, browseTopics); // My Quiz
 router.get("/browse/:kind/subjects/:subjectId/items", optionalAuth, browseItems); // My Test Series
 router.get("/browse/:kind/topics/:topicId/items", optionalAuth, browseTopicItems); // My Quiz
@@ -26,6 +28,20 @@ router.get("/quiz/:id/play", protect, playQuiz);
 
 // The caller's own practice items (client dashboard).
 router.get("/my-items", ...admin, myItems);
+
+// Share practice content (stream/subject/topic/quiz/test) with another
+// REGISTERED user by email (account-to-account). Creates a PENDING share the
+// recipient must accept.
+router.post("/share", ...admin, shareContent);
+// Recipient's incoming shares + accept (duplicate into their account) / decline.
+router.get("/shares/incoming", ...admin, incomingShares);
+router.get("/shares/job/:id", ...admin, acceptShareJob); // poll accept progress (declared before "/shares/:id/...")
+router.get("/shares/:id/placement", ...admin, sharePlacement); // where-to-save options for the accept dialog
+router.post("/shares/:id/accept", ...admin, acceptShare); // starts a background copy job, returns { jobId }
+router.post("/shares/:id/decline", ...admin, declineShare);
+// Remove content that was shared WITH me (reference/view access) from my
+// dashboard — un-shares it from my account without touching the owner's copy.
+router.post("/shared/remove", ...admin, removeSharedWithMe);
 
 // Admin — streams
 router.get("/streams", ...admin, listStreams);

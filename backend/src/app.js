@@ -55,6 +55,7 @@ import paymentRoutes from "./routes/paymentRoutes.js";
 import subscriptionRoutes from "./routes/subscriptionRoutes.js";
 import cbtRoutes from "./routes/cbtRoutes.js";
 import facebookRoutes from "./routes/facebookRoutes.js";
+import userManualRoutes from "./routes/userManualRoutes.js";
 import { releaseEndedCbtExams } from "./controllers/cbtController.js";
 import { runDueFbSchedules } from "./config/facebook.js";
 import { notFound, errorHandler } from "./middleware/error.js";
@@ -146,6 +147,7 @@ app.use("/api/payments", paymentRoutes); // Razorpay: create orders + config for
 app.use("/api/subscriptions", subscriptionRoutes); // client self-serve upgrade/renew (works when expired)
 app.use("/api/cbt", cbtRoutes); // CBT online exams (public name+email sign-in, emailed results, admin rankings)
 app.use("/api/facebook", facebookRoutes); // scheduled Facebook question auto-posting (admin)
+app.use("/api/manual", userManualRoutes); // editable User Manual (public read, admin write)
 
 // Errors
 app.use(notFound);

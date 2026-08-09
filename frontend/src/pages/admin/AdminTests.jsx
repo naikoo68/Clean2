@@ -14,11 +14,14 @@ import DuplicatesModal from "../../components/admin/DuplicatesModal";
 import { Files } from "lucide-react";
 import QuestionFormModal from "../../components/admin/QuestionFormModal";
 import QuestionView from "../../components/admin/QuestionView";
+import QuestionTypeFilter from "../../components/admin/QuestionTypeFilter";
+import { questionTypeKey } from "../../lib/questions";
 import ManageTestQuestions from "../../components/admin/ManageTestQuestions";
 import ShareTestModal from "../../components/admin/ShareTestModal";
 import ExtendExplanationsModal from "../../components/admin/ExtendExplanationsModal";
 import ExtendOneQuestionModal from "../../components/admin/ExtendOneQuestionModal";
 import RegenerateAllModal from "../../components/admin/RegenerateAllModal";
+import RegenerateOneModal from "../../components/admin/RegenerateOneModal";
 import ScheduleQuestionModal from "../../components/admin/ScheduleQuestionModal";
 
 const blank = { name: "", category: "Full-Length", marks: 100, duration: 60, schedule: "", status: "draft", difficulty: "Medium" };
@@ -67,7 +70,8 @@ export default function AdminTests() {
   const [extendTest, setExtendTest] = useState(null); // AI extend-explanations target
   const [extendingQId, setExtendingQId] = useState(null); // per-question extend in progress
   const [extendOneItem, setExtendOneItem] = useState(null); // per-question extend confirm modal target
-  const [regenId, setRegenId] = useState(null); // per-question regenerate in progress
+  const [regenId] = useState(null); // legacy inline spinner id — regenerate now runs in RegenerateOneModal
+  const [regenOneItem, setRegenOneItem] = useState(null); // per-question regenerate dialog target
   const [regenAllTest, setRegenAllTest] = useState(null); // bulk "regenerate all" modal target
   const [scheduleQ, setScheduleQ] = useState(null); // question to post/schedule to Facebook
 
@@ -83,6 +87,7 @@ export default function AdminTests() {
   const [viewQ, setViewQ] = useState(null); // single question preview
   const [viewAllQ, setViewAllQ] = useState(false); // all questions preview
   const [studentView, setStudentView] = useState(true); // View All: defaults to student view (answers hidden)
+  const [typeFilter, setTypeFilter] = useState([]); // View All: which question types to show ([] = all)
 
 
   const openQuestions = async (t) => {
@@ -103,29 +108,28 @@ export default function AdminTests() {
     try { setTq(await testService.getQuestions(qTest._id)); } catch { /* ignore */ }
   };
   // Run the per-question extend once confirmed in the modal.
-  const runExtendOne = async (fixOptions) => {
+  const runExtendOne = async ({ fixOptions, extendQuestion, shuffleOptions } = {}) => {
     const item = extendOneItem;
     if (!item) return;
     setExtendingQId(item._id);
     try {
-      const updated = await aiService.extendOne({ questionId: item._id, fixOptions });
+      const updated = await aiService.extendOne({ questionId: item._id, fixOptions, extendQuestion, shuffleOptions });
       setViewQ((prev) => (prev && prev._id === item._id ? { ...prev, ...updated } : prev));
       setExtendOneItem(null);
       await reloadTq();
     } catch (e) { setError(e.message); setExtendOneItem(null); }
     finally { setExtendingQId(null); }
   };
-  // Regenerate ONE question's options/answer to fit its stem, then reload
-  // (and update the open preview modal in place if it's the same question).
-  const regenerateQ = async (item) => {
-    setRegenId(item._id);
-    try {
-      const updated = await aiService.regenerate({ questionId: item._id });
-      setViewQ((prev) => (prev && prev._id === item._id ? { ...prev, ...updated } : prev));
-      await reloadTq();
-    }
-    catch (e) { setError(e.message); }
-    finally { setRegenId(null); }
+  // Regenerate ONE question: open the dialog (rebuild toggles + AI source/model);
+  // the modal runs the request itself and hands back the updated fields.
+  const regenerateQ = (item) => setRegenOneItem(item);
+
+  // Apply a single-question regenerate result to the open preview + reload.
+  const applyRegenerated = async (updated) => {
+    const item = regenOneItem;
+    if (item) setViewQ((prev) => (prev && prev._id === item._id ? { ...prev, ...updated } : prev));
+    setRegenOneItem(null);
+    await reloadTq();
   };
 
   // Copy a test's questions as CSV text to the clipboard.
@@ -724,6 +728,13 @@ export default function AdminTests() {
         onConfirm={runExtendOne}
       />
 
+      <RegenerateOneModal
+        open={!!regenOneItem}
+        question={regenOneItem}
+        onClose={() => setRegenOneItem(null)}
+        onDone={applyRegenerated}
+      />
+
       <RegenerateAllModal
         open={!!regenAllTest}
         target={{ testSeries: regenAllTest?._id }}
@@ -828,13 +839,17 @@ export default function AdminTests() {
               onAddQuestion={(subject) => setTqModal({ mode: "add", data: null, forceSection: subject })}
               onEditQuestion={(item) => setTqModal({ mode: "edit", data: item })}
               onDeleteQuestion={removeTq}
-              onDeleteSelected={async (ids) => {
-                for (const id of ids) await testService.deleteQuestion(qTest._id, id);
+              onDeleteSelected={async (ids, onProgress) => {
+                let done = 0;
+                for (const id of ids) {
+                  await testService.deleteQuestion(qTest._id, id);
+                  onProgress?.(++done); // real-time progress in the modal
+                }
                 await reloadTq();
                 load();
               }}
               onViewQuestion={setViewQ}
-              onViewAll={() => setViewAllQ(true)}
+              onViewAll={() => { setTypeFilter([]); setViewAllQ(true); }}
               onDuplicates={() => setDupTest(qTest)}
               onCopyCsv={copyCsv}
               onDownloadCsv={(qs) => downloadCsv(qs, qTest?.name || "test")}
@@ -883,8 +898,8 @@ export default function AdminTests() {
 
       {/* View all test questions */}
       {viewAllQ && (
-        <div className="fixed inset-0 z-[60] flex items-start justify-center overflow-y-auto bg-black/50 p-4" onClick={() => setViewAllQ(false)}>
-          <div onClick={(e) => e.stopPropagation()} className="my-8 w-full max-w-3xl animate-scale-in card p-6">
+        <div className="fixed inset-0 z-[60] flex items-start justify-center overflow-y-auto bg-black/50 p-0 sm:p-4" onClick={() => setViewAllQ(false)}>
+          <div onClick={(e) => e.stopPropagation()} className="min-h-full w-full max-w-none animate-scale-in card m-0 rounded-none p-4 sm:rounded-2xl sm:p-6">
             <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
               <h3 className="text-lg font-bold">All questions{qTest ? ` — ${qTest.name}` : ""} ({tq.length})</h3>
               <div className="flex items-center gap-2">
@@ -900,8 +915,12 @@ export default function AdminTests() {
                 Student view — answers &amp; explanations are hidden. Use “Reveal answer” on any question to expose it.
               </p>
             )}
+            <QuestionTypeFilter questions={tq} selected={typeFilter} onChange={setTypeFilter} />
             <div className="max-h-[70vh] space-y-4 overflow-y-auto pr-1">
-              {tq.map((it, i) => (
+              {tq
+                .map((it, i) => ({ it, i }))
+                .filter(({ it }) => !typeFilter.length || typeFilter.includes(questionTypeKey(it)))
+                .map(({ it, i }) => (
                 <div key={(studentView ? "s" : "a") + it._id} className="relative rounded-lg border border-slate-200 p-3 dark:border-slate-700">
                   <div className="absolute right-2 top-2 z-10 flex gap-1">
                     {!studentView && (
