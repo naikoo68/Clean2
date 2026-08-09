@@ -11,7 +11,7 @@ import SubjectPlanEditor from "../../components/admin/SubjectPlanEditor";
 import PickFromBank from "../../components/admin/PickFromBank";
 import WeightageFill from "../../components/admin/WeightageFill";
 import DuplicatesModal from "../../components/admin/DuplicatesModal";
-import { Files } from "lucide-react";
+import { Files, Maximize2, Minimize2 } from "lucide-react";
 import QuestionFormModal from "../../components/admin/QuestionFormModal";
 import QuestionView from "../../components/admin/QuestionView";
 import QuestionTypeFilter from "../../components/admin/QuestionTypeFilter";
@@ -85,6 +85,7 @@ export default function AdminTests() {
   const [tqModal, setTqModal] = useState(null); // { mode, data, forceSection }
   const [tqSaving, setTqSaving] = useState(false);
   const [viewQ, setViewQ] = useState(null); // single question preview
+  const [viewFull, setViewFull] = useState(true); // single-question viewer opens full-screen (toggle to shrink)
   const [viewAllQ, setViewAllQ] = useState(false); // all questions preview
   const [studentView, setStudentView] = useState(true); // View All: defaults to student view (answers hidden)
   const [reopenAfterEdit, setReopenAfterEdit] = useState(null); // question _id to reopen in the preview after editing it there
@@ -891,13 +892,20 @@ export default function AdminTests() {
 
       {/* View single test question */}
       {viewQ && (
-        <div className="fixed inset-0 z-[60] flex items-start justify-center overflow-y-auto bg-black/50 p-4" onClick={() => setViewQ(null)}>
-          <div onClick={(e) => e.stopPropagation()} className="my-8 w-full max-w-2xl animate-scale-in card p-6">
+        <div className={`fixed inset-0 z-[60] flex justify-center overflow-y-auto bg-black/50 ${viewFull ? "items-stretch p-0 sm:p-4" : "items-start p-4"}`} onClick={() => setViewQ(null)}>
+          <div onClick={(e) => e.stopPropagation()} className={`card flex flex-col animate-scale-in ${viewFull ? "m-0 min-h-full w-full max-w-none rounded-none p-4 sm:min-h-0 sm:h-full sm:rounded-2xl sm:p-6" : "my-8 w-full max-w-2xl p-6"}`}>
             <div className="mb-4 flex items-center justify-between">
               <h3 className="text-lg font-bold">Question</h3>
-              <button onClick={() => setViewQ(null)}><X className="h-5 w-5" /></button>
+              <div className="flex items-center gap-1">
+                <button onClick={() => setViewFull((v) => !v)} title={viewFull ? "Exit full screen" : "Full screen"} className="rounded-lg p-1.5 text-slate-500 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800">
+                  {viewFull ? <Minimize2 className="h-5 w-5" /> : <Maximize2 className="h-5 w-5" />}
+                </button>
+                <button onClick={() => setViewQ(null)}><X className="h-5 w-5" /></button>
+              </div>
             </div>
+            <div className={viewFull ? "min-h-0 flex-1 overflow-y-auto" : ""}>
             <QuestionView q={viewQ} {...(() => { const L = tq; const i = L.findIndex((x) => x._id === viewQ._id); return { position: i >= 0 ? `${i + 1} / ${L.length}` : undefined, onPrev: i > 0 ? () => setViewQ(L[i - 1]) : undefined, onNext: i >= 0 && i < L.length - 1 ? () => setViewQ(L[i + 1]) : undefined }; })()} onRegenerate={() => regenerateQ(viewQ)} regenerating={regenId === viewQ._id} onExtend={() => setExtendOneItem(viewQ)} extending={extendingQId === viewQ._id} onSchedule={() => setScheduleQ(viewQ)} onEdit={() => { const q = viewQ; setReopenAfterEdit(q._id); setViewQ(null); setTqModal({ mode: "edit", data: q }); }} />
+            </div>
             <div className="mt-5 flex justify-end gap-2">
               <button onClick={async () => { if (!window.confirm("Delete this question from the test?")) return; await testService.deleteQuestion(qTest._id, viewQ._id); setViewQ(null); await reloadTq(); load(); }} className="btn-outline mr-auto text-rose-600"><Trash2 className="h-4 w-4" /> Delete</button>
               <button onClick={() => setViewQ(null)} className="btn-primary">Close</button>
