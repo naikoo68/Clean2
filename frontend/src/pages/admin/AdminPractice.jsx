@@ -1229,10 +1229,13 @@ export default function AdminPractice({ clientMode = false, fixedKind = "" }) {
             {/* Tick questions (Admin view) and move them into another quiz in this topic. */}
             {!studentView && tq.length > 0 && (() => {
               const siblings = (items || []).filter((it) => it._id !== qItem._id);
-              const allSel = selQ.size > 0 && tq.every((it) => selQ.has(it._id));
+              // "Select all" respects the active TYPE filter: it selects every
+              // VISIBLE (filtered) question at once, so you can grab a whole type.
+              const visible = tq.filter((it) => !typeFilter.length || typeFilter.includes(questionTypeKey(it)));
+              const allSel = visible.length > 0 && visible.every((it) => selQ.has(it._id));
               return (
                 <div className="mb-3 flex flex-wrap items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 p-2 text-xs dark:border-slate-700 dark:bg-slate-800/60">
-                  <button type="button" onClick={() => setSelQ(allSel ? new Set() : new Set(tq.map((it) => it._id)))} className="font-semibold text-brand-600 hover:underline dark:text-brand-300">{allSel ? "Clear all" : "Select all"}</button>
+                  <button type="button" onClick={() => setSelQ(allSel ? new Set() : new Set(visible.map((it) => it._id)))} className="font-semibold text-brand-600 hover:underline dark:text-brand-300">{allSel ? "Clear all" : `Select all${typeFilter.length ? ` (${visible.length})` : ""}`}</button>
                   <span className="text-slate-500 dark:text-slate-400">{selQ.size} selected</span>
                   <span className="ml-auto flex items-center gap-2">
                     {siblings.length ? (
