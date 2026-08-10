@@ -25,7 +25,7 @@ const MAX_TOTAL = 500;
 // Reusable "Generate with AI" modal. Mirrors BulkUploadQuestions:
 // `onUpload(questions)` should return a promise (e.g. { inserted }). The AI
 // only PREVIEWS questions here — nothing is saved until the admin clicks Insert.
-export default function AiGenerate({ open, onClose, onUpload, title = "Generate Questions with AI", sections = [], existingQuestions = [], defaultSection = "", allowNewTarget = false, newLeafLabel = "quiz", currentTargetName = "", defaultTopic = "", defaultSubtopics = "", defaultDest = "current", coverageQuestions = [] }) {
+export default function AiGenerate({ open, onClose, onUpload, title = "Generate Questions with AI", sections = [], existingQuestions = [], defaultSection = "", allowNewTarget = false, newLeafLabel = "quiz", currentTargetName = "", existingItems = [], defaultTopic = "", defaultSubtopics = "", defaultDest = "current", coverageQuestions = [] }) {
   const { user } = useAuth();
   // Clients granted BOTH sources may pick which one this generation uses.
   const isClient = user?.role === "client" && user?.aiAccess;
@@ -60,8 +60,9 @@ export default function AiGenerate({ open, onClose, onUpload, title = "Generate 
   const [msg, setMsg] = useState("");
   const [keyStats, setKeyStats] = useState(null); // live per-key activity this run { label: {requests,ok,limited,error,questions} }
   const [liveWave, setLiveWave] = useState({}); // in-progress wave's per-bucket "have" counts { "type|difficulty": n }
-  const [destChoice, setDestChoice] = useState("current"); // "current" | "new" (where the batch is inserted)
+  const [destChoice, setDestChoice] = useState("current"); // "current" | "existing" | "new" (where the batch is inserted)
   const [newName, setNewName] = useState("");
+  const [existingId, setExistingId] = useState(""); // chosen existing quiz/test id when destChoice === "existing"
   const [inferring, setInferring] = useState(false); // detecting the topic from a quiz's existing questions
   const [coverage, setCoverage] = useState(null); // { covered:[], missing:[] } — refreshed after each batch
   const [coverageLoading, setCoverageLoading] = useState(false);
@@ -145,8 +146,16 @@ export default function AiGenerate({ open, onClose, onUpload, title = "Generate 
     setPerSubtopic(false); // default unchecked each time the modal opens
     setPerSubRun(null);
     setPerSubList([]);
-    setDestChoice(allowNewTarget && defaultDest === "new" ? "new" : "current");
+    // Pick a sensible default destination: inside a quiz → that quiz; at topic
+    // level with existing quizzes → let the user pick one (default to the first)
+    // so they can add to "Quiz 1"; otherwise → new.
+    setDestChoice(
+      !allowNewTarget ? "current"
+        : currentTargetName ? (defaultDest === "new" ? "new" : "current")
+        : (existingItems.length ? "existing" : "new")
+    );
     setNewName("");
+    setExistingId(existingItems[0]?._id || "");
     setSection(defaultSection || sections[0] || ""); // re-sync target subject on open
     // Pre-fill the topic/subtopics REMEMBERED on this quiz/test (saved on a
     // previous generation), so reopening it days later shows what it was built
@@ -602,17 +611,24 @@ export default function AiGenerate({ open, onClose, onUpload, title = "Generate 
   const insert = async () => {
     if (!preview.length) return;
     const makingNew = allowNewTarget && destChoice === "new";
+    const usingExisting = allowNewTarget && destChoice === "existing";
     if (makingNew && !newName.trim()) { setMsg(`Enter a name for the new ${newLeafLabel}.`); return; }
+    if (usingExisting && !existingId) { setMsg(`Choose an existing ${newLeafLabel} to add these to.`); return; }
+    const existingName = existingItems.find((it) => it._id === existingId)?.name || "";
     setInserting(true);
     setMsg("");
     try {
       const opts = { section, topic: topic.trim(), subtopics: subtopics.trim() };
       if (makingNew) opts.newTarget = { name: newName.trim() };
+      else if (usingExisting) opts.existingTargetId = existingId;
       const res = await onUpload(preview, opts);
-      setMsg(`✓ Inserted ${res?.inserted ?? preview.length} question(s)${makingNew ? ` into new ${newLeafLabel} “${newName.trim()}”` : ""}. Generate the next batch, or click Close when you're done.`);
+      const where = makingNew ? ` into new ${newLeafLabel} “${newName.trim()}”` : usingExisting ? ` into “${existingName}”` : "";
+      setMsg(`✓ Inserted ${res?.inserted ?? preview.length} question(s)${where}. Generate the next batch, or click Close when you're done.`);
       setPreview([]);
       setNewName("");
-      setDestChoice("current");
+      // Keep the chosen destination so the next batch appends to the same place.
+      // (After creating a NEW one, switch to "current" — it's now the active target.)
+      if (makingNew) setDestChoice("current");
       // Stay on this screen (keep the topic + settings) so you can immediately
       // generate the next batch — no duplicates. The modal never closes by
       // itself after inserting; use the Close button when you're finished.
@@ -1109,10 +1125,27 @@ export default function AiGenerate({ open, onClose, onUpload, title = "Generate 
             {allowNewTarget && preview.length > 0 && (
               <div className="mt-3 rounded-xl border border-slate-200 p-3 dark:border-slate-700">
                 <p className="mb-2 text-sm font-semibold">Where should these {preview.length} question(s) go?</p>
-                <label className="flex cursor-pointer items-center gap-2 text-sm">
-                  <input type="radio" name="aidest" checked={destChoice === "current"} onChange={() => setDestChoice("current")} />
-                  <span>Current {newLeafLabel}{currentTargetName ? <> — <b>{currentTargetName}</b></> : <span className="text-slate-400"> (the one selected)</span>}</span>
-                </label>
+                {currentTargetName && (
+                  <label className="flex cursor-pointer items-center gap-2 text-sm">
+                    <input type="radio" name="aidest" checked={destChoice === "current"} onChange={() => setDestChoice("current")} />
+                    <span>Current {newLeafLabel} — <b>{currentTargetName}</b></span>
+                  </label>
+                )}
+                {existingItems.length > 0 && (
+                  <label className="mt-2 flex cursor-pointer items-center gap-2 text-sm">
+                    <input type="radio" name="aidest" checked={destChoice === "existing"} onChange={() => setDestChoice("existing")} />
+                    <span className="flex-shrink-0">Existing {newLeafLabel}:</span>
+                    <select
+                      value={existingId}
+                      onFocus={() => setDestChoice("existing")}
+                      onChange={(e) => { setExistingId(e.target.value); setDestChoice("existing"); }}
+                      className="input !py-1"
+                    >
+                      <option value="">Choose a {newLeafLabel}…</option>
+                      {existingItems.map((it) => <option key={it._id} value={it._id}>{it.name}{it.questionCount != null ? ` (${it.questionCount})` : ""}</option>)}
+                    </select>
+                  </label>
+                )}
                 <label className="mt-2 flex cursor-pointer items-center gap-2 text-sm">
                   <input type="radio" name="aidest" checked={destChoice === "new"} onChange={() => setDestChoice("new")} />
                   <span className="flex-shrink-0">New {newLeafLabel}:</span>
