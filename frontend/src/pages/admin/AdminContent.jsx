@@ -10,7 +10,7 @@ import QuestionFormModal from "../../components/admin/QuestionFormModal";
 import QuestionView from "../../components/admin/QuestionView";
 import QuestionTypeFilter from "../../components/admin/QuestionTypeFilter";
 import AddToTestModal from "../../components/admin/AddToTestModal";
-import { questionDateText, searchQuestions, questionTypeKey } from "../../lib/questions";
+import { questionDateText, searchQuestions, questionTypeKey, QUESTION_TYPE_LABELS } from "../../lib/questions";
 import DuplicatesModal from "../../components/admin/DuplicatesModal";
 import AiImport from "../../components/admin/AiImport";
 import ExtendExplanationsModal from "../../components/admin/ExtendExplanationsModal";
@@ -100,6 +100,35 @@ export default function AdminContent() {
       setDelProgress({ total, done: total, finished: true });
       setSelected([]);
       load("questions");
+      setTimeout(() => setDelProgress(null), 3000);
+    } catch (e) {
+      setError(e.message);
+      setDelProgress(null);
+    }
+  };
+
+  // Bulk-delete the questions currently shown in "View all" — i.e. the set
+  // matching the active TYPE filter (or every question when no type is
+  // selected). Lets an admin clear out one whole question type at once.
+  const deleteByType = async () => {
+    if (delProgress) return;
+    const targets = items.filter((it) => !typeFilter.length || typeFilter.includes(questionTypeKey(it)));
+    const ids = targets.map((q) => q._id);
+    if (!ids.length) return;
+    const label = typeFilter.length
+      ? typeFilter.map((t) => QUESTION_TYPE_LABELS[t] || t).join(", ")
+      : "all types";
+    if (!window.confirm(`Delete ${ids.length} question(s) of type: ${label}? This cannot be undone.`)) return;
+    setDelProgress({ total: ids.length, done: 0 });
+    try {
+      let done = 0;
+      for (const id of ids) {
+        await contentService.deleteQuestion(id);
+        setDelProgress({ total: ids.length, done: ++done });
+      }
+      setDelProgress({ total: ids.length, done: ids.length, finished: true });
+      setSelected([]);
+      await load("questions");
       setTimeout(() => setDelProgress(null), 3000);
     } catch (e) {
       setError(e.message);
@@ -858,6 +887,23 @@ export default function AdminContent() {
               </p>
             )}
             <QuestionTypeFilter questions={items} selected={typeFilter} onChange={setTypeFilter} />
+            {!studentView && (() => {
+              const shownCount = items.filter((it) => !typeFilter.length || typeFilter.includes(questionTypeKey(it))).length;
+              if (!shownCount) return null;
+              return (
+                <div className="mb-3 flex flex-wrap items-center gap-2">
+                  <button onClick={deleteByType} disabled={!!delProgress} className="inline-flex items-center gap-1.5 rounded-lg border border-rose-200 px-3 py-1.5 text-xs font-semibold text-rose-600 transition hover:bg-rose-50 disabled:opacity-50 dark:border-rose-900/50 dark:hover:bg-rose-900/20">
+                    <Trash2 className="h-3.5 w-3.5" />
+                    {delProgress
+                      ? `Deleting ${delProgress.done}/${delProgress.total}…`
+                      : typeFilter.length
+                      ? `Delete these ${shownCount} (${typeFilter.map((t) => QUESTION_TYPE_LABELS[t] || t).join(", ")})`
+                      : `Delete all ${shownCount}`}
+                  </button>
+                  {!typeFilter.length && <span className="text-xs text-slate-400">Tip: pick a Type above to delete only that type.</span>}
+                </div>
+              );
+            })()}
             <div className="max-h-[70vh] space-y-4 overflow-y-auto pr-1">
               {items
                 .map((it, i) => ({ it, i }))
