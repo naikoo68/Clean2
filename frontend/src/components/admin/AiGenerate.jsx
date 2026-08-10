@@ -51,7 +51,9 @@ export default function AiGenerate({ open, onClose, onUpload, title = "Generate 
   const [numerical, setNumerical] = useState(false); // opt-in: also include numerical/calculation questions (default off)
   const [perSubtopic, setPerSubtopic] = useState(false); // when ON, the grid counts are generated FOR EACH subtopic (looped), not as a whole-batch total
   const [perSubRun, setPerSubRun] = useState(null); // live per-subtopic progress { i, n, name }
+  const [perSubList, setPerSubList] = useState([]); // completed subtopics this run: [{ name, count }]
   const jobIdRef = useRef(null); // id of the running background job (so Stop can cancel it)
+  const runProducedRef = useRef(0); // how many questions the LAST generate() run produced (for per-subtopic tallying)
   const stopRef = useRef(false); // set when the user clicks Stop — breaks/short-circuits the poll loop
   const pendingDoneRef = useRef([]); // subtopics queued (via "Use selected") to hide after the next Generate
   const [inserting, setInserting] = useState(false);
@@ -142,6 +144,7 @@ export default function AiGenerate({ open, onClose, onUpload, title = "Generate 
     setSyllabus(null);
     setPerSubtopic(false); // default unchecked each time the modal opens
     setPerSubRun(null);
+    setPerSubList([]);
     setDestChoice(allowNewTarget && defaultDest === "new" ? "new" : "current");
     setNewName("");
     setSection(defaultSection || sections[0] || ""); // re-sync target subject on open
@@ -502,6 +505,7 @@ export default function AiGenerate({ open, onClose, onUpload, title = "Generate 
         if (overrideSubtopics != null) markSubtopicsDone([overrideSubtopics]);
         else if (!append && pendingDoneRef.current.length) { markSubtopicsDone(pendingDoneRef.current); pendingDoneRef.current = []; }
       }
+      runProducedRef.current = producedTotal; // expose this run's count for per-subtopic tallying
     } catch (e) {
       setMsg(e.message || "Generation failed.");
     } finally {
@@ -566,12 +570,17 @@ export default function AiGenerate({ open, onClose, onUpload, title = "Generate 
     if (total <= 0) { setMsg("Set at least one question count in the grid below."); return; }
     if (total > maxPerBatch) { setMsg(`Keep the PER-SUBTOPIC total to ${maxPerBatch} or fewer (it runs once per subtopic).`); return; }
     stopRef.current = false;
+    setPerSubList([]);
     for (let idx = 0; idx < subs.length; idx++) {
       if (stopRef.current) break;
       setPerSubRun({ i: idx + 1, n: subs.length, name: subs[idx] });
+      runProducedRef.current = 0;
       // First subtopic starts a fresh preview; later ones append (no duplicates).
       // eslint-disable-next-line no-await-in-loop
       await generate(idx > 0, subs[idx]);
+      // Record how many THIS subtopic produced, for the live per-subtopic tally.
+      const made = runProducedRef.current || 0;
+      setPerSubList((prev) => [...prev, { name: subs[idx], count: made }]);
     }
     setPerSubRun(null);
   };
@@ -836,9 +845,37 @@ export default function AiGenerate({ open, onClose, onUpload, title = "Generate 
             {perSubRun && (
               <div className="mt-2 rounded-lg border border-brand-200 bg-brand-50/60 px-3 py-2 text-xs dark:border-brand-900/40 dark:bg-brand-900/10">
                 <p className="flex flex-wrap items-center gap-1.5 font-semibold text-brand-700 dark:text-brand-300">
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" /> Per subtopic — {perSubRun.i} of {perSubRun.n}: {perSubRun.name}
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" /> Per subtopic — {perSubRun.i} of {perSubRun.n}
                   <span className="font-normal text-slate-500 dark:text-slate-400">· {preview.length} generated so far (target {total * perSubRun.n})</span>
                 </p>
+                {(() => {
+                  const doneSum = perSubList.reduce((a, s) => a + (s.count || 0), 0);
+                  const currentLive = Math.max(0, preview.length - doneSum); // questions made for the subtopic in progress
+                  return (
+                    <ul className="mt-1.5 max-h-40 space-y-0.5 overflow-y-auto">
+                      {perSubList.map((s, k) => (
+                        <li key={k} className="flex items-center gap-1.5 text-emerald-700 dark:text-emerald-300">
+                          <CheckCircle2 className="h-3.5 w-3.5 flex-shrink-0" /> <span className="flex-1 truncate">{s.name}</span> <b>{s.count}</b>
+                        </li>
+                      ))}
+                      <li className="flex items-center gap-1.5 text-brand-700 dark:text-brand-300">
+                        <Loader2 className="h-3.5 w-3.5 flex-shrink-0 animate-spin" /> <span className="flex-1 truncate">{perSubRun.name}</span> <b>{currentLive}</b> / {total}
+                      </li>
+                    </ul>
+                  );
+                })()}
+              </div>
+            )}
+            {!perSubRun && perSubList.length > 0 && (
+              <div className="mt-2 rounded-lg border border-emerald-200 bg-emerald-50/60 px-3 py-2 text-xs dark:border-emerald-900/40 dark:bg-emerald-900/10">
+                <p className="mb-1 font-semibold text-emerald-700 dark:text-emerald-300">Generated per subtopic:</p>
+                <ul className="max-h-40 space-y-0.5 overflow-y-auto">
+                  {perSubList.map((s, k) => (
+                    <li key={k} className="flex items-center gap-1.5 text-slate-600 dark:text-slate-300">
+                      <CheckCircle2 className="h-3.5 w-3.5 flex-shrink-0 text-emerald-500" /> <span className="flex-1 truncate">{s.name}</span> <b>{s.count}</b>
+                    </li>
+                  ))}
+                </ul>
               </div>
             )}
 
@@ -850,7 +887,7 @@ export default function AiGenerate({ open, onClose, onUpload, title = "Generate 
                 <div className="mt-3 flex items-center justify-between">
                   <label className="block text-sm font-semibold">Generated by type &amp; difficulty</label>
                   <span className="rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-bold text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300">
-                    {Object.values(genCounts).reduce((a, b) => a + b, 0)} / {total} generated
+                    {Object.values(genCounts).reduce((a, b) => a + b, 0)} / {perSubtopic ? total * (subtopics.split(/[\n,]+/).map((s) => s.trim()).filter(Boolean).length || 1) : total} generated
                   </span>
                 </div>
                 <div className="mt-2 overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-700">
