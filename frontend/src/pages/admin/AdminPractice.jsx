@@ -148,6 +148,7 @@ export default function AdminPractice({ clientMode = false, fixedKind = "" }) {
   const [mixOpen, setMixOpen] = useState(false);
   const [seqRunning, setSeqRunning] = useState(false);
   const [seqProgress, setSeqProgress] = useState({}); // subtopic name -> { status, count }
+  const [seqLive, setSeqLive] = useState(null); // real-time view of the CURRENT subtopic's job: { subtopic, count, byBucket:[{type,difficulty,have,want}] }
   const [seqMsg, setSeqMsg] = useState("");
   const seqStopRef = useRef(false);
   const [gapPrefill, setGapPrefill] = useState(null); // {topic, subtopics, avoid} when generating from the scan gaps
@@ -487,7 +488,9 @@ export default function AdminPractice({ clientMode = false, fixedKind = "" }) {
   };
 
   // Poll a generation job until done; honours the sequential-run cancel flag.
-  const pollGenJob = async (jobId) => {
+  // `onTick(s)` (optional) fires on every poll with the live job status
+  // ({ count, byBucket, keyStats, … }) so the UI can show real-time progress.
+  const pollGenJob = async (jobId, onTick) => {
     const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     let cancelSent = false;
     for (let i = 0; i < 240; i++) {
@@ -495,6 +498,7 @@ export default function AdminPractice({ clientMode = false, fixedKind = "" }) {
       if (seqStopRef.current && !cancelSent) { cancelSent = true; try { await aiService.cancelJob(jobId); } catch { /* keep polling for the partial */ } }
       let s;
       try { s = await aiService.job(jobId); } catch { continue; }
+      try { onTick?.(s); } catch { /* live UI update must never break polling */ }
       if (s.status === "done") return s.questions || [];
       if (s.status === "error") throw new Error(s.error || "Generation failed.");
     }
@@ -543,7 +547,13 @@ export default function AdminPractice({ clientMode = false, fixedKind = "" }) {
         avoid: [...avoidBase, ...collected.map((q) => q.text)].filter(Boolean).slice(-400),
       };
       let got = [];
-      try { const { jobId } = await aiService.generate(body); if (jobId) got = await pollGenJob(jobId); else lastErr = "Could not start generation."; }
+      const doneSoFar = collected.length; // questions from earlier rounds of THIS subtopic
+      const onTick = (s) => setSeqLive({
+        subtopic: name,
+        count: doneSoFar + (s?.count || 0),
+        byBucket: Array.isArray(s?.byBucket) ? s.byBucket : [],
+      });
+      try { const { jobId } = await aiService.generate(body); if (jobId) got = await pollGenJob(jobId, onTick); else lastErr = "Could not start generation."; }
       catch (e) { lastErr = e?.message || "Generation failed."; }
       const before = collected.length;
       for (const q of got) { const k = keyOf(q); if (String(q?.text || "").trim() && !seen.has(k)) { seen.add(k); collected.push(q); } }
@@ -575,6 +585,7 @@ export default function AdminPractice({ clientMode = false, fixedKind = "" }) {
       setSeqProgress((p) => ({ ...p, [name]: { status: "failed", count: 0, err: e.message || "Generation failed." } }));
     } finally {
       setSeqRunning(false);
+      setSeqLive(null);
     }
   };
 
@@ -625,6 +636,7 @@ export default function AdminPractice({ clientMode = false, fixedKind = "" }) {
     } finally {
       setSeqRunning(false);
       seqStopRef.current = false;
+      setSeqLive(null);
     }
   };
 
@@ -1497,6 +1509,23 @@ export default function AdminPractice({ clientMode = false, fixedKind = "" }) {
                     </div>
                   );
                 })()}
+                {seqLive && (
+                  <div className="mt-2 rounded-lg border border-brand-200 bg-brand-50/60 px-3 py-2 text-xs dark:border-brand-900/40 dark:bg-brand-900/10">
+                    <p className="flex flex-wrap items-center gap-1.5 font-semibold text-brand-700 dark:text-brand-300">
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" /> Now generating: {seqLive.subtopic}
+                      <span className="font-normal text-slate-500 dark:text-slate-400">· {seqLive.count} question(s) so far</span>
+                    </p>
+                    {seqLive.byBucket?.length > 0 && (
+                      <div className="mt-1.5 flex flex-wrap gap-1.5">
+                        {seqLive.byBucket.map((b, k) => (
+                          <span key={k} className={`rounded-full border px-2 py-0.5 ${(b.have || 0) >= (b.want || 0) ? "border-emerald-300 bg-emerald-50 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300" : "border-slate-200 bg-white text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300"}`}>
+                            {(QUESTION_TYPE_LABELS[b.type] || b.type)} · {b.difficulty}: <b>{b.have || 0}</b>/{b.want || 0}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
                 {seqMsg && <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">{seqMsg}</p>}
                 <div className="mt-4 flex flex-wrap justify-end gap-2">
                   {seqRunning ? (
