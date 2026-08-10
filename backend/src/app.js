@@ -37,6 +37,7 @@ import contentRoutes from "./routes/contentRoutes.js";
 import testRoutes from "./routes/testRoutes.js";
 import userRoutes from "./routes/userRoutes.js";
 import analyticsRoutes from "./routes/analyticsRoutes.js";
+import storageRoutes from "./routes/storageRoutes.js";
 import quizRoutes from "./routes/quizRoutes.js";
 import uploadRoutes from "./routes/uploadRoutes.js";
 import setupRoutes from "./routes/setupRoutes.js";
@@ -130,6 +131,7 @@ app.use("/api/tests", testRoutes);
 app.use("/api/quiz", quizRoutes); // /quiz/:sessionId/submit
 app.use("/api/users", userRoutes);
 app.use("/api", analyticsRoutes); // /admin/analytics, /me/dashboard, /leaderboard
+app.use("/api", storageRoutes); // /admin/storage — DB usage + old-attempt cleanup (admin)
 app.use("/api/upload", uploadRoutes);
 app.use("/api/setup", setupRoutes); // one-time bootstrap (auto-disabled after first admin)
 app.use("/api/settings", settingsRoutes); // site branding & theme (public read, admin write)
