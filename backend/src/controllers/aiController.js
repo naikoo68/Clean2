@@ -2523,7 +2523,7 @@ export async function coverageGaps(req, res) {
   let syllabus = (Array.isArray(req.body?.syllabus) ? req.body.syllabus : [])
     .map((s) => String(s || "").replace(/\s+/g, " ").trim())
     .filter((s) => s.length >= 2)
-    .slice(0, 60);
+    .slice(0, 80);
 
   const label = topic || "the provided source material";
 
@@ -2531,7 +2531,7 @@ export async function coverageGaps(req, res) {
   if (!syllabus.length) {
     const buildPrompt = source
       ? [
-          "You are a coverage analyst. Read the SOURCE MATERIAL below and extract a FIXED checklist of the distinct topics/areas/sections it actually covers (the things a question could be asked about). Base it ONLY on what is present in this source — do NOT add outside topics. Keep items at a consistent, medium granularity (not hyper-specific single facts). Aim for 10-40 items. ORDER them as a learner would study them, step by step: foundational items first (introduction, definitions, terminology), then structure/classification, then processes/mechanisms, then causes/effects/factors, then importance/applications, and finally comparisons/exceptions/advanced items.",
+          "You are a coverage analyst. Read the SOURCE MATERIAL below and extract a checklist of the distinct topics/areas/sections it actually covers (the things a question could be asked about). Base it ONLY on what is present in this source — do NOT add outside topics. List AS MANY as the source GENUINELY covers and NO MORE — do NOT pad to a fixed number: a short source may yield only 4-6 items, a large one 40 or more. Keep items at a consistent, medium granularity (not hyper-specific single facts). ORDER them as a learner would study them, step by step: foundational items first (introduction, definitions, terminology), then structure/classification, then processes/mechanisms, then causes/effects/factors, then importance/applications, and finally comparisons/exceptions/advanced items.",
           "",
           "SOURCE MATERIAL:",
           source,
@@ -2539,7 +2539,7 @@ export async function coverageGaps(req, res) {
           "Return ONLY a JSON array of strings, e.g. [\"area one\",\"area two\"]. No commentary, no markdown.",
         ].join("\n")
       : [
-          "You are a syllabus coverage analyst. Build a FIXED checklist of the 30 most important, broad, non-overlapping subtopics for the topic below (NCERT / standard university / competitive-exam scope). Keep them at a consistent, medium granularity — NOT hyper-specific niche facts. ORDER them as a learner would study them, step by step: foundational items first (introduction, definitions, terminology), then structure/classification, then processes/mechanisms, then causes/effects/factors, then importance/applications, and finally comparisons/exceptions/advanced items.",
+          "You are a syllabus coverage analyst. Build a checklist of the important, broad, non-overlapping subtopics for the topic below (NCERT / standard university / competitive-exam scope). List AS MANY subtopics as the topic GENUINELY warrants — and NO MORE. Do NOT pad to a fixed number: a small/narrow topic may have only 4-6 subtopics, while a broad one may have 40 or more. Match the topic's real breadth — never invent filler, and never split one idea into near-duplicate items just to reach a count. Keep them at a consistent, medium granularity — NOT hyper-specific niche facts. ORDER them as a learner would study them, step by step: foundational items first (introduction, definitions, terminology), then structure/classification, then processes/mechanisms, then causes/effects/factors, then importance/applications, and finally comparisons/exceptions/advanced items.",
           `Topic: ${topic}.`,
           TOPIC_SCOPE_RULE,
           "Return ONLY a JSON array of strings, e.g. [\"subtopic one\",\"subtopic two\"]. No commentary, no markdown.",
@@ -2555,7 +2555,7 @@ export async function coverageGaps(req, res) {
     if (!rb.ok) {
       return res.status(502).json({ message: rb.status === 429 ? quota429Message(rb.detail) : `AI provider error (${rb.status}). ${(rb.detail || "").slice(0, 160)}` });
     }
-    syllabus = parseStringArray(rb.content).slice(0, 40);
+    syllabus = parseStringArray(rb.content).slice(0, 80);
   }
   if (!syllabus.length) return res.json({ topic: label, coveredCount: stems.length, syllabus: [], covered: [], missing: [] });
 
