@@ -28,6 +28,7 @@ import RegenerateAllModal from "../../components/admin/RegenerateAllModal";
 import ScheduleQuestionModal from "../../components/admin/ScheduleQuestionModal";
 import MigrateQuizModal from "../../components/admin/MigrateQuizModal";
 import MigrateTopicsModal from "../../components/admin/MigrateTopicsModal";
+import MoveQuestionsModal from "../../components/admin/MoveQuestionsModal";
 import { Files, ScanSearch, Loader2, Sparkles, Scissors, GitMerge, Maximize2, Minimize2, Save } from "lucide-react";
 
 // Question types offered per subtopic in the "Missing areas" sequential generator.
@@ -163,9 +164,7 @@ export default function AdminPractice({ clientMode = false, fixedKind = "" }) {
   const [reopenAfterEdit, setReopenAfterEdit] = useState(null); // question _id to reopen in the preview after editing it there
   const [selQ, setSelQ] = useState(() => new Set()); // ticked questions to move (full-quiz view)
   const [delProgress, setDelProgress] = useState(null); // real-time delete-by-type progress: { total, done }
-  const [moveTargetId, setMoveTargetId] = useState(""); // destination quiz for the checkbox move
-  const [moveByTypeTargetId, setMoveByTypeTargetId] = useState(""); // destination quiz for the by-type move
-  const [movingQ, setMovingQ] = useState(false);
+  const [moveModal, setMoveModal] = useState(null); // { ids } — open the destination picker to move these question ids
   const [shareItem, setShareItem] = useState(null); // public share-link modal target (tests)
   const [shareEmailTarget, setShareEmailTarget] = useState(null); // account-to-account share (stream/subject/topic/item)
   const [migrateItem, setMigrateItem] = useState(null); // per-quiz migrate modal target (My Quiz)
@@ -335,7 +334,7 @@ export default function AdminPractice({ clientMode = false, fixedKind = "" }) {
   // ---- Questions ----
   const openQuestions = (item) => {
     setQItem(item);
-    setSelQ(new Set()); setMoveTargetId(""); setMoveByTypeTargetId(""); // fresh selection per quiz
+    setSelQ(new Set()); // fresh selection per quiz
     setTqLoading(true);
     testService.getQuestions(item._id).then(setTq).catch((e) => setError(e.message)).finally(() => setTqLoading(false));
   };
@@ -343,42 +342,19 @@ export default function AdminPractice({ clientMode = false, fixedKind = "" }) {
 
   // ---- Move ticked questions to another quiz in the same topic --------------
   const toggleSelQ = (qid) => setSelQ((s) => { const n = new Set(s); if (n.has(qid)) n.delete(qid); else n.add(qid); return n; });
-  const doMoveQuestions = async () => {
-    const ids = [...selQ];
-    const dest = (items || []).find((it) => it._id === moveTargetId);
-    if (!ids.length || !dest) return;
-    if (!window.confirm(`Move ${ids.length} question(s) to “${dest.name}”?`)) return;
-    setMovingQ(true); setError("");
-    try {
-      const res = await practiceService.moveQuestions(qItem._id, ids, moveTargetId);
-      setSelQ(new Set()); setMoveTargetId("");
-      await reloadTq();
-      load(view); // refresh the sibling quizzes' question counts
-      window.alert(res?.message || "Moved.");
-    } catch (e) { setError(e.message); }
-    finally { setMovingQ(false); }
-  };
 
-  // Move the "View all" questions matching the active TYPE filter (or every
-  // question when no type is selected) to another quiz in the same topic —
-  // the by-type counterpart of doMoveQuestions, so a whole type moves at once.
-  const moveByType = async () => {
-    if (movingQ || !qItem) return;
-    const dest = (items || []).find((it) => it._id === moveByTypeTargetId);
-    const targets = tq.filter((it) => !typeFilter.length || typeFilter.includes(questionTypeKey(it)));
-    const ids = targets.map((q) => q._id);
-    if (!ids.length || !dest) return;
-    const label = typeFilter.length ? typeFilter.map((t) => QUESTION_TYPE_LABELS[t] || t).join(", ") : "all types";
-    if (!window.confirm(`Move ${ids.length} question(s) of type: ${label} to “${dest.name}”?`)) return;
-    setMovingQ(true); setError("");
-    try {
-      const res = await practiceService.moveQuestions(qItem._id, ids, moveByTypeTargetId);
-      setMoveByTypeTargetId(""); setSelQ(new Set());
-      await reloadTq();
-      load(view); // refresh the sibling quizzes' question counts
-      window.alert(res?.message || "Moved.");
-    } catch (e) { setError(e.message); }
-    finally { setMovingQ(false); }
+  // Open the destination picker (Stream → Subject → Topic → Quiz) to move the
+  // given question ids anywhere in the My-Quiz hierarchy. Used by both the
+  // checkbox "Move selected" and the by-type "Move these" flows.
+  const openMove = (ids) => { const arr = [...ids]; if (arr.length) setMoveModal({ ids: arr }); };
+
+  // Refresh after a successful move (from MoveQuestionsModal).
+  const afterMove = async (res) => {
+    setMoveModal(null);
+    setSelQ(new Set());
+    await reloadTq();
+    load(view); // refresh both quizzes' question counts
+    window.alert(res?.message || "Moved.");
   };
 
   // Saved "missing areas" plan — kept in the browser per topic so you can scan
@@ -1207,6 +1183,17 @@ export default function AdminPractice({ clientMode = false, fixedKind = "" }) {
         <AddToTestModal question={addToTestQ} clientMode={clientMode} onClose={() => setAddToTestQ(null)} />
       )}
 
+      {/* Move selected / by-type questions to ANY quiz (Stream → Subject → Topic → Quiz) */}
+      {moveModal && qItem && (
+        <MoveQuestionsModal
+          open
+          sourceId={qItem._id}
+          questionIds={moveModal.ids}
+          onClose={() => setMoveModal(null)}
+          onMoved={afterMove}
+        />
+      )}
+
       {/* View all questions (with edit/delete per question) */}
       {viewAll && qItem && (
         <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/50 p-0 sm:p-4" onClick={() => setViewAll(false)}>
@@ -1228,7 +1215,6 @@ export default function AdminPractice({ clientMode = false, fixedKind = "" }) {
             )}
             {/* Tick questions (Admin view) and move them into another quiz in this topic. */}
             {!studentView && tq.length > 0 && (() => {
-              const siblings = (items || []).filter((it) => it._id !== qItem._id);
               // "Select all" respects the active TYPE filter: it selects every
               // VISIBLE (filtered) question at once, so you can grab a whole type.
               const visible = tq.filter((it) => !typeFilter.length || typeFilter.includes(questionTypeKey(it)));
@@ -1238,17 +1224,9 @@ export default function AdminPractice({ clientMode = false, fixedKind = "" }) {
                   <button type="button" onClick={() => setSelQ(allSel ? new Set() : new Set(visible.map((it) => it._id)))} className="font-semibold text-brand-600 hover:underline dark:text-brand-300">{allSel ? "Clear all" : `Select all${typeFilter.length ? ` (${visible.length})` : ""}`}</button>
                   <span className="text-slate-500 dark:text-slate-400">{selQ.size} selected</span>
                   <span className="ml-auto flex items-center gap-2">
-                    {siblings.length ? (
-                      <>
-                        <select value={moveTargetId} onChange={(e) => setMoveTargetId(e.target.value)} className="input max-w-[11rem] py-1 text-xs">
-                          <option value="">Move selected to…</option>
-                          {siblings.map((it) => <option key={it._id} value={it._id}>{it.name} ({it.questionCount ?? 0})</option>)}
-                        </select>
-                        <button type="button" onClick={doMoveQuestions} disabled={!selQ.size || !moveTargetId || movingQ} className="btn-primary py-1 text-xs disabled:opacity-50">
-                          {movingQ ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Moving…</> : <><ArrowRightLeft className="h-3.5 w-3.5" /> Move</>}
-                        </button>
-                      </>
-                    ) : <span className="text-slate-400">No other quiz in this topic to move to</span>}
+                    <button type="button" onClick={() => openMove(selQ)} disabled={!selQ.size} className="btn-primary py-1 text-xs disabled:opacity-50">
+                      <ArrowRightLeft className="h-3.5 w-3.5" /> Move selected…
+                    </button>
                   </span>
                 </div>
               );
@@ -1267,21 +1245,12 @@ export default function AdminPractice({ clientMode = false, fixedKind = "" }) {
                       ? `Delete these ${shownCount} (${typeFilter.map((t) => QUESTION_TYPE_LABELS[t] || t).join(", ")})`
                       : `Delete all ${shownCount}`}
                   </button>
-                  {(() => {
-                    const siblings = (items || []).filter((it) => it._id !== qItem._id);
-                    if (!siblings.length) return null;
-                    return (
-                      <span className="inline-flex items-center gap-1.5">
-                        <select value={moveByTypeTargetId} onChange={(e) => setMoveByTypeTargetId(e.target.value)} className="input max-w-[11rem] py-1.5 text-xs">
-                          <option value="">Move these {shownCount} to…</option>
-                          {siblings.map((it) => <option key={it._id} value={it._id}>{it.name} ({it.questionCount ?? 0})</option>)}
-                        </select>
-                        <button onClick={moveByType} disabled={!moveByTypeTargetId || movingQ} className="inline-flex items-center gap-1.5 rounded-lg border border-brand-200 px-3 py-1.5 text-xs font-semibold text-brand-600 transition hover:bg-brand-50 disabled:opacity-50 dark:border-brand-900/50 dark:hover:bg-brand-900/20">
-                          {movingQ ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Moving…</> : <><ArrowRightLeft className="h-3.5 w-3.5" /> Move</>}
-                        </button>
-                      </span>
-                    );
-                  })()}
+                  <button
+                    onClick={() => openMove(tq.filter((it) => !typeFilter.length || typeFilter.includes(questionTypeKey(it))).map((q) => q._id))}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-brand-200 px-3 py-1.5 text-xs font-semibold text-brand-600 transition hover:bg-brand-50 dark:border-brand-900/50 dark:hover:bg-brand-900/20"
+                  >
+                    <ArrowRightLeft className="h-3.5 w-3.5" /> {typeFilter.length ? `Move these ${shownCount}…` : `Move all ${shownCount}…`}
+                  </button>
                   {!typeFilter.length && <span className="text-xs text-slate-400">Tip: pick a Type above to delete/move only that type.</span>}
                 </div>
               );

@@ -395,17 +395,20 @@ export async function mergeItem(req, res) {
 }
 
 // POST /api/practice/items/:id/move-questions  { questionIds, targetId }
-// Move only the SELECTED questions from this quiz (:id) into another quiz
-// (targetId) in the SAME topic — repoints each Question.testSeries and updates
-// both quizzes' denormalized questions[] arrays. Owner-scoped. Powers the
-// "tick questions & move them to another quiz" action in the full-quiz view.
+// Move only the SELECTED questions from this quiz (:id) into ANY other quiz
+// (targetId) the caller owns — anywhere in their My-Quiz hierarchy (any Stream
+// → Subject → Topic), not just the same topic. Repoints each Question.testSeries
+// and updates both quizzes' denormalized questions[] arrays. Owner-scoped.
+// Powers the "tick questions & move them to another quiz" action in the
+// full-quiz view (with a Stream → Subject → Topic → Quiz destination picker).
 export async function moveQuestions(req, res) {
   const source = await TestSeries.findOne({ _id: req.params.id, practice: true, practiceKind: "quiz", ...ownerFilter(req) });
   if (!source) return res.status(404).json({ message: "Source quiz not found" });
   const targetId = String(req.body?.targetId || "");
   if (!targetId || targetId === String(source._id)) return res.status(400).json({ message: "Pick a different destination quiz." });
-  const target = await TestSeries.findOne({ _id: targetId, practice: true, practiceKind: "quiz", practiceTopic: source.practiceTopic, ...ownerFilter(req) });
-  if (!target) return res.status(404).json({ message: "Destination quiz not found (it must be under the same topic)." });
+  // Destination can be ANY quiz the caller owns (any topic/subject/stream).
+  const target = await TestSeries.findOne({ _id: targetId, practice: true, practiceKind: "quiz", ...ownerFilter(req) });
+  if (!target) return res.status(404).json({ message: "Destination quiz not found." });
 
   const sourceSet = new Set((source.questions || []).map((q) => String(q)));
   const ids = (Array.isArray(req.body?.questionIds) ? req.body.questionIds : [])
