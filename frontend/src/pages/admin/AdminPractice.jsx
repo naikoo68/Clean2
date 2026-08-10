@@ -171,6 +171,7 @@ export default function AdminPractice({ clientMode = false, fixedKind = "" }) {
   const [paperFilesItem, setPaperFilesItem] = useState(null); // Previous Papers: paper/answer-key PDF + info modal target
   const [selTopics, setSelTopics] = useState({}); // checkbox selection in the topics view (id -> true)
   const [migrateTopicsOpen, setMigrateTopicsOpen] = useState(false); // bulk-topic migrate modal
+  const [sendSelectedOpen, setSendSelectedOpen] = useState(false); // bulk "Send selected" to another account
   const [extendItem, setExtendItem] = useState(null); // AI extend-explanations target
   const [extendingQId, setExtendingQId] = useState(null); // per-question extend in progress
   const [extendOneItem, setExtendOneItem] = useState(null); // per-question extend confirm modal target
@@ -261,6 +262,10 @@ export default function AdminPractice({ clientMode = false, fixedKind = "" }) {
   useEffect(() => { setSelTopics({}); }, [view, subject?._id, stream?._id, kind]);
   const toggleTopicSel = (id) => setSelTopics((s) => ({ ...s, [id]: !s[id] }));
   const selectedTopics = () => items.filter((it) => selTopics[it._id]).map((it) => ({ _id: it._id, name: it.name }));
+  // The node level for the CURRENT view — used to send selected items to another
+  // account (works for streams, subjects, topics and quizzes/tests alike).
+  const nodeLevelForView = () => (view === "streams" ? "stream" : view === "subjects" ? "subject" : view === "topics" ? "topic" : "item");
+  const selectedNodes = () => { const level = nodeLevelForView(); return items.filter((it) => selTopics[it._id]).map((it) => ({ level, id: it._id, name: it.name })); };
   const allTopicsSelected = items.length > 0 && items.every((it) => selTopics[it._id]);
   const toggleAllTopics = () => setSelTopics(allTopicsSelected ? {} : Object.fromEntries(items.map((it) => [it._id, true])));
   const selectedTopicCount = items.filter((it) => selTopics[it._id]).length;
@@ -913,7 +918,7 @@ export default function AdminPractice({ clientMode = false, fixedKind = "" }) {
       </div>
 
       {/* Bulk-migrate topics: tick topics, then move them all to another subject */}
-      {view === "topics" && items.length > 0 && (
+      {items.length > 0 && (
         <div className="flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 px-3 py-2 dark:border-slate-700">
           <label className="flex cursor-pointer items-center gap-2 text-sm font-medium">
             <input type="checkbox" checked={allTopicsSelected} onChange={toggleAllTopics} className="h-4 w-4 accent-brand-600" />
@@ -922,13 +927,18 @@ export default function AdminPractice({ clientMode = false, fixedKind = "" }) {
           {selectedTopicCount > 0 && (
             <>
               <span className="text-sm text-slate-500">{selectedTopicCount} selected</span>
-              <button onClick={() => setMigrateTopicsOpen(true)} className="btn-primary py-1.5 text-xs">
-                <ArrowRightLeft className="h-3.5 w-3.5" /> Migrate selected
+              {view === "topics" && (
+                <button onClick={() => setMigrateTopicsOpen(true)} className="btn-primary py-1.5 text-xs">
+                  <ArrowRightLeft className="h-3.5 w-3.5" /> Migrate selected
+                </button>
+              )}
+              <button onClick={() => setSendSelectedOpen(true)} className="btn-outline py-1.5 text-xs text-emerald-600">
+                <Send className="h-3.5 w-3.5" /> Send selected
               </button>
               <button onClick={() => setSelTopics({})} className="btn-ghost py-1.5 text-xs">Clear</button>
             </>
           )}
-          <span className="ml-auto text-xs text-slate-400">Tick topics to move several at once</span>
+          <span className="ml-auto text-xs text-slate-400">Tick items to send{view === "topics" ? " or move" : ""} several at once</span>
         </div>
       )}
 
@@ -939,15 +949,13 @@ export default function AdminPractice({ clientMode = false, fixedKind = "" }) {
           {items.map((item) => (
             <div key={item._id} className="card p-4">
               <div className="flex items-start justify-between gap-2">
-                {view === "topics" && (
-                  <input
-                    type="checkbox"
-                    checked={!!selTopics[item._id]}
-                    onChange={() => toggleTopicSel(item._id)}
-                    className="mt-1 h-4 w-4 flex-shrink-0 accent-brand-600"
-                    title="Select to migrate"
-                  />
-                )}
+                <input
+                  type="checkbox"
+                  checked={!!selTopics[item._id]}
+                  onChange={() => toggleTopicSel(item._id)}
+                  className="mt-1 h-4 w-4 flex-shrink-0 accent-brand-600"
+                  title={view === "topics" ? "Select to send or move" : "Select to send"}
+                />
                 <button
                   onClick={() => (view === "streams" ? openStream(item) : view === "subjects" ? openSubject(item) : view === "topics" ? openTopic(item) : openQuestions(item))}
                   className="min-w-0 flex-1 text-left"
@@ -1548,6 +1556,14 @@ export default function AdminPractice({ clientMode = false, fixedKind = "" }) {
 
       {/* Public share-link modal (My Test / Client Test) */}
       {shareEmailTarget && <ShareByEmailModal target={shareEmailTarget} onClose={() => setShareEmailTarget(null)} />}
+
+      {/* Bulk "Send selected": share all ticked streams/subjects/topics/items to another account */}
+      {sendSelectedOpen && (
+        <ShareByEmailModal
+          targets={selectedNodes()}
+          onClose={() => setSendSelectedOpen(false)}
+        />
+      )}
 
       {shareItem && (
         <ShareTestModal
