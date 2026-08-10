@@ -224,6 +224,12 @@ export const analyticsService = {
   clearAllPerformance: () => api.del("/admin/performance"),
 };
 
+// ---- Storage / cleanup (admin) ----
+export const storageService = {
+  stats: (days) => api.get(`/admin/storage${days ? `?days=${days}` : ""}`), // DB usage + old-attempt counts
+  cleanup: (data) => api.post("/admin/storage/cleanup", data), // { days, userAttempts, publicAttempts, cbtAttempts, stripCbtReview }
+};
+
 // ---- Site settings (branding & theme) ----
 export const settingsService = {
   get: () => api.get("/settings", { auth: false }),
