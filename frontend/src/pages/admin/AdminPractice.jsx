@@ -687,7 +687,12 @@ export default function AdminPractice({ clientMode = false, fixedKind = "" }) {
   // Otherwise the batch goes into the item currently open (qItem).
   const saveAiBatch = async (questions, opts = {}) => {
     const section = opts.section || normSection(forceSection);
-    let itemId = aiTarget?.id || qItem?._id;
+    let itemId = opts.existingTargetId || aiTarget?.id || qItem?._id;
+    if (opts.existingTargetId) {
+      // Insert into a chosen EXISTING quiz/test; remember it so later batches append there too.
+      const nm = (items || []).find((it) => it._id === opts.existingTargetId)?.name || "";
+      setAiTarget({ id: opts.existingTargetId, name: nm });
+    }
     if (opts.newTarget) {
       const name = String(opts.newTarget.name || "").trim();
       if (!name) throw new Error(`Enter a name for the new ${kind}.`);
@@ -702,7 +707,7 @@ export default function AdminPractice({ clientMode = false, fixedKind = "" }) {
       itemId = created._id;
       setAiTarget({ id: itemId, name }); // subsequent batches target the new item
     }
-    if (!itemId) throw new Error(`Choose “New ${kind}” and enter a name to save these questions.`);
+    if (!itemId) throw new Error(`Choose an existing ${kind}, or “New ${kind}” and enter a name, to save these questions.`);
     const res = await contentService.bulkQuestions(questions, { testSeries: itemId, section });
     // Remember the topic/subtopics on this item so reopening the generator
     // pre-fills them and coverage can continue from where it left off.
@@ -1347,6 +1352,7 @@ export default function AdminPractice({ clientMode = false, fixedKind = "" }) {
         allowNewTarget
         newLeafLabel={kind}
         currentTargetName={aiTarget?.name || qItem?.name || ""}
+        existingItems={(items || []).filter((it) => it._id !== qItem?._id).map((it) => ({ _id: it._id, name: it.name, questionCount: it.questionCount }))}
         existingQuestions={otherTypesTopic ? [] : (gapPrefill ? gapPrefill.avoid : tq)}
         defaultTopic={gapPrefill ? gapPrefill.topic : (qItem?.aiTopic || (kind === "quiz" ? topic : subject)?.name || "")}
         defaultSubtopics={gapPrefill ? gapPrefill.subtopics : (qItem?.aiSubtopics || "")}
