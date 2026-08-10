@@ -282,16 +282,17 @@ export function parseQuestionsCsv(text) {
       return;
     }
 
-    // ---- MCQ / Journal row (MCQ-shaped; optionally prefixed with "mcq" or "journal") ----
+    // ---- MCQ / Journal / Ledger row (MCQ-shaped; optionally prefixed with "mcq", "journal" or "ledger") ----
     const isJournal = first === "journal";
-    const cols = first === "mcq" || isJournal ? cells.slice(1) : cells;
+    const isLedger = first === "ledger";
+    const cols = first === "mcq" || isJournal || isLedger ? cells.slice(1) : cells;
     if (cols.length < 5) { errors.push(`Row ${idx + 1}: needs a question + 4 options`); return; }
     const [qtext, a, b, c, d, correct, difficulty, explanation, wa, wb, wc, wd] = cols;
     if (!qtext || !a || !b || !c || !d) { errors.push(`Row ${idx + 1}: empty question or option`); return; }
     const ci = correctIndex(correct);
     const optExp = buildOptionExplanations([wa, wb, wc, wd], ci);
     rows.push({
-      type: isJournal ? "journal" : "mcq",
+      type: isJournal ? "journal" : isLedger ? "ledger" : "mcq",
       text: qtext,
       options: [a, b, c, d],
       correct: ci,
@@ -338,6 +339,7 @@ export function questionsToCsv(questions) {
         case "assertion": cells = ["assertion", q.assertion || "", q.reason || "", a, b, c, d, ...tail]; break;
         case "image": cells = ["image", q.image || "", q.text, a, b, c, d, ...tail]; break;
         case "journal": cells = ["journal", q.text, a, b, c, d, ...tail]; break;
+        case "ledger": cells = ["ledger", q.text, a, b, c, d, ...tail]; break;
         default: cells = [q.text, a, b, c, d, ...tail];
       }
       while (cells.length && cells[cells.length - 1] === "") cells.pop(); // trim trailing empties

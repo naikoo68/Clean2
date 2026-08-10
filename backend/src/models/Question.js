@@ -15,7 +15,7 @@ const questionSchema = new mongoose.Schema(
     session: { type: mongoose.Schema.Types.ObjectId, ref: "Session" },
     quiz: { type: mongoose.Schema.Types.ObjectId, ref: "Quiz" },
     testSeries: { type: mongoose.Schema.Types.ObjectId, ref: "TestSeries" },
-    type: { type: String, enum: ["mcq", "matching", "statement", "pair", "pairselect", "image", "table", "assertion", "journal"], default: "mcq" },
+    type: { type: String, enum: ["mcq", "matching", "statement", "pair", "pairselect", "image", "table", "assertion", "journal", "ledger"], default: "mcq" },
     text: { type: String, required: true },
     image: { type: String }, // diagram/figure for "image" (and any) questions
 
