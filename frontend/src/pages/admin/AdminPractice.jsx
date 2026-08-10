@@ -29,7 +29,7 @@ import ScheduleQuestionModal from "../../components/admin/ScheduleQuestionModal"
 import MigrateQuizModal from "../../components/admin/MigrateQuizModal";
 import MigrateTopicsModal from "../../components/admin/MigrateTopicsModal";
 import MoveQuestionsModal from "../../components/admin/MoveQuestionsModal";
-import { Files, ScanSearch, Loader2, Sparkles, Scissors, GitMerge, Maximize2, Minimize2, Save } from "lucide-react";
+import { Files, ScanSearch, Loader2, Sparkles, Scissors, GitMerge, Maximize2, Minimize2, Save, CheckCircle2 } from "lucide-react";
 
 // Question types offered per subtopic in the "Missing areas" sequential generator.
 const GEN_TYPES = [
@@ -348,13 +348,12 @@ export default function AdminPractice({ clientMode = false, fixedKind = "" }) {
   // checkbox "Move selected" and the by-type "Move these" flows.
   const openMove = (ids) => { const arr = [...ids]; if (arr.length) setMoveModal({ ids: arr }); };
 
-  // Refresh after a successful move (from MoveQuestionsModal).
-  const afterMove = async (res) => {
-    setMoveModal(null);
+  // Refresh after a successful move (from MoveQuestionsModal). The modal stays
+  // open showing its moved/remaining summary; the user closes it with "Done".
+  const afterMove = async () => {
     setSelQ(new Set());
     await reloadTq();
     load(view); // refresh both quizzes' question counts
-    window.alert(res?.message || "Moved.");
   };
 
   // Saved "missing areas" plan — kept in the browser per topic so you can scan
@@ -754,6 +753,7 @@ export default function AdminPractice({ clientMode = false, fixedKind = "" }) {
     if (!ids.length) return;
     const label = typeFilter.length ? typeFilter.map((t) => QUESTION_TYPE_LABELS[t] || t).join(", ") : "all types";
     if (!window.confirm(`Delete ${ids.length} question(s) of type: ${label}? This cannot be undone.`)) return;
+    const before = tq.length;
     setDelProgress({ total: ids.length, done: 0 });
     try {
       let done = 0;
@@ -763,7 +763,8 @@ export default function AdminPractice({ clientMode = false, fixedKind = "" }) {
       }
       await reloadTq();
       load("items");
-      setDelProgress(null);
+      setDelProgress({ total: ids.length, done: ids.length, finished: true, remaining: Math.max(0, before - ids.length) });
+      setTimeout(() => setDelProgress(null), 5000);
     } catch (e) {
       setError(e.message);
       setDelProgress(null);
@@ -1255,6 +1256,13 @@ export default function AdminPractice({ clientMode = false, fixedKind = "" }) {
                 </div>
               );
             })()}
+            {!studentView && delProgress && (
+              <p className={`mb-3 flex items-center gap-1.5 text-xs font-medium ${delProgress.finished ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600"}`}>
+                {delProgress.finished
+                  ? <><CheckCircle2 className="h-3.5 w-3.5" /> Deleted {delProgress.done}{delProgress.remaining != null ? ` • ${delProgress.remaining} remaining` : ""}</>
+                  : <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Deleting {delProgress.done} of {delProgress.total}…</>}
+              </p>
+            )}
             <div className="max-h-[70vh] space-y-4 overflow-y-auto pr-1">
               {tq
                 .map((it, i) => ({ it, i }))
