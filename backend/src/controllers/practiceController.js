@@ -921,7 +921,10 @@ async function runAcceptJob(jobId, { share, items, placed, copyOwner, cache }) {
       ? { practice: true, owner: copyOwner ?? null, practiceTopic: topicId }
       : { practice: true, owner: copyOwner ?? null, practiceSubject: subjectId };
     const copyName = await uniqueItemName(src.name, itemScope);
-    const copy = await TestSeries.create({
+    // Preserve the original "uploaded"/"updated" dates on the copy so the
+    // recipient sees the same dates as the sender (timestamps:false stops
+    // Mongoose from resetting them to the accept time).
+    const copy = new TestSeries({
       name: copyName,
       owner: copyOwner,
       practice: true,
@@ -937,8 +940,11 @@ async function runAcceptJob(jobId, { share, items, placed, copyOwner, cache }) {
       subjectPlan: Array.isArray(src.subjectPlan) ? src.subjectPlan : [],
       status: "published",
       visibleToAll: false,
+      ...(src.createdAt ? { createdAt: src.createdAt } : {}),
+      ...(src.updatedAt ? { updatedAt: src.updatedAt } : {}),
     });
-    const created = await duplicateQuestions({ testSeries: src._id }, { testSeries: copy._id, owner: copyOwner });
+    await copy.save({ timestamps: false });
+    const created = await duplicateQuestions({ testSeries: src._id }, { testSeries: copy._id, owner: copyOwner }, { preserveDates: true });
     if (created.length) await TestSeries.findByIdAndUpdate(copy._id, { $push: { questions: { $each: created.map((c) => c._id) } } });
     job.itemsSaved += 1;
     job.questionsSaved += created.length;
