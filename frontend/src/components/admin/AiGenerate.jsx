@@ -49,6 +49,8 @@ export default function AiGenerate({ open, onClose, onUpload, title = "Generate 
   const [autoContinue, setAutoContinue] = useState(true); // ON by default: resume across quota windows until the full count is reached, then stop
   const [keepExtras, setKeepExtras] = useState(false); // if a wave produces more than the target, keep ALL of them instead of trimming to the exact count
   const [numerical, setNumerical] = useState(false); // opt-in: also include numerical/calculation questions (default off)
+  const [perSubtopic, setPerSubtopic] = useState(false); // when ON, the grid counts are generated FOR EACH subtopic (looped), not as a whole-batch total
+  const [perSubRun, setPerSubRun] = useState(null); // live per-subtopic progress { i, n, name }
   const jobIdRef = useRef(null); // id of the running background job (so Stop can cancel it)
   const stopRef = useRef(false); // set when the user clicks Stop — breaks/short-circuits the poll loop
   const pendingDoneRef = useRef([]); // subtopics queued (via "Use selected") to hide after the next Generate
@@ -138,6 +140,8 @@ export default function AiGenerate({ open, onClose, onUpload, title = "Generate 
     setCoverage(null);
     setCoverageLoading(false);
     setSyllabus(null);
+    setPerSubtopic(false); // default unchecked each time the modal opens
+    setPerSubRun(null);
     setDestChoice(allowNewTarget && defaultDest === "new" ? "new" : "current");
     setNewName("");
     setSection(defaultSection || sections[0] || ""); // re-sync target subject on open
@@ -551,6 +555,27 @@ export default function AiGenerate({ open, onClose, onUpload, title = "Generate 
   // it. Manually-typed subtopics still take precedence for the main Generate.
   const generateSubtopic = (text) => { setSubtopics(text); generate(true, text); };
 
+  // "Per subtopic" mode: generate the grid's mix for EACH subtopic in the
+  // "Subtopics to cover" box, one at a time (each subtopic is a focused run that
+  // reuses the normal generator, so it stays within the per-batch cap). The
+  // preview accumulates across subtopics and a live line shows the progress.
+  const generatePerSubtopic = async () => {
+    if (!topic.trim() && !url.trim()) { setMsg("Enter a topic/syllabus (or a source link) first."); return; }
+    const subs = subtopics.split(/[\n,]+/).map((s) => s.trim()).filter(Boolean);
+    if (!subs.length) { setMsg("Add the subtopics in “Subtopics to cover” (or pick from Saved) to generate per subtopic."); return; }
+    if (total <= 0) { setMsg("Set at least one question count in the grid below."); return; }
+    if (total > maxPerBatch) { setMsg(`Keep the PER-SUBTOPIC total to ${maxPerBatch} or fewer (it runs once per subtopic).`); return; }
+    stopRef.current = false;
+    for (let idx = 0; idx < subs.length; idx++) {
+      if (stopRef.current) break;
+      setPerSubRun({ i: idx + 1, n: subs.length, name: subs[idx] });
+      // First subtopic starts a fresh preview; later ones append (no duplicates).
+      // eslint-disable-next-line no-await-in-loop
+      await generate(idx > 0, subs[idx]);
+    }
+    setPerSubRun(null);
+  };
+
   // Stop the current generation. Tells the server to cancel the background job;
   // the poll loop then finalizes with whatever was produced so far, so the
   // partial batch still shows up for review/insert.
@@ -808,6 +833,15 @@ export default function AiGenerate({ open, onClose, onUpload, title = "Generate 
               </span>
             </div>
 
+            {perSubRun && (
+              <div className="mt-2 rounded-lg border border-brand-200 bg-brand-50/60 px-3 py-2 text-xs dark:border-brand-900/40 dark:bg-brand-900/10">
+                <p className="flex flex-wrap items-center gap-1.5 font-semibold text-brand-700 dark:text-brand-300">
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" /> Per subtopic — {perSubRun.i} of {perSubRun.n}: {perSubRun.name}
+                  <span className="font-normal text-slate-500 dark:text-slate-400">· {preview.length} generated so far (target {total * perSubRun.n})</span>
+                </p>
+              </div>
+            )}
+
             {/* Live results breakdown — how many of each type × difficulty have
                 been generated so far vs requested. Appears while generating and
                 after a batch completes. */}
@@ -889,16 +923,31 @@ export default function AiGenerate({ open, onClose, onUpload, title = "Generate 
               <span><b>Include numerical questions</b> that need calculation (solving with a formula/arithmetic). Off by default — leave unticked to keep questions conceptual/factual only.</span>
             </label>
 
+            <label className="mt-2 flex items-start gap-2 rounded-lg border border-slate-200 p-2.5 text-xs text-slate-600 dark:border-slate-700 dark:text-slate-300">
+              <input type="checkbox" checked={perSubtopic} onChange={(e) => setPerSubtopic(e.target.checked)} className="mt-0.5 h-4 w-4 flex-shrink-0 accent-brand-600" />
+              <span>
+                <b>Generate this many per subtopic</b> — the counts above are produced for EACH subtopic in “Subtopics to cover” (looped one at a time). Off by default (the counts are the total for the whole batch).
+                {perSubtopic && (() => {
+                  const n = subtopics.split(/[\n,]+/).map((s) => s.trim()).filter(Boolean).length;
+                  return (
+                    <span className="mt-1 block font-semibold text-brand-600 dark:text-brand-300">
+                      {n ? `${total} × ${n} subtopic(s) = ${total * n} question(s) total` : "Add subtopics in “Subtopics to cover” above first."}
+                    </span>
+                  );
+                })()}
+              </span>
+            </label>
+
             <button
               type="button"
-              onClick={() => generate(false)}
-              disabled={busy}
+              onClick={() => (perSubtopic ? generatePerSubtopic() : generate(false))}
+              disabled={busy || !!perSubRun}
               className="btn-primary mt-2 w-full"
             >
-              {busy ? <><Loader2 className="h-4 w-4 animate-spin" /> Generating…</> : <><Wand2 className="h-4 w-4" /> Generate</>}
+              {(busy || perSubRun) ? <><Loader2 className="h-4 w-4 animate-spin" /> Generating…</> : <><Wand2 className="h-4 w-4" /> {perSubtopic ? "Generate per subtopic" : "Generate"}</>}
             </button>
 
-            {busy && (
+            {(busy || perSubRun) && (
               <button
                 type="button"
                 onClick={stop}
