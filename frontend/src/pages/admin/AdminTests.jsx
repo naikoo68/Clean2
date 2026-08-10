@@ -11,7 +11,7 @@ import SubjectPlanEditor from "../../components/admin/SubjectPlanEditor";
 import PickFromBank from "../../components/admin/PickFromBank";
 import WeightageFill from "../../components/admin/WeightageFill";
 import DuplicatesModal from "../../components/admin/DuplicatesModal";
-import { Files, Maximize2, Minimize2 } from "lucide-react";
+import { Files, Maximize2, Minimize2, Loader2, CheckCircle2 } from "lucide-react";
 import QuestionFormModal from "../../components/admin/QuestionFormModal";
 import QuestionView from "../../components/admin/QuestionView";
 import QuestionTypeFilter from "../../components/admin/QuestionTypeFilter";
@@ -194,6 +194,7 @@ export default function AdminTests() {
     if (!ids.length) return;
     const label = typeFilter.length ? typeFilter.map((t) => QUESTION_TYPE_LABELS[t] || t).join(", ") : "all types";
     if (!window.confirm(`Delete ${ids.length} question(s) of type: ${label} from this test? This cannot be undone.`)) return;
+    const before = tq.length;
     setDelProgress({ total: ids.length, done: 0 });
     try {
       let done = 0;
@@ -203,7 +204,8 @@ export default function AdminTests() {
       }
       await reloadTq();
       load();
-      setDelProgress(null);
+      setDelProgress({ total: ids.length, done: ids.length, finished: true, remaining: Math.max(0, before - ids.length) });
+      setTimeout(() => setDelProgress(null), 5000);
     } catch (e) {
       setError(e.message);
       setDelProgress(null);
@@ -977,6 +979,13 @@ export default function AdminTests() {
                 </div>
               );
             })()}
+            {!studentView && delProgress && (
+              <p className={`mb-3 flex items-center gap-1.5 text-xs font-medium ${delProgress.finished ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600"}`}>
+                {delProgress.finished
+                  ? <><CheckCircle2 className="h-3.5 w-3.5" /> Deleted {delProgress.done}{delProgress.remaining != null ? ` • ${delProgress.remaining} remaining` : ""}</>
+                  : <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Deleting {delProgress.done} of {delProgress.total}…</>}
+              </p>
+            )}
             <div className="max-h-[70vh] space-y-4 overflow-y-auto pr-1">
               {tq
                 .map((it, i) => ({ it, i }))
