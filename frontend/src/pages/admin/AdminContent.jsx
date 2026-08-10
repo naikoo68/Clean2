@@ -97,10 +97,10 @@ export default function AdminContent() {
         await contentService.deleteQuestion(id);
         setDelProgress({ total, done: ++done }); // tick up in real time
       }
-      setDelProgress({ total, done: total, finished: true });
+      setDelProgress({ total, done: total, finished: true, remaining: Math.max(0, items.length - total) });
       setSelected([]);
       load("questions");
-      setTimeout(() => setDelProgress(null), 3000);
+      setTimeout(() => setDelProgress(null), 5000);
     } catch (e) {
       setError(e.message);
       setDelProgress(null);
@@ -126,10 +126,10 @@ export default function AdminContent() {
         await contentService.deleteQuestion(id);
         setDelProgress({ total: ids.length, done: ++done });
       }
-      setDelProgress({ total: ids.length, done: ids.length, finished: true });
+      setDelProgress({ total: ids.length, done: ids.length, finished: true, remaining: Math.max(0, items.length - ids.length) });
       setSelected([]);
       await load("questions");
-      setTimeout(() => setDelProgress(null), 3000);
+      setTimeout(() => setDelProgress(null), 5000);
     } catch (e) {
       setError(e.message);
       setDelProgress(null);
@@ -512,7 +512,7 @@ export default function AdminContent() {
                   delProgress ? (
                     <span className={`inline-flex items-center gap-1.5 text-sm font-medium ${delProgress.finished ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600"}`}>
                       {delProgress.finished ? (
-                        <><CheckCircle2 className="h-4 w-4" /> Deleted {delProgress.total} question{delProgress.total === 1 ? "" : "s"} — done</>
+                        <><CheckCircle2 className="h-4 w-4" /> Deleted {delProgress.total} question{delProgress.total === 1 ? "" : "s"}{delProgress.remaining != null ? ` — ${delProgress.remaining} remaining` : " — done"}</>
                       ) : (
                         <><Loader2 className="h-4 w-4 animate-spin" /> Deleting {delProgress.done} of {delProgress.total}…</>
                       )}
@@ -904,6 +904,13 @@ export default function AdminContent() {
                 </div>
               );
             })()}
+            {!studentView && delProgress && (
+              <p className={`mb-3 flex items-center gap-1.5 text-xs font-medium ${delProgress.finished ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600"}`}>
+                {delProgress.finished
+                  ? <><CheckCircle2 className="h-3.5 w-3.5" /> Deleted {delProgress.done}{delProgress.remaining != null ? ` • ${delProgress.remaining} remaining` : ""}</>
+                  : <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Deleting {delProgress.done} of {delProgress.total}…</>}
+              </p>
+            )}
             <div className="max-h-[70vh] space-y-4 overflow-y-auto pr-1">
               {items
                 .map((it, i) => ({ it, i }))
