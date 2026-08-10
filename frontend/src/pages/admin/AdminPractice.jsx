@@ -163,7 +163,8 @@ export default function AdminPractice({ clientMode = false, fixedKind = "" }) {
   const [reopenAfterEdit, setReopenAfterEdit] = useState(null); // question _id to reopen in the preview after editing it there
   const [selQ, setSelQ] = useState(() => new Set()); // ticked questions to move (full-quiz view)
   const [delProgress, setDelProgress] = useState(null); // real-time delete-by-type progress: { total, done }
-  const [moveTargetId, setMoveTargetId] = useState(""); // destination quiz for the move
+  const [moveTargetId, setMoveTargetId] = useState(""); // destination quiz for the checkbox move
+  const [moveByTypeTargetId, setMoveByTypeTargetId] = useState(""); // destination quiz for the by-type move
   const [movingQ, setMovingQ] = useState(false);
   const [shareItem, setShareItem] = useState(null); // public share-link modal target (tests)
   const [shareEmailTarget, setShareEmailTarget] = useState(null); // account-to-account share (stream/subject/topic/item)
@@ -334,7 +335,7 @@ export default function AdminPractice({ clientMode = false, fixedKind = "" }) {
   // ---- Questions ----
   const openQuestions = (item) => {
     setQItem(item);
-    setSelQ(new Set()); setMoveTargetId(""); // fresh selection per quiz
+    setSelQ(new Set()); setMoveTargetId(""); setMoveByTypeTargetId(""); // fresh selection per quiz
     setTqLoading(true);
     testService.getQuestions(item._id).then(setTq).catch((e) => setError(e.message)).finally(() => setTqLoading(false));
   };
@@ -351,6 +352,28 @@ export default function AdminPractice({ clientMode = false, fixedKind = "" }) {
     try {
       const res = await practiceService.moveQuestions(qItem._id, ids, moveTargetId);
       setSelQ(new Set()); setMoveTargetId("");
+      await reloadTq();
+      load(view); // refresh the sibling quizzes' question counts
+      window.alert(res?.message || "Moved.");
+    } catch (e) { setError(e.message); }
+    finally { setMovingQ(false); }
+  };
+
+  // Move the "View all" questions matching the active TYPE filter (or every
+  // question when no type is selected) to another quiz in the same topic —
+  // the by-type counterpart of doMoveQuestions, so a whole type moves at once.
+  const moveByType = async () => {
+    if (movingQ || !qItem) return;
+    const dest = (items || []).find((it) => it._id === moveByTypeTargetId);
+    const targets = tq.filter((it) => !typeFilter.length || typeFilter.includes(questionTypeKey(it)));
+    const ids = targets.map((q) => q._id);
+    if (!ids.length || !dest) return;
+    const label = typeFilter.length ? typeFilter.map((t) => QUESTION_TYPE_LABELS[t] || t).join(", ") : "all types";
+    if (!window.confirm(`Move ${ids.length} question(s) of type: ${label} to “${dest.name}”?`)) return;
+    setMovingQ(true); setError("");
+    try {
+      const res = await practiceService.moveQuestions(qItem._id, ids, moveByTypeTargetId);
+      setMoveByTypeTargetId(""); setSelQ(new Set());
       await reloadTq();
       load(view); // refresh the sibling quizzes' question counts
       window.alert(res?.message || "Moved.");
@@ -1241,7 +1264,22 @@ export default function AdminPractice({ clientMode = false, fixedKind = "" }) {
                       ? `Delete these ${shownCount} (${typeFilter.map((t) => QUESTION_TYPE_LABELS[t] || t).join(", ")})`
                       : `Delete all ${shownCount}`}
                   </button>
-                  {!typeFilter.length && <span className="text-xs text-slate-400">Tip: pick a Type above to delete only that type.</span>}
+                  {(() => {
+                    const siblings = (items || []).filter((it) => it._id !== qItem._id);
+                    if (!siblings.length) return null;
+                    return (
+                      <span className="inline-flex items-center gap-1.5">
+                        <select value={moveByTypeTargetId} onChange={(e) => setMoveByTypeTargetId(e.target.value)} className="input max-w-[11rem] py-1.5 text-xs">
+                          <option value="">Move these {shownCount} to…</option>
+                          {siblings.map((it) => <option key={it._id} value={it._id}>{it.name} ({it.questionCount ?? 0})</option>)}
+                        </select>
+                        <button onClick={moveByType} disabled={!moveByTypeTargetId || movingQ} className="inline-flex items-center gap-1.5 rounded-lg border border-brand-200 px-3 py-1.5 text-xs font-semibold text-brand-600 transition hover:bg-brand-50 disabled:opacity-50 dark:border-brand-900/50 dark:hover:bg-brand-900/20">
+                          {movingQ ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Moving…</> : <><ArrowRightLeft className="h-3.5 w-3.5" /> Move</>}
+                        </button>
+                      </span>
+                    );
+                  })()}
+                  {!typeFilter.length && <span className="text-xs text-slate-400">Tip: pick a Type above to delete/move only that type.</span>}
                 </div>
               );
             })()}
