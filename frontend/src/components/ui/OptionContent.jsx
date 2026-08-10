@@ -22,14 +22,16 @@ function parsePipeRows(s) {
 /**
  * Renders a single question OPTION.
  *
- * Journal Entry / Ledger Posting options are supplied as a pipe-delimited table
- * in the standard textbook layout — columns "Date | Particulars | LF |
- * Amount(Dr.) | Amount(Cr.)" (older ones use "Account | Debit | Credit"). Plain
- * text would show the raw "| ... |" pipes, so we detect that shape and render a
- * real, aligned journal table: amount columns right-aligned, credit lines
- * ("To …") indented in Particulars, and the "(Being …)" narration italicised.
- * Any other option (plain MCQ, matching sequence, etc.) renders as normal
- * math-aware text.
+ * Accounting options are supplied as a pipe-delimited table in the standard
+ * textbook layout, and we detect that shape to render a real, aligned table
+ * (any "|" cell would otherwise show as raw pipes):
+ *   - Journal Entry: five columns "Date | Particulars | LF | Amount(Dr.) |
+ *     Amount(Cr.)" (older ones use "Account | Debit | Credit").
+ *   - Ledger Posting: an eight-column T-account "Date | Particulars | J.F. |
+ *     Amount | Date | Particulars | J.F. | Amount" (Debit side then Credit side).
+ * Amount columns are right-aligned, credit lines ("To …") indented in
+ * Particulars, and any "(Being …)" narration italicised. Any other option
+ * (plain MCQ, matching sequence, etc.) renders as normal math-aware text.
  */
 export default function OptionContent({ children }) {
   const s = typeof children === "string" ? children : "";

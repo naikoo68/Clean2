@@ -42,7 +42,7 @@ export default function QuestionView({ q, index, studentView = false, onRegenera
         {index != null && (
           <span className="flex h-6 w-6 items-center justify-center rounded-md bg-slate-100 text-xs font-bold dark:bg-slate-800">{index}</span>
         )}
-        <Badge variant={["matching", "pair", "pairselect"].includes(q.type) ? "accent" : "brand"}>{{ matching: "Matching", statement: "Statement", pair: "Pair", pairselect: "Pair-select", image: "Image", table: "Table", assertion: "Assertion & Reason", journal: "Journal / Ledger" }[q.type] || "MCQ"}</Badge>
+        <Badge variant={["matching", "pair", "pairselect"].includes(q.type) ? "accent" : "brand"}>{{ matching: "Matching", statement: "Statement", pair: "Pair", pairselect: "Pair-select", image: "Image", table: "Table", assertion: "Assertion & Reason", journal: "Journal Entry", ledger: "Ledger Posting" }[q.type] || "MCQ"}</Badge>
         {q.difficulty && <Badge variant={q.difficulty}>{q.difficulty}</Badge>}
         {q.status && <Badge variant={q.status === "published" ? "brand" : "neutral"}>{q.status}</Badge>}
         {showAnswer && q.correct !== undefined && (
