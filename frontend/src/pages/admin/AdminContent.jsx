@@ -86,6 +86,38 @@ export default function AdminContent() {
   const toggleSelect = (id) => setSelected((s) => (s.includes(id) ? s.filter((x) => x !== id) : [...s, id]));
   const allSelected = view === "questions" && items.length > 0 && selected.length === items.length;
   const toggleAll = () => setSelected(allSelected ? [] : items.map((i) => i._id));
+
+  // ---- Bulk delete of NODES (streams/subjects/topics/sessions/quizzes) ----
+  const [selNodes, setSelNodes] = useState([]); // ticked node ids (non-question views)
+  const [delNodeBusy, setDelNodeBusy] = useState(null); // { done, total } while deleting nodes
+  const toggleNode = (id) => setSelNodes((s) => (s.includes(id) ? s.filter((x) => x !== id) : [...s, id]));
+  const allNodesSelected = view !== "questions" && items.length > 0 && selNodes.length === items.length;
+  const toggleAllNodes = () => setSelNodes(allNodesSelected ? [] : items.map((i) => i._id));
+  const deleteSelectedNodes = async () => {
+    if (!selNodes.length || delNodeBusy) return;
+    const type = VIEW_TYPE[view];
+    const total = selNodes.length;
+    if (!window.confirm(`Delete ${total} selected ${type}${total === 1 ? "" : "s"}? This also removes everything inside them. This cannot be undone.`)) return;
+    setDelNodeBusy({ done: 0, total });
+    setError("");
+    try {
+      let done = 0;
+      for (const id of selNodes) {
+        if (type === "stream") await contentService.deleteStream(id);
+        else if (type === "subject") await contentService.deleteSubject(id);
+        else if (type === "topic") await contentService.deleteTopic(id);
+        else if (type === "session") await contentService.deleteSession(id);
+        else if (type === "quiz") await contentService.deleteQuiz(id);
+        setDelNodeBusy({ done: ++done, total });
+      }
+      setSelNodes([]);
+      load(view);
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setDelNodeBusy(null);
+    }
+  };
   const deleteSelected = async () => {
     if (!selected.length || delProgress) return;
     const total = selected.length;
@@ -190,7 +222,7 @@ export default function AdminContent() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stream, subject, topic, session, quiz]);
 
-  useEffect(() => { setSelected([]); setSearch(""); load(view); /* eslint-disable-next-line */ }, [view]);
+  useEffect(() => { setSelected([]); setSelNodes([]); setSearch(""); load(view); /* eslint-disable-next-line */ }, [view]);
 
   // After editing a question that was opened from the single-question preview,
   // reopen the preview on that (now-reloaded, updated) question so you land back
@@ -528,6 +560,27 @@ export default function AdminContent() {
               </div>
             </div>
           )}
+          {view !== "questions" && items.length > 0 && (
+            <div className="flex flex-wrap items-center gap-3 rounded-xl border border-slate-200 px-4 py-2 dark:border-slate-700">
+              <label className="flex items-center gap-2 text-sm font-medium">
+                <input type="checkbox" checked={allNodesSelected} onChange={toggleAllNodes} className="h-4 w-4 accent-brand-600" /> Select all
+              </label>
+              {(selNodes.length > 0 || delNodeBusy) && (
+                delNodeBusy ? (
+                  <span className="inline-flex items-center gap-1.5 text-sm font-medium text-rose-600">
+                    <Loader2 className="h-4 w-4 animate-spin" /> Deleting {delNodeBusy.done} of {delNodeBusy.total}…
+                  </span>
+                ) : (
+                  <>
+                    <span className="text-sm text-slate-500">{selNodes.length} selected</span>
+                    <button onClick={deleteSelectedNodes} className="btn-outline py-1.5 text-rose-600"><Trash2 className="h-4 w-4" /> Delete selected</button>
+                    <button onClick={() => setSelNodes([])} className="text-sm text-slate-500 hover:underline">Clear</button>
+                  </>
+                )
+              )}
+              <span className="ml-auto text-xs text-slate-400">Tick to delete several at once</span>
+            </div>
+          )}
           {questionResults && questionResults.length === 0 && (
             <p className="rounded-xl border border-dashed border-slate-200 px-4 py-6 text-center text-sm text-slate-500 dark:border-slate-700">
               No questions match “{search}” at 40% or higher. Try fewer or different words.
@@ -541,6 +594,9 @@ export default function AdminContent() {
             >
               {view === "questions" && (
                 <input type="checkbox" checked={selected.includes(item._id)} onChange={() => toggleSelect(item._id)} className="h-4 w-4 flex-shrink-0 accent-brand-600" />
+              )}
+              {view !== "questions" && (
+                <input type="checkbox" checked={selNodes.includes(item._id)} onClick={(e) => e.stopPropagation()} onChange={() => toggleNode(item._id)} className="h-4 w-4 flex-shrink-0 accent-brand-600" title="Select to delete" />
               )}
               <div className="min-w-0 flex-1">
                 {view === "questions" ? (
