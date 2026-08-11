@@ -173,6 +173,7 @@ export default function AdminPractice({ clientMode = false, fixedKind = "" }) {
   const [selTopics, setSelTopics] = useState({}); // checkbox selection in the topics view (id -> true)
   const [migrateTopicsOpen, setMigrateTopicsOpen] = useState(false); // bulk-topic migrate modal
   const [sendSelectedOpen, setSendSelectedOpen] = useState(false); // bulk "Send selected" to another account
+  const [delSelBusy, setDelSelBusy] = useState(null); // real-time bulk-delete progress: { done, total }
   const [extendItem, setExtendItem] = useState(null); // AI extend-explanations target
   const [extendingQId, setExtendingQId] = useState(null); // per-question extend in progress
   const [extendOneItem, setExtendOneItem] = useState(null); // per-question extend confirm modal target
@@ -296,6 +297,33 @@ export default function AdminPractice({ clientMode = false, fixedKind = "" }) {
       else if (type === "item") await testService.remove(id);
       load(view);
     } catch (e) { setError(e.message); }
+  };
+
+  // Delete every ticked node at the current level (streams / subjects / topics /
+  // quizzes) in one go, with a confirmation and real-time progress.
+  const deleteSelectedNodes = async () => {
+    const nodes = selectedNodes(); // [{ level, id, name }]
+    if (!nodes.length || delSelBusy) return;
+    const noun = { stream: "stream", subject: "subject", topic: "topic", item: kind === "test" ? "test" : "quiz" }[nodes[0].level] || "item";
+    if (!window.confirm(`Delete ${nodes.length} ${noun}${nodes.length === 1 ? "" : "s"}? This also deletes everything inside them. This cannot be undone.`)) return;
+    setDelSelBusy({ done: 0, total: nodes.length });
+    setError("");
+    try {
+      let done = 0;
+      for (const n of nodes) {
+        if (n.level === "stream") await practiceService.deleteStream(n.id);
+        else if (n.level === "subject") await practiceService.deleteSubject(n.id);
+        else if (n.level === "topic") await practiceService.deleteTopic(n.id);
+        else await testService.remove(n.id);
+        setDelSelBusy({ done: ++done, total: nodes.length });
+      }
+      setSelTopics({});
+      load(view);
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setDelSelBusy(null);
+    }
   };
 
   // Split a My-Quiz item (or a whole topic) into quizzes of `splitPer` each.
@@ -949,13 +977,16 @@ export default function AdminPractice({ clientMode = false, fixedKind = "" }) {
                   <ArrowRightLeft className="h-3.5 w-3.5" /> Migrate selected
                 </button>
               )}
-              <button onClick={() => setSendSelectedOpen(true)} className="btn-outline py-1.5 text-xs text-emerald-600">
+              <button onClick={() => setSendSelectedOpen(true)} disabled={!!delSelBusy} className="btn-outline py-1.5 text-xs text-emerald-600 disabled:opacity-50">
                 <Send className="h-3.5 w-3.5" /> Send selected
+              </button>
+              <button onClick={deleteSelectedNodes} disabled={!!delSelBusy} className="btn-outline py-1.5 text-xs text-rose-600 disabled:opacity-50">
+                <Trash2 className="h-3.5 w-3.5" /> {delSelBusy ? `Deleting ${delSelBusy.done}/${delSelBusy.total}…` : "Delete selected"}
               </button>
               <button onClick={() => setSelTopics({})} className="btn-ghost py-1.5 text-xs">Clear</button>
             </>
           )}
-          <span className="ml-auto text-xs text-slate-400">Tick items to send{view === "topics" ? " or move" : ""} several at once</span>
+          <span className="ml-auto text-xs text-slate-400">Tick items to delete, send{view === "topics" ? " or move" : ""} several at once</span>
         </div>
       )}
 
