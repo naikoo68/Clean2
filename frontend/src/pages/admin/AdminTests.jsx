@@ -360,6 +360,63 @@ export default function AdminTests() {
     }
   };
 
+  // ---- Bulk delete of the current level (exams / posts / tests) ----
+  const [selRows, setSelRows] = useState([]); // ticked row ids at the current level
+  const [delRowBusy, setDelRowBusy] = useState(null); // { done, total } while deleting
+  useEffect(() => { setSelRows([]); }, [view, exam?._id, post?._id]);
+  const currentList = view === "tests" ? tests : list;
+  const toggleRow = (id) => setSelRows((s) => (s.includes(id) ? s.filter((x) => x !== id) : [...s, id]));
+  const allRowsSelected = currentList.length > 0 && selRows.length === currentList.length;
+  const toggleAllRows = () => setSelRows(allRowsSelected ? [] : currentList.map((i) => i._id));
+  const deleteSelectedRows = async () => {
+    if (!selRows.length || delRowBusy) return;
+    const noun = view === "exams" ? "exam" : view === "posts" ? "post" : "test";
+    const total = selRows.length;
+    if (!window.confirm(`Delete ${total} selected ${noun}${total === 1 ? "" : "s"}? ${view !== "tests" ? "Everything inside is removed/detached. " : ""}This cannot be undone.`)) return;
+    setDelRowBusy({ done: 0, total });
+    setError("");
+    try {
+      let done = 0;
+      for (const id of selRows) {
+        if (view === "exams") await examService.deleteExam(id);
+        else if (view === "posts") await examService.deletePost(id);
+        else await testService.remove(id);
+        setDelRowBusy({ done: ++done, total });
+      }
+      const del = new Set(selRows);
+      if (view === "tests") setTests((l) => l.filter((x) => !del.has(x._id)));
+      else setList((l) => l.filter((x) => !del.has(x._id)));
+      setSelRows([]);
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setDelRowBusy(null);
+    }
+  };
+  // Reusable toolbar shown above each level's list (a JSX element, not a nested
+  // component, so it doesn't remount on every render).
+  const bulkBar = (
+    <div className="flex flex-wrap items-center gap-3 rounded-xl border border-slate-200 px-4 py-2 dark:border-slate-700">
+      <label className="flex items-center gap-2 text-sm font-medium">
+        <input type="checkbox" checked={allRowsSelected} onChange={toggleAllRows} className="h-4 w-4 accent-brand-600" /> Select all
+      </label>
+      {(selRows.length > 0 || delRowBusy) && (
+        delRowBusy ? (
+          <span className="inline-flex items-center gap-1.5 text-sm font-medium text-rose-600">
+            <Loader2 className="h-4 w-4 animate-spin" /> Deleting {delRowBusy.done} of {delRowBusy.total}…
+          </span>
+        ) : (
+          <>
+            <span className="text-sm text-slate-500">{selRows.length} selected</span>
+            <button onClick={deleteSelectedRows} className="btn-outline py-1.5 text-rose-600"><Trash2 className="h-4 w-4" /> Delete selected</button>
+            <button onClick={() => setSelRows([])} className="text-sm text-slate-500 hover:underline">Clear</button>
+          </>
+        )
+      )}
+      <span className="ml-auto text-xs text-slate-400">Tick to delete several at once</span>
+    </div>
+  );
+
   const save = async (e) => {
     e.preventDefault();
     setSaving(true);
@@ -429,6 +486,7 @@ export default function AdminTests() {
           <EmptyState message={view === "exams" ? 'No exams yet. Click "Add Exam".' : 'No posts yet. Click "Add Post".'} />
         ) : (
           <div className="space-y-3">
+            {bulkBar}
             {list.map((item) => (
               <div
                 key={item._id}
@@ -436,6 +494,7 @@ export default function AdminTests() {
                 className="card flex cursor-pointer items-center justify-between gap-3 p-4 transition hover:border-brand-300 dark:hover:border-brand-600"
               >
                 <div className="flex min-w-0 items-center gap-3">
+                  <input type="checkbox" checked={selRows.includes(item._id)} onClick={(e) => e.stopPropagation()} onChange={() => toggleRow(item._id)} className="h-4 w-4 flex-shrink-0 accent-brand-600" title="Select to delete" />
                   <span className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-brand-100 text-brand-600 dark:bg-brand-900/40 dark:text-brand-300">
                     {view === "exams" ? <GraduationCap className="h-5 w-5" /> : <Briefcase className="h-5 w-5" />}
                   </span>
@@ -456,10 +515,13 @@ export default function AdminTests() {
       ) : tests.length === 0 ? (
         <EmptyState message="No tests in this post yet. Click Create Test, or use Bulk Upload after creating one." />
       ) : (
-        <div className="card overflow-x-auto">
+        <div className="space-y-3">
+          {bulkBar}
+          <div className="card overflow-x-auto">
           <table className="w-full min-w-[720px] text-sm">
             <thead className="bg-slate-50 text-left text-slate-500 dark:bg-slate-800/60">
               <tr>
+                <th className="w-8 px-3 py-3"><input type="checkbox" checked={allRowsSelected} onChange={toggleAllRows} className="h-4 w-4 accent-brand-600" /></th>
                 <th className="px-5 py-3 font-semibold">Test Name</th>
                 <th className="px-5 py-3 font-semibold">Category</th>
                 <th className="px-5 py-3 font-semibold">Questions</th>
@@ -472,6 +534,9 @@ export default function AdminTests() {
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
               {tests.map((t) => (
                 <tr key={t._id} onClick={() => openQuestions(t)} className="cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/40">
+                  <td className="px-3 py-3" onClick={(e) => e.stopPropagation()}>
+                    <input type="checkbox" checked={selRows.includes(t._id)} onChange={() => toggleRow(t._id)} className="h-4 w-4 accent-brand-600" />
+                  </td>
                   <td className="px-5 py-3">
                     <span className="text-left font-medium text-brand-600 dark:text-brand-400">
                       {t.name}
@@ -538,6 +603,7 @@ export default function AdminTests() {
               ))}
             </tbody>
           </table>
+          </div>
         </div>
       )}
 
