@@ -14,6 +14,7 @@ const TYPE_OPTIONS = [
   { id: "table", label: "Table-based" },
   { id: "journal", label: "Journal Entry" },
   { id: "ledger", label: "Ledger Posting" },
+  { id: "rearrange", label: "Sentence Rearrangement" },
 ];
 
 const LETTERS = ["A", "B", "C", "D"];
