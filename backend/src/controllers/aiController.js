@@ -3125,7 +3125,7 @@ function buildExtendSet(q, parsed, extendQuestion = false, shuffleOptions = fals
   // pair/pairselect/statement/matching) — e.g. to insert a missing "None of the
   // pairs" choice — but NOT for assertion–reason, whose four options are a fixed
   // rubric.
-  const canFixOptions = !q.type || ["mcq", "table", "pair", "pairselect", "statement", "matching", "journal"].includes(q.type);
+  const canFixOptions = !q.type || ["mcq", "table", "pair", "pairselect", "statement", "matching", "journal", "ledger", "rearrange"].includes(q.type);
   if (newOptions && newCorrect != null && canFixOptions) set.options = newOptions; // replace values only with a corrected index
   if (newCorrect != null) set.correct = newCorrect;
   const effectiveCorrect = newCorrect != null ? newCorrect : q.correct;
@@ -3411,7 +3411,7 @@ Respond with ONE valid JSON object and NOTHING else — no markdown, no code fen
 RULES:
 - Keep the question's MEANING, TYPE and what it asks UNCHANGED. Do NOT invent a different question or change the numbers/facts being asked.
 - FIX MATH RENDERING: if any math anywhere (stem, columns, options, explanation) is written as PLAIN TEXT, wrap it properly in $...$ so it renders — e.g. "3/4" → "$\\frac{3}{4}$", "x^2" → "$x^2$", "N/2" → "$\\frac{N}{2}$", "sqrt(2)" → "$\\sqrt{2}$", "25%" → "$25\\%$", "Sum(P1*Q0)/Sum(P0*Q0)" → "$\\frac{\\sum P_1 Q_0}{\\sum P_0 Q_0}$". Return the SAME meaning with the math wrapped and obvious typos/rendering fixed.
-- COLUMN QUESTIONS (matching / pair / pairselect / statement): "text" must be ONLY the short intro line (e.g. "Identify the correct mapping." or "Consider the following statements:"). NEVER put the Column A / Column B / statement items inside "text". Put the Column A items in "columnA" and the Column B items in "columnB" (the SAME number of items as given), each with any formula/math wrapped in $...$ so the columns themselves render. Do NOT prefix these items with numbers or roman numerals (no "1.", "I.") — the app numbers Column A (1,2,3,4) and Column B (I,II,III,IV) automatically. The 4 "options" stay as mapping sequences (e.g. "1-II, 2-IV, 3-I, 4-III") / combinations.
+- COLUMN QUESTIONS (matching / pair / pairselect / statement / rearrange): "text" must be ONLY the short intro line (e.g. "Identify the correct mapping." or "Consider the following statements:"). NEVER put the Column A / Column B / statement / sentence items inside "text". Put the Column A items in "columnA" and the Column B items in "columnB" (the SAME number of items as given), each with any formula/math wrapped in $...$ so the columns themselves render. Do NOT prefix these items with numbers or roman numerals (no "1.", "I.") — the app numbers Column A (1,2,3,4) and Column B (I,II,III,IV) automatically. The 4 "options" stay as mapping sequences (e.g. "1-II, 2-IV, 3-I, 4-III") / combinations. For a "rearrange" (sentence rearrangement) question, put the FOUR jumbled sentences (one per element, no numbering) in "columnA" and make "text" ONLY the instruction line; if the sentences are currently embedded in the stem paragraph, SPLIT them out into "columnA". Its 4 "options" are orderings of the four sentences written as Roman numerals joined by hyphens (e.g. "IV-II-I-III"), matching columnA order (columnA[0]=I, columnA[1]=II, columnA[2]=III, columnA[3]=IV); exactly one is the correct logical order.
 - MATCHING, PAIR & PAIRSELECT questions: return "columnA" and "columnB" ALIGNED so EVERY pair is correct (columnA[i] ↔ columnB[i]), plus "pairFacts" (one short reason per pair). Do NOT shuffle and do NOT set the "options"/"correct" yourself — the app reshuffles Column B and builds the mapping / count / which-pairs answer to match.
 - TABLE questions: the data table MUST go in "tableRows" (a 2D array; the FIRST inner row is the header), NEVER as a markdown/pipe table inside "text". "text" is ONLY the question sentence (no "| ... |" rows). If the question currently shows a table in the stem AND/OR in tableRows — even with DIFFERENT numbers — CONSOLIDATE into ONE correct table in "tableRows" (choose the data that is consistent with the intended options, wrap any math in each cell in $...$), remove the table from "text", then SOLVE the question from THAT table with the correct formula and set "options"/"correct" to match your computed value. Return the table in "tableRows".
 - Regenerate the 4 "options", the 0-based "correct" index, the "explanation" and the 4 "optionExplanations" so they are correct and fit the question.
@@ -3422,6 +3422,7 @@ RULES:
   • statement: combinations like "1 only", "1 and 2 only", "Neither 1 nor 2".
   • pair: how MANY pairs are correctly matched — "Only one pair", "Only two pairs", "Only three pairs", "All four pairs", or "None of the pairs are correctly matched" when zero match.
   • pairselect: WHICH pairs are correct — "1 and 2 only", "2 and 3 only", "All of the above", etc.
+  • rearrange: orderings of the four sentences as Roman numerals joined by hyphens (e.g. "IV-II-I-III"), matching columnA order (columnA[0]=I …); exactly one is the correct logical order.
   • assertion: keep the four standard A/R options; just choose the correct one.
 - NUMERICAL: solve with the correct FORMULA step by step; the correct option MUST equal your computed value; show the working in "explanation" (each step on its own line).
 - MATCHING / PAIR / STATEMENT: evaluate EACH pair/statement individually and make the answer reflect the TRUE count/combination; if none of the standard options fit (e.g. zero pairs match), include the right one (e.g. "None of the pairs are correctly matched").
@@ -3450,6 +3451,11 @@ function buildRegenPrompt(q, notes, { fixOptions = true, extendQuestion = false 
   if (fixOptions && ["pair", "matching", "pairselect"].includes(q.type)) {
     const kind = q.type === "pair" ? "count" : q.type === "matching" ? "mapping" : "which-pairs-are-correct";
     lines.push(`This is a ${q.type.toUpperCase()} question. Return "columnA" and "columnB" ALIGNED so that columnA[i] is the CORRECT match of columnB[i] for EVERY index i (i.e. all pairs correct as returned) — do NOT shuffle them yourself and keep the SAME number of items. Also return "pairFacts": an array with one SHORT reason per pair (pairFacts[i] = why columnA[i] correctly matches columnB[i]). Do NOT set the "options" or the "correct" index yourself — the app reshuffles Column B and builds the ${kind} answer to match.`);
+  }
+  if (fixOptions && q.type === "rearrange") {
+    lines.push(`This is a REARRANGE (sentence rearrangement) question. Return the FOUR sentences in "columnA" as an array of 4 complete sentences (no numbering) and make "text" ONLY the instruction line (e.g. "Rearrange the following sentences to form a meaningful paragraph:"). If the four sentences are currently EMBEDDED IN THE STEM paragraph, SPLIT them out into "columnA". The 4 "options" are orderings written as Roman numerals joined by hyphens (e.g. "IV-II-I-III"), matching columnA order (columnA[0]=I, [1]=II, [2]=III, [3]=IV); exactly ONE is the correct logical order.`);
+  } else if (fixOptions && q.type === "statement") {
+    lines.push(`This is a STATEMENT question. Return the statements in "columnA" (an array, no numbering) and make "text" ONLY the intro line. If the statements are currently EMBEDDED IN THE STEM, SPLIT them out into "columnA".`);
   }
   // When the user ticks "Extend the question length", allow (only) the STEM to
   // be rewritten a little longer — same rules and 3-line cap as Extend.
@@ -3660,7 +3666,7 @@ function buildRegenSet(q, parsed, { fixOptions = true, extendQuestion = false, s
   if (parsed.explanation) set.explanation = parsed.explanation;
   // Column-based questions keep their items in columnA/columnB — never in the
   // stem. Strip any "Column A/B …" block the model wrongly merged into "text".
-  const isColumnType = ["matching", "pair", "pairselect", "statement"].includes(q.type);
+  const isColumnType = ["matching", "pair", "pairselect", "statement", "rearrange"].includes(q.type);
   const isTableType = q.type === "table";
   if (isColumnType) {
     const introOnly = (s) => String(s || "").split(/\bColumn\s*[AB]\b\s*:?/i)[0].trim();
@@ -3689,10 +3695,27 @@ function buildRegenSet(q, parsed, { fixOptions = true, extendQuestion = false, s
   // Strip any leading "1."/"I." marker — the app auto-numbers the columns.
   if (Array.isArray(parsed.columnA) && Array.isArray(q.columnA) && parsed.columnA.length === q.columnA.length) set.columnA = parsed.columnA.map(stripListMarker);
   if (Array.isArray(parsed.columnB) && Array.isArray(q.columnB) && parsed.columnB.length === q.columnB.length) set.columnB = parsed.columnB.map(stripListMarker);
+  // Statement / Rearrange: the items live in columnA. Rebuild it (CREATE or
+  // RESIZE — not just same-length edits) from the model's columnA, else recover
+  // a numbered list from the stem. This converts OLD paragraph-style questions
+  // into the boxed list on Regenerate.
+  if (q.type === "statement" || q.type === "rearrange") {
+    let items = Array.isArray(parsed.columnA) ? parsed.columnA.map((s) => (s == null ? "" : String(s))).filter((s) => s.trim() !== "") : [];
+    let intro = parsed.text;
+    // Always try to pull a numbered list out of the stem: this both recovers the
+    // items (when columnA is missing) AND strips them from the intro line, so an
+    // old paragraph-style question is converted into the boxed list + a clean
+    // instruction line.
+    const ex = extractNumbered(parsed.text) || extractNumbered(q.text);
+    if (ex && ex.intro) intro = ex.intro;
+    if (items.length < 2 && ex && Array.isArray(ex.statements) && ex.statements.length >= 2) items = ex.statements;
+    if (items.length >= 2) { set.columnA = items.map(stripListMarker); set.columnB = []; }
+    if (intro && String(intro).trim()) set.text = String(intro).trim();
+  }
   const newCorrect = Number.isInteger(parsed.correct) && parsed.correct >= 0 && parsed.correct <= 3 ? parsed.correct : null;
   const newOptions = Array.isArray(parsed.options) && parsed.options.length === 4 && parsed.options.every((s) => String(s).trim() !== "")
     ? parsed.options.map((x) => String(x)) : null;
-  const canFixOptions = !q.type || ["mcq", "table", "pair", "pairselect", "statement", "matching", "journal"].includes(q.type);
+  const canFixOptions = !q.type || ["mcq", "table", "pair", "pairselect", "statement", "matching", "journal", "ledger", "rearrange"].includes(q.type);
   // "Fix options" (default on) gates whether the options/answer are rebuilt at
   // all. When the user unticks it, the existing options & correct answer are
   // kept untouched and only the explanation / per-option notes are refreshed.
