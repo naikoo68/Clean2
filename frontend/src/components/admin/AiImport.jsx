@@ -21,6 +21,7 @@ const Q_TYPES = [
   { id: "table", label: "Table" },
   { id: "journal", label: "Journal Entry" },
   { id: "ledger", label: "Ledger Posting" },
+  { id: "rearrange", label: "Sentence Rearrangement" },
 ];
 const DIFFS = ["Easy", "Medium", "Hard"];
 

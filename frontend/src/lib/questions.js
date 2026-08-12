@@ -165,6 +165,7 @@ export const QUESTION_TYPE_LABELS = {
   image: "Image",
   journal: "Journal Entry",
   ledger: "Ledger Posting",
+  rearrange: "Sentence Rearrangement",
 };
 
 // The canonical TYPE key for a question. A plain MCQ has no/blank/unknown type,
