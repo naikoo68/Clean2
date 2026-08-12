@@ -146,7 +146,7 @@ export default function QuestionFormModal({ question, saving, onClose, onSave, s
         options: form.options,
         correct: form.correct,
       };
-    } else if (form.type === "statement") {
+    } else if (form.type === "statement" || form.type === "rearrange") {
       payload = {
         ...base,
         columnA: (form.columnA || []).map((x) => (x || "").trim()).filter(Boolean),
@@ -246,9 +246,9 @@ export default function QuestionFormModal({ question, saving, onClose, onSave, s
             </select>
           </Field>
 
-          <Field label={form.type === "assertion" ? "Directive line (optional)" : ["statement", "pair", "pairselect", "table"].includes(form.type) ? "Intro / directive line" : "Question Text"}>
-            <textarea required={form.type !== "assertion"} rows={2} className="input resize-none" value={form.text} onChange={(e) => setForm({ ...form, text: e.target.value })} placeholder={form.type === "statement" ? "Consider the following statements:" : form.type === "pair" || form.type === "pairselect" ? "Consider the following pairs (Item — Description):" : form.type === "table" ? "Study the table below and answer:" : form.type === "assertion" ? "Leave blank for the standard directive, or write your own" : form.type === "journal" ? "Journalise the transaction, e.g. Purchased goods for cash 5,000 — enter the 4 candidate journal entries as the options below" : form.type === "ledger" ? "State the transactions/entries and the task, e.g. Prepare the Cash A/c — enter the 4 candidate ledger (T-account) tables as the options below" : form.type === "rearrange" ? "Rearrange the following sentences to form a meaningful paragraph: I. … II. … III. … IV. … — enter the 4 candidate orderings (e.g. IV-II-I-III) as the options below" : "Use $...$ for equations, e.g. Solve $x^2+2x-3=0$"} />
-            <p className="mt-1 text-xs text-slate-400">{["statement", "pair", "pairselect"].includes(form.type) ? "The numbered list you add below appears under this line, followed by the closing question automatically." : form.type === "table" ? "The table you build below appears under this line." : form.type === "assertion" ? "If left blank, a standard Assertion–Reason directive is used automatically." : "Tip: wrap maths in dollar signs to render equations."}</p>
+          <Field label={form.type === "assertion" ? "Directive line (optional)" : ["statement", "pair", "pairselect", "table", "rearrange"].includes(form.type) ? "Intro / directive line" : "Question Text"}>
+            <textarea required={form.type !== "assertion"} rows={2} className="input resize-none" value={form.text} onChange={(e) => setForm({ ...form, text: e.target.value })} placeholder={form.type === "statement" ? "Consider the following statements:" : form.type === "pair" || form.type === "pairselect" ? "Consider the following pairs (Item — Description):" : form.type === "table" ? "Study the table below and answer:" : form.type === "assertion" ? "Leave blank for the standard directive, or write your own" : form.type === "journal" ? "Journalise the transaction, e.g. Purchased goods for cash 5,000 — enter the 4 candidate journal entries as the options below" : form.type === "ledger" ? "State the transactions/entries and the task, e.g. Prepare the Cash A/c — enter the 4 candidate ledger (T-account) tables as the options below" : form.type === "rearrange" ? "Rearrange the following sentences to form a meaningful paragraph:" : "Use $...$ for equations, e.g. Solve $x^2+2x-3=0$"} />
+            <p className="mt-1 text-xs text-slate-400">{["statement", "pair", "pairselect", "rearrange"].includes(form.type) ? "The numbered list you add below appears under this line, followed by the closing question automatically." : form.type === "table" ? "The table you build below appears under this line." : form.type === "assertion" ? "If left blank, a standard Assertion–Reason directive is used automatically." : "Tip: wrap maths in dollar signs to render equations."}</p>
           </Field>
 
           <Field label={form.type === "image" ? "Image / Diagram (required for this type)" : "Image (optional)"}>
@@ -285,17 +285,17 @@ export default function QuestionFormModal({ question, saving, onClose, onSave, s
             </>
           )}
 
-          {form.type === "statement" && (
-            <Field label="Statements (shown numbered 1, 2, 3…)">
+          {(form.type === "statement" || form.type === "rearrange") && (
+            <Field label={form.type === "rearrange" ? "Sentences (shown in their own boxes as I, II, III, IV)" : "Statements (shown numbered 1, 2, 3…)"}>
               <div className="space-y-2">
                 {form.columnA.map((item, i) => (
                   <div key={i} className="flex items-center gap-2">
-                    <span className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-md bg-brand-100 text-xs font-bold text-brand-700 dark:bg-brand-900/40 dark:text-brand-300">{i + 1}</span>
-                    <input className="input" value={item} onChange={(e) => setForm({ ...form, columnA: form.columnA.map((x, xi) => (xi === i ? e.target.value : x)) })} placeholder={`Statement ${i + 1}`} />
+                    <span className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-md bg-brand-100 text-xs font-bold text-brand-700 dark:bg-brand-900/40 dark:text-brand-300">{form.type === "rearrange" ? (["I", "II", "III", "IV", "V", "VI", "VII", "VIII"][i] || i + 1) : i + 1}</span>
+                    <input className="input" value={item} onChange={(e) => setForm({ ...form, columnA: form.columnA.map((x, xi) => (xi === i ? e.target.value : x)) })} placeholder={form.type === "rearrange" ? `Sentence ${i + 1}` : `Statement ${i + 1}`} />
                     <button type="button" onClick={() => setForm({ ...form, columnA: form.columnA.filter((_, xi) => xi !== i) })} className="flex-shrink-0 rounded-lg p-2 text-rose-600 hover:bg-rose-50 disabled:opacity-40 dark:hover:bg-rose-900/30" disabled={form.columnA.length <= 2}><Trash2 className="h-4 w-4" /></button>
                   </div>
                 ))}
-                <button type="button" onClick={() => setForm({ ...form, columnA: [...form.columnA, ""] })} className="btn-outline py-2"><Plus className="h-4 w-4" /> Add statement</button>
+                <button type="button" onClick={() => setForm({ ...form, columnA: [...form.columnA, ""] })} className="btn-outline py-2"><Plus className="h-4 w-4" /> {form.type === "rearrange" ? "Add sentence" : "Add statement"}</button>
               </div>
             </Field>
           )}
