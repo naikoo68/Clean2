@@ -1,10 +1,13 @@
 import MathText from "./MathText";
 
+const ROMAN = ["I", "II", "III", "IV", "V", "VI", "VII", "VIII"];
+
 // The closing prompt shown under the statements/pairs list for these types.
 export function closingPrompt(type) {
   if (type === "statement") return "Which of the statement(s) given above is/are correct?";
   if (type === "pair") return "How many of the above pairs are correctly matched?";
   if (type === "pairselect") return "Which of the pairs given above is/are correctly matched?";
+  if (type === "rearrange") return "Choose the correct order of the sentences:";
   return "";
 }
 
@@ -18,7 +21,7 @@ export default function StatementPairView({ q }) {
   if (!q) return null;
 
   let rows = null;
-  if (q.type === "statement") {
+  if (q.type === "statement" || q.type === "rearrange") {
     rows = (q.columnA || [])
       .filter((s) => s != null && String(s).trim() !== "")
       .map((s) => <MathText>{s}</MathText>);
@@ -44,7 +47,7 @@ export default function StatementPairView({ q }) {
       <div className="space-y-1.5 rounded-xl border border-slate-200 bg-slate-50/60 p-3 dark:border-slate-700 dark:bg-slate-800/40">
         {rows.map((content, i) => (
           <div key={i} className="flex items-start gap-2 text-sm">
-            <span className="font-bold text-brand-700 dark:text-brand-300">{i + 1}.</span>
+            <span className="font-bold text-brand-700 dark:text-brand-300">{(q.type === "rearrange" ? ROMAN[i] || i + 1 : i + 1)}.</span>
             {content}
           </div>
         ))}
