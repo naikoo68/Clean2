@@ -259,6 +259,31 @@ function extractNumbered(text) {
   return statements.length >= 2 ? { intro, statements } : null;
 }
 
+// Like extractNumbered, but for sentences a model numbered with ROMAN numerals
+// in the stem — "… : I. <one>. II. <two>. III. <three>. IV. <four>". Used to
+// split a rearrange question's sentences out of the paragraph into columnA.
+function extractRomanNumbered(text) {
+  const t = String(text || "").trim();
+  if (!t) return null;
+  const ROM = { i: 1, ii: 2, iii: 3, iv: 4, v: 5, vi: 6, vii: 7, viii: 8 };
+  const marker = /(?:^|[\n\s(])(viii|vii|vi|iv|iii|ii|v|i)\s*[.):\-]\s+/gi;
+  const hits = [];
+  let m;
+  while ((m = marker.exec(t))) hits.push({ start: m.index, contentStart: marker.lastIndex, num: ROM[m[1].toLowerCase()] });
+  if (hits.length < 2 || hits[0].num !== 1) return null;
+  // Require a strictly sequential I, II, III, IV… run (guards against a stray
+  // "I"/"V" inside a sentence being mistaken for a marker).
+  for (let i = 1; i < hits.length; i++) if (hits[i].num !== hits[i - 1].num + 1) return null;
+  const intro = t.slice(0, hits[0].start).trim();
+  const statements = [];
+  for (let i = 0; i < hits.length; i++) {
+    const end = i + 1 < hits.length ? hits[i + 1].start : t.length;
+    const s = t.slice(hits[i].contentStart, end).trim();
+    if (s) statements.push(s);
+  }
+  return statements.length >= 2 ? { intro, statements } : null;
+}
+
 // Split a combined "Left — Right" pair string into [left, right] on the first
 // dash / arrow / colon separator (e.g. "Dal Lake — Srinagar").
 function splitPairString(s) {
@@ -785,7 +810,7 @@ function normalize(list) {
         let sents = arrStr(q?.columnA);
         if (!sents.length && Array.isArray(q?.sentences)) sents = arrStr(q.sentences);
         if (sents.filter((s) => s.trim()).length < 2) {
-          const ex = extractNumbered(q?.text);
+          const ex = extractNumbered(q?.text) || extractRomanNumbered(q?.text);
           if (ex) { sents = ex.statements; if (ex.intro) out.text = ex.intro; }
         }
         out.columnA = sents.map(stripListMarker).filter((s) => s.trim() !== "");
@@ -3706,7 +3731,7 @@ function buildRegenSet(q, parsed, { fixOptions = true, extendQuestion = false, s
     // items (when columnA is missing) AND strips them from the intro line, so an
     // old paragraph-style question is converted into the boxed list + a clean
     // instruction line.
-    const ex = extractNumbered(parsed.text) || extractNumbered(q.text);
+    const ex = extractNumbered(parsed.text) || extractRomanNumbered(parsed.text) || extractNumbered(q.text) || extractRomanNumbered(q.text);
     if (ex && ex.intro) intro = ex.intro;
     if (items.length < 2 && ex && Array.isArray(ex.statements) && ex.statements.length >= 2) items = ex.statements;
     if (items.length >= 2) { set.columnA = items.map(stripListMarker); set.columnB = []; }
