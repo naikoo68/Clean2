@@ -26,6 +26,17 @@ const MAX_TOTAL = 500;
 // Reusable "Generate with AI" modal. Mirrors BulkUploadQuestions:
 // `onUpload(questions)` should return a promise (e.g. { inserted }). The AI
 // only PREVIEWS questions here — nothing is saved until the admin clicks Insert.
+// Detects "current affairs" topics the AI cannot reliably answer from memory —
+// current office-holders, latest/recent events, or a recent/near-future year.
+// An AI model has a knowledge cut-off, so for these it tends to return general
+// theory or outdated names. When detected (and no Source link is given) we warn
+// the user to paste a source so questions are built from verified material.
+const CURRENT_AFFAIRS_RE =
+  /\b(current(ly)?|latest|recent(ly)?|as of|up[- ]?to[- ]?date|incumbent|present[- ]?day|this (year|month)|in the news|ongoing|20(2[3-9]|3\d))\b/i;
+function looksLikeCurrentAffairs(text) {
+  return CURRENT_AFFAIRS_RE.test(String(text || ""));
+}
+
 export default function AiGenerate({ open, onClose, onUpload, title = "Generate Questions with AI", sections = [], existingQuestions = [], defaultSection = "", allowNewTarget = false, newLeafLabel = "quiz", currentTargetName = "", existingItems = [], defaultTopic = "", defaultSubtopics = "", defaultDest = "current", coverageQuestions = [] }) {
   const { user } = useAuth();
   // Clients granted BOTH sources may pick which one this generation uses.
@@ -319,6 +330,18 @@ export default function AiGenerate({ open, onClose, onUpload, title = "Generate 
 
   const generate = async (append = false, overrideSubtopics = null, extra = {}) => {
     if (!topic.trim() && !url.trim() && !extra.sourceText) { setMsg("Enter a topic/syllabus, or paste a source link (web page or YouTube video)."); return; }
+    // Current-affairs safeguard: the AI can't reliably recall current office-holders,
+    // latest appointments or recent events. If the topic looks like current affairs
+    // and no Source link/material is provided, confirm before generating from memory.
+    if (!append && !extra.sourceText && !url.trim() && looksLikeCurrentAffairs(topic)) {
+      const ok = window.confirm(
+        "This looks like a CURRENT-AFFAIRS topic (current office-holders, latest/recent events, or a recent year).\n\n" +
+        "The AI's knowledge has a cut-off date, so it CANNOT reliably know current facts — it may return general theory or outdated names.\n\n" +
+        "For accurate results, click Cancel and paste a Source link (an article or official page URL) in the box below, then generate — the AI will build the questions from that verified material.\n\n" +
+        "Generate anyway without a source?"
+      );
+      if (!ok) { setMsg("Tip: paste a Source link (web page URL) below so the AI builds accurate current-affairs questions from verified material."); return; }
+    }
     const plan = buildPlan();
     if (!plan.length) { setMsg("Set at least one question count in the grid below."); return; }
     if (total > maxPerBatch) { setMsg(`Please keep the total to ${maxPerBatch} questions or fewer per batch.`); return; }
@@ -812,6 +835,17 @@ export default function AiGenerate({ open, onClose, onUpload, title = "Generate 
               Paste a web page or a <b>YouTube video</b> link and the AI bases the questions on its content/transcript
               (the video must have captions). Leave empty to generate purely from the topic above.
             </p>
+            {looksLikeCurrentAffairs(topic) && !url.trim() && (
+              <div className="mt-2 flex items-start gap-2 rounded-lg border border-amber-300 bg-amber-50 p-2.5 text-xs text-amber-800 dark:border-amber-700/50 dark:bg-amber-900/20 dark:text-amber-300">
+                <AlertTriangle className="mt-0.5 h-4 w-4 flex-shrink-0" />
+                <span>
+                  This looks like a <b>current-affairs</b> topic. The AI's knowledge has a cut-off date, so it can't reliably
+                  know <b>current office-holders, latest appointments or recent events</b> — it may return general theory or
+                  outdated facts. For accurate questions, paste a <b>Source link</b> above (e.g. the official page) and the AI
+                  will build them from that verified material.
+                </span>
+              </div>
+            )}
 
             {/* How many of each type × difficulty. Total = sum of all cells. */}
             <div className="mt-3 flex items-center justify-between">
