@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Crown, Check, Tag, Gift, Loader2, AlarmClock, ShieldCheck, Sparkles } from "lucide-react";
 import { authService, subscriptionService } from "../../services";
 import { useAuth } from "../../context/AuthContext";
+import { useSettings } from "../../context/SettingsContext";
 import PlanPicker from "../../components/client/PlanPicker";
 
 const FALLBACK_PLANS = [
@@ -26,6 +27,7 @@ function loadRazorpay() {
 // apply a coupon/referral, pay via Razorpay, and instantly regain access.
 export default function ClientUpgrade({ onClose }) {
   const { user, refreshUser } = useAuth();
+  const { settings } = useSettings();
   const [plans, setPlans] = useState(FALLBACK_PLANS);
   const [planKey, setPlanKey] = useState("1m");
   const [coupon, setCoupon] = useState("");
@@ -78,10 +80,11 @@ export default function ClientUpgrade({ onClose }) {
             order_id: order.orderId,
             amount: order.amount,
             currency: order.currency || "INR",
-            name: "My Study Guide",
+            name: settings?.siteName || "My Study Guide",
+            image: settings?.logoUrl || undefined,
             description: `${selectedPlan?.label} plan`,
             prefill: { name: user?.name, email: user?.email },
-            theme: { color: "#2563eb" },
+            theme: { color: settings?.primaryColor || "#2563eb" },
             handler: async (resp) => {
               try {
                 await subscriptionService.activate({
