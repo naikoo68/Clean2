@@ -20,6 +20,7 @@ import { Loading } from "./components/ui/AsyncState";
 const Home = lazy(() => import("./pages/Home"));
 const About = lazy(() => import("./pages/About"));
 const Contact = lazy(() => import("./pages/Contact"));
+const Pricing = lazy(() => import("./pages/Pricing"));
 const Dashboard = lazy(() => import("./pages/Dashboard"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 
@@ -103,6 +104,7 @@ const router = createHashRouter([
       { path: "/", element: S(Home) },
       { path: "/about", element: S(About) },
       { path: "/contact", element: S(Contact) },
+      { path: "/pricing", element: S(Pricing) },
 
       { path: "/quiz", element: S(QuizHome) },
       { path: "/quiz/stream/:streamId", element: S(StreamSubjects) },
