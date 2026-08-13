@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { X, Sparkles, Wand2, CheckCircle2, AlertTriangle, Loader2, Server, KeyRound, ListChecks, Circle, Square, Bookmark, Trash2 } from "lucide-react";
+import { X, Sparkles, Wand2, CheckCircle2, AlertTriangle, Loader2, Server, KeyRound, ListChecks, Circle, Square, Bookmark, Trash2, Globe } from "lucide-react";
 import { aiService } from "../../services";
 import { useAuth } from "../../context/AuthContext";
 import GraphView from "../ui/GraphView";
@@ -26,6 +26,17 @@ const MAX_TOTAL = 500;
 // Reusable "Generate with AI" modal. Mirrors BulkUploadQuestions:
 // `onUpload(questions)` should return a promise (e.g. { inserted }). The AI
 // only PREVIEWS questions here — nothing is saved until the admin clicks Insert.
+// Detects "current affairs" topics the AI cannot reliably answer from memory —
+// current office-holders, latest/recent events, or a recent/near-future year.
+// An AI model has a knowledge cut-off, so for these it tends to return general
+// theory or outdated names. When detected (and no Source link is given) we warn
+// the user to paste a source so questions are built from verified material.
+const CURRENT_AFFAIRS_RE =
+  /\b(current(ly)?|latest|recent(ly)?|as of|up[- ]?to[- ]?date|incumbent|present[- ]?day|this (year|month)|in the news|ongoing|20(2[3-9]|3\d))\b/i;
+function looksLikeCurrentAffairs(text) {
+  return CURRENT_AFFAIRS_RE.test(String(text || ""));
+}
+
 export default function AiGenerate({ open, onClose, onUpload, title = "Generate Questions with AI", sections = [], existingQuestions = [], defaultSection = "", allowNewTarget = false, newLeafLabel = "quiz", currentTargetName = "", existingItems = [], defaultTopic = "", defaultSubtopics = "", defaultDest = "current", coverageQuestions = [] }) {
   const { user } = useAuth();
   // Clients granted BOTH sources may pick which one this generation uses.
@@ -41,6 +52,7 @@ export default function AiGenerate({ open, onClose, onUpload, title = "Generate 
   const [topic, setTopic] = useState("");
   const [subtopics, setSubtopics] = useState(""); // optional — specific subtopics to cover in the topic
   const [url, setUrl] = useState(""); // optional source link (web page or YouTube)
+  const [research, setResearch] = useState(false); // auto-research the web for current-affairs facts before generating
   // matrix[typeId] = { Easy, Medium, Hard } counts. Default: 5 medium MCQs.
   const [matrix, setMatrix] = useState({ mcq: { Easy: 0, Medium: 5, Hard: 0 } });
   const [notes, setNotes] = useState("");
@@ -145,6 +157,7 @@ export default function AiGenerate({ open, onClose, onUpload, title = "Generate 
     setCoverageLoading(false);
     setSyllabus(null);
     setPerSubtopic(false); // default unchecked each time the modal opens
+    setResearch(false); // auto-research off by default each open
     setPerSubRun(null);
     setPerSubList([]);
     // Pick a sensible default destination: inside a quiz → that quiz; at topic
@@ -319,6 +332,18 @@ export default function AiGenerate({ open, onClose, onUpload, title = "Generate 
 
   const generate = async (append = false, overrideSubtopics = null, extra = {}) => {
     if (!topic.trim() && !url.trim() && !extra.sourceText) { setMsg("Enter a topic/syllabus, or paste a source link (web page or YouTube video)."); return; }
+    // Current-affairs safeguard: the AI can't reliably recall current office-holders,
+    // latest appointments or recent events. If the topic looks like current affairs
+    // and no Source link/material is provided, confirm before generating from memory.
+    if (!append && !extra.sourceText && !url.trim() && !research && looksLikeCurrentAffairs(topic)) {
+      const ok = window.confirm(
+        "This looks like a CURRENT-AFFAIRS topic (current office-holders, latest/recent events, or a recent year).\n\n" +
+        "The AI's knowledge has a cut-off date, so it CANNOT reliably know current facts — it may return general theory or outdated names.\n\n" +
+        "For accurate results, click Cancel and paste a Source link (an article or official page URL) in the box below, then generate — the AI will build the questions from that verified material.\n\n" +
+        "Generate anyway without a source?"
+      );
+      if (!ok) { setMsg("Tip: paste a Source link (web page URL) below so the AI builds accurate current-affairs questions from verified material."); return; }
+    }
     const plan = buildPlan();
     if (!plan.length) { setMsg("Set at least one question count in the grid below."); return; }
     if (total > maxPerBatch) { setMsg(`Please keep the total to ${maxPerBatch} questions or fewer per batch.`); return; }
@@ -372,6 +397,7 @@ export default function AiGenerate({ open, onClose, onUpload, title = "Generate 
           mode: isClient ? source : undefined,
           source: extra.sourceText || undefined, // existing questions as material (from-existing modes)
           reshape: extra.reshape || undefined,   // true = recast existing MCQs into the chosen types
+          research: (research && !url.trim() && !extra.sourceText) || undefined, // auto-fetch current web facts
         }));
       } catch (e) { setMsg(e.message || "Generation failed."); return { produced: 0, errored: true }; }
       if (!jobId) { setMsg("Could not start generation."); return { produced: 0, errored: true }; }
@@ -812,6 +838,34 @@ export default function AiGenerate({ open, onClose, onUpload, title = "Generate 
               Paste a web page or a <b>YouTube video</b> link and the AI bases the questions on its content/transcript
               (the video must have captions). Leave empty to generate purely from the topic above.
             </p>
+            {looksLikeCurrentAffairs(topic) && !url.trim() && !research && (
+              <div className="mt-2 flex items-start gap-2 rounded-lg border border-amber-300 bg-amber-50 p-2.5 text-xs text-amber-800 dark:border-amber-700/50 dark:bg-amber-900/20 dark:text-amber-300">
+                <AlertTriangle className="mt-0.5 h-4 w-4 flex-shrink-0" />
+                <span>
+                  This looks like a <b>current-affairs</b> topic. The AI's knowledge has a cut-off date, so it can't reliably
+                  know <b>current office-holders, latest appointments or recent events</b> — it may return general theory or
+                  outdated facts. Either paste a <b>Source link</b> above, or tick <b>Auto-research the web</b> below and the
+                  AI will fetch up-to-date facts and build the questions from them.
+                </span>
+              </div>
+            )}
+            {/* Auto-research the web: fetch current facts for the topic before generating. */}
+            <label className={`mt-3 flex cursor-pointer items-start gap-2 rounded-lg border p-2.5 text-xs transition ${research ? "border-brand-400 bg-brand-50 dark:border-brand-600 dark:bg-brand-900/20" : "border-slate-200 dark:border-slate-700"} ${url.trim() ? "pointer-events-none opacity-50" : ""}`}>
+              <input
+                type="checkbox"
+                className="mt-0.5 h-4 w-4"
+                checked={research && !url.trim()}
+                disabled={!!url.trim()}
+                onChange={(e) => setResearch(e.target.checked)}
+              />
+              <span className="text-slate-700 dark:text-slate-200">
+                <span className="flex items-center gap-1.5 font-semibold"><Globe className="h-3.5 w-3.5" /> Auto-research the web</span>
+                <span className="mt-0.5 block text-slate-500 dark:text-slate-400">
+                  The AI first searches the web (free Wikipedia, or your configured search provider) and builds the questions
+                  from what it finds — best for <b>current affairs</b>. A little slower. {url.trim() ? "(Disabled while a Source link is set.)" : ""}
+                </span>
+              </span>
+            </label>
 
             {/* How many of each type × difficulty. Total = sum of all cells. */}
             <div className="mt-3 flex items-center justify-between">
