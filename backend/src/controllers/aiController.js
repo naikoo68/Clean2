@@ -4,6 +4,7 @@ import Question from "../models/Question.js";
 import Settings from "../models/Settings.js";
 import { ownerFilter } from "../utils/ownership.js";
 import { DEFAULT_CLIENT_PLANS } from "../utils/plans.js";
+import { webResearch } from "../utils/webResearch.js";
 import { splitIntoStems, contentOfBlock, questionLocation } from "./contentController.js";
 
 // Works with any OpenAI-compatible provider (Gemini, TokenLab, OpenAI, Groq,
@@ -1518,6 +1519,19 @@ export async function generateQuestions(req, res) {
   if (source) source = source.slice(0, 24000); // cap material sent on each call
 
   let topic = String(req.body?.topic || "").trim();
+
+  // Auto-research: when the user ticks "research the web" and hasn't supplied a
+  // source link/text, fetch real up-to-date material for the topic (Tavily if an
+  // admin configured a key, else free Wikipedia) so current-affairs topics are
+  // built from verified facts rather than the model's frozen memory. Cached per
+  // topic so multiple generation waves reuse the same material. Non-fatal: if it
+  // finds nothing we simply fall back to topic-only generation.
+  const wantResearch = req.body?.research === true || req.body?.research === "true";
+  if (wantResearch && !source && topic) {
+    const r = await webResearch(topic);
+    if (r.ok && r.text) source = r.text.slice(0, 24000);
+  }
+
   if (!topic) topic = source ? "the provided source material" : "";
   if (!topic) return res.status(400).json({ message: "A topic is required (or provide source material)." });
 
