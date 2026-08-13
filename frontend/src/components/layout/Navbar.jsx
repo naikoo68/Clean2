@@ -13,6 +13,7 @@ const links = [
   { to: "/test-series", label: "Test Series" },
   { to: "/practice", label: "My Practice" },
   { to: "/study", label: "Study Material" },
+  { to: "/pricing", label: "Pricing" },
   { to: "/about", label: "About Us" },
   { to: "/contact", label: "Contact" },
 ];
