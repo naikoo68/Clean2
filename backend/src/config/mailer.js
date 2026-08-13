@@ -53,7 +53,7 @@ function senderIdentity() {
 }
 
 // ---- Provider 1: Brevo HTTPS API ----
-async function sendViaBrevo({ to, subject, text, html, replyTo }) {
+async function sendViaBrevo({ to, subject, text, html, replyTo, fromName }) {
   const from = senderIdentity();
   if (!from) {
     console.error("✉  Brevo: no sender configured (set SMTP_FROM to your verified sender email).");
@@ -68,7 +68,7 @@ async function sendViaBrevo({ to, subject, text, html, replyTo }) {
         accept: "application/json",
       },
       body: JSON.stringify({
-        sender: { email: from.email, name: from.name || "My Study Guide" },
+        sender: { email: from.email, name: fromName || from.name || "My Study Guide" },
         to: [{ email: to }],
         subject,
         htmlContent: html || `<p>${text || ""}</p>`,
@@ -87,13 +87,15 @@ async function sendViaBrevo({ to, subject, text, html, replyTo }) {
 }
 
 // ---- Provider 2: SMTP ----
-async function sendViaSmtp({ to, subject, text, html, replyTo }) {
+async function sendViaSmtp({ to, subject, text, html, replyTo, fromName }) {
   const t = getTransporter();
   if (!t) {
     console.log("✉  SMTP not configured — skipping email.");
     return false;
   }
-  const from = process.env.SMTP_FROM || process.env.SMTP_USER;
+  const raw = process.env.SMTP_FROM || process.env.SMTP_USER;
+  // Prefix a display name (the site brand) when the address is a bare email.
+  const from = fromName && raw && !/[<>]/.test(raw) ? `"${fromName}" <${raw}>` : raw;
   try {
     await t.sendMail({ from, to, subject, text, html, replyTo });
     return true;
@@ -103,10 +105,10 @@ async function sendViaSmtp({ to, subject, text, html, replyTo }) {
   }
 }
 
-export async function sendMail({ to, subject, text, html, replyTo }) {
+export async function sendMail({ to, subject, text, html, replyTo, fromName }) {
   // Prefer Brevo (works everywhere), otherwise fall back to SMTP.
-  if (brevoConfigured()) return sendViaBrevo({ to, subject, text, html, replyTo });
-  return sendViaSmtp({ to, subject, text, html, replyTo });
+  if (brevoConfigured()) return sendViaBrevo({ to, subject, text, html, replyTo, fromName });
+  return sendViaSmtp({ to, subject, text, html, replyTo, fromName });
 }
 
 export function isMailConfigured() {

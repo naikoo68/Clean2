@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState, useCallback } from "react";
 import { settingsService } from "../services";
 import { applyTheme } from "../lib/theme";
+import { applyBranding } from "../lib/branding";
 
 const SettingsContext = createContext();
 
@@ -63,13 +64,13 @@ export function SettingsProvider({ children }) {
     setSettings(s);
     localStorage.setItem("msg-settings", JSON.stringify(s));
     applyTheme(s);
-    document.title = `${s.siteName} — ${s.tagline}`;
+    applyBranding(s);
   }, []);
 
   // Apply cached theme immediately, then refresh from the server.
   useEffect(() => {
     applyTheme(settings);
-    document.title = `${settings.siteName} — ${settings.tagline}`;
+    applyBranding(settings);
     settingsService
       .get()
       .then((s) => apply({ ...DEFAULTS, ...s }))

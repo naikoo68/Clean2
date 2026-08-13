@@ -6,6 +6,7 @@ import OtpVerify from "../../components/auth/OtpVerify";
 import AccountTypeTabs from "../../components/auth/AccountTypeTabs";
 import PlanPicker from "../../components/client/PlanPicker";
 import { useAuth } from "../../context/AuthContext";
+import { useSettings } from "../../context/SettingsContext";
 import { authService, paymentService } from "../../services";
 
 // Load Razorpay Checkout once, on demand.
@@ -34,6 +35,7 @@ const FALLBACK_PLANS = [
 // gets a private My Practice workspace to build and take their own quizzes/tests.
 export default function ClientRegister() {
   const { register, applySession } = useAuth();
+  const { settings } = useSettings();
   const navigate = useNavigate();
   const [showPw, setShowPw] = useState(false);
   const [otpStep, setOtpStep] = useState(null); // { email, devOtp, emailSent }
@@ -122,10 +124,11 @@ export default function ClientRegister() {
               order_id: order.orderId,
               amount: order.amount,
               currency: order.currency || "INR",
-              name: "My Study Guide",
+              name: settings?.siteName || "My Study Guide",
+              image: settings?.logoUrl || undefined,
               description: `${selectedPlan?.label} plan`,
               prefill: { name: form.name, email: form.email },
-              theme: { color: "#2563eb" },
+              theme: { color: settings?.primaryColor || "#2563eb" },
               handler: async (resp) => {
                 try {
                   await doRegister({
