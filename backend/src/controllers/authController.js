@@ -7,6 +7,7 @@ import { sendMail } from "../config/mailer.js";
 import { clientBaseFromReq } from "../config/clientUrl.js";
 import { notifyNewUser } from "../utils/notify.js";
 import { getClientPlans } from "../utils/plans.js";
+import { getSiteName } from "../utils/siteInfo.js";
 
 // Normalise emails so case/whitespace never causes a login mismatch
 // (phone keyboards often auto-capitalise the first letter).
@@ -26,9 +27,11 @@ async function issueOtp(user) {
 }
 
 async function sendOtpEmail(email, name, otp) {
+  const site = await getSiteName();
   return sendMail({
     to: email,
-    subject: "Your My Study Guide verification code",
+    fromName: site,
+    subject: `Your ${site} verification code`,
     text: `Hi ${name || "there"},\n\nYour verification code is ${otp}. It expires in 10 minutes.\n\nIf you didn't request this, ignore this email.`,
     html: `<p>Hi ${name || "there"},</p>
            <p>Your verification code is:</p>
@@ -413,9 +416,11 @@ export async function forgotPassword(req, res) {
     // Build the reset link from the site the request came from (falls back to
     // CLIENT_URL, then localhost), so it works even if CLIENT_URL isn't set.
     const resetLink = `${clientBaseFromReq(req)}/#/reset-password/${user.resetPasswordToken}`;
+    const site = await getSiteName();
     await sendMail({
       to: user.email,
-      subject: "Reset your My Study Guide password",
+      fromName: site,
+      subject: `Reset your ${site} password`,
       text: `Hi ${user.name || "there"},\n\nYou requested a password reset. Click this link to set a new password (expires in 1 hour):\n\n${resetLink}\n\nIf you didn't request this, ignore this email — your password won't change.`,
       html: `<p>Hi ${user.name || "there"},</p>
              <p>You requested a password reset. Click the link below to set a new password (expires in 1 hour):</p>
