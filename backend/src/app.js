@@ -1,4 +1,5 @@
 import express from "express";
+import mongoose from "mongoose";
 import cors from "cors";
 import helmet from "helmet";
 import morgan from "morgan";
@@ -99,21 +100,45 @@ const authLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 50 });
 // their own (auto: at exam end · manual: at the scheduled timer) even when the
 // free-tier server had been asleep and the in-process timer wasn't running —
 // no admin refresh required. Throttled + fire-and-forget so health stays fast.
+const DB_STATES = ["disconnected", "connected", "connecting", "disconnecting", "uninitialized"];
 let lastCbtSweep = 0;
-app.get("/api/health", (req, res) => {
+app.get("/api/health", async (req, res) => {
   const now = Date.now();
   if (now - lastCbtSweep > 60 * 1000) {
     lastCbtSweep = now;
     releaseEndedCbtExams().catch(() => {});
     runDueFbSchedules().catch(() => {}); // fire any due Facebook scheduled posts (safety net for sleepy hosts)
   }
-  res.json({
-    status: "ok",
+
+  // Report the real database status so this endpoint is trustworthy for
+  // "is the site down?" checks. readyState tells us if Mongoose thinks it's
+  // connected; a short, timeout-guarded ping confirms Atlas is actually
+  // answering (e.g. not paused or over-quota). Kept fast so health stays snappy.
+  const state = mongoose.connection?.readyState ?? 0;
+  let dbStatus = DB_STATES[state] || "unknown";
+  let dbOk = state === 1;
+  if (state === 1) {
+    try {
+      await Promise.race([
+        mongoose.connection.db.admin().ping(),
+        new Promise((_, reject) => setTimeout(() => reject(new Error("ping timeout")), 4000)),
+      ]);
+      dbOk = true;
+    } catch {
+      dbOk = false;
+      dbStatus = "unreachable";
+    }
+  }
+
+  res.status(dbOk ? 200 : 503).json({
+    status: dbOk ? "ok" : "degraded",
     service: "my-study-guide-api",
+    db: dbStatus,
+    dbOk,
     // Bump this whenever backend code changes so we can verify Render actually
     // redeployed: open /api/health and check `version`. If it's older than the
     // latest, the backend did NOT deploy and server-side fixes aren't live.
-    version: "2026-07-23-watermark-fix-v46",
+    version: "2026-08-13-db-aware-health-v47",
     features: ["ai-scope", "ai-key-owner", "extract-batches", "matching-labels", "documents", "extract-remaining", "notes-gen", "latex-json-repair", "no-currency-dollar", "parallel-small-chunks", "provider-timeout", "addtotest-drilldown", "mytest-subjectplan", "reshuffle-subjects-questions-options", "db-indexes", "extend-verify-numeric", "extend-verify-matching-pairs", "generate-extract-formula-verify", "regenerate-question", "wrap-numeric-options-latex", "regenerate-fixall-render", "regenerate-columns-not-in-stem", "regenerate-table-not-in-stem", "regenerate-strip-list-markers", "youtube-transcript-source", "shared-link-tracker", "shared-link-opens", "youtube-innertube-retry", "cbt-online-exams", "cbt-emailed-results", "cbt-rankings", "cbt-exam-portal", "cbt-live-toggle", "cbt-deferred-results", "cbt-otp-registration", "cbt-scheduled-window", "cbt-one-attempt", "cbt-portal-registration", "cbt-portal-login-password", "cbt-student-dashboard", "cbt-reset-password", "cbt-change-password", "cbt-admin-candidates", "cbt-late-entry-cutoff", "cbt-entry-allowlist", "cbt-student-status", "cbt-late-entry-access", "cbt-manual-result-mode", "cbt-result-autorelease-on-ping"],
     mailConfigured: isMailConfigured(),
     uploadConfigured: isCloudinaryConfigured(),
