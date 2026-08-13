@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useLocation } from "react-router-dom";
 import { User, Mail, Lock, Eye, EyeOff, UserPlus, Loader2, AlertCircle, Sparkles, Check, Tag, Gift } from "lucide-react";
 import AuthShell from "../../components/auth/AuthShell";
 import OtpVerify from "../../components/auth/OtpVerify";
@@ -35,11 +35,13 @@ const FALLBACK_PLANS = [
 export default function ClientRegister() {
   const { register, applySession } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const [showPw, setShowPw] = useState(false);
   const [otpStep, setOtpStep] = useState(null); // { email, devOtp, emailSent }
   const [form, setForm] = useState({ name: "", email: "", password: "" });
   const [plans, setPlans] = useState(FALLBACK_PLANS);
-  const [planKey, setPlanKey] = useState("trial"); // default: free 1-day trial
+  // Pre-select the plan chosen on the public /pricing page (if any), else trial.
+  const [planKey, setPlanKey] = useState(location.state?.plan || "trial");
   const [coupon, setCoupon] = useState("");
   const [referral, setReferral] = useState("");
   const [offer, setOffer] = useState(null); // { basePrice, discount, finalPrice, applied }
