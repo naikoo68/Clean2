@@ -1401,6 +1401,7 @@ export default function AdminPractice({ clientMode = false, fixedKind = "" }) {
         allowNewTarget
         newLeafLabel={kind}
         currentTargetName={aiTarget?.name || qItem?.name || ""}
+        existingItems={(items || []).filter((it) => it._id !== qItem?._id).map((it) => ({ _id: it._id, name: it.name, questionCount: it.questionCount }))}
         onUpload={(questions, opts = {}) => saveAiBatch(questions, opts)}
       />
 
