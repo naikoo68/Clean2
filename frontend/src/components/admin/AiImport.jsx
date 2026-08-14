@@ -28,7 +28,7 @@ const DIFFS = ["Easy", "Medium", "Hard"];
 // Import questions from a saved document, a PDF (text or OCR), a web page, or
 // pasted text. The AI extracts the questions present (it doesn't invent them);
 // review, then insert — all at once or batch by batch.
-export default function AiImport({ open, onClose, onUpload, title = "Import Questions (PDF, Web or Text)", sections = [], documents = false, defaultSection = "", allowNewTarget = false, newLeafLabel = "quiz", currentTargetName = "" }) {
+export default function AiImport({ open, onClose, onUpload, title = "Import Questions (PDF, Web or Text)", sections = [], documents = false, defaultSection = "", allowNewTarget = false, newLeafLabel = "quiz", currentTargetName = "", existingItems = [] }) {
   const { user } = useAuth();
   const isClient = user?.role === "client" && user?.aiAccess;
   const canChooseSource = isClient && user?.aiAllowInbuilt !== false && user?.aiAllowSelf !== false;
@@ -47,8 +47,9 @@ export default function AiImport({ open, onClose, onUpload, title = "Import Ques
   const [coverage, setCoverage] = useState(null); // { covered:[], missing:[] }
   const [coverageLoading, setCoverageLoading] = useState(false);
   const [syllabus, setSyllabus] = useState(null); // FIXED checklist so totals stay stable across batches
-  const [destChoice, setDestChoice] = useState("current"); // "current" | "new" — where a batch is inserted
+  const [destChoice, setDestChoice] = useState("current"); // "current" | "existing" | "new" — where a batch is inserted
   const [newName, setNewName] = useState("");
+  const [existingId, setExistingId] = useState(""); // chosen existing quiz/test id when destChoice === "existing"
   const [status, setStatus] = useState(null);
   const [model, setModel] = useState("");
   const [section, setSection] = useState(defaultSection || sections[0] || "");
@@ -409,7 +410,14 @@ export default function AiImport({ open, onClose, onUpload, title = "Import Ques
   // the parent auto-creates it; after the first insert we flip back to "current"
   // so the remaining batches go into that just-created quiz/test.
   const makingNew = allowNewTarget && destChoice === "new";
-  const buildOpts = () => (makingNew ? { section, newTarget: { name: newName.trim() } } : { section });
+  const usingExisting = allowNewTarget && destChoice === "existing";
+  const existingName = existingItems.find((it) => it._id === existingId)?.name || "";
+  const buildOpts = () => {
+    if (makingNew) return { section, newTarget: { name: newName.trim() } };
+    if (usingExisting) return { section, existingTargetId: existingId };
+    return { section };
+  };
+  const destSuffix = () => (makingNew ? ` into new ${newLeafLabel} “${newName.trim()}”` : usingExisting ? ` into “${existingName}”` : "");
   const afterNewInsert = () => { if (makingNew) { setDestChoice("current"); setNewName(""); } };
 
   // Insert one batch of the extracted preview (removes them so they aren't
@@ -417,12 +425,13 @@ export default function AiImport({ open, onClose, onUpload, title = "Import Ques
   const insertBatch = async (items, idx) => {
     if (!items.length || insertingIdx !== -1 || inserting) return;
     if (makingNew && !newName.trim()) { setMsg(`Enter a name for the new ${newLeafLabel}.`); return; }
+    if (usingExisting && !existingId) { setMsg(`Choose an existing ${newLeafLabel} to add these to.`); return; }
     setInsertingIdx(idx);
     setMsg("");
     try {
       const res = await onUpload(items, buildOpts());
       setPreview((prev) => prev.filter((q) => !items.includes(q)));
-      setMsg(`✓ Inserted ${res?.inserted ?? items.length} question(s) from this batch${makingNew ? ` into new ${newLeafLabel} “${newName.trim()}”` : ""}.`);
+      setMsg(`✓ Inserted ${res?.inserted ?? items.length} question(s) from this batch${destSuffix()}.`);
       afterNewInsert();
     } catch (e) {
       setMsg(e.message || "Insert failed.");
@@ -434,11 +443,12 @@ export default function AiImport({ open, onClose, onUpload, title = "Import Ques
   const insert = async () => {
     if (!preview.length) return;
     if (makingNew && !newName.trim()) { setMsg(`Enter a name for the new ${newLeafLabel}.`); return; }
+    if (usingExisting && !existingId) { setMsg(`Choose an existing ${newLeafLabel} to add these to.`); return; }
     setInserting(true);
     setMsg("");
     try {
       const res = await onUpload(preview, buildOpts());
-      setMsg(`✓ Inserted ${res?.inserted ?? preview.length} question(s)${makingNew ? ` into new ${newLeafLabel} “${newName.trim()}”` : ""}. Generate/extract the next batch, or click Close when you're done.`);
+      setMsg(`✓ Inserted ${res?.inserted ?? preview.length} question(s)${destSuffix()}. Generate/extract the next batch, or click Close when you're done.`);
       setPreview([]);
       afterNewInsert();
       // Stay on this screen (keep the source + settings) so you can immediately
@@ -857,6 +867,21 @@ export default function AiImport({ open, onClose, onUpload, title = "Import Ques
                   <input type="radio" name="importdest" checked={destChoice === "current"} onChange={() => setDestChoice("current")} />
                   <span>Current {newLeafLabel}{currentTargetName ? <> — <b>{currentTargetName}</b></> : <span className="text-slate-400"> (the one selected)</span>}</span>
                 </label>
+                {existingItems.length > 0 && (
+                  <label className="mt-2 flex cursor-pointer items-center gap-2 text-sm">
+                    <input type="radio" name="importdest" checked={destChoice === "existing"} onChange={() => setDestChoice("existing")} />
+                    <span className="flex-shrink-0">Existing {newLeafLabel}:</span>
+                    <select
+                      value={existingId}
+                      onFocus={() => setDestChoice("existing")}
+                      onChange={(e) => { setExistingId(e.target.value); setDestChoice("existing"); }}
+                      className="input !py-1"
+                    >
+                      <option value="">Choose a {newLeafLabel}…</option>
+                      {existingItems.map((it) => <option key={it._id} value={it._id}>{it.name}{it.questionCount != null ? ` (${it.questionCount})` : ""}</option>)}
+                    </select>
+                  </label>
+                )}
                 <label className="mt-2 flex cursor-pointer items-center gap-2 text-sm">
                   <input type="radio" name="importdest" checked={destChoice === "new"} onChange={() => setDestChoice("new")} />
                   <span className="flex-shrink-0">New {newLeafLabel}:</span>
