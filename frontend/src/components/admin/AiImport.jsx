@@ -13,6 +13,7 @@ const MAX_TOTAL = 500;
 // Question types the "Generate from source" mode can produce.
 const Q_TYPES = [
   { id: "mcq", label: "MCQ" },
+  { id: "numericalmcq", label: "Numerical MCQ" },
   { id: "matching", label: "Matching" },
   { id: "statement", label: "Statements" },
   { id: "pair", label: "Pairs" },
