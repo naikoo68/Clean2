@@ -156,6 +156,7 @@ export function searchQuestions(list, query) {
 // filter (and matching the badges shown on each question card).
 export const QUESTION_TYPE_LABELS = {
   mcq: "MCQ",
+  numericalmcq: "Numerical MCQ",
   assertion: "Assertion & Reason",
   matching: "Matching",
   statement: "Statement",

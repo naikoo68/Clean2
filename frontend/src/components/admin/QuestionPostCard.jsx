@@ -39,7 +39,7 @@ export default function QuestionPostCard({ question, includeOptions = true, incl
   const colA = Array.isArray(q.columnA) ? q.columnA : [];
   const colB = Array.isArray(q.columnB) ? q.columnB : [];
   const rows = Array.isArray(q.tableRows) ? q.tableRows : [];
-  const typeLabel = { matching: "Matching", statement: "Statements", pair: "Pairs", pairselect: "Pair-select", assertion: "Assertion & Reason", table: "Table" }[type];
+  const typeLabel = { numericalmcq: "Numerical MCQ", matching: "Matching", statement: "Statements", pair: "Pairs", pairselect: "Pair-select", assertion: "Assertion & Reason", table: "Table" }[type];
 
   return (
     <div style={S.card}>
