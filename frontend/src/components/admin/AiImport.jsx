@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { X, Globe, Download, CheckCircle2, AlertTriangle, Loader2, Server, KeyRound, FileText, Upload, Files, ScanText, Maximize2, Minimize2, Plus, Sparkles, ListChecks, Circle, Trash2 } from "lucide-react";
 import { aiService, documentService } from "../../services";
 import { useAuth } from "../../context/AuthContext";
@@ -58,6 +58,17 @@ export default function AiImport({ open, onClose, onUpload, title = "Import Ques
   const [textFull, setTextFull] = useState(false); // full-screen editor for the source text
   const [preview, setPreview] = useState([]);
   const [liveWave, setLiveWave] = useState({}); // in-progress job's per-bucket "have" counts { "type|difficulty": n }
+  const [subtopics, setSubtopics] = useState(""); // optional — specific subtopics to spread the questions across
+  const [numerical, setNumerical] = useState(false); // opt-in: also include numerical/calculation questions
+  const [autoContinue, setAutoContinue] = useState(true); // resume across quota windows until the target is reached
+  const [keepExtras, setKeepExtras] = useState(false); // keep everything even if a wave overshoots the requested count
+  const [perSubtopic, setPerSubtopic] = useState(false); // run the grid's mix once per subtopic listed
+  const [perSubRun, setPerSubRun] = useState(null); // live per-subtopic progress { i, n, name }
+  const [perSubList, setPerSubList] = useState([]); // completed subtopics this run: [{ name, count }]
+  const [stopping, setStopping] = useState(false); // user asked to stop the current generation
+  const stopRef = useRef(false); // set when the user clicks Stop — breaks the wave/poll loop
+  const jobIdRef = useRef(null); // id of the running background job (so Stop can cancel it)
+  const runProducedRef = useRef(0); // how many questions the LAST runGenerate produced (for per-subtopic tally)
   const [detected, setDetected] = useState(0); // how many questions the source appears to contain
   const [busy, setBusy] = useState(false);
   const [busyMore, setBusyMore] = useState(false); // "Extract remaining" pass in progress
@@ -89,6 +100,16 @@ export default function AiImport({ open, onClose, onUpload, title = "Import Ques
     setSyllabus(null);
     setDestChoice("current");
     setNewName("");
+    setSubtopics("");
+    setNumerical(false);
+    setAutoContinue(true);
+    setKeepExtras(false);
+    setPerSubtopic(false);
+    setPerSubRun(null);
+    setPerSubList([]);
+    setStopping(false);
+    stopRef.current = false;
+    jobIdRef.current = null;
     setSection(defaultSection || sections[0] || ""); // re-sync target subject on open
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, defaultSection]);
@@ -351,7 +372,9 @@ export default function AiImport({ open, onClose, onUpload, title = "Import Ques
   // per-type × per-difficulty counts. Uses the same background job + polling.
   // `append` = "Generate more": keep the current preview and add a fresh batch
   // from the same source, avoiding everything already generated (via avoidStems).
-  const runGenerate = async (append = false) => {
+  // `append` = "Generate more": keep the current preview and add a fresh batch.
+  // `overrideSubtopics` (per-subtopic mode) focuses this run on ONE subtopic.
+  const runGenerate = async (append = false, overrideSubtopics = null) => {
     if (!url.trim() && !text.trim()) {
       setMsg("Add a link or paste a paragraph to generate questions from.");
       return;
@@ -359,64 +382,178 @@ export default function AiImport({ open, onClose, onUpload, title = "Import Ques
     const plan = buildPlan();
     if (!plan.length) { setMsg("Set at least one question count in the grid below."); return; }
     if (genTotal > maxPerBatch) { setMsg(`Please keep the total to ${maxPerBatch} questions or fewer per run.`); return; }
+    const target = genTotal;
     setBusy(true);
-    setLiveWave({}); // clear any previous run's live overlay
+    setStopping(false);
+    stopRef.current = false;
+    jobIdRef.current = null;
+    setLiveWave({});
     if (!append) { setPreview([]); setDetected(0); }
-    setMsg(append ? `Generating ${genTotal} more from your source (no duplicates)…` : `Generating ${genTotal} question(s) from your source…`);
-    try {
-      const { jobId, requested } = await aiService.generate({
-        source: text.trim() || undefined,
-        url: url.trim() || undefined,
-        topic: genTopic.trim() || undefined, // optional — enables coverage analysis
-        plan,
-        notes: notes.trim() || undefined,
-        model: model || undefined,
-        avoid: avoidStems, // don't repeat anything from earlier batches
-        mode: isClient ? source : undefined,
-      });
-      if (!jobId) throw new Error("Could not start generation.");
-      if (requested && !append) setDetected(requested);
-      const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-      let done = false;
-      for (let i = 0; i < 240 && !done; i++) {
+
+    // Per-type|difficulty tally across waves so each wave requests only the
+    // REMAINING buckets (keeps the grid's distribution instead of regenerating
+    // the whole plan every wave).
+    const producedByBucket = {};
+    const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+    // Accumulate the avoid-list LOCALLY across waves (React state is async, so
+    // relying on avoidStems would let the next wave repeat this wave's questions).
+    let avoidLocal = Array.from(new Set([...(avoidStems || [])]));
+
+    // Run ONE wave (start a job + poll to completion), append its questions.
+    const runWave = async (isAppend, priorTotal = 0) => {
+      const wavePlan = plan
+        .map((b) => ({ ...b, count: Math.max(0, b.count - (producedByBucket[`${b.type}|${b.difficulty}`] || 0)) }))
+        .filter((b) => b.count > 0);
+      if (!wavePlan.length) return { produced: 0, done: true };
+      let jobId, requested;
+      try {
+        ({ jobId, requested } = await aiService.generate({
+          source: text.trim() || undefined,
+          url: url.trim() || undefined,
+          topic: genTopic.trim() || undefined, // optional — enables coverage analysis
+          subtopics: (overrideSubtopics != null ? overrideSubtopics : subtopics).trim() || undefined,
+          plan: wavePlan,
+          notes: notes.trim() || undefined,
+          numerical: numerical || undefined,
+          model: model || undefined,
+          avoid: avoidLocal, // don't repeat anything from earlier waves/batches
+          mode: isClient ? source : undefined,
+        }));
+      } catch (e) { setMsg(e.message || "Generation failed."); return { produced: 0, errored: true }; }
+      if (!jobId) { setMsg("Could not start generation."); return { produced: 0, errored: true }; }
+      jobIdRef.current = jobId;
+      if (requested && !isAppend && priorTotal === 0) setDetected(target);
+      let done = false, result = { produced: 0, timedOut: true };
+      for (let i = 0; i < 300 && !done; i++) {
         await sleep(2000);
         let s;
         try { s = await aiService.job(jobId); } catch { continue; }
-        // Live per-type × per-difficulty progress WHILE the batch is generating.
+        // Live per-type × per-difficulty progress WHILE the batch generates.
         if (Array.isArray(s.byBucket)) {
           const m = {};
           for (const b of s.byBucket) m[`${b.type}|${b.difficulty}`] = b.have;
           setLiveWave(m);
         }
         if (s.status === "done") {
-          const qs = s.questions || [];
-          setPreview((prev) => (append ? [...prev, ...qs] : qs));
-          setLiveWave({}); // clear the in-progress overlay — these are now counted via preview
-          // Remember these stems so the NEXT batch avoids repeating them.
+          const qsAll = s.questions || [];
+          // Trim to the remaining need so the total lands on the target exactly,
+          // unless "Keep all generated" is on.
+          const room = target > 0 ? Math.max(0, target - priorTotal) : qsAll.length;
+          const qs = keepExtras ? qsAll : qsAll.slice(0, room);
+          setPreview((prev) => (isAppend ? [...prev, ...qs] : qs));
+          for (const q of qs) {
+            const k = `${q?.type || "mcq"}|${q?.difficulty || "Medium"}`;
+            producedByBucket[k] = (producedByBucket[k] || 0) + 1;
+          }
+          setLiveWave({}); // now counted via preview
           const batchStems = qs.map((q) => q.text).filter(Boolean);
-          setAvoidStems((prev) => Array.from(new Set([...prev, ...batchStems])));
-          // Refresh the covered / not-covered summary (only if a topic is set).
-          refreshCoverage(Array.from(new Set([...avoidStems, ...batchStems])));
-          setMsg(qs.length
-            ? (append
-                ? `✓ Added ${qs.length} more question(s) — no duplicates of the earlier ones. Review, then insert.`
-                : `✓ Generated ${qs.length}${requested ? ` of ${requested}` : ""} question(s). Review below, then insert.`)
-            : "No questions were generated — try a longer source, a higher count, or different types.");
+          avoidLocal = Array.from(new Set([...avoidLocal, ...batchStems]));
+          setAvoidStems(avoidLocal);
+          refreshCoverage(avoidLocal);
+          result = { produced: qs.length, requested, short: qs.length < requested, quota: s.error === "quota", cancelled: s.error === "cancelled" || stopRef.current };
           done = true;
         } else if (s.status === "error") {
-          setLiveWave({});
-          setMsg(s.error || "Generation failed.");
-          done = true;
+          setMsg(s.error || "Generation failed."); result = { produced: 0, errored: true }; done = true;
         } else {
-          setMsg(`Generating… ${s.count || 0} question(s) so far`);
+          const soFar = priorTotal + (s.count || 0);
+          setMsg(stopRef.current ? `Stopping… keeping the ${soFar} generated so far` : `Generating… ${soFar} of ${target} ready (${Math.max(0, target - soFar)} to go)`);
         }
       }
-      if (!done) setMsg("Still working — try a smaller count.");
+      if (!done) setMsg("Still generating — this is taking longer than expected. Try a smaller batch.");
+      return result;
+    };
+
+    const finalize = (res, producedTotal) => {
+      if ((res?.errored || res?.timedOut) && producedTotal === 0) return;
+      if (stopRef.current || res?.cancelled) { setMsg(`⏹ Stopped. Kept ${producedTotal} question(s) so far — review & Insert below, or Generate more.`); return; }
+      const short = producedTotal < target;
+      if (append && !autoContinue) {
+        setMsg(`✓ Added ${producedTotal} more question(s).` + (short ? " (Some couldn't be generated — click “Generate more” to top up.)" : " No duplicates of the earlier questions. Review & Insert."));
+        return;
+      }
+      if (res?.errored || res?.timedOut) {
+        setMsg(`✓ Generated ${producedTotal} of ${target} question(s). The AI stopped before finishing — Insert these now, then use “Generate more” to top up.`);
+        return;
+      }
+      let tail;
+      if (!short) tail = " Review below, then Insert.";
+      else if (res?.quota) tail = autoContinue ? " The free-tier quota kept limiting it — Insert these, then Generate more later for the rest." : " Stopped early — quota reached. Insert these, then generate the rest in a minute.";
+      else tail = " (Some couldn't be generated — click “Generate more” to top up.)";
+      setMsg(`✓ Generated ${producedTotal} of ${target} question(s).` + tail);
+    };
+
+    try {
+      const autoLoop = autoContinue && !append; // manual "Generate more" stays a single wave
+      const MAX_WAVES = 60, MAX_ZERO = 8, MIN_YIELD = 2, MAX_LOW = 4;
+      setMsg(append ? `Generating ${target} more from your source (no duplicates)…` : `Starting generation of ${target} question(s)…`);
+      let producedTotal = 0, firstWave = true, wave = 0, zeroWaves = 0, lowWaves = 0, last;
+      while (true) {
+        // eslint-disable-next-line no-await-in-loop
+        last = await runWave(firstWave ? append : true, producedTotal);
+        producedTotal += last.produced || 0;
+        firstWave = false;
+        wave += 1;
+        zeroWaves = (last.produced || 0) === 0 ? zeroWaves + 1 : 0;
+        lowWaves = (last.produced || 0) < MIN_YIELD ? lowWaves + 1 : 0;
+        const reached = producedTotal >= target;
+        const dead = zeroWaves >= MAX_ZERO;
+        const stalled = lowWaves >= MAX_LOW;
+        const canContinue = autoLoop && !stopRef.current && !reached && !last.errored && !last.timedOut && !dead && !stalled && wave < MAX_WAVES;
+        if (!canContinue) {
+          if (autoLoop && !reached && !stopRef.current && !last.errored && !last.timedOut && (dead || stalled || wave >= MAX_WAVES)) {
+            setMsg(`⏸ Auto-continue stopped at ${producedTotal} of ${target}. The free-tier quota looks exhausted, or some types couldn't be filled right now — Insert these, then use “Generate more” later.`);
+          } else {
+            finalize(last, producedTotal);
+          }
+          break;
+        }
+        // Interruptible wait for the per-minute limit to refill.
+        const waitSec = (last.produced || 0) === 0 ? 60 : 40;
+        for (let k = waitSec; k > 0 && !stopRef.current; k--) {
+          setMsg(`Auto-continue: ${producedTotal} of ${target} so far${zeroWaves ? ` · ${zeroWaves} empty wave(s)` : ""}. Waiting ${k}s for the free-tier limit to reset… (press Stop to keep what you have)`);
+          // eslint-disable-next-line no-await-in-loop
+          await sleep(1000);
+        }
+        if (stopRef.current) { finalize(last, producedTotal); break; }
+      }
+      runProducedRef.current = producedTotal;
     } catch (e) {
       setMsg(e.message || "Generation failed.");
     } finally {
       setBusy(false);
+      setStopping(false);
+      stopRef.current = false;
+      jobIdRef.current = null;
     }
+  };
+
+  // "Per subtopic": run the grid's mix for EACH subtopic in the box, one at a
+  // time. The preview accumulates and a live line shows which subtopic is running.
+  const generatePerSubtopic = async () => {
+    if (!url.trim() && !text.trim()) { setMsg("Add a link or paste a paragraph first."); return; }
+    const subs = subtopics.split(/[\n,]+/).map((s) => s.trim()).filter(Boolean);
+    if (!subs.length) { setMsg("Add the subtopics in “Subtopics to cover” to generate per subtopic."); return; }
+    if (genTotal <= 0) { setMsg("Set at least one question count in the grid below."); return; }
+    if (genTotal > maxPerBatch) { setMsg(`Keep the PER-SUBTOPIC total to ${maxPerBatch} or fewer (it runs once per subtopic).`); return; }
+    stopRef.current = false;
+    setPerSubList([]);
+    for (let idx = 0; idx < subs.length; idx++) {
+      if (stopRef.current) break;
+      setPerSubRun({ i: idx + 1, n: subs.length, name: subs[idx] });
+      runProducedRef.current = 0;
+      // First subtopic starts a fresh preview; later ones append (no duplicates).
+      // eslint-disable-next-line no-await-in-loop
+      await runGenerate(idx > 0, subs[idx]);
+      setPerSubList((prev) => [...prev, { name: subs[idx], count: runProducedRef.current || 0 }]);
+    }
+    setPerSubRun(null);
+  };
+
+  // Stop a running generation — keep whatever was produced so far.
+  const stop = () => {
+    stopRef.current = true;
+    setStopping(true);
+    if (jobIdRef.current) aiService.cancelJob(jobIdRef.current).catch(() => {});
   };
 
   // Build the onUpload options. When "New {leaf}" is chosen we send newTarget so
@@ -759,10 +896,82 @@ export default function AiImport({ open, onClose, onUpload, title = "Import Ques
               </div>
             )}
 
+            {/* Optional subtopics + generation controls (source generator parity). */}
+            {task === "generate" && (
+              <div className="mt-4 space-y-3">
+                <div>
+                  <label className="block text-sm font-semibold">
+                    Subtopics to cover <span className="font-normal text-slate-400">(optional)</span>
+                  </label>
+                  <textarea
+                    className="input mt-1 h-20"
+                    placeholder="List the exact subtopics to spread the questions across, one per line or comma-separated. Leave empty to let the AI work them out from the source."
+                    value={subtopics}
+                    onChange={(e) => setSubtopics(e.target.value)}
+                  />
+                  <p className="mt-1 text-xs text-slate-400">
+                    The questions are spread across these subtopics, drawing the facts from your source material above.
+                  </p>
+                </div>
+                <label className="flex cursor-pointer items-start gap-2 text-sm text-slate-700 dark:text-slate-200">
+                  <input type="checkbox" className="mt-0.5 h-4 w-4" checked={numerical} onChange={(e) => setNumerical(e.target.checked)} />
+                  <span>
+                    <span className="font-semibold">Include numerical questions</span>
+                    <span className="mt-0.5 block text-xs text-slate-500 dark:text-slate-400">
+                      Also generate calculation/quantitative questions (off by default — most sources are conceptual).
+                    </span>
+                  </span>
+                </label>
+                <label className="flex cursor-pointer items-start gap-2 text-sm text-slate-700 dark:text-slate-200">
+                  <input type="checkbox" className="mt-0.5 h-4 w-4" checked={autoContinue} onChange={(e) => setAutoContinue(e.target.checked)} />
+                  <span>
+                    <span className="font-semibold">Auto-continue until the target is reached</span>
+                    <span className="mt-0.5 block text-xs text-slate-500 dark:text-slate-400">
+                      Keep generating across free-tier limits (waiting out quota pauses) until the full count is made. Press Stop anytime.
+                    </span>
+                  </span>
+                </label>
+                <label className="flex cursor-pointer items-start gap-2 text-sm text-slate-700 dark:text-slate-200">
+                  <input type="checkbox" className="mt-0.5 h-4 w-4" checked={keepExtras} onChange={(e) => setKeepExtras(e.target.checked)} />
+                  <span>
+                    <span className="font-semibold">Keep all generated</span>
+                    <span className="mt-0.5 block text-xs text-slate-500 dark:text-slate-400">
+                      Keep every question even if a wave produces more than the requested count (don't trim to the exact total).
+                    </span>
+                  </span>
+                </label>
+                <label className="flex cursor-pointer items-start gap-2 text-sm text-slate-700 dark:text-slate-200">
+                  <input type="checkbox" className="mt-0.5 h-4 w-4" checked={perSubtopic} onChange={(e) => setPerSubtopic(e.target.checked)} />
+                  <span>
+                    <span className="font-semibold">Generate per subtopic</span>
+                    <span className="mt-0.5 block text-xs text-slate-500 dark:text-slate-400">
+                      Run the grid's mix once FOR EACH subtopic listed above (instead of one combined batch). Needs subtopics filled in.
+                    </span>
+                  </span>
+                </label>
+                {(perSubRun || perSubList.length > 0) && (
+                  <div className="rounded-lg border border-brand-200 bg-brand-50/60 p-2.5 text-xs dark:border-brand-800 dark:bg-brand-900/20">
+                    {perSubRun && (
+                      <p className="flex items-center gap-1.5 font-semibold text-brand-700 dark:text-brand-300">
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" /> Subtopic {perSubRun.i} of {perSubRun.n}: {perSubRun.name}
+                      </p>
+                    )}
+                    {perSubList.length > 0 && (
+                      <ul className="mt-1 space-y-0.5 text-slate-600 dark:text-slate-300">
+                        {perSubList.map((p, i) => (
+                          <li key={i} className="flex items-center gap-1.5"><CheckCircle2 className="h-3 w-3 text-emerald-500" /> {p.name}: {p.count} question(s)</li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Live results breakdown — how many of each type × difficulty have
                 been generated so far vs requested. Appears while generating and
                 after each batch, mirroring the topic generator. */}
-            {(busy || preview.length > 0) && genTotal > 0 && (
+            {task === "generate" && (busy || preview.length > 0) && genTotal > 0 && (
               <div className="mt-4">
                 <div className="flex items-center justify-between">
                   <label className="block text-sm font-semibold">Generated by type &amp; difficulty</label>
@@ -808,13 +1017,18 @@ export default function AiImport({ open, onClose, onUpload, title = "Import Ques
               </div>
             )}
 
-            <button type="button" onClick={() => (task === "generate" ? runGenerate(false) : runExtract(false))} disabled={busy || busyMore} className="btn-primary mt-4 w-full">
+            <button type="button" onClick={() => (task === "generate" ? (perSubtopic ? generatePerSubtopic() : runGenerate(false)) : runExtract(false))} disabled={busy || busyMore} className="btn-primary mt-4 w-full">
               {busy
                 ? <><Loader2 className="h-4 w-4 animate-spin" /> {task === "generate" ? "Generating…" : "Extracting…"}</>
                 : task === "generate"
-                  ? <><Sparkles className="h-4 w-4" /> Generate Questions</>
+                  ? <><Sparkles className="h-4 w-4" /> {perSubtopic ? "Generate per subtopic" : "Generate Questions"}</>
                   : <><Download className="h-4 w-4" /> Extract Questions</>}
             </button>
+            {busy && task === "generate" && (
+              <button type="button" onClick={stop} disabled={stopping} className="btn-outline mt-2 w-full">
+                {stopping ? "Stopping…" : "Stop (keep what's generated so far)"}
+              </button>
+            )}
 
             {/* Generate-new mode: add another batch from the same source, with no
                 repeats of what's already in the preview (mirrors the AI Generator). */}
