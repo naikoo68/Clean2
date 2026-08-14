@@ -57,6 +57,7 @@ export default function AiImport({ open, onClose, onUpload, title = "Import Ques
   const [text, setText] = useState("");
   const [textFull, setTextFull] = useState(false); // full-screen editor for the source text
   const [preview, setPreview] = useState([]);
+  const [liveWave, setLiveWave] = useState({}); // in-progress job's per-bucket "have" counts { "type|difficulty": n }
   const [detected, setDetected] = useState(0); // how many questions the source appears to contain
   const [busy, setBusy] = useState(false);
   const [busyMore, setBusyMore] = useState(false); // "Extract remaining" pass in progress
@@ -313,6 +314,9 @@ export default function AiImport({ open, onClose, onUpload, title = "Import Ques
     const k = `${q?.type || "mcq"}|${q?.difficulty || ""}`;
     genCounts[k] = (genCounts[k] || 0) + 1;
   }
+  // Include the in-progress job's live per-bucket counts so the grid updates
+  // WHILE generating (not only after the batch finishes and lands in preview).
+  for (const k in liveWave) genCounts[k] = (genCounts[k] || 0) + (liveWave[k] || 0);
 
   // After a batch, summarise which areas of the SOURCE (the PDF / link / pasted
   // text) are now covered vs still missing. The checklist is built from the
@@ -356,6 +360,7 @@ export default function AiImport({ open, onClose, onUpload, title = "Import Ques
     if (!plan.length) { setMsg("Set at least one question count in the grid below."); return; }
     if (genTotal > maxPerBatch) { setMsg(`Please keep the total to ${maxPerBatch} questions or fewer per run.`); return; }
     setBusy(true);
+    setLiveWave({}); // clear any previous run's live overlay
     if (!append) { setPreview([]); setDetected(0); }
     setMsg(append ? `Generating ${genTotal} more from your source (no duplicates)…` : `Generating ${genTotal} question(s) from your source…`);
     try {
@@ -377,9 +382,16 @@ export default function AiImport({ open, onClose, onUpload, title = "Import Ques
         await sleep(2000);
         let s;
         try { s = await aiService.job(jobId); } catch { continue; }
+        // Live per-type × per-difficulty progress WHILE the batch is generating.
+        if (Array.isArray(s.byBucket)) {
+          const m = {};
+          for (const b of s.byBucket) m[`${b.type}|${b.difficulty}`] = b.have;
+          setLiveWave(m);
+        }
         if (s.status === "done") {
           const qs = s.questions || [];
           setPreview((prev) => (append ? [...prev, ...qs] : qs));
+          setLiveWave({}); // clear the in-progress overlay — these are now counted via preview
           // Remember these stems so the NEXT batch avoids repeating them.
           const batchStems = qs.map((q) => q.text).filter(Boolean);
           setAvoidStems((prev) => Array.from(new Set([...prev, ...batchStems])));
@@ -392,6 +404,7 @@ export default function AiImport({ open, onClose, onUpload, title = "Import Ques
             : "No questions were generated — try a longer source, a higher count, or different types.");
           done = true;
         } else if (s.status === "error") {
+          setLiveWave({});
           setMsg(s.error || "Generation failed.");
           done = true;
         } else {
