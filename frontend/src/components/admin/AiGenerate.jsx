@@ -6,6 +6,7 @@ import GraphView from "../ui/GraphView";
 
 const TYPE_OPTIONS = [
   { id: "mcq", label: "MCQ" },
+  { id: "numericalmcq", label: "Numerical MCQ" },
   { id: "assertion", label: "Assertion & Reason" },
   { id: "statement", label: "Statement-based" },
   { id: "matching", label: "Matching" },
