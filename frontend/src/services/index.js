@@ -445,3 +445,13 @@ export const subscriptionService = {
 export const searchService = {
   query: (q) => api.get(`/search?q=${encodeURIComponent(q)}`),
 };
+
+
+// Full ADMIN content-library backup & restore (background jobs + live progress).
+export const adminBackupService = {
+  start: () => api.post("/admin/backup/start"),
+  job: (id) => api.get(`/admin/backup/job/${id}`),
+  file: (id) => api.get(`/admin/backup/job/${id}/file`, { timeout: 180000 }),
+  startRestore: (data) => api.post("/admin/restore/start", data, { timeout: 180000 }),
+  restoreJob: (id) => api.get(`/admin/restore/job/${id}`),
+};
