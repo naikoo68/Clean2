@@ -5,6 +5,21 @@ import { applyBranding } from "../lib/branding";
 
 const SettingsContext = createContext();
 
+// Optional build-time Google OAuth Client ID (set as VITE_GOOGLE_CLIENT_ID in
+// Vercel). Used as the default so Google Drive backup works out-of-the-box;
+// a Client ID saved in Admin → Settings always takes priority over this.
+const ENV_GOOGLE_CLIENT_ID = String(import.meta.env.VITE_GOOGLE_CLIENT_ID || "").trim();
+
+// Merge server/cached settings over the defaults, then fall back to the env
+// Client ID when the admin hasn't saved one.
+function withDefaults(s = {}) {
+  const merged = { ...DEFAULTS, ...s };
+  if (!String(merged.googleClientId || "").trim() && ENV_GOOGLE_CLIENT_ID) {
+    merged.googleClientId = ENV_GOOGLE_CLIENT_ID;
+  }
+  return merged;
+}
+
 const DEFAULTS = {
   siteName: "My Study Guide",
   tagline: "Prepare Smart, Achieve More.",
@@ -58,7 +73,7 @@ const DEFAULTS = {
 export function SettingsProvider({ children }) {
   const [settings, setSettings] = useState(() => {
     const cached = localStorage.getItem("msg-settings");
-    return cached ? { ...DEFAULTS, ...JSON.parse(cached) } : DEFAULTS;
+    return withDefaults(cached ? JSON.parse(cached) : {});
   });
 
   const apply = useCallback((s) => {
@@ -74,7 +89,7 @@ export function SettingsProvider({ children }) {
     applyBranding(settings);
     settingsService
       .get()
-      .then((s) => apply({ ...DEFAULTS, ...s }))
+      .then((s) => apply(withDefaults(s)))
       .catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -82,7 +97,7 @@ export function SettingsProvider({ children }) {
   // Admin save
   const save = async (patch) => {
     const updated = await settingsService.update(patch);
-    apply({ ...DEFAULTS, ...updated });
+    apply(withDefaults(updated));
     return updated;
   };
 
