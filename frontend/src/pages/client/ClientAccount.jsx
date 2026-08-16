@@ -1,8 +1,12 @@
 import { useEffect, useRef, useState } from "react";
-import { AlarmClock, ShieldCheck, Clock, Crown, Gift, Copy, Sparkles, User, Download, Upload, Loader2 } from "lucide-react";
+import { AlarmClock, ShieldCheck, Clock, Crown, Gift, Copy, Sparkles, User, Download, Upload, Loader2, HardDriveUpload, HardDriveDownload, X } from "lucide-react";
 import { authService, practiceService } from "../../services";
 import { useAuth } from "../../context/AuthContext";
+import { useSettings } from "../../context/SettingsContext";
+import { getAccessToken, uploadBackup, listBackups, downloadBackup as driveDownloadBackup } from "../../lib/googleDrive";
 import Badge from "../../components/ui/Badge";
+
+const fmtWhen = (d) => { try { return new Date(d).toLocaleString(undefined, { day: "2-digit", month: "short", year: "numeric", hour: "numeric", minute: "2-digit" }); } catch { return ""; } };
 
 const fmtDate = (d) =>
   new Date(d).toLocaleString(undefined, { day: "2-digit", month: "short", year: "numeric", hour: "numeric", minute: "2-digit" });
@@ -24,6 +28,7 @@ const isExpired = (d) => d && new Date(d).getTime() < Date.now();
 // stays focused on content; opened from the workspace hamburger menu.
 export default function ClientAccount({ onUpgrade }) {
   const { user } = useAuth();
+  const { settings } = useSettings();
   const [planInfo, setPlanInfo] = useState(null);
   const [copied, setCopied] = useState(false);
 
@@ -50,43 +55,62 @@ export default function ClientAccount({ onUpgrade }) {
   const [backupBusy, setBackupBusy] = useState(false);
   const [restoreBusy, setRestoreBusy] = useState(false);
   const [backupMsg, setBackupMsg] = useState("");
-  const [progress, setProgress] = useState(null); // { done, total } while an op runs
+  const [progress, setProgress] = useState(null); // { done, total, phase } while an op runs
+  const [driveFiles, setDriveFiles] = useState(null); // Drive backups to pick from when restoring
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  const driveReady = !!(settings?.googleClientId || "").trim();
+
+  const backupName = () => {
+    const acct = String(user?.name || "").trim().replace(/[^a-z0-9]+/gi, "-").replace(/^-+|-+$/g, "").toLowerCase() || "my";
+    return `${acct}-practice-backup-${new Date().toISOString().slice(0, 10)}.json`;
+  };
+
+  // Run the backup job → returns the full backup JSON (shared by file + Drive).
+  const runBackupJob = async () => {
+    const { jobId, total } = await practiceService.startBackup();
+    setProgress({ done: 0, total: total || 0, phase: "Backing up" });
+    let st;
+    for (;;) {
+      await sleep(700);
+      st = await practiceService.backupJob(jobId);
+      setProgress({ done: st.done || 0, total: st.total || total || 0, phase: "Backing up" });
+      if (st.status === "done") break;
+      if (st.status === "error") throw new Error(st.error || "Backup failed.");
+    }
+    return practiceService.backupFile(jobId);
+  };
+
+  // Run a restore job from a parsed backup object (shared by file + Drive).
+  const runRestoreJob = async (parsed) => {
+    const { jobId, total } = await practiceService.startRestore(parsed);
+    setProgress({ done: 0, total: total || 0, phase: "Restoring" });
+    let st;
+    for (;;) {
+      await sleep(700);
+      st = await practiceService.restoreJob(jobId);
+      setProgress({ done: st.done || 0, total: st.total || total || 0, phase: "Restoring" });
+      if (st.status === "done") break;
+      if (st.status === "error") throw new Error(st.error || "Restore failed.");
+    }
+    const r = st.result || {};
+    return `✓ Restored ${r.items || 0} item(s) and ${r.questions || 0} question(s). Open My Practice (refresh) to see them.`;
+  };
 
   const downloadBackup = async () => {
-    setBackupBusy(true);
-    setBackupMsg("");
-    setProgress({ done: 0, total: 0 });
+    setBackupBusy(true); setBackupMsg(""); setProgress({ done: 0, total: 0, phase: "Backing up" });
     try {
-      const { jobId, total } = await practiceService.startBackup();
-      setProgress({ done: 0, total: total || 0 });
-      let st;
-      for (;;) {
-        await sleep(700);
-        st = await practiceService.backupJob(jobId);
-        setProgress({ done: st.done || 0, total: st.total || total || 0 });
-        if (st.status === "done") break;
-        if (st.status === "error") throw new Error(st.error || "Backup failed.");
-      }
-      const data = await practiceService.backupFile(jobId);
+      const data = await runBackupJob();
       const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
-      a.href = url;
-      const acct = String(user?.name || "").trim().replace(/[^a-z0-9]+/gi, "-").replace(/^-+|-+$/g, "").toLowerCase() || "my";
-      a.download = `${acct}-practice-backup-${new Date().toISOString().slice(0, 10)}.json`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
+      a.href = url; a.download = backupName();
+      document.body.appendChild(a); a.click(); a.remove();
       URL.revokeObjectURL(url);
       const c = data?.counts || {};
       setBackupMsg(`✓ Backed up ${c.items || 0} item(s) and ${c.questions || 0} question(s). Now save this file to your Google Drive.`);
     } catch (e) {
       setBackupMsg(e?.message || "Backup failed — please try again.");
-    } finally {
-      setBackupBusy(false);
-      setProgress(null);
-    }
+    } finally { setBackupBusy(false); setProgress(null); }
   };
 
   const onRestoreFile = async (e) => {
@@ -94,31 +118,54 @@ export default function ClientAccount({ onUpgrade }) {
     e.target.value = ""; // allow re-selecting the same file later
     if (!file) return;
     if (!window.confirm("Restore will ADD everything from this backup to your account (it does not delete or replace what you already have). Continue?")) return;
-    setRestoreBusy(true);
-    setBackupMsg("");
-    setProgress({ done: 0, total: 0 });
+    setRestoreBusy(true); setBackupMsg(""); setProgress({ done: 0, total: 0, phase: "Restoring" });
     try {
       let parsed;
       try { parsed = JSON.parse(await file.text()); }
       catch { throw new Error("That file isn't a valid backup file."); }
-      const { jobId, total } = await practiceService.startRestore(parsed);
-      setProgress({ done: 0, total: total || 0 });
-      let st;
-      for (;;) {
-        await sleep(700);
-        st = await practiceService.restoreJob(jobId);
-        setProgress({ done: st.done || 0, total: st.total || total || 0 });
-        if (st.status === "done") break;
-        if (st.status === "error") throw new Error(st.error || "Restore failed.");
-      }
-      const r = st.result || {};
-      setBackupMsg(`✓ Restored ${r.items || 0} item(s) and ${r.questions || 0} question(s). Open My Practice (refresh) to see them.`);
+      setBackupMsg(await runRestoreJob(parsed));
     } catch (err) {
       setBackupMsg(err?.message || "Restore failed — please check the file and try again.");
-    } finally {
-      setRestoreBusy(false);
-      setProgress(null);
-    }
+    } finally { setRestoreBusy(false); setProgress(null); }
+  };
+
+  // ---- Google Drive ----
+  const backupToDrive = async () => {
+    setBackupBusy(true); setBackupMsg(""); setProgress({ done: 0, total: 0, phase: "Connecting to Google Drive…" });
+    try {
+      const token = await getAccessToken(settings?.googleClientId);
+      const data = await runBackupJob();
+      setProgress((p) => ({ ...(p || {}), phase: "Uploading to Google Drive…" }));
+      await uploadBackup(token, backupName(), data);
+      const c = data?.counts || {};
+      setBackupMsg(`✓ Backed up ${c.items || 0} item(s) and ${c.questions || 0} question(s) to your Google Drive → "My Study Guide Backups" folder.`);
+    } catch (e) {
+      setBackupMsg(e?.message || "Google Drive backup failed — please try again.");
+    } finally { setBackupBusy(false); setProgress(null); }
+  };
+
+  const openDrivePicker = async () => {
+    setRestoreBusy(true); setBackupMsg(""); setDriveFiles(null); setProgress({ done: 0, total: 0, phase: "Connecting to Google Drive…" });
+    try {
+      const token = await getAccessToken(settings?.googleClientId);
+      const files = await listBackups(token);
+      if (!files.length) { setBackupMsg("No backups found in your Google Drive yet. Create one with \"Back up to Google Drive\" first."); return; }
+      setDriveFiles(files.map((f) => ({ ...f, token })));
+    } catch (e) {
+      setBackupMsg(e?.message || "Couldn't open Google Drive — please try again.");
+    } finally { setProgress(null); setRestoreBusy(false); }
+  };
+
+  const restoreFromDrive = async (file) => {
+    if (!window.confirm(`Restore "${file.name}" from Google Drive? This ADDS everything from it to your account (it never deletes or replaces what you have). Continue?`)) return;
+    setDriveFiles(null);
+    setRestoreBusy(true); setBackupMsg(""); setProgress({ done: 0, total: 0, phase: "Downloading from Google Drive…" });
+    try {
+      const parsed = await driveDownloadBackup(file.token, file.id);
+      setBackupMsg(await runRestoreJob(parsed));
+    } catch (e) {
+      setBackupMsg(e?.message || "Google Drive restore failed — please try again.");
+    } finally { setRestoreBusy(false); setProgress(null); }
   };
 
   const pct = progress && progress.total ? Math.round((progress.done / progress.total) * 100) : 0;
@@ -220,26 +267,56 @@ export default function ClientAccount({ onUpgrade }) {
         </div>
         <div className="mt-4 flex flex-col gap-2 sm:flex-row">
           <button onClick={downloadBackup} disabled={backupBusy || restoreBusy} className="btn-outline flex-1">
-            {backupBusy ? <><Loader2 className="h-4 w-4 animate-spin" /> Backing up…</> : <><Download className="h-4 w-4" /> Back up my content</>}
+            {backupBusy ? <><Loader2 className="h-4 w-4 animate-spin" /> Backing up…</> : <><Download className="h-4 w-4" /> Back up to a file</>}
           </button>
           <button onClick={() => fileRef.current?.click()} disabled={backupBusy || restoreBusy} className="btn-outline flex-1">
-            {restoreBusy ? <><Loader2 className="h-4 w-4 animate-spin" /> Restoring…</> : <><Upload className="h-4 w-4" /> Restore from a backup</>}
+            {restoreBusy ? <><Loader2 className="h-4 w-4 animate-spin" /> Restoring…</> : <><Upload className="h-4 w-4" /> Restore from a file</>}
           </button>
           <input ref={fileRef} type="file" accept="application/json,.json" className="hidden" onChange={onRestoreFile} />
         </div>
+        {driveReady && (
+          <div className="mt-2 flex flex-col gap-2 sm:flex-row">
+            <button onClick={backupToDrive} disabled={backupBusy || restoreBusy} className="btn-outline flex-1">
+              {backupBusy ? <><Loader2 className="h-4 w-4 animate-spin" /> Working…</> : <><HardDriveUpload className="h-4 w-4" /> Back up to Google Drive</>}
+            </button>
+            <button onClick={openDrivePicker} disabled={backupBusy || restoreBusy} className="btn-outline flex-1">
+              {restoreBusy ? <><Loader2 className="h-4 w-4 animate-spin" /> Working…</> : <><HardDriveDownload className="h-4 w-4" /> Restore from Google Drive</>}
+            </button>
+          </div>
+        )}
+        {driveFiles && (
+          <div className="mt-3 rounded-lg border border-slate-200 dark:border-slate-700">
+            <div className="flex items-center justify-between border-b border-slate-200 px-3 py-2 dark:border-slate-700">
+              <p className="text-sm font-semibold">Choose a backup to restore</p>
+              <button onClick={() => setDriveFiles(null)} className="text-slate-400 hover:text-slate-600"><X className="h-4 w-4" /></button>
+            </div>
+            <ul className="max-h-56 overflow-auto">
+              {driveFiles.map((f) => (
+                <li key={f.id}>
+                  <button onClick={() => restoreFromDrive(f)} className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-sm hover:bg-slate-50 dark:hover:bg-slate-800/60">
+                    <span className="truncate">{f.name}</span>
+                    <span className="flex-shrink-0 text-xs text-slate-400">{fmtWhen(f.modifiedTime)}</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
         {progress && (
           <div className="mt-3">
             <div className="h-2 w-full overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
               <div className="h-full rounded-full bg-brand-600 transition-all duration-300" style={{ width: `${pct}%` }} />
             </div>
             <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-              {backupBusy ? "Backing up" : "Restoring"}… {pct}%{progress.total ? ` · ${progress.done} / ${progress.total}` : ""}
+              {progress.phase || (backupBusy ? "Backing up" : "Restoring")}… {progress.total ? `${pct}% · ${progress.done} / ${progress.total}` : ""}
             </p>
           </div>
         )}
         {backupMsg && <p className="mt-3 text-sm text-slate-600 dark:text-slate-300">{backupMsg}</p>}
         <p className="mt-2 text-xs text-slate-400">
-          To keep a backup in Google Drive: click <b>Back up my content</b>, then upload the downloaded file to your Drive. To restore later, download it from Drive and choose it here. Restoring <b>adds a fresh copy</b> of everything — it never overwrites what you already have.
+          {driveReady
+            ? <>Use <b>Back up to Google Drive</b> to save straight to your own Google Drive (a "My Study Guide Backups" folder), then <b>Restore from Google Drive</b> to bring it back on any device. You can also back up to a file. Restoring <b>adds a fresh copy</b> — it never overwrites what you already have.</>
+            : <>Click <b>Back up to a file</b>, then keep the downloaded file safe (e.g. upload it to your Google Drive). To restore later, choose that file here. Restoring <b>adds a fresh copy</b> of everything — it never overwrites what you already have.</>}
         </p>
       </div>
     </div>
