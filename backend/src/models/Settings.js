@@ -125,6 +125,12 @@ const settingsSchema = new mongoose.Schema(
     // Instagram cross-posting (uses the same Page token; IG account linked to the Page)
     igEnabled: { type: Boolean, default: false },
     igUserId: { type: String, default: "" }, // Instagram Business account id (blank = auto-detect from the Page)
+    // ---- Google Drive backup ----
+    // OAuth Web Client ID (from Google Cloud Console). NOT a secret — it is meant
+    // to be public in the browser. When set, the "Back up / Restore to Google
+    // Drive" buttons turn on for admins and clients. Blank = feature hidden.
+    // White-label buyers paste their own Client ID here.
+    googleClientId: { type: String, default: "" },
     socialLinks: {
       type: [socialSchema],
       default: () => [
