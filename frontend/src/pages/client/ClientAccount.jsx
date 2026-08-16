@@ -45,22 +45,36 @@ export default function ClientAccount({ onUpgrade }) {
     }).catch(() => {});
   };
 
-  // ---- Back up / Restore my own My Practice content ----
+  // ---- Back up / Restore my own My Practice content (with live progress) ----
   const fileRef = useRef(null);
   const [backupBusy, setBackupBusy] = useState(false);
   const [restoreBusy, setRestoreBusy] = useState(false);
   const [backupMsg, setBackupMsg] = useState("");
+  const [progress, setProgress] = useState(null); // { done, total } while an op runs
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
   const downloadBackup = async () => {
     setBackupBusy(true);
     setBackupMsg("");
+    setProgress({ done: 0, total: 0 });
     try {
-      const data = await practiceService.backup();
+      const { jobId, total } = await practiceService.startBackup();
+      setProgress({ done: 0, total: total || 0 });
+      let st;
+      for (;;) {
+        await sleep(700);
+        st = await practiceService.backupJob(jobId);
+        setProgress({ done: st.done || 0, total: st.total || total || 0 });
+        if (st.status === "done") break;
+        if (st.status === "error") throw new Error(st.error || "Backup failed.");
+      }
+      const data = await practiceService.backupFile(jobId);
       const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `my-practice-backup-${new Date().toISOString().slice(0, 10)}.json`;
+      const acct = String(user?.name || "").trim().replace(/[^a-z0-9]+/gi, "-").replace(/^-+|-+$/g, "").toLowerCase() || "my";
+      a.download = `${acct}-practice-backup-${new Date().toISOString().slice(0, 10)}.json`;
       document.body.appendChild(a);
       a.click();
       a.remove();
@@ -71,6 +85,7 @@ export default function ClientAccount({ onUpgrade }) {
       setBackupMsg(e?.message || "Backup failed — please try again.");
     } finally {
       setBackupBusy(false);
+      setProgress(null);
     }
   };
 
@@ -81,19 +96,32 @@ export default function ClientAccount({ onUpgrade }) {
     if (!window.confirm("Restore will ADD everything from this backup to your account (it does not delete or replace what you already have). Continue?")) return;
     setRestoreBusy(true);
     setBackupMsg("");
+    setProgress({ done: 0, total: 0 });
     try {
       let parsed;
       try { parsed = JSON.parse(await file.text()); }
       catch { throw new Error("That file isn't a valid backup file."); }
-      const res = await practiceService.restore(parsed);
-      const r = res?.restored || {};
+      const { jobId, total } = await practiceService.startRestore(parsed);
+      setProgress({ done: 0, total: total || 0 });
+      let st;
+      for (;;) {
+        await sleep(700);
+        st = await practiceService.restoreJob(jobId);
+        setProgress({ done: st.done || 0, total: st.total || total || 0 });
+        if (st.status === "done") break;
+        if (st.status === "error") throw new Error(st.error || "Restore failed.");
+      }
+      const r = st.result || {};
       setBackupMsg(`✓ Restored ${r.items || 0} item(s) and ${r.questions || 0} question(s). Open My Practice (refresh) to see them.`);
     } catch (err) {
       setBackupMsg(err?.message || "Restore failed — please check the file and try again.");
     } finally {
       setRestoreBusy(false);
+      setProgress(null);
     }
   };
+
+  const pct = progress && progress.total ? Math.round((progress.done / progress.total) * 100) : 0;
 
   return (
     <div className="grid gap-4 sm:grid-cols-3">
@@ -199,6 +227,16 @@ export default function ClientAccount({ onUpgrade }) {
           </button>
           <input ref={fileRef} type="file" accept="application/json,.json" className="hidden" onChange={onRestoreFile} />
         </div>
+        {progress && (
+          <div className="mt-3">
+            <div className="h-2 w-full overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
+              <div className="h-full rounded-full bg-brand-600 transition-all duration-300" style={{ width: `${pct}%` }} />
+            </div>
+            <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+              {backupBusy ? "Backing up" : "Restoring"}… {pct}%{progress.total ? ` · ${progress.done} / ${progress.total}` : ""}
+            </p>
+          </div>
+        )}
         {backupMsg && <p className="mt-3 text-sm text-slate-600 dark:text-slate-300">{backupMsg}</p>}
         <p className="mt-2 text-xs text-slate-400">
           To keep a backup in Google Drive: click <b>Back up my content</b>, then upload the downloaded file to your Drive. To restore later, download it from Drive and choose it here. Restoring <b>adds a fresh copy</b> of everything — it never overwrites what you already have.

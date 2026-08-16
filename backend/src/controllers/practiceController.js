@@ -1082,127 +1082,165 @@ const Q_CONTENT_FIELDS = [
   "reason", "image", "topic", "section", "status",
 ];
 
-// GET /api/practice/backup — download ALL of the caller's My Practice content
-// (streams → subjects → topics → items → questions) as one JSON object. Owner-
-// scoped, so a client only ever backs up their own content.
-export async function backupMyContent(req, res) {
-  const of = ownerFilter(req);
-  const [streams, subjects, topics, items] = await Promise.all([
-    PracticeStream.find(of).lean(),
-    PracticeSubject.find(of).lean(),
-    PracticeTopic.find(of).lean(),
-    TestSeries.find({ ...of, practice: true }).lean(),
-  ]);
-  const itemIds = items.map((i) => i._id);
-  const questions = itemIds.length
-    ? await Question.find({ ...of, testSeries: { $in: itemIds } }).lean()
-    : [];
-
-  const pick = (c) => ({ _id: c._id, name: c.name, icon: c.icon, color: c.color, description: c.description, order: c.order, isActive: c.isActive });
-  res.json({
-    format: "mystudyguide-practice-backup",
-    version: 1,
-    exportedAt: new Date().toISOString(),
-    counts: { streams: streams.length, subjects: subjects.length, topics: topics.length, items: items.length, questions: questions.length },
-    streams: streams.map((s) => ({ ...pick(s), kind: s.kind })),
-    subjects: subjects.map((s) => ({ ...pick(s), stream: s.stream })),
-    topics: topics.map((t) => ({ ...pick(t), subject: t.subject })),
-    items: items.map((it) => ({
-      _id: it._id, name: it.name, practiceKind: it.practiceKind,
-      practiceStream: it.practiceStream, practiceSubject: it.practiceSubject, practiceTopic: it.practiceTopic,
-      category: it.category, duration: it.duration, marks: it.marks, difficulty: it.difficulty,
-      subjectPlan: it.subjectPlan, negativeMarking: it.negativeMarking, status: it.status,
-      aiTopic: it.aiTopic, aiSubtopics: it.aiSubtopics,
-      paperPdfUrl: it.paperPdfUrl, answerKeyPdfUrl: it.answerKeyPdfUrl, answerKeys: it.answerKeys, additionalInfo: it.additionalInfo,
-    })),
-    questions: questions.map((q) => {
-      const o = { _id: q._id, testSeries: q.testSeries };
-      for (const f of Q_CONTENT_FIELDS) if (q[f] !== undefined) o[f] = q[f];
-      return o;
-    }),
+// In-memory backup/restore jobs so the UI can show a live % progress bar
+// (mirrors the accept-share job pattern). id -> { user, kind, status, phase,
+// total, done, payload?, result?, error, updatedAt }.
+const pbJobs = new Map();
+const newPbId = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
+function guardPb(id, p) {
+  Promise.resolve(p).catch((e) => {
+    const j = pbJobs.get(id);
+    if (j) { j.status = "error"; j.error = e?.message || "Operation failed"; j.updatedAt = Date.now(); }
+    console.error("[practice-backup] background job failed:", e?.stack || e);
   });
 }
+setInterval(() => {
+  const cutoff = Date.now() - 20 * 60 * 1000;
+  for (const [id, j] of pbJobs) if (j.updatedAt < cutoff) pbJobs.delete(id);
+}, 5 * 60 * 1000).unref();
+const touchPb = (j, extra = {}) => { Object.assign(j, extra); j.updatedAt = Date.now(); };
 
-// POST /api/practice/restore — rebuild content from a backup file into the
-// caller's account. ALWAYS creates fresh copies (new ids), remapping every
-// parent→child reference; it never overwrites, so restoring is additive/safe.
-export async function restoreMyContent(req, res) {
+// POST /api/practice/backup/start — begin assembling the caller's My Practice
+// backup in the background; returns { jobId, total } to poll for live progress.
+export async function startBackup(req, res) {
+  const of = ownerFilter(req);
+  const [nStreams, nSubjects, nTopics, itemIdDocs] = await Promise.all([
+    PracticeStream.countDocuments(of),
+    PracticeSubject.countDocuments(of),
+    PracticeTopic.countDocuments(of),
+    TestSeries.find({ ...of, practice: true }, { _id: 1 }).lean(),
+  ]);
+  const itemIds = itemIdDocs.map((i) => i._id);
+  const nQuestions = itemIds.length ? await Question.countDocuments({ ...of, testSeries: { $in: itemIds } }) : 0;
+  const total = nStreams + nSubjects + nTopics + itemIds.length + nQuestions;
+  const jobId = newPbId();
+  pbJobs.set(jobId, { user: String(req.user._id), kind: "backup", status: "running", phase: "Starting…", total, done: 0, payload: null, error: null, updatedAt: Date.now() });
+  guardPb(jobId, runBackupJob(jobId, of));
+  res.status(202).json({ jobId, total });
+}
+
+async function runBackupJob(jobId, of) {
+  const job = pbJobs.get(jobId);
+  if (!job) return;
+  const pick = (c) => ({ _id: c._id, name: c.name, icon: c.icon, color: c.color, description: c.description, order: c.order, isActive: c.isActive });
+  const bump = (n = 1) => { job.done += n; job.updatedAt = Date.now(); };
+
+  touchPb(job, { phase: "Streams" });
+  const streams = (await PracticeStream.find(of).lean()).map((s) => { bump(); return { ...pick(s), kind: s.kind }; });
+  touchPb(job, { phase: "Subjects" });
+  const subjects = (await PracticeSubject.find(of).lean()).map((s) => { bump(); return { ...pick(s), stream: s.stream }; });
+  touchPb(job, { phase: "Topics" });
+  const topics = (await PracticeTopic.find(of).lean()).map((t) => { bump(); return { ...pick(t), subject: t.subject }; });
+  touchPb(job, { phase: "Items" });
+  const itemsRaw = await TestSeries.find({ ...of, practice: true }).lean();
+  const items = itemsRaw.map((it) => { bump(); return {
+    _id: it._id, name: it.name, practiceKind: it.practiceKind,
+    practiceStream: it.practiceStream, practiceSubject: it.practiceSubject, practiceTopic: it.practiceTopic,
+    category: it.category, duration: it.duration, marks: it.marks, difficulty: it.difficulty,
+    subjectPlan: it.subjectPlan, negativeMarking: it.negativeMarking, status: it.status,
+    aiTopic: it.aiTopic, aiSubtopics: it.aiSubtopics,
+    paperPdfUrl: it.paperPdfUrl, answerKeyPdfUrl: it.answerKeyPdfUrl, answerKeys: it.answerKeys, additionalInfo: it.additionalInfo,
+  }; });
+  touchPb(job, { phase: "Questions" });
+  const itemIds = itemsRaw.map((i) => i._id);
+  const qRaw = itemIds.length ? await Question.find({ ...of, testSeries: { $in: itemIds } }).lean() : [];
+  const questions = qRaw.map((q) => { bump(); const o = { _id: q._id, testSeries: q.testSeries }; for (const f of Q_CONTENT_FIELDS) if (q[f] !== undefined) o[f] = q[f]; return o; });
+
+  job.payload = {
+    format: "mystudyguide-practice-backup", version: 1, exportedAt: new Date().toISOString(),
+    counts: { streams: streams.length, subjects: subjects.length, topics: topics.length, items: items.length, questions: questions.length },
+    streams, subjects, topics, items, questions,
+  };
+  touchPb(job, { status: "done", phase: "Done", done: job.total });
+}
+
+// GET /api/practice/backup/job/:id — progress only (never the payload).
+export function backupJobStatus(req, res) {
+  const job = pbJobs.get(req.params.id);
+  if (!job || String(job.user) !== String(req.user._id)) return res.status(404).json({ message: "Backup job not found or expired." });
+  res.json({ status: job.status, phase: job.phase, total: job.total, done: job.done, counts: job.payload?.counts || null, error: job.error });
+}
+
+// GET /api/practice/backup/job/:id/file — the finished backup JSON to download.
+export function backupJobFile(req, res) {
+  const job = pbJobs.get(req.params.id);
+  if (!job || String(job.user) !== String(req.user._id)) return res.status(404).json({ message: "Backup job not found or expired." });
+  if (job.status !== "done" || !job.payload) return res.status(409).json({ message: "Backup is not ready yet." });
+  res.json(job.payload);
+}
+
+// POST /api/practice/restore/start — rebuild content from an uploaded backup in
+// the background (additive; new ids; owner = caller). Returns { jobId, total }.
+export async function startRestore(req, res) {
   const owner = ownerValue(req);
   const b = req.body || {};
-  if (b.format && b.format !== "mystudyguide-practice-backup") {
-    return res.status(400).json({ message: "This file is not a My Practice backup." });
-  }
+  if (b.format && b.format !== "mystudyguide-practice-backup") return res.status(400).json({ message: "This file is not a My Practice backup." });
   const streams = Array.isArray(b.streams) ? b.streams : [];
   const subjects = Array.isArray(b.subjects) ? b.subjects : [];
   const topics = Array.isArray(b.topics) ? b.topics : [];
   const items = Array.isArray(b.items) ? b.items : [];
   const questions = Array.isArray(b.questions) ? b.questions : [];
-  if (!streams.length && !items.length) {
-    return res.status(400).json({ message: "This backup file has no My Practice content to restore." });
-  }
+  if (!streams.length && !items.length) return res.status(400).json({ message: "This backup file has no My Practice content to restore." });
+  const total = streams.length + subjects.length + topics.length + items.length + questions.length;
+  const jobId = newPbId();
+  pbJobs.set(jobId, { user: String(req.user._id), kind: "restore", status: "running", phase: "Starting…", total, done: 0, result: null, error: null, updatedAt: Date.now() });
+  guardPb(jobId, runRestoreJob(jobId, owner, { streams, subjects, topics, items, questions }));
+  res.status(202).json({ jobId, total });
+}
 
+async function runRestoreJob(jobId, owner, data) {
+  const job = pbJobs.get(jobId);
+  if (!job) return;
+  const { streams, subjects, topics, items, questions } = data;
+  const bump = (n = 1) => { job.done += n; job.updatedAt = Date.now(); };
   const map = { stream: {}, subject: {}, topic: {} };
 
+  touchPb(job, { phase: "Streams" });
   for (const s of streams) {
-    const doc = await PracticeStream.create({
-      owner, kind: s.kind || "quiz", name: s.name, slug: slugify(s.name),
-      icon: s.icon, color: s.color, description: s.description, order: s.order || 0, isActive: s.isActive !== false,
-    });
-    map.stream[String(s._id)] = doc._id;
+    const doc = await PracticeStream.create({ owner, kind: s.kind || "quiz", name: s.name, slug: slugify(s.name), icon: s.icon, color: s.color, description: s.description, order: s.order || 0, isActive: s.isActive !== false });
+    map.stream[String(s._id)] = doc._id; bump();
   }
+  touchPb(job, { phase: "Subjects" });
   for (const s of subjects) {
-    const stream = map.stream[String(s.stream)];
-    if (!stream) continue;
-    const doc = await PracticeSubject.create({
-      owner, stream, name: s.name, slug: slugify(s.name),
-      icon: s.icon, color: s.color, description: s.description, order: s.order || 0, isActive: s.isActive !== false,
-    });
-    map.subject[String(s._id)] = doc._id;
+    const stream = map.stream[String(s.stream)]; if (!stream) { bump(); continue; }
+    const doc = await PracticeSubject.create({ owner, stream, name: s.name, slug: slugify(s.name), icon: s.icon, color: s.color, description: s.description, order: s.order || 0, isActive: s.isActive !== false });
+    map.subject[String(s._id)] = doc._id; bump();
   }
+  touchPb(job, { phase: "Topics" });
   for (const t of topics) {
-    const subject = map.subject[String(t.subject)];
-    if (!subject) continue;
-    const doc = await PracticeTopic.create({
-      owner, subject, name: t.name, slug: slugify(t.name),
-      icon: t.icon, color: t.color, description: t.description, order: t.order || 0, isActive: t.isActive !== false,
-    });
-    map.topic[String(t._id)] = doc._id;
+    const subject = map.subject[String(t.subject)]; if (!subject) { bump(); continue; }
+    const doc = await PracticeTopic.create({ owner, subject, name: t.name, slug: slugify(t.name), icon: t.icon, color: t.color, description: t.description, order: t.order || 0, isActive: t.isActive !== false });
+    map.topic[String(t._id)] = doc._id; bump();
   }
-
+  touchPb(job, { phase: "Items & questions" });
   let restoredQuestions = 0;
   for (const it of items) {
     const doc = await TestSeries.create({
       owner, practice: true, practiceKind: it.practiceKind || "quiz",
-      practiceStream: map.stream[String(it.practiceStream)],
-      practiceSubject: map.subject[String(it.practiceSubject)],
-      practiceTopic: map.topic[String(it.practiceTopic)],
-      name: it.name, category: it.category || "Full-Length",
-      duration: it.duration, marks: it.marks, difficulty: it.difficulty,
-      subjectPlan: it.subjectPlan, negativeMarking: it.negativeMarking,
-      status: it.status || "published", visibleToAll: false,
-      aiTopic: it.aiTopic, aiSubtopics: it.aiSubtopics,
-      paperPdfUrl: it.paperPdfUrl, answerKeyPdfUrl: it.answerKeyPdfUrl,
-      answerKeys: it.answerKeys, additionalInfo: it.additionalInfo,
-      questions: [],
+      practiceStream: map.stream[String(it.practiceStream)], practiceSubject: map.subject[String(it.practiceSubject)], practiceTopic: map.topic[String(it.practiceTopic)],
+      name: it.name, category: it.category || "Full-Length", duration: it.duration, marks: it.marks, difficulty: it.difficulty,
+      subjectPlan: it.subjectPlan, negativeMarking: it.negativeMarking, status: it.status || "published", visibleToAll: false,
+      aiTopic: it.aiTopic, aiSubtopics: it.aiSubtopics, paperPdfUrl: it.paperPdfUrl, answerKeyPdfUrl: it.answerKeyPdfUrl, answerKeys: it.answerKeys, additionalInfo: it.additionalInfo, questions: [],
     });
+    bump();
     const mine = questions.filter((q) => String(q.testSeries) === String(it._id));
     if (mine.length) {
-      const docs = mine.map((q) => {
-        const d = { owner, testSeries: doc._id };
-        for (const f of Q_CONTENT_FIELDS) if (q[f] !== undefined) d[f] = q[f];
-        return d;
-      });
+      const docs = mine.map((q) => { const d = { owner, testSeries: doc._id }; for (const f of Q_CONTENT_FIELDS) if (q[f] !== undefined) d[f] = q[f]; return d; });
       let created = [];
       try { created = await Question.insertMany(docs, { ordered: false }); }
       catch (e) { created = Array.isArray(e?.insertedDocs) ? e.insertedDocs : []; }
       restoredQuestions += created.length;
       doc.questions = created.map((c) => c._id);
       await doc.save();
+      bump(mine.length);
     }
   }
+  touchPb(job, { status: "done", phase: "Done", done: job.total, result: { streams: streams.length, subjects: subjects.length, topics: topics.length, items: items.length, questions: restoredQuestions } });
+}
 
-  res.json({
-    ok: true,
-    restored: { streams: streams.length, subjects: subjects.length, topics: topics.length, items: items.length, questions: restoredQuestions },
-  });
+// GET /api/practice/restore/job/:id — restore progress.
+export function restoreJobStatus(req, res) {
+  const job = pbJobs.get(req.params.id);
+  if (!job || String(job.user) !== String(req.user._id)) return res.status(404).json({ message: "Restore job not found or expired." });
+  res.json({ status: job.status, phase: job.phase, total: job.total, done: job.done, result: job.result, error: job.error });
 }
