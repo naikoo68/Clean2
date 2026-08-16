@@ -1,13 +1,17 @@
 import { useRef, useState } from "react";
 import { DatabaseBackup, Download, Upload, Loader2, AlertTriangle, CheckCircle2 } from "lucide-react";
 import { adminBackupService } from "../../services";
+import { useSettings } from "../../context/SettingsContext";
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+// Turn an account/brand name into a safe filename prefix.
+const safeName = (s) => String(s || "").trim().replace(/[^a-z0-9]+/gi, "-").replace(/^-+|-+$/g, "").toLowerCase() || "backup";
 
 // Full content-library backup & restore for the admin: Content
 // (streams→subjects→topics→sessions→quizzes→questions), Study Material and
 // Test Series. Both run as background jobs with a live % progress bar.
 export default function AdminBackup() {
+  const { settings } = useSettings();
   const fileRef = useRef(null);
   const [busy, setBusy] = useState(""); // "" | "backup" | "restore"
   const [progress, setProgress] = useState(null); // { done, total, phase }
@@ -33,7 +37,7 @@ export default function AdminBackup() {
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `mystudyguide-content-backup-${new Date().toISOString().slice(0, 10)}.json`;
+      a.download = `${safeName(settings?.siteName)}-content-backup-${new Date().toISOString().slice(0, 10)}.json`;
       document.body.appendChild(a); a.click(); a.remove();
       URL.revokeObjectURL(url);
       const c = data?.counts || {};
