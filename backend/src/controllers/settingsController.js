@@ -42,6 +42,7 @@ export async function updateSettings(req, res) {
     "fbDefaultHashtags", "fbAutoHashtags", "fbExtraTargets",
     "fbSelfieWatermarkUrl", "fbSelfieWatermarkEnabled", "fbSelfieWatermarkPosition", "fbSelfieWatermarkSize", "fbSelfieWatermarkOpacity", "fbSelfieWatermarkShape",
     "igEnabled", "igUserId",
+    "googleClientId",
   ];
   const update = {};
   for (const k of allowed) if (k in req.body) update[k] = req.body[k];
@@ -68,6 +69,7 @@ export async function updateSettings(req, res) {
   }
   if ("fbGraphVersion" in update) update.fbGraphVersion = String(update.fbGraphVersion || "").trim() || "v21.0";
   if ("igUserId" in update) update.igUserId = String(update.igUserId || "").trim();
+  if ("googleClientId" in update) update.googleClientId = String(update.googleClientId || "").trim();
 
   // Selfie watermark: validate position and clamp size/opacity.
   if ("fbSelfieWatermarkUrl" in update) update.fbSelfieWatermarkUrl = String(update.fbSelfieWatermarkUrl || "").trim();

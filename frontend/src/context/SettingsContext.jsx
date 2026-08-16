@@ -29,6 +29,7 @@ const DEFAULTS = {
   guardHoldMs: 1500,
   statsAuto: true,
   notifyOnNewContent: false,
+  googleClientId: "",
   homeSections: [
     { key: "hero", visible: true },
     { key: "stats", visible: true },
