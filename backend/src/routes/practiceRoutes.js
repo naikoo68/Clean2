@@ -7,7 +7,7 @@ import {
   browseStreams, browseSubjects, browseTopics, browseItems, browseTopicItems, browseStreamItems,
   playQuiz, allSubjects, myItems, moveItem, updateItem, splitItem, splitTopic, mergeItem, moveQuestions, shareContent,
   incomingShares, acceptShare, acceptShareJob, declineShare, sharePlacement, removeSharedWithMe,
-  backupMyContent, restoreMyContent,
+  startBackup, backupJobStatus, backupJobFile, startRestore, restoreJobStatus,
 } from "../controllers/practiceController.js";
 import { protect, authorize, optionalAuth } from "../middleware/auth.js";
 
@@ -30,10 +30,14 @@ router.get("/quiz/:id/play", protect, playQuiz);
 // The caller's own practice items (client dashboard).
 router.get("/my-items", ...admin, myItems);
 
-// Back up ALL of the caller's own My Practice content to a JSON file, and
-// restore it later (additive — always creates fresh copies).
-router.get("/backup", ...admin, backupMyContent);
-router.post("/restore", ...admin, restoreMyContent);
+// Back up ALL of the caller's own My Practice content, and restore it later
+// (additive — always creates fresh copies). Both run as background jobs so the
+// UI can show a live % progress bar.
+router.post("/backup/start", ...admin, startBackup);
+router.get("/backup/job/:id", ...admin, backupJobStatus);
+router.get("/backup/job/:id/file", ...admin, backupJobFile);
+router.post("/restore/start", ...admin, startRestore);
+router.get("/restore/job/:id", ...admin, restoreJobStatus);
 
 // Share practice content (stream/subject/topic/quiz/test) with another
 // REGISTERED user by email (account-to-account). Creates a PENDING share the
