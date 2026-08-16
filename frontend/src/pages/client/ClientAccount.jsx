@@ -73,7 +73,8 @@ export default function ClientAccount({ onUpgrade }) {
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `my-practice-backup-${new Date().toISOString().slice(0, 10)}.json`;
+      const acct = String(user?.name || "").trim().replace(/[^a-z0-9]+/gi, "-").replace(/^-+|-+$/g, "").toLowerCase() || "my";
+      a.download = `${acct}-practice-backup-${new Date().toISOString().slice(0, 10)}.json`;
       document.body.appendChild(a);
       a.click();
       a.remove();
