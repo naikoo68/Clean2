@@ -88,16 +88,48 @@ async function ensureFolder(token) {
   return (await create.json()).id;
 }
 
-// Upload a JSON backup object into the backup folder. Returns { id, name }.
+// Find a file by exact name inside the backup folder; returns it or null.
+async function findFileByName(token, folderId, name) {
+  const q = encodeURIComponent(`'${folderId}' in parents and name='${name.replace(/'/g, "\\'")}' and trashed=false`);
+  const res = await driveApi(token, `files?q=${q}&fields=files(id,name,modifiedTime)&spaces=drive&orderBy=modifiedTime desc`);
+  return (await res.json()).files?.[0] || null;
+}
+
+// Save a JSON backup into the backup folder, WhatsApp-style: if a backup with
+// the same name already exists, its contents are UPDATED in place (so Drive
+// keeps a single, always-current backup instead of piling up copies). If none
+// exists yet, a new one is created. Returns { id, name, updated }.
 export async function uploadBackup(token, filename, obj) {
   const folderId = await ensureFolder(token);
+  const media = JSON.stringify(obj);
+  const existing = await findFileByName(token, folderId, filename);
+
+  if (existing) {
+    // Overwrite the existing backup file's content.
+    const res = await fetch(
+      `https://www.googleapis.com/upload/drive/v3/files/${existing.id}?uploadType=media&fields=id,name`,
+      {
+        method: "PATCH",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: media,
+      }
+    );
+    if (!res.ok) {
+      let msg = `Updating your Google Drive backup failed (${res.status}).`;
+      try { const j = await res.json(); if (j?.error?.message) msg = j.error.message; } catch { /* ignore */ }
+      throw new Error(msg);
+    }
+    return { ...(await res.json()), updated: true };
+  }
+
+  // No existing backup — create a new one in the folder.
   const metadata = { name: filename, parents: [folderId], mimeType: "application/json" };
   const boundary = "msgbackup" + Math.random().toString(36).slice(2);
   const body =
     `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n` +
     JSON.stringify(metadata) +
     `\r\n--${boundary}\r\nContent-Type: application/json\r\n\r\n` +
-    JSON.stringify(obj) +
+    media +
     `\r\n--${boundary}--`;
   const res = await fetch(
     "https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name",
@@ -115,7 +147,7 @@ export async function uploadBackup(token, filename, obj) {
     } catch { /* ignore */ }
     throw new Error(msg);
   }
-  return res.json();
+  return { ...(await res.json()), updated: false };
 }
 
 // List backup files in the folder (newest first): [{ id, name, modifiedTime }].
