@@ -27,7 +27,10 @@ export default function AdminBackup() {
   const driveReady = !!(settings?.googleClientId || "").trim();
 
   const pct = progress && progress.total ? Math.round((progress.done / progress.total) * 100) : 0;
+  // Dated name for downloaded files (each is a separate copy the user keeps).
   const filename = () => `${safeName(settings?.siteName)}-content-backup-${new Date().toISOString().slice(0, 10)}.json`;
+  // Stable name for Google Drive so each backup UPDATES the same file (WhatsApp-style).
+  const driveFilename = () => `${safeName(settings?.siteName)}-content-backup.json`;
 
   const saveClientId = async () => {
     setSavingId(true); setMsg(null);
@@ -118,8 +121,11 @@ export default function AdminBackup() {
       const token = await getAccessToken(settings?.googleClientId);
       const data = await runBackupJob();
       setProgress((p) => ({ ...(p || {}), phase: "Uploading to Google Drive…" }));
-      await uploadBackup(token, filename(), data);
-      setMsg({ ok: true, text: summarizeBackup(data, `Saved to your Google Drive → "My Study Guide Backups" folder.`) });
+      const up = await uploadBackup(token, driveFilename(), data);
+      const where = up?.updated
+        ? `Updated your single backup in Google Drive → "My Study Guide Backups" folder (always kept current).`
+        : `Saved to your Google Drive → "My Study Guide Backups" folder.`;
+      setMsg({ ok: true, text: summarizeBackup(data, where) });
     } catch (e) {
       setMsg({ ok: false, text: e?.message || "Google Drive backup failed — please try again." });
     } finally { setBusy(""); setProgress(null); }

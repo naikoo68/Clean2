@@ -60,10 +60,11 @@ export default function ClientAccount({ onUpgrade }) {
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   const driveReady = !!(settings?.googleClientId || "").trim();
 
-  const backupName = () => {
-    const acct = String(user?.name || "").trim().replace(/[^a-z0-9]+/gi, "-").replace(/^-+|-+$/g, "").toLowerCase() || "my";
-    return `${acct}-practice-backup-${new Date().toISOString().slice(0, 10)}.json`;
-  };
+  const acctSlug = () => String(user?.name || "").trim().replace(/[^a-z0-9]+/gi, "-").replace(/^-+|-+$/g, "").toLowerCase() || "my";
+  // Dated name for downloaded file copies.
+  const backupName = () => `${acctSlug()}-practice-backup-${new Date().toISOString().slice(0, 10)}.json`;
+  // Stable name for Google Drive so each backup UPDATES the same file (WhatsApp-style).
+  const driveBackupName = () => `${acctSlug()}-practice-backup.json`;
 
   // Run the backup job → returns the full backup JSON (shared by file + Drive).
   const runBackupJob = async () => {
@@ -136,9 +137,10 @@ export default function ClientAccount({ onUpgrade }) {
       const token = await getAccessToken(settings?.googleClientId);
       const data = await runBackupJob();
       setProgress((p) => ({ ...(p || {}), phase: "Uploading to Google Drive…" }));
-      await uploadBackup(token, backupName(), data);
+      const up = await uploadBackup(token, driveBackupName(), data);
       const c = data?.counts || {};
-      setBackupMsg(`✓ Backed up ${c.items || 0} item(s) and ${c.questions || 0} question(s) to your Google Drive → "My Study Guide Backups" folder.`);
+      const tail = up?.updated ? "updated your single Google Drive backup (always kept current)" : "saved to your Google Drive";
+      setBackupMsg(`✓ Backed up ${c.items || 0} item(s) and ${c.questions || 0} question(s) — ${tail}.`);
     } catch (e) {
       setBackupMsg(e?.message || "Google Drive backup failed — please try again.");
     } finally { setBackupBusy(false); setProgress(null); }
