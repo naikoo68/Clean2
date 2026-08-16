@@ -62,6 +62,7 @@ const AdminTests = lazy(() => import("./pages/admin/AdminTests"));
 const AdminStudyMaterial = lazy(() => import("./pages/admin/AdminStudyMaterial"));
 const AdminFeedback = lazy(() => import("./pages/admin/AdminFeedback"));
 const AdminStorage = lazy(() => import("./pages/admin/AdminStorage"));
+const AdminBackup = lazy(() => import("./pages/admin/AdminBackup"));
 const AdminUsers = lazy(() => import("./pages/admin/AdminUsers"));
 const AdminMessages = lazy(() => import("./pages/admin/AdminMessages"));
 const AdminCustomization = lazy(() => import("./pages/admin/AdminCustomization"));
@@ -225,6 +226,7 @@ const router = createHashRouter([
       { path: "users", element: S(AdminUsers) },
       { path: "performance", element: S(AdminPerformance) },
       { path: "storage", element: S(AdminStorage) },
+      { path: "backup", element: S(AdminBackup) },
       { path: "messages", element: S(AdminMessages) },
       { path: "notices", element: S(AdminNotices) },
       { path: "facebook", element: S(AdminFacebook) },
