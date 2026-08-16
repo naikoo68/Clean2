@@ -1,6 +1,6 @@
-import { useEffect, useState } from "react";
-import { AlarmClock, ShieldCheck, Clock, Crown, Gift, Copy, Sparkles, User } from "lucide-react";
-import { authService } from "../../services";
+import { useEffect, useRef, useState } from "react";
+import { AlarmClock, ShieldCheck, Clock, Crown, Gift, Copy, Sparkles, User, Download, Upload, Loader2 } from "lucide-react";
+import { authService, practiceService } from "../../services";
 import { useAuth } from "../../context/AuthContext";
 import Badge from "../../components/ui/Badge";
 
@@ -43,6 +43,56 @@ export default function ClientAccount({ onUpgrade }) {
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
     }).catch(() => {});
+  };
+
+  // ---- Back up / Restore my own My Practice content ----
+  const fileRef = useRef(null);
+  const [backupBusy, setBackupBusy] = useState(false);
+  const [restoreBusy, setRestoreBusy] = useState(false);
+  const [backupMsg, setBackupMsg] = useState("");
+
+  const downloadBackup = async () => {
+    setBackupBusy(true);
+    setBackupMsg("");
+    try {
+      const data = await practiceService.backup();
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `my-practice-backup-${new Date().toISOString().slice(0, 10)}.json`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      const c = data?.counts || {};
+      setBackupMsg(`✓ Backed up ${c.items || 0} item(s) and ${c.questions || 0} question(s). Now save this file to your Google Drive.`);
+    } catch (e) {
+      setBackupMsg(e?.message || "Backup failed — please try again.");
+    } finally {
+      setBackupBusy(false);
+    }
+  };
+
+  const onRestoreFile = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // allow re-selecting the same file later
+    if (!file) return;
+    if (!window.confirm("Restore will ADD everything from this backup to your account (it does not delete or replace what you already have). Continue?")) return;
+    setRestoreBusy(true);
+    setBackupMsg("");
+    try {
+      let parsed;
+      try { parsed = JSON.parse(await file.text()); }
+      catch { throw new Error("That file isn't a valid backup file."); }
+      const res = await practiceService.restore(parsed);
+      const r = res?.restored || {};
+      setBackupMsg(`✓ Restored ${r.items || 0} item(s) and ${r.questions || 0} question(s). Open My Practice (refresh) to see them.`);
+    } catch (err) {
+      setBackupMsg(err?.message || "Restore failed — please check the file and try again.");
+    } finally {
+      setRestoreBusy(false);
+    }
   };
 
   return (
@@ -127,6 +177,32 @@ export default function ClientAccount({ onUpgrade }) {
             <Crown className="h-3.5 w-3.5" /> {user?.isTrial ? "Upgrade plan" : "Renew / change plan"}
           </button>
         )}
+      </div>
+
+      {/* Back up & Restore my content */}
+      <div className="card p-5 sm:col-span-3">
+        <div className="flex items-center gap-2">
+          <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand-100 text-brand-600 dark:bg-brand-900/40 dark:text-brand-300">
+            <Download className="h-5 w-5" />
+          </span>
+          <div>
+            <h2 className="font-bold">Back up &amp; restore my content</h2>
+            <p className="mt-0.5 text-xs text-slate-400">Download all your My Practice content as a file, keep it in your Google Drive, and restore it anytime.</p>
+          </div>
+        </div>
+        <div className="mt-4 flex flex-col gap-2 sm:flex-row">
+          <button onClick={downloadBackup} disabled={backupBusy || restoreBusy} className="btn-outline flex-1">
+            {backupBusy ? <><Loader2 className="h-4 w-4 animate-spin" /> Backing up…</> : <><Download className="h-4 w-4" /> Back up my content</>}
+          </button>
+          <button onClick={() => fileRef.current?.click()} disabled={backupBusy || restoreBusy} className="btn-outline flex-1">
+            {restoreBusy ? <><Loader2 className="h-4 w-4 animate-spin" /> Restoring…</> : <><Upload className="h-4 w-4" /> Restore from a backup</>}
+          </button>
+          <input ref={fileRef} type="file" accept="application/json,.json" className="hidden" onChange={onRestoreFile} />
+        </div>
+        {backupMsg && <p className="mt-3 text-sm text-slate-600 dark:text-slate-300">{backupMsg}</p>}
+        <p className="mt-2 text-xs text-slate-400">
+          To keep a backup in Google Drive: click <b>Back up my content</b>, then upload the downloaded file to your Drive. To restore later, download it from Drive and choose it here. Restoring <b>adds a fresh copy</b> of everything — it never overwrites what you already have.
+        </p>
       </div>
     </div>
   );
