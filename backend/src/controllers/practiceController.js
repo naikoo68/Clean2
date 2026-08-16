@@ -1071,3 +1071,138 @@ export async function browseTopicItems(req, res) {
       .map((t) => ({ _id: t._id, name: t.name, duration: t.duration, marks: t.marks, difficulty: t.difficulty, questionCount: t.questions?.length || 0 }))
   );
 }
+
+
+/* ---------------- Backup / Restore (a client's own My Practice content) ---------------- */
+
+// Content fields copied for each question in a backup/restore (no ids/refs).
+const Q_CONTENT_FIELDS = [
+  "text", "type", "options", "correct", "difficulty", "explanation",
+  "optionExplanations", "columnA", "columnB", "tableRows", "assertion",
+  "reason", "image", "topic", "section", "status",
+];
+
+// GET /api/practice/backup — download ALL of the caller's My Practice content
+// (streams → subjects → topics → items → questions) as one JSON object. Owner-
+// scoped, so a client only ever backs up their own content.
+export async function backupMyContent(req, res) {
+  const of = ownerFilter(req);
+  const [streams, subjects, topics, items] = await Promise.all([
+    PracticeStream.find(of).lean(),
+    PracticeSubject.find(of).lean(),
+    PracticeTopic.find(of).lean(),
+    TestSeries.find({ ...of, practice: true }).lean(),
+  ]);
+  const itemIds = items.map((i) => i._id);
+  const questions = itemIds.length
+    ? await Question.find({ ...of, testSeries: { $in: itemIds } }).lean()
+    : [];
+
+  const pick = (c) => ({ _id: c._id, name: c.name, icon: c.icon, color: c.color, description: c.description, order: c.order, isActive: c.isActive });
+  res.json({
+    format: "mystudyguide-practice-backup",
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    counts: { streams: streams.length, subjects: subjects.length, topics: topics.length, items: items.length, questions: questions.length },
+    streams: streams.map((s) => ({ ...pick(s), kind: s.kind })),
+    subjects: subjects.map((s) => ({ ...pick(s), stream: s.stream })),
+    topics: topics.map((t) => ({ ...pick(t), subject: t.subject })),
+    items: items.map((it) => ({
+      _id: it._id, name: it.name, practiceKind: it.practiceKind,
+      practiceStream: it.practiceStream, practiceSubject: it.practiceSubject, practiceTopic: it.practiceTopic,
+      category: it.category, duration: it.duration, marks: it.marks, difficulty: it.difficulty,
+      subjectPlan: it.subjectPlan, negativeMarking: it.negativeMarking, status: it.status,
+      aiTopic: it.aiTopic, aiSubtopics: it.aiSubtopics,
+      paperPdfUrl: it.paperPdfUrl, answerKeyPdfUrl: it.answerKeyPdfUrl, answerKeys: it.answerKeys, additionalInfo: it.additionalInfo,
+    })),
+    questions: questions.map((q) => {
+      const o = { _id: q._id, testSeries: q.testSeries };
+      for (const f of Q_CONTENT_FIELDS) if (q[f] !== undefined) o[f] = q[f];
+      return o;
+    }),
+  });
+}
+
+// POST /api/practice/restore — rebuild content from a backup file into the
+// caller's account. ALWAYS creates fresh copies (new ids), remapping every
+// parent→child reference; it never overwrites, so restoring is additive/safe.
+export async function restoreMyContent(req, res) {
+  const owner = ownerValue(req);
+  const b = req.body || {};
+  if (b.format && b.format !== "mystudyguide-practice-backup") {
+    return res.status(400).json({ message: "This file is not a My Practice backup." });
+  }
+  const streams = Array.isArray(b.streams) ? b.streams : [];
+  const subjects = Array.isArray(b.subjects) ? b.subjects : [];
+  const topics = Array.isArray(b.topics) ? b.topics : [];
+  const items = Array.isArray(b.items) ? b.items : [];
+  const questions = Array.isArray(b.questions) ? b.questions : [];
+  if (!streams.length && !items.length) {
+    return res.status(400).json({ message: "This backup file has no My Practice content to restore." });
+  }
+
+  const map = { stream: {}, subject: {}, topic: {} };
+
+  for (const s of streams) {
+    const doc = await PracticeStream.create({
+      owner, kind: s.kind || "quiz", name: s.name, slug: slugify(s.name),
+      icon: s.icon, color: s.color, description: s.description, order: s.order || 0, isActive: s.isActive !== false,
+    });
+    map.stream[String(s._id)] = doc._id;
+  }
+  for (const s of subjects) {
+    const stream = map.stream[String(s.stream)];
+    if (!stream) continue;
+    const doc = await PracticeSubject.create({
+      owner, stream, name: s.name, slug: slugify(s.name),
+      icon: s.icon, color: s.color, description: s.description, order: s.order || 0, isActive: s.isActive !== false,
+    });
+    map.subject[String(s._id)] = doc._id;
+  }
+  for (const t of topics) {
+    const subject = map.subject[String(t.subject)];
+    if (!subject) continue;
+    const doc = await PracticeTopic.create({
+      owner, subject, name: t.name, slug: slugify(t.name),
+      icon: t.icon, color: t.color, description: t.description, order: t.order || 0, isActive: t.isActive !== false,
+    });
+    map.topic[String(t._id)] = doc._id;
+  }
+
+  let restoredQuestions = 0;
+  for (const it of items) {
+    const doc = await TestSeries.create({
+      owner, practice: true, practiceKind: it.practiceKind || "quiz",
+      practiceStream: map.stream[String(it.practiceStream)],
+      practiceSubject: map.subject[String(it.practiceSubject)],
+      practiceTopic: map.topic[String(it.practiceTopic)],
+      name: it.name, category: it.category || "Full-Length",
+      duration: it.duration, marks: it.marks, difficulty: it.difficulty,
+      subjectPlan: it.subjectPlan, negativeMarking: it.negativeMarking,
+      status: it.status || "published", visibleToAll: false,
+      aiTopic: it.aiTopic, aiSubtopics: it.aiSubtopics,
+      paperPdfUrl: it.paperPdfUrl, answerKeyPdfUrl: it.answerKeyPdfUrl,
+      answerKeys: it.answerKeys, additionalInfo: it.additionalInfo,
+      questions: [],
+    });
+    const mine = questions.filter((q) => String(q.testSeries) === String(it._id));
+    if (mine.length) {
+      const docs = mine.map((q) => {
+        const d = { owner, testSeries: doc._id };
+        for (const f of Q_CONTENT_FIELDS) if (q[f] !== undefined) d[f] = q[f];
+        return d;
+      });
+      let created = [];
+      try { created = await Question.insertMany(docs, { ordered: false }); }
+      catch (e) { created = Array.isArray(e?.insertedDocs) ? e.insertedDocs : []; }
+      restoredQuestions += created.length;
+      doc.questions = created.map((c) => c._id);
+      await doc.save();
+    }
+  }
+
+  res.json({
+    ok: true,
+    restored: { streams: streams.length, subjects: subjects.length, topics: topics.length, items: items.length, questions: restoredQuestions },
+  });
+}
