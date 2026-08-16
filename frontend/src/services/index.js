@@ -137,9 +137,13 @@ export const practiceService = {
   quizPlay: (id) => api.get(`/practice/quiz/${id}/play`),
   // The caller's own practice items (client dashboard) — flat quiz + test list
   myItems: () => api.get("/practice/my-items"),
-  // Back up ALL of my own My Practice content to a JSON object, and restore it later.
-  backup: () => api.get("/practice/backup", { timeout: 120000 }),
-  restore: (data) => api.post("/practice/restore", data, { timeout: 120000 }),
+  // Back up / restore ALL of my own My Practice content — background jobs with
+  // a live % progress bar (poll the job, then download / read the file).
+  startBackup: () => api.post("/practice/backup/start"),
+  backupJob: (id) => api.get(`/practice/backup/job/${id}`),
+  backupFile: (id) => api.get(`/practice/backup/job/${id}/file`, { timeout: 120000 }),
+  startRestore: (data) => api.post("/practice/restore/start", data, { timeout: 120000 }),
+  restoreJob: (id) => api.get(`/practice/restore/job/${id}`),
   share: (data) => api.post("/practice/share", data), // { level, id, email } → send a pending share to a registered user
   incomingShares: () => api.get("/practice/shares/incoming"), // pending shares awaiting my accept/decline
   sharePlacement: (id) => api.get(`/practice/shares/${id}/placement`), // which container levels to place (existing/new) + suggested names
