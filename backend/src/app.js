@@ -58,6 +58,7 @@ import subscriptionRoutes from "./routes/subscriptionRoutes.js";
 import cbtRoutes from "./routes/cbtRoutes.js";
 import facebookRoutes from "./routes/facebookRoutes.js";
 import userManualRoutes from "./routes/userManualRoutes.js";
+import backupRoutes from "./routes/backupRoutes.js";
 import { releaseEndedCbtExams } from "./controllers/cbtController.js";
 import { runDueFbSchedules } from "./config/facebook.js";
 import { notFound, errorHandler } from "./middleware/error.js";
@@ -165,6 +166,7 @@ app.use("/api", examRoutes); // /exams, /exams/:id/posts, /posts
 app.use("/api", studyRoutes); // study material: institutions → subjects → classes → files
 app.use("/api/feedback", feedbackRoutes); // student feedback (per-question + overall)
 app.use("/api/notices", noticeRoutes); // scrolling notice board (public read, admin write)
+app.use("/api/admin", backupRoutes); // full content-library backup & restore (admin)
 app.use("/api/documents", documentRoutes); // standalone text documents (PDF text extraction)
 app.use("/api/practice", practiceRoutes); // "Practice Quizzes" section (My Quiz / My Test Series)
 app.use("/api", searchRoutes); // global metadata search (streams/subjects/topics/quizzes/tests)
