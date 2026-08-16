@@ -5,18 +5,22 @@ import { applyBranding } from "../lib/branding";
 
 const SettingsContext = createContext();
 
-// Optional build-time Google OAuth Client ID (set as VITE_GOOGLE_CLIENT_ID in
-// Vercel). Used as the default so Google Drive backup works out-of-the-box;
-// a Client ID saved in Admin → Settings always takes priority over this.
-const ENV_GOOGLE_CLIENT_ID = String(import.meta.env.VITE_GOOGLE_CLIENT_ID || "").trim();
+// Built-in Google OAuth Web Client ID for "Back up / Restore to Google Drive".
+// WHITE-LABEL BUYERS: replace the value below with your own Client ID from
+// Google Cloud Console (or set VITE_GOOGLE_CLIENT_ID in your hosting env, which
+// overrides this). Leave it as "" to disable the built-in default and manage the
+// Client ID from Admin → Backup & Restore instead.
+const DEFAULT_GOOGLE_CLIENT_ID = "127205537308-lic1g1e6lvk03ee4qe3ch75k9effenl0.apps.googleusercontent.com";
+const ENV_GOOGLE_CLIENT_ID = String(
+  import.meta.env.VITE_GOOGLE_CLIENT_ID || DEFAULT_GOOGLE_CLIENT_ID || ""
+).trim();
 
-// Merge server/cached settings over the defaults, then fall back to the env
-// Client ID when the admin hasn't saved one.
+// Merge server/cached settings over the defaults. The built-in Client ID (env
+// var, else the constant above) always wins, so an old/wrong value left in the
+// database can never break Google Drive sign-in.
 function withDefaults(s = {}) {
   const merged = { ...DEFAULTS, ...s };
-  if (!String(merged.googleClientId || "").trim() && ENV_GOOGLE_CLIENT_ID) {
-    merged.googleClientId = ENV_GOOGLE_CLIENT_ID;
-  }
+  if (ENV_GOOGLE_CLIENT_ID) merged.googleClientId = ENV_GOOGLE_CLIENT_ID;
   return merged;
 }
 
