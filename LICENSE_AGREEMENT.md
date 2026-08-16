@@ -10,7 +10,7 @@
 
 This Agreement is made between:
 
-- **Seller / Licensor:** [YOUR NAME OR COMPANY], ("we", "us")
+- **Seller / Licensor:** Aadil Abdullah Naikoo — aadilabdullah552@gmail.com — +91 6006898857, ("we", "us")
 - **Buyer / Licensee:** [BUYER NAME OR INSTITUTE], ("you")
 - **Date:** [DATE]
 - **Product:** "My Study Guide" study & examination platform source code (the "Software").
@@ -67,8 +67,8 @@ This licence terminates automatically if you breach it (e.g. redistribute the
 source). On termination you must stop using and delete all copies of the Software.
 
 ## 10. Governing law
-This Agreement is governed by the laws of [YOUR COUNTRY / STATE]. Disputes are
-subject to the courts of [YOUR CITY].
+This Agreement is governed by the laws of India. Disputes are
+subject to the courts of [YOUR CITY — e.g. your district/state].
 
 ---
 
