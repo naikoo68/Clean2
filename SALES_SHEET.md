@@ -2,8 +2,8 @@
 
 **A ready-to-launch, fully-featured study and examination platform for coaching institutes, schools, and edtech sellers — brandable as your own.**
 
-- 🔗 **Live demo:** [YOUR DEMO URL]
-- 💬 **Contact:** [YOUR NAME] · [EMAIL] · [PHONE/WHATSAPP]
+- 🔗 **Live demo:** https://mystudyguideme.vercel.app
+- 💬 **Contact:** Aadil Abdullah Naikoo · aadilabdullah552@gmail.com · +91 6006898857
 - 🏷️ **Type:** Full source code (MERN) · fully white-label
 
 ---
@@ -69,4 +69,4 @@ Coaching institutes, schools, tuition centres, and developers/resellers who want
 
 ---
 
-*Interested? Reply for a live demo walkthrough.* — [YOUR NAME], [CONTACT]
+*Interested? Reply for a live demo walkthrough.* — Aadil Abdullah Naikoo · aadilabdullah552@gmail.com · +91 6006898857
