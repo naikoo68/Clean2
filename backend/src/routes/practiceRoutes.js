@@ -7,6 +7,7 @@ import {
   browseStreams, browseSubjects, browseTopics, browseItems, browseTopicItems, browseStreamItems,
   playQuiz, allSubjects, myItems, moveItem, updateItem, splitItem, splitTopic, mergeItem, moveQuestions, shareContent,
   incomingShares, acceptShare, acceptShareJob, declineShare, sharePlacement, removeSharedWithMe,
+  backupMyContent, restoreMyContent,
 } from "../controllers/practiceController.js";
 import { protect, authorize, optionalAuth } from "../middleware/auth.js";
 
@@ -28,6 +29,11 @@ router.get("/quiz/:id/play", protect, playQuiz);
 
 // The caller's own practice items (client dashboard).
 router.get("/my-items", ...admin, myItems);
+
+// Back up ALL of the caller's own My Practice content to a JSON file, and
+// restore it later (additive — always creates fresh copies).
+router.get("/backup", ...admin, backupMyContent);
+router.post("/restore", ...admin, restoreMyContent);
 
 // Share practice content (stream/subject/topic/quiz/test) with another
 // REGISTERED user by email (account-to-account). Creates a PENDING share the
