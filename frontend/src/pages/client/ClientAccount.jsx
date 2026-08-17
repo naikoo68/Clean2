@@ -6,6 +6,7 @@ import { useSettings } from "../../context/SettingsContext";
 import { getAccessToken, uploadBackup, listBackups, downloadBackup as driveDownloadBackup } from "../../lib/googleDrive";
 import Badge from "../../components/ui/Badge";
 import ProfilePhotoCard from "../../components/ui/ProfilePhotoCard";
+import ProfileEditCard from "../../components/ui/ProfileEditCard";
 
 const fmtWhen = (d) => { try { return new Date(d).toLocaleString(undefined, { day: "2-digit", month: "short", year: "numeric", hour: "numeric", minute: "2-digit" }); } catch { return ""; } };
 
@@ -256,6 +257,9 @@ export default function ClientAccount({ onUpgrade }) {
           </button>
         )}
       </div>
+
+      {/* Editable details — name, email, phone */}
+      <ProfileEditCard className="sm:col-span-3" />
 
       {/* Profile photo */}
       <ProfilePhotoCard className="sm:col-span-3" />
