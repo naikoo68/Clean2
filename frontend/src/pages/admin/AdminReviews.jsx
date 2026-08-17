@@ -3,6 +3,7 @@ import { Star, Check, X, Trash2, MessageSquareQuote } from "lucide-react";
 import { reviewService } from "../../services";
 import { Loading, ErrorState, EmptyState } from "../../components/ui/AsyncState";
 import Badge from "../../components/ui/Badge";
+import Avatar from "../../components/ui/Avatar";
 
 const FILTERS = [
   { key: "pending", label: "Pending" },
@@ -105,7 +106,10 @@ export default function AdminReviews() {
                       ))}
                     </div>
                   </div>
-                  <span className="flex-shrink-0 text-xs text-slate-400">{fmt(r.createdAt)}</span>
+                  <div className="flex flex-shrink-0 items-center gap-2">
+                    <Avatar src={r.photo} name={r.name} size={40} />
+                    <span className="text-xs text-slate-400">{fmt(r.createdAt)}</span>
+                  </div>
                 </div>
                 <p className="mt-3 text-sm leading-relaxed text-slate-700 dark:text-slate-300">“{r.text}”</p>
                 {r.email && <p className="mt-1 text-xs text-slate-400">{r.email}</p>}

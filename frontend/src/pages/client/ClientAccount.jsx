@@ -5,6 +5,7 @@ import { useAuth } from "../../context/AuthContext";
 import { useSettings } from "../../context/SettingsContext";
 import { getAccessToken, uploadBackup, listBackups, downloadBackup as driveDownloadBackup } from "../../lib/googleDrive";
 import Badge from "../../components/ui/Badge";
+import ProfilePhotoCard from "../../components/ui/ProfilePhotoCard";
 
 const fmtWhen = (d) => { try { return new Date(d).toLocaleString(undefined, { day: "2-digit", month: "short", year: "numeric", hour: "numeric", minute: "2-digit" }); } catch { return ""; } };
 
@@ -255,6 +256,9 @@ export default function ClientAccount({ onUpgrade }) {
           </button>
         )}
       </div>
+
+      {/* Profile photo */}
+      <ProfilePhotoCard className="sm:col-span-3" />
 
       {/* Back up & Restore my content */}
       <div className="card p-5 sm:col-span-3">

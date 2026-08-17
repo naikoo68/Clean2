@@ -41,6 +41,7 @@ import { useSettings } from "../../context/SettingsContext";
 import { messageService } from "../../services";
 import GlobalSearch from "../../components/ui/GlobalSearch";
 import { Facebook as FacebookIcon } from "../../components/ui/SocialIcons";
+import Avatar from "../../components/ui/Avatar";
 
 const nav = [
   { to: "/admin", label: "Dashboard", icon: LayoutDashboard, end: true },
@@ -201,9 +202,8 @@ export default function AdminLayout() {
             <button onClick={toggleTheme} className="rounded-lg p-2 text-slate-600 dark:text-slate-300">
               {theme === "dark" ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
             </button>
-            <span className="flex h-9 w-9 items-center justify-center rounded-full bg-brand-600 text-sm font-bold text-white">
-              {user?.avatar || "AD"}
-            </span>
+            <Avatar src={user?.avatar} name={user?.name || "Admin"} size={36} />
+
           </div>
         </header>
 
