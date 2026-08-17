@@ -88,7 +88,15 @@ const corsOrigin = process.env.NODE_ENV === "production"
     }
   : true;
 app.use(cors({ origin: corsOrigin }));
-app.use(express.json({ limit: "10mb" }));
+// Restore endpoints accept large backup files — they attach their own 60mb JSON
+// parser at the route level. Skip the global 10mb parser for them so it doesn't
+// reject a big backup before the route-level parser runs.
+const RESTORE_PATHS = ["/api/practice/restore/start", "/api/admin/restore/start"];
+const globalJson = express.json({ limit: "10mb" });
+app.use((req, res, next) => {
+  if (RESTORE_PATHS.includes(req.path)) return next();
+  return globalJson(req, res, next);
+});
 app.use(express.urlencoded({ extended: true }));
 if (process.env.NODE_ENV !== "test") app.use(morgan("dev"));
 
