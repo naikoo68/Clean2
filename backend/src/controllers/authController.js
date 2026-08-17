@@ -44,6 +44,7 @@ const sanitize = (u) => ({
   id: u._id,
   name: u.name,
   email: u.email,
+  phone: u.phone || "",
   role: u.role,
   plan: u.plan,
   avatar: u.avatar,
@@ -459,6 +460,34 @@ export async function updateProfile(req, res) {
     user.name = req.body.name.trim().slice(0, 80);
   }
 
+  // Email — normalise, validate format and enforce uniqueness (it's the login
+  // identifier). Reject if another account already uses it.
+  if (typeof req.body.email === "string") {
+    const email = norm(req.body.email);
+    if (!email) {
+      return res.status(400).json({ message: "Email can't be empty." });
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return res.status(400).json({ message: "Please enter a valid email address." });
+    }
+    if (email !== norm(user.email)) {
+      const taken = await User.findOne({ email, _id: { $ne: user._id } }).select("_id");
+      if (taken) {
+        return res.status(409).json({ message: "That email is already in use by another account." });
+      }
+      user.email = email;
+    }
+  }
+
+  // Phone — optional free-text (digits, spaces and + / - / ( )). Empty clears it.
+  if ("phone" in req.body) {
+    const phone = String(req.body.phone || "").trim().slice(0, 30);
+    if (phone && !/^[+()\-\s\d]{6,30}$/.test(phone)) {
+      return res.status(400).json({ message: "Please enter a valid phone number." });
+    }
+    user.phone = phone;
+  }
+
   if ("avatar" in req.body) {
     const avatar = String(req.body.avatar || "").trim();
     if (avatar) {
@@ -473,7 +502,15 @@ export async function updateProfile(req, res) {
     user.avatar = avatar; // empty string clears the photo
   }
 
-  await user.save();
+  try {
+    await user.save();
+  } catch (e) {
+    // Unique index on email can still collide on a race — surface it cleanly.
+    if (e?.code === 11000 && e?.keyPattern?.email) {
+      return res.status(409).json({ message: "That email is already in use by another account." });
+    }
+    throw e;
+  }
   res.json({ user: sanitize(user) });
 }
 
