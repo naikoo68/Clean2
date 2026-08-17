@@ -4,9 +4,6 @@ import { setToken, clearToken, getToken } from "../lib/api";
 
 const AuthContext = createContext();
 
-const initials = (s = "") =>
-  s.trim().split(/\s+/).map((p) => p[0]).join("").slice(0, 2).toUpperCase();
-
 // Real auth backed by the API. The JWT is stored via the api layer and the
 // user profile is cached in localStorage for instant first paint, then
 // revalidated against /auth/me on load.
@@ -19,10 +16,11 @@ export function AuthProvider({ children }) {
 
   const persist = useCallback((u) => {
     if (u) {
-      const profile = { ...u, avatar: u.avatar || initials(u.name || u.email) };
-      localStorage.setItem("mpm-user", JSON.stringify(profile));
-      setUser(profile);
-      return profile;
+      // Keep `avatar` as the raw value (photo URL / data-URI, or empty). The
+      // <Avatar> component decides whether to show the picture or initials.
+      localStorage.setItem("mpm-user", JSON.stringify(u));
+      setUser(u);
+      return u;
     }
     localStorage.removeItem("mpm-user");
     setUser(null);

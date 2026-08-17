@@ -9,6 +9,7 @@ import {
   forgotPassword,
   resetPassword,
   getMe,
+  updateProfile,
   getPlans,
   validateOffer,
 } from "../controllers/authController.js";
@@ -27,5 +28,6 @@ router.get("/verify-email/:token", verifyEmail);
 router.post("/forgot-password", forgotPassword);
 router.post("/reset-password/:token", resetPassword);
 router.get("/me", attachUser, getMe); // expired clients can still load their profile (to upgrade)
+router.put("/profile", attachUser, updateProfile); // update own name / profile photo
 
 export default router;

@@ -5,6 +5,7 @@ import { useAuth } from "../../context/AuthContext";
 import { useTheme } from "../../context/ThemeContext";
 import { useSettings } from "../../context/SettingsContext";
 import { useZoom } from "../../context/ZoomContext";
+import Avatar from "../../components/ui/Avatar";
 import AdminPractice from "../admin/AdminPractice";
 import AdminMigration from "../admin/AdminMigration";
 import AdminChecker from "../admin/AdminChecker";
@@ -127,8 +128,8 @@ export default function ClientWorkspace() {
             <button onClick={toggleTheme} className="rounded-lg p-2 text-slate-600 dark:text-slate-300" title="Toggle theme">
               {theme === "dark" ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
             </button>
-            <span className="hidden sm:flex h-9 w-9 items-center justify-center rounded-full bg-brand-600 text-sm font-bold text-white" title={user?.name}>
-              {user?.avatar || "ME"}
+            <span className="hidden sm:block" title={user?.name}>
+              <Avatar src={user?.avatar} name={user?.name || "Me"} size={36} />
             </span>
             <button onClick={handleLogout} className="btn-ghost" title="Log out">
               <LogOut className="h-4 w-4" /> <span className="hidden sm:inline">Log out</span>
