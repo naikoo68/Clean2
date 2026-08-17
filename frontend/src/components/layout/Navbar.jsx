@@ -6,6 +6,7 @@ import { useAuth } from "../../context/AuthContext";
 import { useZoom } from "../../context/ZoomContext";
 import Brand from "./Brand";
 import InstallAppButton from "../client/InstallAppButton";
+import Avatar from "../ui/Avatar";
 
 const links = [
   { to: "/", label: "Home", end: true },
@@ -102,9 +103,7 @@ export default function Navbar() {
               <Link to={isClient ? "/client" : "/dashboard"} className="btn-ghost">
                 <LayoutDashboard className="h-4 w-4" /> {isClient ? "My Practice" : "Dashboard"}
               </Link>
-              <span className="flex h-9 w-9 items-center justify-center rounded-full bg-brand-600 text-sm font-bold text-white">
-                {user.avatar}
-              </span>
+              <Avatar src={user.avatar} name={user.name || user.email} size={36} />
               <button onClick={handleLogout} className="btn-ghost" title="Log out">
                 <LogOut className="h-4 w-4" />
               </button>

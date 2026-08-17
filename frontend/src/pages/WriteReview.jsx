@@ -1,14 +1,16 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { Star, Send, CheckCircle2, MessageSquarePlus, Loader2 } from "lucide-react";
+import { Star, Send, CheckCircle2, MessageSquarePlus, Loader2, Camera } from "lucide-react";
 import { reviewService } from "../services";
 import { useAuth } from "../context/AuthContext";
 import { useSettings } from "../context/SettingsContext";
+import Avatar from "../components/ui/Avatar";
+import { fileToResizedDataUrl } from "../lib/imageResize";
 
 export default function WriteReview() {
   const { user } = useAuth();
   const { settings } = useSettings();
-  const [form, setForm] = useState({ name: "", exam: "", rating: 5, text: "" });
+  const [form, setForm] = useState({ name: "", exam: "", rating: 5, text: "", photo: "" });
   const [hover, setHover] = useState(0);
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState(false);
@@ -20,6 +22,14 @@ export default function WriteReview() {
   }, [user]);
 
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
+
+  const onPhoto = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    try { set("photo", await fileToResizedDataUrl(file, 256, 0.85)); }
+    catch (ex) { setError(ex?.message || "Couldn't load that image."); }
+  };
 
   const submit = async (e) => {
     e.preventDefault();
@@ -68,6 +78,23 @@ export default function WriteReview() {
         </div>
 
         <form onSubmit={submit} className="card mt-8 space-y-4 p-6">
+          <div className="flex items-center gap-4">
+            <label className="group relative cursor-pointer" title="Add your photo">
+              <Avatar src={form.photo} name={form.name} size={64} />
+              <span className="absolute inset-0 flex items-center justify-center rounded-full bg-black/40 opacity-0 transition group-hover:opacity-100">
+                <Camera className="h-5 w-5 text-white" />
+              </span>
+              <input type="file" accept="image/*" className="hidden" onChange={onPhoto} />
+            </label>
+            <div>
+              <p className="text-sm font-medium">Your photo <span className="font-normal text-slate-400">(optional)</span></p>
+              <p className="text-xs text-slate-400">Tap the circle to add a picture.</p>
+              {form.photo && (
+                <button type="button" onClick={() => set("photo", "")} className="mt-1 text-xs text-rose-600 hover:underline">Remove photo</button>
+              )}
+            </div>
+          </div>
+
           <div>
             <label className="mb-1 block text-sm font-medium">Your name</label>
             <input className="input" value={form.name} onChange={(e) => set("name", e.target.value)} placeholder="e.g. Rahul Verma" maxLength={80} />

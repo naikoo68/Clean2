@@ -20,12 +20,17 @@ export async function createReview(req, res) {
 
   const role = req.user?.role === "client" ? "client" : req.user ? "student" : "guest";
 
+  // Optional profile photo (hosted URL or a small data-URI kept small by the client).
+  let photo = String(req.body.photo || "").trim();
+  if (photo && (!/^data:image\/|^https?:\/\//i.test(photo) || photo.length > 3_000_000)) photo = "";
+
   const review = await Review.create({
     user: req.user?._id,
     name: name.slice(0, 80),
     exam,
     rating: clampRating(req.body.rating),
     text,
+    photo,
     email: String(req.body.email || "").trim() || req.user?.email || "",
     role,
     status: "pending",
@@ -74,7 +79,7 @@ export async function approveReview(req, res) {
             exam: review.exam || "",
             text: review.text,
             rating: review.rating || 5,
-            photo: "",
+            photo: review.photo || "",
           },
         },
       },

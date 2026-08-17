@@ -450,6 +450,33 @@ export async function getMe(req, res) {
   res.json({ user: sanitize(req.user) });
 }
 
+// PUT /api/auth/profile — let the signed-in user update their own name / photo
+export async function updateProfile(req, res) {
+  const user = req.user;
+  if (!user) return res.status(401).json({ message: "Not authenticated" });
+
+  if (typeof req.body.name === "string" && req.body.name.trim()) {
+    user.name = req.body.name.trim().slice(0, 80);
+  }
+
+  if ("avatar" in req.body) {
+    const avatar = String(req.body.avatar || "").trim();
+    if (avatar) {
+      // Accept a hosted image URL or a small data-URI (kept small by the client-side resize).
+      if (!/^data:image\/|^https?:\/\//i.test(avatar)) {
+        return res.status(400).json({ message: "Please choose a valid image file." });
+      }
+      if (avatar.length > 3_000_000) {
+        return res.status(400).json({ message: "That image is too large — please choose a smaller one." });
+      }
+    }
+    user.avatar = avatar; // empty string clears the photo
+  }
+
+  await user.save();
+  res.json({ user: sanitize(user) });
+}
+
 // GET /api/auth/plans — public list of client subscription plans + pricing.
 export async function getPlans(req, res) {
   res.json({ plans: await getClientPlans() });

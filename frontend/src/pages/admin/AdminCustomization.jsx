@@ -1,9 +1,11 @@
 import { useState, useRef } from "react";
 import {
   Palette, Type, ImagePlus, Save, RotateCcw, CheckCircle2, Eye, EyeOff,
-  Share2, Phone, Plus, Trash2, Upload, X, Info, BarChart3, PanelTop, GripVertical, LayoutList, Megaphone, Star,
+  Share2, Phone, Plus, Trash2, Upload, X, Info, BarChart3, PanelTop, GripVertical, LayoutList, Megaphone, Star, Camera,
 } from "lucide-react";
 import { useSettings } from "../../context/SettingsContext";
+import Avatar from "../../components/ui/Avatar";
+import { fileToResizedDataUrl } from "../../lib/imageResize";
 
 // Home-page sections (fixed set) that the admin can reorder / hide.
 const HOME_ORDER = ["hero", "stats", "quickAccess", "features", "howItWorks", "testimonials", "cta"];
@@ -213,6 +215,12 @@ export default function AdminCustomization() {
   const updateTestimonial = (i, key, val) =>
     set("testimonials", form.testimonials.map((t, idx) => (idx === i ? { ...t, [key]: val } : t)));
   const removeTestimonial = (i) => set("testimonials", form.testimonials.filter((_, idx) => idx !== i));
+  const onTestimonialPhoto = async (i, e) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    try { updateTestimonial(i, "photo", await fileToResizedDataUrl(file, 200, 0.85)); } catch { /* ignore */ }
+  };
 
   // ---- Home layout ----
   const toggleSection = (i) =>
@@ -663,6 +671,18 @@ export default function AdminCustomization() {
           <div className="space-y-3">
             {form.testimonials.map((t, i) => (
               <div key={i} className="flex items-start gap-2 rounded-xl border border-slate-200 p-3 dark:border-slate-700">
+                <div className="flex flex-col items-center gap-1">
+                  <label className="group relative cursor-pointer" title="Add photo">
+                    <Avatar src={t.photo} name={t.name} size={48} />
+                    <span className="absolute inset-0 flex items-center justify-center rounded-full bg-black/40 opacity-0 transition group-hover:opacity-100">
+                      <Camera className="h-4 w-4 text-white" />
+                    </span>
+                    <input type="file" accept="image/*" className="hidden" onChange={(e) => onTestimonialPhoto(i, e)} />
+                  </label>
+                  {t.photo ? (
+                    <button type="button" onClick={() => updateTestimonial(i, "photo", "")} className="text-[10px] text-rose-600 hover:underline">Remove</button>
+                  ) : null}
+                </div>
                 <div className="flex-1 space-y-2">
                   <div className="flex flex-col gap-2 sm:flex-row">
                     <input className="input sm:flex-1" value={t.name} onChange={(e) => updateTestimonial(i, "name", e.target.value)} placeholder="Student name" />
