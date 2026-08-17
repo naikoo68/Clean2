@@ -13,6 +13,7 @@ import {
   ArrowRight,
   Crown,
 } from "lucide-react";
+import { UserCog } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { analyticsService, noticeService } from "../services";
 import StatCard from "../components/ui/StatCard";
@@ -91,6 +92,12 @@ export default function Dashboard() {
             <p className="text-sm text-white/80">Welcome back,</p>
             <h1 className="text-2xl font-extrabold">{profile.name}</h1>
             <p className="text-sm text-white/80">{profile.email}</p>
+            <Link
+              to="/account"
+              className="mt-2 inline-flex items-center gap-1.5 rounded-lg bg-white/15 px-3 py-1.5 text-xs font-semibold text-white backdrop-blur transition hover:bg-white/25"
+            >
+              <UserCog className="h-3.5 w-3.5" /> Manage account
+            </Link>
           </div>
         </div>
         <div className="flex gap-3">

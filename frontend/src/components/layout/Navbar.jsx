@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, NavLink, useNavigate } from "react-router-dom";
-import { Menu, X, Moon, Sun, LayoutDashboard, LogOut, User, ShieldCheck, ZoomIn, ZoomOut } from "lucide-react";
+import { Menu, X, Moon, Sun, LayoutDashboard, LogOut, User, UserCog, ShieldCheck, ZoomIn, ZoomOut } from "lucide-react";
 import { useTheme } from "../../context/ThemeContext";
 import { useAuth } from "../../context/AuthContext";
 import { useZoom } from "../../context/ZoomContext";
@@ -103,6 +103,12 @@ export default function Navbar() {
               <Link to={isClient ? "/client" : "/dashboard"} className="btn-ghost">
                 <LayoutDashboard className="h-4 w-4" /> {isClient ? "My Practice" : "Dashboard"}
               </Link>
+              {/* Students manage their profile here; clients use the Account tab in their workspace */}
+              {!isClient && !isAdmin && (
+                <Link to="/account" className="btn-ghost" title="My Account">
+                  <UserCog className="h-4 w-4" /> Account
+                </Link>
+              )}
               <Avatar src={user.avatar} name={user.name || user.email} size={36} />
               <button onClick={handleLogout} className="btn-ghost" title="Log out">
                 <LogOut className="h-4 w-4" />
@@ -161,6 +167,11 @@ export default function Navbar() {
                   <Link to={isClient ? "/client" : "/dashboard"} onClick={() => setOpen(false)} className="btn-outline w-full">
                     <LayoutDashboard className="h-4 w-4" /> {isClient ? "My Practice" : "Dashboard"}
                   </Link>
+                  {!isClient && !isAdmin && (
+                    <Link to="/account" onClick={() => setOpen(false)} className="btn-outline w-full">
+                      <UserCog className="h-4 w-4" /> Account
+                    </Link>
+                  )}
                   <button onClick={handleLogout} className="btn-ghost w-full">
                     <LogOut className="h-4 w-4" /> Log out
                   </button>
