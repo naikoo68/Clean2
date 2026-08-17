@@ -1717,32 +1717,44 @@ const QUESTION_CHUNK_MAX_CHARS = 14000;
 // { count, chunks } or null when no reliable numbering is found (caller then
 // falls back to character-based splitting).
 function splitByQuestions(text, perChunk = QUESTIONS_PER_CHUNK) {
-  // Line-start question markers. Allow leading Markdown/markup BEFORE the number
-  // (e.g. "### 1.", "## 1)", "**1.**", "> 3.", "- 4)") as well as a "Q"/"Question"
-  // prefix ("Q3.", "Question 5:"). Capture the markup + any "Q" word so we can
-  // PREFER these "strong" markers (real question numbers) over bare numbered
-  // lines — a bare "1. / 2. / 3." list also appears INSIDE a question (e.g. a
-  // "which of the following: 1… 2… 3…" statement list) and must NOT be mistaken
-  // for question starts (that bug made a 50-question paste extract only 3).
-  const re = /(^|\n)[ \t]*([#*>\-]{0,6})[ \t]*(Q(?:uestion)?\.?[ \t]*)?(\d{1,3})[.)\]:]\s/gi;
+  // Line-start question markers. The leading markup run allows ANY mix of
+  // Markdown markers and spaces BEFORE the number/keyword — so a bold-wrapped
+  // heading like "### **Question 201**" is recognised (previously the "**" and
+  // the "**" that CLOSES the number were not handled, so such headings were
+  // missed entirely and extraction latched onto an unrelated "1. 2. 3." list
+  // inside an answer — dropping every question before it).
+  //   Recognised: "### **Question 201**", "## 1.", "**1.**", "> 3.", "- 4)",
+  //               "Q3.", "Question 5:", "1)".
+  // The number may be closed by ".)]:", by Markdown bold/italic ("**"/"_"), or by
+  // end-of-line — a lookahead, so a 4-digit year like "2026." is never matched.
+  const re = /(^|\n)((?:[#>\-]+|[*_]+|[ \t]+)*)(Q(?:uestion)?\.?[ \t]*)?(?:[*_]+[ \t]*)?(\d{1,3})(?=[.)\]:*_]|[ \t]*(?:\n|$))/gi;
   const marks = [];
   let m;
   while ((m = re.exec(text)) !== null) {
-    const strong = /[#*]/.test(m[2] || "") || !!m[3]; // markdown heading/bold, or a "Q" prefix
+    // "strong" = a real question number: introduced by a "Q"/"Question" keyword,
+    // or wrapped in Markdown heading/bold (#, *, _). Bare "1." lines are weak.
+    const strong = /[#*_]/.test(m[2] || "") || !!m[3];
     marks.push({ pos: m.index + (m[1] ? m[1].length : 0), num: parseInt(m[4], 10), strong });
+    if (re.lastIndex === m.index) re.lastIndex++; // guard against a zero-width match stalling the loop
   }
   // When the document uses strong markers (headings/bold/"Q"), rely ONLY on those
   // so a numbered list inside a question can't fragment it. Plain numbered papers
   // (no markup at all) keep using every numbered line as before.
-  const usable = marks.some((mk) => mk.strong) ? marks.filter((mk) => mk.strong) : marks;
-  // Keep a sequential chain (1,2,3,…) so stray numbers / numbered options aren't
-  // mistaken for question starts. Allow a reset to 1 for multi-section papers.
+  const hasStrong = marks.some((mk) => mk.strong);
+  let usable = (hasStrong ? marks.filter((mk) => mk.strong) : marks).sort((a, b) => a.pos - b.pos);
+  usable = usable.filter((mk, i) => i === 0 || mk.pos !== usable[i - 1].pos); // drop coincident matches
+  // Keep a sequential chain so stray numbers / numbered options aren't mistaken
+  // for question starts. STRONG markers are explicit, so we trust them from the
+  // FIRST one and only require the numbers to keep increasing — this handles a
+  // paper that starts high (e.g. "Questions 201–305") and tolerates a missing
+  // number. BARE-only papers still must begin near the first question (num <= 3)
+  // to avoid latching onto an incidental list. A reset to 1 starts a new section.
   const starts = [];
   let prev = null;
   for (const mk of usable) {
     if (prev === null) {
-      if (mk.num <= 3) { starts.push(mk.pos); prev = mk.num; } // begin near the first question
-    } else if (mk.num === prev + 1 || mk.num === 1) {
+      if (hasStrong || mk.num <= 3) { starts.push(mk.pos); prev = mk.num; }
+    } else if (mk.num === 1 || (hasStrong ? mk.num > prev : mk.num === prev + 1)) {
       starts.push(mk.pos);
       prev = mk.num;
     }
