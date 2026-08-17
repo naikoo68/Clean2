@@ -3,6 +3,7 @@ import { X, Sparkles, Wand2, CheckCircle2, AlertTriangle, Loader2, Server, KeyRo
 import { aiService } from "../../services";
 import { useAuth } from "../../context/AuthContext";
 import GraphView from "../ui/GraphView";
+import VizView from "../ui/VizView";
 
 const TYPE_OPTIONS = [
   { id: "mcq", label: "MCQ" },
@@ -16,6 +17,7 @@ const TYPE_OPTIONS = [
   { id: "journal", label: "Journal Entry" },
   { id: "ledger", label: "Ledger Posting" },
   { id: "rearrange", label: "Sentence Rearrangement" },
+  { id: "diagram", label: "Diagram" },
 ];
 
 const LETTERS = ["A", "B", "C", "D"];
@@ -1115,6 +1117,7 @@ export default function AiGenerate({ open, onClose, onUpload, title = "Generate 
                       </div>
                       <p className="mt-1 font-medium text-slate-700 dark:text-slate-200">{i + 1}. {q.text}</p>
                       <GraphView q={q} />
+                      <VizView q={q} />
                       <ul className="mt-1 grid grid-cols-2 gap-x-3 text-slate-500 dark:text-slate-400">
                         {(q.options || []).map((o, j) => (
                           <li key={j} className={j === q.correct ? "font-semibold text-emerald-600 dark:text-emerald-400" : ""}>
