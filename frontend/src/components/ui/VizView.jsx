@@ -39,7 +39,19 @@ export default function VizView({ q }) {
       {spec.title && (
         <p className="mb-1 text-center text-sm font-semibold text-slate-700 dark:text-slate-200">{spec.title}</p>
       )}
-      <div className={`mx-auto w-full ${fixed ? "h-[300px] max-w-xl" : "min-h-[260px] max-h-[75vh] overflow-auto"}`}>
+      {/* Charts keep a fixed height (Chart.js needs a bounded parent). SVG
+          diagrams (Mermaid/graph) are scaled to FILL the width — this enlarges
+          the many short/horizontal diagrams that otherwise render tiny — and
+          are capped in height with a scroll for very tall ones. The [&_svg]
+          overrides force the diagram to use the full width and keep its aspect
+          ratio (width:100%, height:auto). */}
+      <div
+        className={`mx-auto w-full ${
+          fixed
+            ? "h-[300px] max-w-xl"
+            : "min-h-[180px] max-h-[78vh] overflow-auto [&_svg]:!w-full [&_svg]:!max-w-none [&_svg]:!h-auto"
+        }`}
+      >
         <Suspense fallback={<div className="flex h-[260px] items-center justify-center text-sm text-slate-400">Loading diagram…</div>}>
           <VizRenderer spec={spec} />
         </Suspense>
