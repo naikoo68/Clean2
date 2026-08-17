@@ -25,7 +25,11 @@ import GlobalSearch from "../components/ui/GlobalSearch";
 const STAT_ICONS = [Users, ListChecks, Layers];
 
 // Default order of home sections (used if none saved / for any missing keys).
-const DEFAULT_HOME_ORDER = ["hero", "stats", "quickAccess", "features", "howItWorks", "cta"];
+const DEFAULT_HOME_ORDER = ["hero", "stats", "quickAccess", "features", "howItWorks", "testimonials", "cta"];
+
+// Initials for a testimonial avatar when no photo is provided.
+const initials = (name) =>
+  String(name || "").trim().split(/\s+/).slice(0, 2).map((w) => w[0]?.toUpperCase() || "").join("") || "★";
 
 const features = [
   {
@@ -372,6 +376,50 @@ export default function Home() {
         </div>
       </section>
     ),
+
+    testimonials:
+      (settings.testimonials?.length ? settings.testimonials : []).length > 0 ? (
+        <section className="bg-slate-50 py-20 dark:bg-slate-900/40">
+          <div className="container-page">
+            <div className="mx-auto max-w-2xl text-center">
+              <span className="badge bg-accent-100 text-accent-700 dark:bg-accent-900/40 dark:text-accent-300">
+                <Star className="h-3.5 w-3.5" /> Loved by students
+              </span>
+              <h2 className="mt-4 text-3xl font-extrabold sm:text-4xl">What our students say</h2>
+              <p className="mt-3 text-slate-600 dark:text-slate-300">
+                Real results from learners preparing with {settings.siteName}.
+              </p>
+            </div>
+            <div className="mt-12 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+              {settings.testimonials.map((t, i) => (
+                <figure key={i} className="card flex flex-col p-6">
+                  <div className="flex gap-0.5 text-amber-400">
+                    {Array.from({ length: 5 }).map((_, k) => (
+                      <Star key={k} className={`h-4 w-4 ${k < (t.rating || 5) ? "fill-current" : "opacity-30"}`} />
+                    ))}
+                  </div>
+                  <blockquote className="mt-4 flex-1 text-sm leading-relaxed text-slate-600 dark:text-slate-300">
+                    “{t.text}”
+                  </blockquote>
+                  <figcaption className="mt-5 flex items-center gap-3">
+                    {t.photo ? (
+                      <img src={t.photo} alt={t.name} className="h-11 w-11 rounded-full object-cover" />
+                    ) : (
+                      <span className="flex h-11 w-11 items-center justify-center rounded-full bg-gradient-to-br from-brand-600 to-accent-500 text-sm font-bold text-white">
+                        {initials(t.name)}
+                      </span>
+                    )}
+                    <div>
+                      <p className="text-sm font-bold">{t.name}</p>
+                      {t.exam && <p className="text-xs text-slate-500 dark:text-slate-400">{t.exam}</p>}
+                    </div>
+                  </figcaption>
+                </figure>
+              ))}
+            </div>
+          </div>
+        </section>
+      ) : null,
 
     cta: (
       <section className="container-page py-20">
