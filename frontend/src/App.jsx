@@ -24,6 +24,7 @@ const Pricing = lazy(() => import("./pages/Pricing"));
 const Privacy = lazy(() => import("./pages/Privacy"));
 const Terms = lazy(() => import("./pages/Terms"));
 const Refund = lazy(() => import("./pages/Refund"));
+const WriteReview = lazy(() => import("./pages/WriteReview"));
 const Dashboard = lazy(() => import("./pages/Dashboard"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 
@@ -64,6 +65,7 @@ const AdminContent = lazy(() => import("./pages/admin/AdminContent"));
 const AdminTests = lazy(() => import("./pages/admin/AdminTests"));
 const AdminStudyMaterial = lazy(() => import("./pages/admin/AdminStudyMaterial"));
 const AdminFeedback = lazy(() => import("./pages/admin/AdminFeedback"));
+const AdminReviews = lazy(() => import("./pages/admin/AdminReviews"));
 const AdminStorage = lazy(() => import("./pages/admin/AdminStorage"));
 const AdminBackup = lazy(() => import("./pages/admin/AdminBackup"));
 const AdminUsers = lazy(() => import("./pages/admin/AdminUsers"));
@@ -112,6 +114,7 @@ const router = createHashRouter([
       { path: "/privacy", element: S(Privacy) },
       { path: "/terms", element: S(Terms) },
       { path: "/refund", element: S(Refund) },
+      { path: "/review", element: S(WriteReview) },
 
       { path: "/quiz", element: S(QuizHome) },
       { path: "/quiz/stream/:streamId", element: S(StreamSubjects) },
@@ -229,6 +232,7 @@ const router = createHashRouter([
       { path: "coupons", element: S(AdminCoupons) },
       { path: "study", element: S(AdminStudyMaterial) },
       { path: "feedback", element: S(AdminFeedback) },
+      { path: "reviews", element: S(AdminReviews) },
       { path: "users", element: S(AdminUsers) },
       { path: "performance", element: S(AdminPerformance) },
       { path: "storage", element: S(AdminStorage) },

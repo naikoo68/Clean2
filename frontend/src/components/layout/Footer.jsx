@@ -20,6 +20,7 @@ const columns = [
     links: [
       { label: "About Us", to: "/about" },
       { label: "Contact", to: "/contact" },
+      { label: "Leave a Review", to: "/review" },
       { label: "Login", to: "/login" },
     ],
   },

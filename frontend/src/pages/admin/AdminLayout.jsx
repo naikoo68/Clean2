@@ -33,6 +33,7 @@ import {
   Files,
   HardDrive,
   DatabaseBackup,
+  Star,
 } from "lucide-react";
 import { useTheme } from "../../context/ThemeContext";
 import { useAuth } from "../../context/AuthContext";
@@ -63,6 +64,7 @@ const nav = [
   { to: "/admin/storage", label: "Storage", icon: HardDrive },
   { to: "/admin/backup", label: "Backup & Restore", icon: DatabaseBackup },
   { to: "/admin/feedback", label: "Feedback", icon: MessageSquare },
+  { to: "/admin/reviews", label: "Reviews", icon: Star },
   { to: "/admin/messages", label: "Messages", icon: Mail },
   { to: "/admin/notices", label: "Notice Board", icon: Megaphone },
   { to: "/admin/facebook", label: "Facebook Auto-Post", icon: FacebookIcon },
