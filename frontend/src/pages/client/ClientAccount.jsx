@@ -102,7 +102,8 @@ export default function ClientAccount({ onUpgrade }) {
         questions: p.questions || [],
       };
     }
-    const { jobId, total } = await practiceService.startRestore(data);
+    const { jobId, total } = await practiceService.startRestore(data) || {};
+    if (!jobId) throw new Error("Restore failed to start — the server may have rejected the file. Make sure it's a valid backup.");
     setProgress({ done: 0, total: total || 0, phase: "Restoring" });
     let st;
     for (;;) {
