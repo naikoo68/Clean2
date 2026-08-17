@@ -1,4 +1,5 @@
 import { Router } from "express";
+import express from "express";
 import {
   listStreams, createStream, updateStream, deleteStream,
   listSubjects, createSubject, updateSubject, deleteSubject,
@@ -33,10 +34,12 @@ router.get("/my-items", ...admin, myItems);
 // Back up ALL of the caller's own My Practice content, and restore it later
 // (additive — always creates fresh copies). Both run as background jobs so the
 // UI can show a live % progress bar.
+// A restored admin backup can be large — allow a higher body limit for restore.
+const bigJson = express.json({ limit: "60mb" });
 router.post("/backup/start", ...admin, startBackup);
 router.get("/backup/job/:id", ...admin, backupJobStatus);
 router.get("/backup/job/:id/file", ...admin, backupJobFile);
-router.post("/restore/start", ...admin, startRestore);
+router.post("/restore/start", bigJson, ...admin, startRestore);
 router.get("/restore/job/:id", ...admin, restoreJobStatus);
 
 // Share practice content (stream/subject/topic/quiz/test) with another
