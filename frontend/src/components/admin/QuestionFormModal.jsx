@@ -1,7 +1,8 @@
 import { useState } from "react";
-import { Plus, Trash2, X, Image as ImageIcon, Upload, Loader2, Eraser, FileText } from "lucide-react";
-import { uploadService } from "../../services";
+import { Plus, Trash2, X, Image as ImageIcon, Upload, Loader2, Eraser, FileText, Wand2, LayoutGrid } from "lucide-react";
+import { uploadService, aiService } from "../../services";
 import { parseQuestionsCsv } from "./BulkUploadQuestions";
+import VizView from "../ui/VizView";
 
 // Roman numerals for Column B labels (I, II, III, IV…)
 function toRomanLite(n) {
@@ -26,6 +27,7 @@ export const emptyQuestion = {
   explanation: "",
   status: "published",
   image: "",
+  viz: null,
 };
 
 function Field({ label, children }) {
@@ -58,10 +60,16 @@ export default function QuestionFormModal({ question, saving, onClose, onSave, s
     explanation: data.explanation || "",
     status: data.status || "published",
     image: data.image || "",
+    viz: data.viz || null,
   }));
 
   const [imgUploading, setImgUploading] = useState(false);
   const [imgErr, setImgErr] = useState("");
+  // Diagram ("viz") builder state: a prompt → AI spec, plus manual JSON editing.
+  const [vizPrompt, setVizPrompt] = useState("");
+  const [vizBusy, setVizBusy] = useState(false);
+  const [vizErr, setVizErr] = useState("");
+  const [vizJson, setVizJson] = useState(() => (data.viz ? JSON.stringify(data.viz, null, 2) : ""));
   const [csvOpen, setCsvOpen] = useState(false);
   const [csvText, setCsvText] = useState("");
   const [csvErr, setCsvErr] = useState("");
@@ -123,6 +131,39 @@ export default function QuestionFormModal({ question, saving, onClose, onSave, s
     }
   };
 
+  // Diagram question: generate a Visualization-Studio spec from a prompt (reuses
+  // the /api/ai/visualize endpoint that powers the Studio), preview it, and store
+  // it on the question. The admin can also paste/edit the spec JSON by hand.
+  const generateViz = async () => {
+    if (!vizPrompt.trim()) { setVizErr("Describe the diagram you want, e.g. \u201cbar chart of yearly exports\u201d."); return; }
+    setVizErr("");
+    setVizBusy(true);
+    try {
+      const res = await aiService.visualize(vizPrompt.trim());
+      if (!res?.spec) throw new Error("No diagram returned — try rephrasing the prompt.");
+      setForm((f) => ({ ...f, viz: res.spec }));
+      setVizJson(JSON.stringify(res.spec, null, 2));
+    } catch (err) {
+      setVizErr(err.message || "Couldn't generate the diagram.");
+    } finally {
+      setVizBusy(false);
+    }
+  };
+
+  // Apply hand-edited JSON to the live diagram (validates it's parseable).
+  const applyVizJson = () => {
+    setVizErr("");
+    const t = vizJson.trim();
+    if (!t) { setForm((f) => ({ ...f, viz: null })); return; }
+    try {
+      const spec = JSON.parse(t);
+      if (!spec || typeof spec !== "object") throw new Error("Spec must be a JSON object.");
+      setForm((f) => ({ ...f, viz: spec }));
+    } catch {
+      setVizErr("That isn't valid JSON. Check the spec and try again.");
+    }
+  };
+
   const submit = (e) => {
     e.preventDefault();
     const base = {
@@ -136,6 +177,8 @@ export default function QuestionFormModal({ question, saving, onClose, onSave, s
       optionExplanations: (form.optionExplanations || []).map((x, i) => (i === form.correct ? "" : (x || "").trim())),
       status: form.status,
       section: form.section || "",
+      // Diagram spec — only carried for diagram questions (null clears it otherwise).
+      viz: form.type === "diagram" ? (form.viz || null) : null,
     };
     let payload;
     if (form.type === "matching") {
@@ -243,6 +286,7 @@ export default function QuestionFormModal({ question, saving, onClose, onSave, s
               <option value="journal">Journal Entry</option>
               <option value="ledger">Ledger Posting (T-account)</option>
               <option value="rearrange">Sentence Rearrangement</option>
+              <option value="diagram">Diagram (Visualization Studio chart)</option>
             </select>
           </Field>
 
@@ -272,6 +316,48 @@ export default function QuestionFormModal({ question, saving, onClose, onSave, s
             {imgErr && <p className="mt-1 text-xs text-rose-600">{imgErr}</p>}
             <p className="mt-1 text-xs text-slate-400">Pick a file from your device — it uploads to Cloudinary and fills the link automatically.</p>
           </Field>
+
+          {form.type === "diagram" && (
+            <Field label="Diagram (required for this type)">
+              <p className="mb-2 text-xs text-slate-500 dark:text-slate-400">
+                Describe the chart/diagram and generate it with AI (same engine as the Visualization Studio), or paste a spec below. The student answers by reading this diagram, so make your question text refer to it.
+              </p>
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <input
+                  className="input flex-1"
+                  value={vizPrompt}
+                  onChange={(e) => setVizPrompt(e.target.value)}
+                  placeholder='e.g. "bar chart: exports 2019=120, 2020=90, 2021=150, 2022=170" or "flowchart of the water cycle"'
+                />
+                <button type="button" onClick={generateViz} disabled={vizBusy} className="btn-primary py-2 disabled:opacity-50">
+                  {vizBusy ? <><Loader2 className="h-4 w-4 animate-spin" /> Generating…</> : <><Wand2 className="h-4 w-4" /> Generate diagram</>}
+                </button>
+              </div>
+              {vizErr && <p className="mt-1 text-xs text-rose-600">{vizErr}</p>}
+
+              {form.viz && (
+                <div className="mt-3">
+                  <div className="mb-1 flex items-center justify-between">
+                    <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-500 dark:text-slate-400"><LayoutGrid className="h-3.5 w-3.5" /> Preview</span>
+                    <button type="button" onClick={() => { setForm((f) => ({ ...f, viz: null })); setVizJson(""); }} className="text-xs font-medium text-rose-600 hover:underline">Remove diagram</button>
+                  </div>
+                  <VizView q={{ viz: form.viz }} />
+                </div>
+              )}
+
+              <details className="mt-3 rounded-lg border border-slate-200 p-2 dark:border-slate-700">
+                <summary className="cursor-pointer text-xs font-semibold text-slate-500 dark:text-slate-400">Edit spec JSON (advanced)</summary>
+                <textarea
+                  rows={6}
+                  className="input mt-2 resize-y font-mono text-xs"
+                  value={vizJson}
+                  onChange={(e) => setVizJson(e.target.value)}
+                  placeholder={'{"type":"bar","title":"Exports","labels":["2019","2020"],"series":[{"name":"Exports","data":[120,90]}]}'}
+                />
+                <button type="button" onClick={applyVizJson} className="btn-outline mt-2 py-1.5 text-xs">Apply JSON to diagram</button>
+              </details>
+            </Field>
+          )}
 
           {form.type === "assertion" && (
             <>
