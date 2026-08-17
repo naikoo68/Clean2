@@ -26,6 +26,7 @@ const Terms = lazy(() => import("./pages/Terms"));
 const Refund = lazy(() => import("./pages/Refund"));
 const WriteReview = lazy(() => import("./pages/WriteReview"));
 const Dashboard = lazy(() => import("./pages/Dashboard"));
+const Account = lazy(() => import("./pages/Account"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 
 const QuizHome = lazy(() => import("./pages/quiz/QuizHome"));
@@ -149,6 +150,10 @@ const router = createHashRouter([
       {
         path: "/dashboard",
         element: <ProtectedRoute>{S(Dashboard)}</ProtectedRoute>,
+      },
+      {
+        path: "/account",
+        element: <ProtectedRoute>{S(Account)}</ProtectedRoute>,
       },
     ],
   },
