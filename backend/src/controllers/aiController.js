@@ -184,7 +184,7 @@ async function callWithFallback({ endpoints, model, userPrompt, maxTokens, owner
   return last;
 }
 
-const TYPES = ["mcq", "numericalmcq", "matching", "statement", "pair", "pairselect", "assertion", "table", "journal", "ledger", "rearrange"];
+const TYPES = ["mcq", "numericalmcq", "matching", "statement", "pair", "pairselect", "assertion", "table", "journal", "ledger", "rearrange", "diagram"];
 const DIFFS = ["Easy", "Medium", "Hard"];
 
 // --- Semantic-ish duplicate detection (so the generator stops returning the
@@ -380,7 +380,7 @@ const TOPIC_SCOPE_RULE =
 const SYSTEM_PROMPT = `You are an exam-preparation question writer. You output ONLY valid JSON, no markdown, no commentary.
 Return an object of the exact shape: {"questions": [ ... ]}.
 Each question object uses these fields:
-- "type": one of "mcq", "numericalmcq", "matching", "statement", "pair", "pairselect", "assertion", "table", "journal", "ledger", "rearrange".
+- "type": one of "mcq", "numericalmcq", "matching", "statement", "pair", "pairselect", "assertion", "table", "journal", "ledger", "rearrange", "diagram".
 - "text": the question stem (may include LaTeX between $...$).
 - "options": array of EXACTLY 4 answer strings.
 - "correct": 0-based index (0-3) of the correct option in "options".
@@ -402,6 +402,12 @@ Type-specific rules — each type needs specific extra fields AND a specific sty
 - "pairselect": include "columnA" and "columnB" (candidate pairs), each with 3-4 items of the SAME length; put them ONLY in these arrays (NOT inside "text", NOT under any other key). "text" is only the intro line. The 4 "options" state WHICH pairs are correct, e.g. "1 and 2 only", "2 and 3 only", "1, 3 and 4 only", "All of the above". In "explanation", go through EACH pair stating whether it is correct or wrong and why.
 - "assertion": REQUIRED — you MUST include BOTH "assertion" (the full Assertion A statement) and "reason" (the full Reason R statement) as NON-EMPTY, complete standalone sentences. NEVER leave "assertion" or "reason" blank, and NEVER put the A/R statements only inside "explanation" or "text" — the actual statements MUST be in the "assertion" and "reason" fields ("text" may be empty). The 4 "options" MUST be exactly: "Both A and R are true and R is the correct explanation of A", "Both A and R are true but R is NOT the correct explanation of A", "A is true but R is false", "A is false but R is true". In "explanation", separately evaluate Assertion (A) — state true/false and WHY with supporting facts — then separately evaluate Reason (R) — true/false and WHY — and finally explain the RELATIONSHIP: whether R correctly explains A and why.
 - "table": put the data table in "tableRows" (a 2D array; the first inner array is the header row) — NEVER write it as a markdown/pipe ("| a | b |") table inside "text". "text" is ONLY the question sentence. Wrap any math in a cell in $...$. 4 normal options that match a calculation done from the table.
+- "diagram": a DIAGRAMMATIC question — the student answers by reading a DIAGRAM/CHART that the app renders from a structured spec (the "Visualization Studio" engine). REQUIRED — include a "viz" object (see "DIAGRAM SPEC (\\"viz\\")" below) that fully describes the figure as DATA, never prose or an image URL. "text" is ONLY the question sentence and MUST refer to the rendered figure (e.g. "Study the bar chart below. Which year recorded the highest exports?", "From the flowchart, which stage immediately follows fertilisation?"). Provide the usual 4 "options" and the 0-based "correct" index; the answer MUST be derivable purely from what the diagram shows. The 4 "optionExplanations" say, using values/relationships read off the diagram, why each option is right or wrong (leave the correct one ""). In "explanation", walk through HOW to read the diagram to reach the answer (which bar/slice/node/axis value to compare). Keep "numerical": false unless the answer needs an actual calculation from the plotted values. Choose a diagram type that genuinely aids the question — do NOT attach a decorative chart to a plain factual question (use "mcq" for those).
+DIAGRAM SPEC ("viz") — the exact JSON grammar the Visualization Engine accepts (output the object VERBATIM in the question's "viz" field; every "viz" MUST have a "type"):
+  • Charts (Chart.js) — "type" one of "bar","line","pie","doughnut","scatter","bubble","radar","polarArea": {"type":"bar","title":"Exports by Year","labels":["2019","2020","2021","2022"],"series":[{"name":"Exports","data":[120,90,150,170]}],"options":{"beginAtZero":true}}. For "scatter"/"bubble" each series uses "data":[{"x":1,"y":2},…] (bubble adds "r"). Use "labels" for the category axis and one or more "series" (each {"name","data":[…]}); numeric arrays must align with "labels".
+  • Flow / process / tree / mindmap / ER / sequence / state / class / gantt / timeline diagrams — use Mermaid: {"type":"flowchart","title":"Water Cycle","code":"flowchart TD\\nA[Evaporation]-->B[Condensation]\\nB-->C[Precipitation]\\nC-->D[Collection]\\nD-->A"}. Put valid Mermaid source in "code" with real newlines (\\n). Pick the fitting Mermaid diagram kind (flowchart, sequenceDiagram, classDiagram, stateDiagram-v2, erDiagram, mindmap, gantt, timeline).
+  • Networks / graphs (nodes & edges): {"type":"graph","title":"Food Web","graph":{"nodes":[{"id":"a","label":"Grass"},{"id":"b","label":"Rabbit"}],"edges":[{"source":"a","target":"b"}],"directed":true}}.
+  KEEP IT SELF-CONSISTENT: the correct answer and every distractor must be readable from the spec you provide (e.g. if you ask which year is highest, the "data" must make exactly one year the clear maximum). Keep labels short, values simple and the figure uncluttered (aim for 3–8 data points / nodes). Do NOT put a currency "$" in any viz value, and do NOT reference the diagram only in words without providing the matching "viz".
 Do NOT prefix columnA / columnB / statement items with numbers or roman numerals (no "1.", "I.") — the app numbers Column A (1,2,3,4), Column B (I,II,III,IV) and statements (1,2,3) automatically.
 OPTIONAL DIAGRAM ("graph"): ONLY when a question genuinely needs a diagram to be answered or understood — e.g. an ECONOMICS supply/demand curve, a shift, an equilibrium, a cost curve, or any simple straight-line/curve relationship — include a "graph" object. The app DRAWS it as a labelled chart, so provide DATA, not prose. Shape: {"xLabel":"Quantity","yLabel":"Price","lines":[{"label":"Demand","points":[[0,100],[100,0]]},{"label":"Supply","points":[[0,0],[100,100]]}],"points":[{"label":"E (equilibrium)","x":50,"y":50}]}. Rules for "graph": use a consistent numeric scale for all points; each line needs a short "label" and at least two [x,y] points (use 3-6 points for a curve); put key intersections/equilibria in "points" with a short label; keep values simple (0-100 is ideal). If the question also refers to the diagram in words, keep "text" as the question itself (e.g. "In the diagram, the equilibrium price is:"). OMIT "graph" entirely for questions that don't need a visual (most questions) — never add a decorative or irrelevant graph.
 VARIETY IS MANDATORY: within the set, every question must test a DIFFERENT fact / sub-topic and a DIFFERENT angle (definition, cause, effect, date or number, example, comparison, application, exception, sequence). NEVER ask about the same fact, entity or correct answer more than once, and NEVER reword or rephrase another question — a different sentence with the same meaning counts as a duplicate and is forbidden. Spread the questions across the full breadth of the topic rather than clustering on the few most obvious facts.
@@ -690,6 +696,47 @@ function normalizeGraph(g) {
   };
 }
 
+// Coerce a model-supplied Visualization-Studio spec (for a "diagram" question)
+// into a safe, renderable object, or undefined if there's nothing usable. The
+// spec shape varies per engine (Chart.js / Mermaid / Plotly / graph), so we
+// keep it permissive: it must be a plain object with a non-empty string "type",
+// and carry at least one recognised payload (series/labels, Mermaid code, a
+// plotly block, or a graph/network). We JSON round-trip and size-cap it to drop
+// functions/oversized blobs before it's stored as Mixed.
+function normalizeViz(v) {
+  if (!v || typeof v !== "object" || Array.isArray(v)) return undefined;
+  const type = String(v.type || "").trim();
+  if (!type) return undefined;
+  const hasPayload =
+    (Array.isArray(v.series) && v.series.length) ||
+    (Array.isArray(v.labels) && v.labels.length) ||
+    (typeof v.code === "string" && v.code.trim()) ||
+    (v.plotly && typeof v.plotly === "object") ||
+    (v.graph && typeof v.graph === "object") ||
+    (v.network && typeof v.network === "object") ||
+    (v.framework && typeof v.framework === "object") ||
+    (v.map && typeof v.map === "object") ||
+    (v.science && typeof v.science === "object") ||
+    (v.illustration && typeof v.illustration === "object") ||
+    (v.chem && typeof v.chem === "object");
+  if (!hasPayload) return undefined;
+  let clean;
+  try {
+    clean = JSON.parse(JSON.stringify(v)); // strip functions / non-serialisable bits
+  } catch {
+    return undefined;
+  }
+  clean.type = type.slice(0, 40);
+  if (clean.title != null) clean.title = String(clean.title).slice(0, 120);
+  // Guard against an oversized spec bloating the document.
+  try {
+    if (JSON.stringify(clean).length > 20000) return undefined;
+  } catch {
+    return undefined;
+  }
+  return clean;
+}
+
 // The "$...$" delimiters render inline math, so they are for numbers, values,
 // units, symbols and formulas ONLY. Models often wrap ordinary words or proper
 // nouns too (e.g. "$Natya$", "$AbhinayaDarpana$", "$abhinaya$"), which then show
@@ -837,6 +884,11 @@ function normalize(list) {
       // supply-demand curve). Kept only when it has at least one valid line.
       const graph = normalizeGraph(q?.graph);
       if (graph) out.graph = graph;
+
+      // Optional Visualization-Studio diagram spec for "diagram" questions
+      // (charts / flowcharts / graphs). Kept only when it's a valid spec.
+      const viz = normalizeViz(q?.viz);
+      if (viz) out.viz = viz;
 
       // Strip stray $...$ the model put around plain words (math is for numbers/
       // formulas only), across every user-visible text field.

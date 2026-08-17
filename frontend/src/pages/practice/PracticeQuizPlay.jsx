@@ -32,6 +32,7 @@ import OptionContent from "../../components/ui/OptionContent";
 import StatementPairView from "../../components/ui/StatementPairView";
 import TableView from "../../components/ui/TableView";
 import GraphView from "../../components/ui/GraphView";
+import VizView from "../../components/ui/VizView";
 import AssertionReasonView from "../../components/ui/AssertionReasonView";
 import Watermark from "../../components/ui/Watermark";
 import FeedbackButton from "../../components/ui/FeedbackButton";
@@ -391,6 +392,7 @@ export default function PracticeQuizPlay() {
                   <StatementPairView q={q} />
                   <TableView q={q} />
                   <GraphView q={q} />
+                  <VizView q={q} />
                   <AssertionReasonView q={q} />
 
                   <div className="mt-3 space-y-2">
@@ -666,6 +668,7 @@ export default function PracticeQuizPlay() {
           <StatementPairView q={q} />
           <TableView q={q} />
           <GraphView q={q} />
+          <VizView q={q} />
           <AssertionReasonView q={q} />
 
           <div className="mt-5 space-y-3">
