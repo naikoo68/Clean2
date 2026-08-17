@@ -19,6 +19,7 @@ import StatCard from "../components/ui/StatCard";
 import Badge from "../components/ui/Badge";
 import ProgressBar from "../components/ui/ProgressBar";
 import Avatar from "../components/ui/Avatar";
+import ProfilePhotoCard from "../components/ui/ProfilePhotoCard";
 import { Loading, ErrorState, EmptyState } from "../components/ui/AsyncState";
 
 export default function Dashboard() {
