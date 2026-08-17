@@ -17,8 +17,16 @@ export default function WriteReview() {
   const [error, setError] = useState("");
 
   useEffect(() => { window.scrollTo(0, 0); }, []);
+  // Pre-fill the review from the signed-in user's account: their name and, by
+  // default, their existing profile picture (they can still change either).
   useEffect(() => {
-    if (user?.name) setForm((f) => ({ ...f, name: f.name || user.name }));
+    if (!user) return;
+    const isImg = (v) => typeof v === "string" && (v.startsWith("http") || v.startsWith("data:"));
+    setForm((f) => ({
+      ...f,
+      name: f.name || user.name || "",
+      photo: f.photo || (isImg(user.avatar) ? user.avatar : ""),
+    }));
   }, [user]);
 
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
@@ -88,7 +96,7 @@ export default function WriteReview() {
             </label>
             <div>
               <p className="text-sm font-medium">Your photo <span className="font-normal text-slate-400">(optional)</span></p>
-              <p className="text-xs text-slate-400">Tap the circle to add a picture.</p>
+              <p className="text-xs text-slate-400">{user ? "Your account photo is used by default — tap to change it." : "Tap the circle to add a picture."}</p>
               {form.photo && (
                 <button type="button" onClick={() => set("photo", "")} className="mt-1 text-xs text-rose-600 hover:underline">Remove photo</button>
               )}
