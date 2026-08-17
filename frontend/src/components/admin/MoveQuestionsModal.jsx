@@ -13,9 +13,14 @@ import { practiceService } from "../../services";
 // Props:
 //  - open, onClose
 //  - sourceId:    the quiz the questions currently live in (excluded as a target)
-//  - questionIds: ids to move
-//  - onMoved(res): called after a successful move so the parent can refresh
-export default function MoveQuestionsModal({ open, onClose, sourceId, questionIds = [], onMoved }) {
+//  - questionIds: ids to move/copy
+//  - mode:        "move" (default) relocates the questions; "copy" duplicates
+//                 them into the target and leaves the originals in place
+//  - onMoved(res): called after a successful move/copy so the parent can refresh
+export default function MoveQuestionsModal({ open, onClose, sourceId, questionIds = [], mode = "move", onMoved }) {
+  const isCopy = mode === "copy";
+  const verb = isCopy ? "Copy" : "Move";
+  const verbing = isCopy ? "Copying" : "Moving";
   const [streams, setStreams] = useState([]);
   const [subjects, setSubjects] = useState([]);
   const [topics, setTopics] = useState([]);
@@ -53,17 +58,19 @@ export default function MoveQuestionsModal({ open, onClose, sourceId, questionId
     let last = null;
     try {
       let done = 0;
-      // Move one at a time so progress ticks up live and the last response
-      // carries the final source/target totals.
+      // One at a time so progress ticks up live and the last response carries
+      // the final source/target totals.
       for (const id of questionIds) {
-        last = await practiceService.moveQuestions(sourceId, [id], sel.item);
+        last = isCopy
+          ? await practiceService.copyQuestions(sourceId, [id], sel.item)
+          : await practiceService.moveQuestions(sourceId, [id], sel.item);
         done += 1;
         setProgress({ done, total: count });
       }
       setResult({ moved: done, sourceTotal: last?.sourceTotal, targetTotal: last?.targetTotal, name: targetName });
       onMoved?.({ moved: done, sourceTotal: last?.sourceTotal, targetTotal: last?.targetTotal });
     } catch (e) {
-      setMsg(e.message || "Move failed.");
+      setMsg(e.message || `${verb} failed.`);
     } finally {
       setProgress(null);
     }
@@ -74,7 +81,7 @@ export default function MoveQuestionsModal({ open, onClose, sourceId, questionId
       <div onClick={(e) => e.stopPropagation()} className="my-10 w-full max-w-lg animate-scale-in card p-6">
         <div className="mb-4 flex items-center justify-between">
           <h3 className="flex items-center gap-2 text-lg font-bold">
-            <ArrowRightLeft className="h-5 w-5 text-brand-600" /> Move {count} question{count === 1 ? "" : "s"}
+            <ArrowRightLeft className="h-5 w-5 text-brand-600" /> {verb} {count} question{count === 1 ? "" : "s"}
           </h3>
           <button type="button" onClick={onClose} disabled={busy}><X className="h-5 w-5" /></button>
         </div>
@@ -82,10 +89,10 @@ export default function MoveQuestionsModal({ open, onClose, sourceId, questionId
         {result ? (
           <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm dark:border-emerald-900/50 dark:bg-emerald-900/20">
             <p className="flex items-center gap-2 font-semibold text-emerald-700 dark:text-emerald-300">
-              <CheckCircle2 className="h-4 w-4" /> Moved {result.moved} question{result.moved === 1 ? "" : "s"} to “{result.name}”.
+              <CheckCircle2 className="h-4 w-4" /> {isCopy ? "Copied" : "Moved"} {result.moved} question{result.moved === 1 ? "" : "s"} to “{result.name}”.
             </p>
             <ul className="mt-2 space-y-0.5 text-emerald-800 dark:text-emerald-200">
-              {result.sourceTotal != null && <li>• This quiz now has <b>{result.sourceTotal}</b> question{result.sourceTotal === 1 ? "" : "s"} remaining.</li>}
+              {result.sourceTotal != null && <li>• This quiz {isCopy ? "still has" : "now has"} <b>{result.sourceTotal}</b> question{result.sourceTotal === 1 ? "" : "s"}{isCopy ? "." : " remaining."}</li>}
               {result.targetTotal != null && <li>• “{result.name}” now has <b>{result.targetTotal}</b> question{result.targetTotal === 1 ? "" : "s"}.</li>}
             </ul>
           </div>
@@ -141,7 +148,7 @@ export default function MoveQuestionsModal({ open, onClose, sourceId, questionId
 
         {busy && (
           <p className="mt-3 flex items-center gap-2 text-sm font-medium text-brand-600 dark:text-brand-300">
-            <Loader2 className="h-4 w-4 animate-spin" /> Moving {progress.done} of {progress.total}…
+            <Loader2 className="h-4 w-4 animate-spin" /> {verbing} {progress.done} of {progress.total}…
           </p>
         )}
         {msg && <p className="mt-3 text-sm font-medium text-rose-600">{msg}</p>}
@@ -153,7 +160,7 @@ export default function MoveQuestionsModal({ open, onClose, sourceId, questionId
             <>
               <button type="button" onClick={onClose} disabled={busy} className="btn-outline">Cancel</button>
               <button type="button" onClick={doMove} disabled={!sel.item || busy || !count} className="btn-primary disabled:opacity-50">
-                {busy ? <><Loader2 className="h-4 w-4 animate-spin" /> Moving…</> : <><ArrowRightLeft className="h-4 w-4" /> Move here</>}
+                {busy ? <><Loader2 className="h-4 w-4 animate-spin" /> {verbing}…</> : <><ArrowRightLeft className="h-4 w-4" /> {verb} here</>}
               </button>
             </>
           )}

@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef, Fragment } from "react";
 import { useSearchParams } from "react-router-dom";
-import { Plus, Pencil, Trash2, X, ChevronRight, GraduationCap, FolderOpen, ListChecks, FileStack, HelpCircle, Users, Search, Share2, ClipboardList, ArrowRightLeft, Send } from "lucide-react";
+import { Plus, Pencil, Trash2, X, ChevronRight, GraduationCap, FolderOpen, ListChecks, FileStack, HelpCircle, Users, Search, Share2, ClipboardList, ArrowRightLeft, Send, Copy as CopyIcon } from "lucide-react";
 import { practiceService, testService, contentService, aiService } from "../../services";
 import { loadNav, saveNav } from "../../lib/navState";
 import Badge from "../../components/ui/Badge";
@@ -382,7 +382,8 @@ export default function AdminPractice({ clientMode = false, fixedKind = "" }) {
   // Open the destination picker (Stream → Subject → Topic → Quiz) to move the
   // given question ids anywhere in the My-Quiz hierarchy. Used by both the
   // checkbox "Move selected" and the by-type "Move these" flows.
-  const openMove = (ids) => { const arr = [...ids]; if (arr.length) setMoveModal({ ids: arr }); };
+  const openMove = (ids, mode = "move") => { const arr = [...ids]; if (arr.length) setMoveModal({ ids: arr, mode }); };
+  const openCopy = (ids) => openMove(ids, "copy"); // duplicate selected questions into another quiz
 
   // Refresh after a successful move (from MoveQuestionsModal). The modal stays
   // open showing its moved/remaining summary; the user closes it with "Done".
@@ -1248,6 +1249,7 @@ export default function AdminPractice({ clientMode = false, fixedKind = "" }) {
           open
           sourceId={qItem._id}
           questionIds={moveModal.ids}
+          mode={moveModal.mode}
           onClose={() => setMoveModal(null)}
           onMoved={afterMove}
         />
@@ -1283,6 +1285,9 @@ export default function AdminPractice({ clientMode = false, fixedKind = "" }) {
                   <button type="button" onClick={() => setSelQ(allSel ? new Set() : new Set(visible.map((it) => it._id)))} className="font-semibold text-brand-600 hover:underline dark:text-brand-300">{allSel ? "Clear all" : `Select all${typeFilter.length ? ` (${visible.length})` : ""}`}</button>
                   <span className="text-slate-500 dark:text-slate-400">{selQ.size} selected</span>
                   <span className="ml-auto flex items-center gap-2">
+                    <button type="button" onClick={() => openCopy(selQ)} disabled={!selQ.size} className="btn-outline py-1 text-xs disabled:opacity-50" title="Duplicate the selected questions into another quiz (originals stay here)">
+                      <CopyIcon className="h-3.5 w-3.5" /> Copy selected…
+                    </button>
                     <button type="button" onClick={() => openMove(selQ)} disabled={!selQ.size} className="btn-primary py-1 text-xs disabled:opacity-50">
                       <ArrowRightLeft className="h-3.5 w-3.5" /> Move selected…
                     </button>
@@ -1311,7 +1316,14 @@ export default function AdminPractice({ clientMode = false, fixedKind = "" }) {
                   >
                     <ArrowRightLeft className="h-3.5 w-3.5" /> {typeFilter.length ? `Move these ${shownCount}…` : `Move all ${shownCount}…`}
                   </button>
-                  {!typeFilter.length && <span className="text-xs text-slate-400">Tip: pick a Type above to delete/move only that type.</span>}
+                  <button
+                    onClick={() => openCopy(tq.filter((it) => !typeFilter.length || typeFilter.includes(questionTypeKey(it))).map((q) => q._id))}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-brand-200 px-3 py-1.5 text-xs font-semibold text-brand-600 transition hover:bg-brand-50 dark:border-brand-900/50 dark:hover:bg-brand-900/20"
+                    title="Duplicate these questions into another quiz (originals stay here)"
+                  >
+                    <CopyIcon className="h-3.5 w-3.5" /> {typeFilter.length ? `Copy these ${shownCount}…` : `Copy all ${shownCount}…`}
+                  </button>
+                  {!typeFilter.length && <span className="text-xs text-slate-400">Tip: pick a Type above to delete/move/copy only that type.</span>}
                 </div>
               );
             })()}
