@@ -64,7 +64,7 @@ export default function AiGenerate({ open, onClose, onUpload, title = "Generate 
   const [stopping, setStopping] = useState(false); // user asked to stop the current generation
   const [autoContinue, setAutoContinue] = useState(true); // ON by default: resume across quota windows until the full count is reached, then stop
   const [keepExtras, setKeepExtras] = useState(false); // if a wave produces more than the target, keep ALL of them instead of trimming to the exact count
-  const [numerical, setNumerical] = useState(false); // opt-in: also include numerical/calculation questions (default off)
+  const [numerical, setNumerical] = useState(false); // when ON, EVERY generated question is numerical/calculation-based (default off)
   const [perSubtopic, setPerSubtopic] = useState(false); // when ON, the grid counts are generated FOR EACH subtopic (looped), not as a whole-batch total
   const [perSubRun, setPerSubRun] = useState(null); // live per-subtopic progress { i, n, name }
   const [perSubList, setPerSubList] = useState([]); // completed subtopics this run: [{ name, count }]
@@ -1031,7 +1031,7 @@ export default function AiGenerate({ open, onClose, onUpload, title = "Generate 
 
             <label className="mt-2 flex items-start gap-2 rounded-lg border border-slate-200 p-2.5 text-xs text-slate-600 dark:border-slate-700 dark:text-slate-300">
               <input type="checkbox" checked={numerical} onChange={(e) => setNumerical(e.target.checked)} className="mt-0.5 h-4 w-4 flex-shrink-0 accent-brand-600" />
-              <span><b>Include numerical questions</b> that need calculation (solving with a formula/arithmetic). Off by default — leave unticked to keep questions conceptual/factual only.</span>
+              <span><b>Make all questions numerical</b> — when ticked, EVERY generated question is calculation-based (solved with a formula/arithmetic, numeric options). Off by default — leave unticked to keep questions conceptual/factual only.</span>
             </label>
 
             <label className="mt-2 flex items-start gap-2 rounded-lg border border-slate-200 p-2.5 text-xs text-slate-600 dark:border-slate-700 dark:text-slate-300">
