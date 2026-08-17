@@ -47,6 +47,7 @@ import messageRoutes from "./routes/messageRoutes.js";
 import examRoutes from "./routes/examRoutes.js";
 import studyRoutes from "./routes/studyRoutes.js";
 import feedbackRoutes from "./routes/feedbackRoutes.js";
+import reviewRoutes from "./routes/reviewRoutes.js";
 import noticeRoutes from "./routes/noticeRoutes.js";
 import documentRoutes from "./routes/documentRoutes.js";
 import practiceRoutes from "./routes/practiceRoutes.js";
@@ -165,6 +166,7 @@ app.use("/api/messages", messageRoutes); // contact-form inbox
 app.use("/api", examRoutes); // /exams, /exams/:id/posts, /posts
 app.use("/api", studyRoutes); // study material: institutions → subjects → classes → files
 app.use("/api/feedback", feedbackRoutes); // student feedback (per-question + overall)
+app.use("/api/reviews", reviewRoutes); // student/client reviews (public submit, admin approve)
 app.use("/api/notices", noticeRoutes); // scrolling notice board (public read, admin write)
 app.use("/api/admin", backupRoutes); // full content-library backup & restore (admin)
 app.use("/api/documents", documentRoutes); // standalone text documents (PDF text extraction)

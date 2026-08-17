@@ -313,6 +313,15 @@ export const feedbackService = {
   remove: (id) => api.del(`/feedback/${id}`),
 };
 
+// ---- Reviews (public submit, admin moderation) ----
+export const reviewService = {
+  submit: (data) => api.post("/reviews", data), // public (works logged-in or guest)
+  list: () => api.get("/reviews"), // admin
+  approve: (id) => api.patch(`/reviews/${id}/approve`),
+  reject: (id) => api.patch(`/reviews/${id}/reject`),
+  remove: (id) => api.del(`/reviews/${id}`),
+};
+
 // ---- Notice board (scrolling ticker) ----
 export const noticeService = {
   list: () => api.get("/notices", { auth: false }), // active notices (public)
