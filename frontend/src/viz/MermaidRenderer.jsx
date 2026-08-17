@@ -60,8 +60,13 @@ const MermaidRenderer = forwardRef(function MermaidRenderer({ spec }, ref) {
 
   useEffect(() => {
     let cancelled = false;
-    const code = sanitizeMermaidCode(spec?.code);
-    if (!code) { setError(""); if (holder.current) holder.current.innerHTML = ""; return; }
+    const original = String(spec?.code || "").trim();
+    if (!original) { setError(""); if (holder.current) holder.current.innerHTML = ""; return; }
+    // Try the sanitized code first (fixes common AI mistakes), but if it fails
+    // fall back to the ORIGINAL code — sanitizing must NEVER turn a diagram that
+    // used to render into one that doesn't. Only show the message if BOTH fail.
+    const sanitized = sanitizeMermaidCode(original);
+    const candidates = sanitized && sanitized !== original ? [sanitized, original] : [original];
 
     (async () => {
       try {
@@ -77,11 +82,19 @@ const MermaidRenderer = forwardRef(function MermaidRenderer({ spec }, ref) {
           fontFamily: "inherit",
           suppressErrorRendering: true, // never inject Mermaid's "bomb" error graphic
         });
-        const id = "mmd-" + Math.random().toString(36).slice(2);
-        // Validate first so a bad diagram throws here (caught below) instead of
-        // Mermaid painting a parse-error graphic into the page.
-        if (typeof mermaid.parse === "function") await mermaid.parse(code);
-        const { svg } = await mermaid.render(id, code);
+        let svg = "";
+        let lastErr = null;
+        for (const code of candidates) {
+          try {
+            const id = "mmd-" + Math.random().toString(36).slice(2);
+            ({ svg } = await mermaid.render(id, code));
+            lastErr = null;
+            break; // rendered successfully
+          } catch (e) {
+            lastErr = e;
+          }
+        }
+        if (lastErr) throw lastErr;
         if (!cancelled && holder.current) {
           holder.current.innerHTML = svg;
           setError("");
