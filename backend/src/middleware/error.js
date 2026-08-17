@@ -10,7 +10,15 @@ export function errorHandler(err, req, res, next) {
   // If headers are already sent, delegate to Express's default error handler.
   if (res.headersSent) return next(err);
 
-  const status = res.statusCode && res.statusCode !== 200 ? res.statusCode : 500;
+  // Prefer an explicit status set on the response; otherwise honour a status
+  // carried on the error (e.g. body-parser's 413 "payload too large"), falling
+  // back to 500. Without the err.status/statusCode check, a 413 from the JSON
+  // body parser (which never sets res.statusCode) would surface as a generic 500.
+  const status =
+    (res.statusCode && res.statusCode !== 200 && res.statusCode) ||
+    err.status ||
+    err.statusCode ||
+    500;
 
   // Log server errors for debugging (never log expected 4xx client errors).
   if (status >= 500) {
