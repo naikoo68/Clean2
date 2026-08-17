@@ -417,6 +417,9 @@ export default function Home() {
                 </figure>
               ))}
             </div>
+            <div className="mt-10 text-center">
+              <Link to="/review" className="btn-outline"><Star className="h-4 w-4" /> Share your review</Link>
+            </div>
           </div>
         </section>
       ) : null,
