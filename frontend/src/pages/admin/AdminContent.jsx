@@ -9,6 +9,7 @@ import AiGenerate from "../../components/admin/AiGenerate";
 import QuestionFormModal from "../../components/admin/QuestionFormModal";
 import QuestionView from "../../components/admin/QuestionView";
 import QuestionTypeFilter from "../../components/admin/QuestionTypeFilter";
+import QuestionStatusFilter, { filterByStatus } from "../../components/admin/QuestionStatusFilter";
 import AddToTestModal from "../../components/admin/AddToTestModal";
 import { questionDateText, searchQuestions, questionTypeKey, QUESTION_TYPE_LABELS } from "../../lib/questions";
 import DuplicatesModal from "../../components/admin/DuplicatesModal";
@@ -78,6 +79,7 @@ export default function AdminContent() {
   const [viewAll, setViewAll] = useState(false); // preview all questions
   const [studentView, setStudentView] = useState(true); // View All: defaults to student view (answers hidden)
   const [typeFilter, setTypeFilter] = useState([]); // View All: which question types to show ([] = all)
+  const [statusFilter, setStatusFilter] = useState("all"); // View All: updated/not_updated/all
   const [reopenAfterEdit, setReopenAfterEdit] = useState(null); // question _id to reopen in the preview after editing it there
   const [selected, setSelected] = useState([]); // bulk-selected question ids
   const [delProgress, setDelProgress] = useState(null); // real-time bulk-delete progress: { total, done, finished? }
@@ -476,7 +478,7 @@ export default function AdminContent() {
           </button>
           {view === "questions" && (
             <>
-              <button onClick={() => { setTypeFilter([]); setViewAll(true); }} className="btn-outline">
+              <button onClick={() => { setTypeFilter([]); setStatusFilter("all"); setViewAll(true); }} className="btn-outline">
                 <Eye className="h-4 w-4" /> View All
               </button>
               <button onClick={() => setBulkOpen(true)} className="btn-outline">
@@ -943,8 +945,9 @@ export default function AdminContent() {
               </p>
             )}
             <QuestionTypeFilter questions={items} selected={typeFilter} onChange={setTypeFilter} />
+            <QuestionStatusFilter questions={items} selected={statusFilter} onChange={setStatusFilter} />
             {!studentView && (() => {
-              const shownCount = items.filter((it) => !typeFilter.length || typeFilter.includes(questionTypeKey(it))).length;
+              const shownCount = filterByStatus(items.filter((it) => !typeFilter.length || typeFilter.includes(questionTypeKey(it))), statusFilter).length;
               if (!shownCount) return null;
               return (
                 <div className="mb-3 flex flex-wrap items-center gap-2">
@@ -968,7 +971,7 @@ export default function AdminContent() {
               </p>
             )}
             <div className="max-h-[70vh] space-y-4 overflow-y-auto pr-1">
-              {items
+              {filterByStatus(items, statusFilter)
                 .map((it, i) => ({ it, i }))
                 .filter(({ it }) => !typeFilter.length || typeFilter.includes(questionTypeKey(it)))
                 .map(({ it, i }) => (

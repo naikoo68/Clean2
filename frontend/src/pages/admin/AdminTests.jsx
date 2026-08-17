@@ -15,6 +15,7 @@ import { Files, Maximize2, Minimize2, Loader2, CheckCircle2 } from "lucide-react
 import QuestionFormModal from "../../components/admin/QuestionFormModal";
 import QuestionView from "../../components/admin/QuestionView";
 import QuestionTypeFilter from "../../components/admin/QuestionTypeFilter";
+import QuestionStatusFilter, { filterByStatus } from "../../components/admin/QuestionStatusFilter";
 import { questionTypeKey, QUESTION_TYPE_LABELS } from "../../lib/questions";
 import ManageTestQuestions from "../../components/admin/ManageTestQuestions";
 import ShareTestModal from "../../components/admin/ShareTestModal";
@@ -90,6 +91,7 @@ export default function AdminTests() {
   const [studentView, setStudentView] = useState(true); // View All: defaults to student view (answers hidden)
   const [reopenAfterEdit, setReopenAfterEdit] = useState(null); // question _id to reopen in the preview after editing it there
   const [typeFilter, setTypeFilter] = useState([]); // View All: which question types to show ([] = all)
+  const [statusFilter, setStatusFilter] = useState("all"); // View All: updated/not_updated/all
   const [delProgress, setDelProgress] = useState(null); // real-time delete-by-type progress: { total, done }
 
 
@@ -954,7 +956,7 @@ export default function AdminTests() {
                 load();
               }}
               onViewQuestion={setViewQ}
-              onViewAll={() => { setTypeFilter([]); setViewAllQ(true); }}
+              onViewAll={() => { setTypeFilter([]); setStatusFilter("all"); setViewAllQ(true); }}
               onDuplicates={() => setDupTest(qTest)}
               onCopyCsv={copyCsv}
               onDownloadCsv={(qs) => downloadCsv(qs, qTest?.name || "test")}
@@ -1028,8 +1030,9 @@ export default function AdminTests() {
               </p>
             )}
             <QuestionTypeFilter questions={tq} selected={typeFilter} onChange={setTypeFilter} />
+            <QuestionStatusFilter questions={tq} selected={statusFilter} onChange={setStatusFilter} />
             {!studentView && (() => {
-              const shownCount = tq.filter((it) => !typeFilter.length || typeFilter.includes(questionTypeKey(it))).length;
+              const shownCount = filterByStatus(tq.filter((it) => !typeFilter.length || typeFilter.includes(questionTypeKey(it))), statusFilter).length;
               if (!shownCount) return null;
               return (
                 <div className="mb-3 flex flex-wrap items-center gap-2">
@@ -1053,7 +1056,7 @@ export default function AdminTests() {
               </p>
             )}
             <div className="max-h-[70vh] space-y-4 overflow-y-auto pr-1">
-              {tq
+              {filterByStatus(tq, statusFilter)
                 .map((it, i) => ({ it, i }))
                 .filter(({ it }) => !typeFilter.length || typeFilter.includes(questionTypeKey(it)))
                 .map(({ it, i }) => (
