@@ -545,11 +545,12 @@ function buildUserPrompt({ topic, count, difficulty, types, notes, plan, avoid, 
     );
   }
 
-  // Numerical/calculation questions are OPT-IN. By default keep the set purely
-  // conceptual/factual; only when the caller asks do we allow quantitative ones.
+  // Numerical/calculation questions are OPT-IN. When the caller ticks the box,
+  // EVERY question must be numerical/calculation-based (overriding the type
+  // mix). Otherwise keep the whole set purely conceptual/factual.
   lines.push(
     numerical
-      ? `You MAY include NUMERICAL / CALCULATION questions (problems solved with a formula or arithmetic to compute a numeric value) alongside conceptual ones, where they fit the topic.`
+      ? `NUMERICAL MODE — EVERY question MUST be a NUMERICAL / CALCULATION question that the student answers by computing a value (applying a formula, arithmetic, or solving an equation). Use the type "numericalmcq" for ALL questions: all four "options" are NUMERIC values (each wrapped in $...$) in the same unit and similar magnitude, with exactly ONE equal to your computed result and three plausible wrong values from classic mistakes. Set "numerical": true and leave ALL FOUR "optionExplanations" as empty strings ""; put the FULL step-by-step working (formula → substitution → each step → final value, each on its own line) in "explanation". This OVERRIDES the allowed/listed types above — do NOT produce ANY purely conceptual, factual, theoretical, matching, assertion, statement or definition question; if a listed type is not calculation-based, replace it with a "numericalmcq". Choose sub-topics of the syllabus that genuinely involve calculation.`
       : `Do NOT create NUMERICAL / CALCULATION questions: no problems that require arithmetic, solving equations, applying a formula to compute a value, or any quantitative working-out. Keep EVERY question conceptual/factual/theoretical (definitions, facts, causes/effects, reasoning, matching) — not quantitative. (Genuine dates/years/quantities that are simply RECALLED facts are fine; questions that require the student to CALCULATE are not.)`
   );
 
