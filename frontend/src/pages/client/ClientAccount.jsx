@@ -85,6 +85,10 @@ export default function ClientAccount({ onUpgrade }) {
 
   // Run a restore job from a parsed backup object (shared by file + Drive).
   const runRestoreJob = async (parsed) => {
+    // Detect admin backup file and show a helpful message instead of a generic error.
+    if (parsed.format === "mystudyguide-admin-backup") {
+      throw new Error("This is an Admin content backup — it can only be restored from the Admin panel (Admin → Backup & Restore). The client restore only works with My Practice backups.");
+    }
     const { jobId, total } = await practiceService.startRestore(parsed);
     setProgress({ done: 0, total: total || 0, phase: "Restoring" });
     let st;
