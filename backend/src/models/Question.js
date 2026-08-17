@@ -15,7 +15,7 @@ const questionSchema = new mongoose.Schema(
     session: { type: mongoose.Schema.Types.ObjectId, ref: "Session" },
     quiz: { type: mongoose.Schema.Types.ObjectId, ref: "Quiz" },
     testSeries: { type: mongoose.Schema.Types.ObjectId, ref: "TestSeries" },
-    type: { type: String, enum: ["mcq", "numericalmcq", "matching", "statement", "pair", "pairselect", "image", "table", "assertion", "journal", "ledger", "rearrange"], default: "mcq" },
+    type: { type: String, enum: ["mcq", "numericalmcq", "matching", "statement", "pair", "pairselect", "image", "table", "assertion", "journal", "ledger", "rearrange", "diagram"], default: "mcq" },
     text: { type: String, required: true },
     image: { type: String }, // diagram/figure for "image" (and any) questions
 
@@ -35,6 +35,17 @@ const questionSchema = new mongoose.Schema(
     //     lines: [ { label?, color?, points: [[x,y], ...] } ],
     //     points: [ { label?, x, y } ] }   // annotations e.g. equilibrium
     graph: { type: mongoose.Schema.Types.Mixed, default: undefined },
+
+    // Diagrammatic ("diagram") questions: a full Visualization Studio spec,
+    // rendered by the app's Visualization Engine (Chart.js / Mermaid / Plotly /
+    // Cytoscape / SVG families). Stored verbatim as Mixed since the spec shape
+    // varies per engine. Shape (see frontend/src/viz/registry.js):
+    //   Chart.js: { type, title, labels:[…], series:[{name,data:[…]}], options:{…} }
+    //   Mermaid:  { type, title, code:"<mermaid source>" }
+    //   Plotly:   { type, title, plotly:{ data:[…], layout:{} } }
+    //   Graph:    { type, title, graph:{ nodes, edges, layout, directed } }
+    // The question stem (text) asks about the rendered diagram.
+    viz: { type: mongoose.Schema.Types.Mixed, default: undefined },
 
     // MCQ fields
     options: {
