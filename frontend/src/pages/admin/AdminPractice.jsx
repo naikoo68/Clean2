@@ -13,6 +13,7 @@ import DuplicatesModal from "../../components/admin/DuplicatesModal";
 import PaperFilesModal from "../../components/admin/PaperFilesModal";
 import QuestionView from "../../components/admin/QuestionView";
 import QuestionTypeFilter from "../../components/admin/QuestionTypeFilter";
+import QuestionStatusFilter, { filterByStatus } from "../../components/admin/QuestionStatusFilter";
 import { questionTypeKey, QUESTION_TYPE_LABELS } from "../../lib/questions";
 import AddToTestModal from "../../components/admin/AddToTestModal";
 import PickFromBank from "../../components/admin/PickFromBank";
@@ -162,6 +163,7 @@ export default function AdminPractice({ clientMode = false, fixedKind = "" }) {
   const [viewAll, setViewAll] = useState(false);
   const [studentView, setStudentView] = useState(true); // View All: defaults to student view (answers hidden)
   const [typeFilter, setTypeFilter] = useState([]); // View All: which question types to show ([] = all)
+  const [statusFilter, setStatusFilter] = useState("all"); // View All: updated/not_updated/all
   const [reopenAfterEdit, setReopenAfterEdit] = useState(null); // question _id to reopen in the preview after editing it there
   const [selQ, setSelQ] = useState(() => new Set()); // ticked questions to move (full-quiz view)
   const [delProgress, setDelProgress] = useState(null); // real-time delete-by-type progress: { total, done }
@@ -1181,7 +1183,7 @@ export default function AdminPractice({ clientMode = false, fixedKind = "" }) {
                 load("items");
               }}
               onViewQuestion={setViewQ}
-              onViewAll={() => { setTypeFilter([]); setViewAll(true); }}
+              onViewAll={() => { setTypeFilter([]); setStatusFilter("all"); setViewAll(true); }}
               onDuplicates={() => { setDupScope({ params: { testSeries: qItem._id }, name: qItem.name }); setDupOpen(true); }}
               onCopyCsv={copyCsv}
               onDownloadCsv={downloadCsv}
@@ -1289,8 +1291,9 @@ export default function AdminPractice({ clientMode = false, fixedKind = "" }) {
               );
             })()}
             <QuestionTypeFilter questions={tq} selected={typeFilter} onChange={setTypeFilter} />
+            <QuestionStatusFilter questions={tq} selected={statusFilter} onChange={setStatusFilter} />
             {!studentView && (() => {
-              const shownCount = tq.filter((it) => !typeFilter.length || typeFilter.includes(questionTypeKey(it))).length;
+              const shownCount = filterByStatus(tq.filter((it) => !typeFilter.length || typeFilter.includes(questionTypeKey(it))), statusFilter).length;
               if (!shownCount) return null;
               return (
                 <div className="mb-3 flex flex-wrap items-center gap-2">
@@ -1320,7 +1323,7 @@ export default function AdminPractice({ clientMode = false, fixedKind = "" }) {
               </p>
             )}
             <div className="max-h-[70vh] space-y-4 overflow-y-auto pr-1">
-              {tq
+              {filterByStatus(tq, statusFilter)
                 .map((it, i) => ({ it, i }))
                 .filter(({ it }) => !typeFilter.length || typeFilter.includes(questionTypeKey(it)))
                 .map(({ it, i }) => (
