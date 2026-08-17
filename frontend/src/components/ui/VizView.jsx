@@ -40,19 +40,19 @@ export default function VizView({ q }) {
         <p className="mb-1 text-center text-sm font-semibold text-slate-700 dark:text-slate-200">{spec.title}</p>
       )}
       {/* Charts keep a fixed height (Chart.js needs a bounded parent). SVG
-          diagrams (Mermaid/graph) are scaled to FILL the width — this enlarges
-          the many short/horizontal diagrams that otherwise render tiny — and
-          are capped in height with a scroll for very tall ones. The [&_svg]
-          overrides force the diagram to use the full width and keep its aspect
-          ratio (width:100%, height:auto). */}
+          diagrams (Mermaid/graph) are CONTAINED within a sensible box: they
+          scale DOWN to fit the width and a ~420px height while keeping their
+          aspect ratio, and are never stretched beyond their natural size (so a
+          small diagram isn't blown up into giant boxes). Very large diagrams
+          scale down to fit; if still taller than the cap, the box scrolls. */}
       <div
         className={`mx-auto w-full ${
           fixed
             ? "h-[300px] max-w-xl"
-            : "min-h-[180px] max-h-[78vh] overflow-auto [&_svg]:!w-full [&_svg]:!max-w-none [&_svg]:!h-auto"
+            : "min-h-[200px] max-h-[70vh] overflow-auto [&_svg]:!h-auto [&_svg]:!w-auto [&_svg]:!max-h-[420px] [&_svg]:!max-w-full [&_svg]:mx-auto"
         }`}
       >
-        <Suspense fallback={<div className="flex h-[260px] items-center justify-center text-sm text-slate-400">Loading diagram…</div>}>
+        <Suspense fallback={<div className="flex h-[220px] items-center justify-center text-sm text-slate-400">Loading diagram…</div>}>
           <VizRenderer spec={spec} />
         </Suspense>
       </div>

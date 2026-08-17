@@ -32,6 +32,21 @@ function sanitizeMermaidCode(raw) {
       .replace(/={2,}\s*>/g, "==>")   // "==>" thick arrow kept
       .replace(/-->\s*-->/g, "-->");  // collapse any doubled arrows from the above
   }
+  // Quote node labels that contain characters Mermaid can't parse when bare —
+  // parentheses, slashes, colons, ampersands, commas — e.g. the very common
+  // A[Access Point (AP)] or B[Client / STA] that otherwise throw a parse error.
+  // Wrapping the label in double quotes (A["Access Point (AP)"]) is always safe
+  // and rescues many AI-authored diagrams without regenerating them. Skips the
+  // stateDiagram start/end marker [*] and already-quoted labels.
+  if (!isSequence) {
+    code = code.replace(/\[([^\]\n]*?)\]/g, (m, inner) => {
+      const t = inner.trim();
+      if (!t || t === "*") return m;                       // keep [*]
+      if (t.startsWith('"') && t.endsWith('"')) return m;   // already quoted
+      if (/[()/:;#&,]/.test(t)) return `["${t.replace(/"/g, "'")}"]`;
+      return m;
+    });
+  }
   return code.trim();
 }
 
