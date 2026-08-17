@@ -1174,12 +1174,19 @@ export function backupJobFile(req, res) {
 export async function startRestore(req, res) {
   const owner = ownerValue(req);
   const b = req.body || {};
-  if (b.format && b.format !== "mystudyguide-practice-backup") return res.status(400).json({ message: "This file is not a My Practice backup." });
-  const streams = Array.isArray(b.streams) ? b.streams : [];
-  const subjects = Array.isArray(b.subjects) ? b.subjects : [];
-  const topics = Array.isArray(b.topics) ? b.topics : [];
-  const items = Array.isArray(b.items) ? b.items : [];
-  const questions = Array.isArray(b.questions) ? b.questions : [];
+  // Accept both practice backups and admin backups (extract practice section from admin).
+  let src = b;
+  if (b.format === "mystudyguide-admin-backup") {
+    const p = b.practice || {};
+    src = { streams: p.streams, subjects: p.subjects, topics: p.topics, items: p.items, questions: p.questions };
+  } else if (b.format && b.format !== "mystudyguide-practice-backup") {
+    return res.status(400).json({ message: "This file is not a My Practice backup." });
+  }
+  const streams = Array.isArray(src.streams) ? src.streams : [];
+  const subjects = Array.isArray(src.subjects) ? src.subjects : [];
+  const topics = Array.isArray(src.topics) ? src.topics : [];
+  const items = Array.isArray(src.items) ? src.items : [];
+  const questions = Array.isArray(src.questions) ? src.questions : [];
   if (!streams.length && !items.length) return res.status(400).json({ message: "This backup file has no My Practice content to restore." });
   const total = streams.length + subjects.length + topics.length + items.length + questions.length;
   const jobId = newPbId();
