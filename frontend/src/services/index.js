@@ -469,3 +469,12 @@ export const adminBackupService = {
   startRestore: (data) => api.post("/admin/restore/start", data, { timeout: 180000 }),
   restoreJob: (id) => api.get(`/admin/restore/job/${id}`),
 };
+
+// Content-library Recycle Bin — soft-deleted Streams/Subjects/Topics/Sessions/
+// Quizzes/Questions that can be restored or permanently removed.
+export const recycleService = {
+  list: () => api.get("/recycle-bin"), // { items, counts, total }
+  restore: (type, id) => api.post("/recycle-bin/restore", { type, id }),
+  remove: (type, id) => api.del(`/recycle-bin/${type}/${id}`), // permanent delete (cascades)
+  empty: () => api.del("/recycle-bin"), // permanently empty the whole bin
+};

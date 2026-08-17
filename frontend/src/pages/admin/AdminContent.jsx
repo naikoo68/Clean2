@@ -19,7 +19,8 @@ import ExtendOneQuestionModal from "../../components/admin/ExtendOneQuestionModa
 import RegenerateAllModal from "../../components/admin/RegenerateAllModal";
 import RegenerateOneModal from "../../components/admin/RegenerateOneModal";
 import ScheduleQuestionModal from "../../components/admin/ScheduleQuestionModal";
-import { Sparkles, Files, Globe, Wand2, Loader2, ClipboardList, RefreshCw, Scissors, GitMerge, CheckCircle2, Maximize2, Minimize2 } from "lucide-react";
+import RecycleBinModal from "../../components/admin/RecycleBinModal";
+import { Sparkles, Files, Globe, Wand2, Loader2, ClipboardList, RefreshCw, Scissors, GitMerge, CheckCircle2, Maximize2, Minimize2, Archive } from "lucide-react";
 
 const COLORS = [
   "from-blue-500 to-indigo-600",
@@ -64,6 +65,7 @@ export default function AdminContent() {
   const [regenOneItem, setRegenOneItem] = useState(null); // per-question regenerate dialog target
   const [dupOpen, setDupOpen] = useState(false);
   const [dupScope, setDupScope] = useState({ id: "all", name: "" }); // which subject the duplicate scan targets
+  const [recycleOpen, setRecycleOpen] = useState(false); // Recycle Bin (soft-deleted content) modal
   // Split a topic/quiz into quizzes of N. { kind: "quiz"|"topic", id, name, count }
   const [splitTarget, setSplitTarget] = useState(null);
   const [splitPer, setSplitPer] = useState(50);
@@ -476,6 +478,13 @@ export default function AdminContent() {
           >
             <Files className="h-4 w-4" /> Find Duplicates{subject ? ` — ${subject.name}` : ""}
           </button>
+          <button
+            onClick={() => setRecycleOpen(true)}
+            className="btn-outline"
+            title="Restore recently deleted streams, subjects, topics, sessions, quizzes or questions"
+          >
+            <Archive className="h-4 w-4" /> Recycle Bin
+          </button>
           {view === "questions" && (
             <>
               <button onClick={() => { setTypeFilter([]); setStatusFilter("all"); setViewAll(true); }} className="btn-outline">
@@ -857,6 +866,12 @@ export default function AdminContent() {
         onClose={() => setDupOpen(false)}
         defaultSubject={dupScope.id}
         defaultSubjectName={dupScope.name}
+      />
+
+      <RecycleBinModal
+        open={recycleOpen}
+        onClose={() => setRecycleOpen(false)}
+        onChange={() => load(view)}
       />
 
       <ExtendExplanationsModal
