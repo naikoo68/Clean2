@@ -9,6 +9,7 @@ import { notifyNewContent } from "../utils/notify.js";
 import { ownerValue, ownerFilter, isClient } from "../utils/ownership.js";
 import { duplicateQuestions } from "../utils/duplicateQuestions.js";
 import { byNatural } from "../utils/naturalSort.js";
+import { NOT_DELETED, softDeletePatch } from "../utils/softDelete.js";
 
 const slugify = (s) =>
   s.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
@@ -17,9 +18,9 @@ const slugify = (s) =>
 
 // GET /api/streams — includes subject count per stream
 export async function listStreams(req, res) {
-  const streams = await Stream.find({ isActive: true }).sort("order name").lean();
+  const streams = await Stream.find({ isActive: true, ...NOT_DELETED }).sort("order name").lean();
   const subs = await Subject.aggregate([
-    { $match: { stream: { $ne: null } } },
+    { $match: { stream: { $ne: null }, deleted: { $ne: true } } },
     { $group: { _id: "$stream", count: { $sum: 1 } } },
   ]);
   const map = Object.fromEntries(subs.map((s) => [String(s._id), s.count]));
@@ -40,32 +41,28 @@ export async function updateStream(req, res) {
   res.json(stream);
 }
 
-// Cascade delete: stream → its subjects → topics → sessions → quizzes → questions
+// Soft delete (Recycle Bin): flag the stream as deleted. Its subjects/topics/
+// sessions/quizzes/questions are left intact but become unreachable (you reach
+// them only by navigating into the now-hidden stream), so restoring the stream
+// brings its whole tree back. A permanent delete from the Recycle Bin does the
+// real cascade removal.
 export async function deleteStream(req, res) {
-  const id = req.params.id;
-  const subjectIds = (await Subject.find({ stream: id }).select("_id")).map((s) => s._id);
-  await Promise.all([
-    Question.deleteMany({ subject: { $in: subjectIds } }),
-    Quiz.deleteMany({ subject: { $in: subjectIds } }),
-    Session.deleteMany({ subject: { $in: subjectIds } }),
-    Topic.deleteMany({ subject: { $in: subjectIds } }),
-    Subject.deleteMany({ stream: id }),
-    Stream.findByIdAndDelete(id),
-  ]);
-  res.json({ message: "Stream and all its subjects, topics, sessions, quizzes and questions deleted", subjects: subjectIds.length });
+  const stream = await Stream.findByIdAndUpdate(req.params.id, softDeletePatch(), { new: true });
+  if (!stream) return res.status(404).json({ message: "Stream not found" });
+  res.json({ message: "Stream moved to Recycle Bin", softDeleted: true });
 }
 
 // GET /api/streams/:streamId/subjects — subjects in a stream, with topic counts
 export async function listStreamSubjects(req, res) {
-  const subjects = await Subject.find({ stream: req.params.streamId, isActive: true }).sort("name").lean();
-  const topics = await Topic.aggregate([{ $group: { _id: "$subject", count: { $sum: 1 } } }]);
+  const subjects = await Subject.find({ stream: req.params.streamId, isActive: true, ...NOT_DELETED }).sort("name").lean();
+  const topics = await Topic.aggregate([{ $match: { deleted: { $ne: true } } }, { $group: { _id: "$subject", count: { $sum: 1 } } }]);
   const tMap = Object.fromEntries(topics.map((t) => [String(t._id), t.count]));
   res.json(subjects.map((s) => ({ ...s, topics: tMap[String(s._id)] || 0 })));
 }
 
 async function countMap(Model, matchIds, field) {
   const rows = await Model.aggregate([
-    { $match: { [field]: { $in: matchIds } } },
+    { $match: { [field]: { $in: matchIds }, deleted: { $ne: true } } },
     { $group: { _id: `$${field}`, count: { $sum: 1 } } },
   ]);
   return Object.fromEntries(rows.map((r) => [String(r._id), r.count]));
@@ -75,8 +72,8 @@ async function countMap(Model, matchIds, field) {
 
 // GET /api/subjects — includes topic count per subject
 export async function listSubjects(req, res) {
-  const subjects = await Subject.find({ isActive: true }).sort("name").lean();
-  const topics = await Topic.aggregate([{ $group: { _id: "$subject", count: { $sum: 1 } } }]);
+  const subjects = await Subject.find({ isActive: true, ...NOT_DELETED }).sort("name").lean();
+  const topics = await Topic.aggregate([{ $match: { deleted: { $ne: true } } }, { $group: { _id: "$subject", count: { $sum: 1 } } }]);
   const tMap = Object.fromEntries(topics.map((t) => [String(t._id), t.count]));
   res.json(subjects.map((s) => ({ ...s, topics: tMap[String(s._id)] || 0 })));
 }
@@ -95,25 +92,19 @@ export async function updateSubject(req, res) {
   res.json(subject);
 }
 
-// Cascade delete: subject → its topics → sessions → quizzes → questions
+// Soft delete (Recycle Bin): flag the subject; its tree is kept and restored
+// with it. Permanent removal happens from the Recycle Bin.
 export async function deleteSubject(req, res) {
-  const id = req.params.id;
-  const topicIds = (await Topic.find({ subject: id }).select("_id")).map((t) => t._id);
-  await Promise.all([
-    Question.deleteMany({ subject: id }),
-    Quiz.deleteMany({ subject: id }),
-    Session.deleteMany({ subject: id }),
-    Topic.deleteMany({ subject: id }),
-    Subject.findByIdAndDelete(id),
-  ]);
-  res.json({ message: "Subject and all its topics, sessions, quizzes and questions deleted", topics: topicIds.length });
+  const subject = await Subject.findByIdAndUpdate(req.params.id, softDeletePatch(), { new: true });
+  if (!subject) return res.status(404).json({ message: "Subject not found" });
+  res.json({ message: "Subject moved to Recycle Bin", softDeleted: true });
 }
 
 /* ---------------- Topics ---------------- */
 
 // GET /api/subjects/:subjectId/topics — includes session count per topic
 export async function listTopics(req, res) {
-  const topics = await Topic.find({ subject: req.params.subjectId }).sort("index createdAt").lean();
+  const topics = await Topic.find({ subject: req.params.subjectId, ...NOT_DELETED }).sort("index createdAt").lean();
   const sMap = await countMap(Session, topics.map((t) => t._id), "topic");
   res.json(topics.map((t) => ({ ...t, sessions: sMap[String(t._id)] || 0 })));
 }
@@ -131,24 +122,19 @@ export async function updateTopic(req, res) {
   res.json(topic);
 }
 
-// Cascade delete: topic → sessions → quizzes → questions
+// Soft delete (Recycle Bin): flag the topic; its sessions/quizzes/questions are
+// kept and restored with it. Permanent removal happens from the Recycle Bin.
 export async function deleteTopic(req, res) {
-  const id = req.params.id;
-  const sessionIds = (await Session.find({ topic: id }).select("_id")).map((s) => s._id);
-  await Promise.all([
-    Question.deleteMany({ session: { $in: sessionIds } }),
-    Quiz.deleteMany({ session: { $in: sessionIds } }),
-    Session.deleteMany({ topic: id }),
-    Topic.findByIdAndDelete(id),
-  ]);
-  res.json({ message: "Topic and its sessions, quizzes and questions deleted" });
+  const topic = await Topic.findByIdAndUpdate(req.params.id, softDeletePatch(), { new: true });
+  if (!topic) return res.status(404).json({ message: "Topic not found" });
+  res.json({ message: "Topic moved to Recycle Bin", softDeleted: true });
 }
 
 /* ---------------- Sessions ---------------- */
 
 // GET /api/topics/:topicId/sessions — includes quiz count per session
 export async function listSessions(req, res) {
-  const sessions = await Session.find({ topic: req.params.topicId }).sort("index createdAt").lean();
+  const sessions = await Session.find({ topic: req.params.topicId, ...NOT_DELETED }).sort("index createdAt").lean();
   const qMap = await countMap(Quiz, sessions.map((s) => s._id), "session");
   res.json(sessions.map((s) => ({ ...s, quizzes: qMap[String(s._id)] || 0 })));
 }
@@ -164,14 +150,12 @@ export async function updateSession(req, res) {
   res.json(session);
 }
 
-// Cascade delete: session → quizzes → questions
+// Soft delete (Recycle Bin): flag the session; its quizzes/questions are kept
+// and restored with it. Permanent removal happens from the Recycle Bin.
 export async function deleteSession(req, res) {
-  await Promise.all([
-    Question.deleteMany({ session: req.params.id }),
-    Quiz.deleteMany({ session: req.params.id }),
-  ]);
-  await Session.findByIdAndDelete(req.params.id);
-  res.json({ message: "Session and its quizzes and questions deleted" });
+  const session = await Session.findByIdAndUpdate(req.params.id, softDeletePatch(), { new: true });
+  if (!session) return res.status(404).json({ message: "Session not found" });
+  res.json({ message: "Session moved to Recycle Bin", softDeleted: true });
 }
 
 /* ---------------- Quizzes (within a session) ---------------- */
@@ -180,7 +164,7 @@ export async function deleteSession(req, res) {
 // Ordered by title in NATURAL order (Quiz 1, Quiz 2, … Quiz 9, Quiz 10) instead
 // of creation order, so numbered quizzes read in the expected sequence.
 export async function listQuizzes(req, res) {
-  const quizzes = (await Quiz.find({ session: req.params.sessionId }).lean()).sort(byNatural("title"));
+  const quizzes = (await Quiz.find({ session: req.params.sessionId, ...NOT_DELETED }).lean()).sort(byNatural("title"));
   const qMap = await countMap(Question, quizzes.map((q) => q._id), "quiz");
   res.json(quizzes.map((q) => ({ ...q, questions: qMap[String(q._id)] || 0 })));
 }
@@ -199,11 +183,12 @@ export async function updateQuiz(req, res) {
   res.json(quiz);
 }
 
-// Cascade delete: quiz → questions
+// Soft delete (Recycle Bin): flag the quiz; its questions are kept and restored
+// with it. Permanent removal happens from the Recycle Bin.
 export async function deleteQuiz(req, res) {
-  await Question.deleteMany({ quiz: req.params.id });
-  await Quiz.findByIdAndDelete(req.params.id);
-  res.json({ message: "Quiz and its questions deleted" });
+  const quiz = await Quiz.findByIdAndUpdate(req.params.id, softDeletePatch(), { new: true });
+  if (!quiz) return res.status(404).json({ message: "Quiz not found" });
+  res.json({ message: "Quiz moved to Recycle Bin", softDeleted: true });
 }
 
 // PATCH /api/quizzes/:id/move  { session } — move a quiz to another session
@@ -360,6 +345,7 @@ export async function listQuizQuestions(req, res) {
   const isAdmin = req.user?.role === "admin";
   const questions = await Question.find({
     quiz: req.params.quizId,
+    ...NOT_DELETED,
     ...(isAdmin ? {} : { status: "published" }),
   });
   res.json(questions);
@@ -374,6 +360,7 @@ export async function listQuestions(req, res) {
   const isAdmin = req.user?.role === "admin";
   const questions = await Question.find({
     session: req.params.sessionId,
+    ...NOT_DELETED,
     ...(isAdmin ? {} : { status: "published" }),
   });
   res.json(questions);
@@ -382,7 +369,7 @@ export async function listQuestions(req, res) {
 // GET /api/questions  (admin) — list all questions with their full location
 // (stream → subject → topic → session → quiz) so the UI can show a breadcrumb.
 export async function listAllQuestions(req, res) {
-  const questions = await Question.find()
+  const questions = await Question.find({ ...NOT_DELETED })
     .sort("-createdAt")
     .limit(2000)
     .populate({ path: "subject", select: "name stream", populate: { path: "stream", select: "name" } })
@@ -530,7 +517,7 @@ export async function findDuplicates(req, res) {
   //   ?subject=<id>          → one quiz subject (e.g. Economics)
   //   ?practiceSubject=<id>  → all practice items under one practice subject
   //   ?testSeries=<id>       → a single test-series / practice item
-  const filter = { ...ownerFilter(req) }; // clients scan only their own bank
+  const filter = { ...ownerFilter(req), ...NOT_DELETED }; // clients scan only their own (non-binned) bank
   if (req.query.subject && req.query.subject !== "all") filter.subject = req.query.subject;
   if (req.query.testSeries) filter.testSeries = req.query.testSeries;
   if (req.query.practiceSubject) {
@@ -620,13 +607,15 @@ export async function findDuplicates(req, res) {
   res.json({ scanned: questions.length, groups: dupes.length, extras, duplicates: dupes });
 }
 
+// Soft delete (Recycle Bin): flag the question so it disappears from lists but
+// can be restored. If it belonged to a test, remove it from that test's
+// question list (it's re-added on restore) so it doesn't count while binned.
 export async function deleteQuestion(req, res) {
-  const q = await Question.findOne({ _id: req.params.id, ...ownerFilter(req) });
+  const q = await Question.findOne({ _id: req.params.id, ...ownerFilter(req), ...NOT_DELETED });
   if (!q) return res.status(404).json({ message: "Question not found" });
-  // Keep the owning test's question list tidy if this belonged to one.
   if (q.testSeries) await TestSeries.findByIdAndUpdate(q.testSeries, { $pull: { questions: q._id } });
-  await Question.findByIdAndDelete(req.params.id);
-  res.json({ message: "Question deleted" });
+  await Question.findByIdAndUpdate(q._id, softDeletePatch());
+  res.json({ message: "Question moved to Recycle Bin", softDeleted: true });
 }
 
 
@@ -728,7 +717,7 @@ export function splitIntoStems(content) {
 // POST /api/questions/check  { content? , stems?[] }
 // Returns per-question match status against the caller's own bank.
 export async function checkQuestions(req, res) {
-  const own = ownerFilter(req);
+  const own = { ...ownerFilter(req), ...NOT_DELETED };
   const provided = Array.isArray(req.body?.stems)
     ? req.body.stems.map((s) => String(s || "").trim()).filter((s) => s.length >= 8).map((s) => ({ stem: s, block: s }))
     : null;
