@@ -431,6 +431,49 @@ export async function moveQuestions(req, res) {
   });
 }
 
+// POST /api/practice/items/:id/copy-questions  { questionIds, targetId }
+// Like moveQuestions, but DUPLICATES the selected questions into the target quiz
+// (fresh Question docs, same owner) and LEAVES the originals in the source quiz.
+// Powers the "tick questions & Copy selected" action alongside Move.
+export async function copyQuestions(req, res) {
+  const source = await TestSeries.findOne({ _id: req.params.id, practice: true, practiceKind: "quiz", ...ownerFilter(req) });
+  if (!source) return res.status(404).json({ message: "Source quiz not found" });
+  const targetId = String(req.body?.targetId || "");
+  if (!targetId) return res.status(400).json({ message: "Pick a destination quiz." });
+  const target = await TestSeries.findOne({ _id: targetId, practice: true, practiceKind: "quiz", ...ownerFilter(req) });
+  if (!target) return res.status(404).json({ message: "Destination quiz not found." });
+
+  const sourceSet = new Set((source.questions || []).map((q) => String(q)));
+  const ids = (Array.isArray(req.body?.questionIds) ? req.body.questionIds : [])
+    .map(String)
+    .filter((qid) => sourceSet.has(qid)); // only questions that really belong to this quiz
+  if (!ids.length) return res.status(400).json({ message: "Select at least one question in this quiz to copy." });
+
+  // Load the originals and build fresh copies (new ids) stamped to the target.
+  const originals = await Question.find({ _id: { $in: ids } }).lean();
+  const owner = ownerValue(req);
+  const copies = originals.map((q) => {
+    const d = { owner, testSeries: target._id };
+    for (const f of Q_CONTENT_FIELDS) if (q[f] !== undefined) d[f] = q[f];
+    if (q.graph !== undefined) d.graph = q.graph;
+    return d;
+  });
+  let created = [];
+  try { created = await Question.insertMany(copies, { ordered: false }); }
+  catch (e) { created = Array.isArray(e?.insertedDocs) ? e.insertedDocs : []; }
+
+  const have = new Set((target.questions || []).map((q) => String(q)));
+  for (const c of created) { const cid = String(c._id); if (!have.has(cid)) { target.questions.push(c._id); have.add(cid); } }
+  await target.save();
+
+  res.json({
+    message: `Copied ${created.length} question(s) to "${target.name}". This quiz still has ${source.questions.length}; "${target.name}" now has ${target.questions.length}.`,
+    copied: created.length,
+    sourceTotal: source.questions.length,
+    targetTotal: target.questions.length,
+  });
+}
+
 // POST /api/practice/topics/:id/split  { perQuiz }
 // Split ALL questions in a My-Quiz topic (across its quiz items) into quiz items
 // of `perQuiz` each, named "Quiz 1".."Quiz N". The topic's old items are replaced

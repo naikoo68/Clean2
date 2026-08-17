@@ -6,7 +6,7 @@ import {
   listTopics, createTopic, updateTopic, deleteTopic, moveTopic, listTopicItems,
   listItems, createItem,
   browseStreams, browseSubjects, browseTopics, browseItems, browseTopicItems, browseStreamItems,
-  playQuiz, allSubjects, myItems, moveItem, updateItem, splitItem, splitTopic, mergeItem, moveQuestions, shareContent,
+  playQuiz, allSubjects, myItems, moveItem, updateItem, splitItem, splitTopic, mergeItem, moveQuestions, copyQuestions, shareContent,
   incomingShares, acceptShare, acceptShareJob, declineShare, sharePlacement, removeSharedWithMe,
   startBackup, backupJobStatus, backupJobFile, startRestore, restoreJobStatus,
 } from "../controllers/practiceController.js";
@@ -86,6 +86,7 @@ router.post("/items", ...admin, createItem);
 router.post("/items/:id/split", ...admin, splitItem); // split a practice quiz into quizzes of N
 router.post("/items/:id/merge", ...admin, mergeItem); // merge other My-Quiz items (same topic) into this one
 router.post("/items/:id/move-questions", ...admin, moveQuestions); // move SELECTED questions to another quiz (same topic)
+router.post("/items/:id/copy-questions", ...admin, copyQuestions); // COPY SELECTED questions into another quiz (originals kept)
 router.patch("/items/:id/move", ...admin, moveItem); // relocate a practice item
 router.patch("/items/:id", ...admin, updateItem); // update name / remembered AI topic
 
