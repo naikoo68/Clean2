@@ -27,9 +27,9 @@ const columns = [
     title: "Resources",
     links: [
       { label: "Help Center", to: "/contact" },
-      { label: "Privacy Policy", to: "/about" },
-      { label: "Terms of Service", to: "/about" },
-      { label: "FAQ", to: "/about" },
+      { label: "Privacy Policy", to: "/privacy" },
+      { label: "Terms of Service", to: "/terms" },
+      { label: "Refund Policy", to: "/refund" },
     ],
   },
 ];
