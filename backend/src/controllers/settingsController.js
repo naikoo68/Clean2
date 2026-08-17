@@ -36,7 +36,7 @@ export async function updateSettings(req, res) {
     "watermarkEnabled", "watermarkText", "watermarkOpacity", "watermarkSize", "watermarkMode", "restrictCopy", "screenshotGuard", "guardHoldMs", "statsAuto", "notifyOnNewContent",
     "homeSections",
     "clientAnnouncement",
-    "aboutHeading", "aboutIntro", "aboutValues", "aboutStats",
+    "aboutHeading", "aboutIntro", "aboutValues", "aboutStats", "testimonials",
     "aiMaxPerBatch", "clientPlans",
     "fbEnabled", "fbPageId", "fbAutoOnNotice", "fbGraphVersion", "fbPageAccessToken",
     "fbDefaultHashtags", "fbAutoHashtags", "fbExtraTargets",

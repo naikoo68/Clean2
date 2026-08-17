@@ -1,18 +1,19 @@
 import { useState, useRef } from "react";
 import {
   Palette, Type, ImagePlus, Save, RotateCcw, CheckCircle2, Eye, EyeOff,
-  Share2, Phone, Plus, Trash2, Upload, X, Info, BarChart3, PanelTop, GripVertical, LayoutList, Megaphone,
+  Share2, Phone, Plus, Trash2, Upload, X, Info, BarChart3, PanelTop, GripVertical, LayoutList, Megaphone, Star,
 } from "lucide-react";
 import { useSettings } from "../../context/SettingsContext";
 
 // Home-page sections (fixed set) that the admin can reorder / hide.
-const HOME_ORDER = ["hero", "stats", "quickAccess", "features", "howItWorks", "cta"];
+const HOME_ORDER = ["hero", "stats", "quickAccess", "features", "howItWorks", "testimonials", "cta"];
 const HOME_SECTION_LABELS = {
   hero: "Hero (tagline & progress card)",
   stats: "Statistics",
   quickAccess: "Quick Access (Quiz / Test / Study)",
   features: "Features",
   howItWorks: "How it works",
+  testimonials: "Testimonials",
   cta: "Call-to-action banner",
 };
 
@@ -150,6 +151,11 @@ const DEFAULTS = {
   statsAuto: true,
   clientAnnouncement: { enabled: false, title: "", message: "" },
   homeSections: HOME_ORDER.map((key) => ({ key, visible: true })),
+  testimonials: [
+    { name: "Aisha Khan", exam: "Cleared SSC CGL 2025", rating: 5, text: "The subject-wise quizzes and instant solutions made my revision so much faster." },
+    { name: "Rahul Verma", exam: "NEET Aspirant", rating: 5, text: "Full-length mock tests feel just like the real exam — timers, palette and auto-submit." },
+    { name: "Sneha Patil", exam: "State PSC 2025", rating: 5, text: "I love that I can practise for free and track my rank. It kept me motivated every day." },
+  ],
   aboutStats: [
     { value: "1,20,000+", label: "Total Students" },
     { value: "8,500+", label: "Total Quizzes" },
@@ -173,6 +179,7 @@ export default function AdminCustomization() {
     contacts: settings.contacts?.length ? settings.contacts : DEFAULTS.contacts,
     aboutValues: settings.aboutValues?.length ? settings.aboutValues : DEFAULTS.aboutValues,
     aboutStats: settings.aboutStats?.length ? settings.aboutStats : DEFAULTS.aboutStats,
+    testimonials: settings.testimonials?.length ? settings.testimonials : DEFAULTS.testimonials,
     clientAnnouncement: { ...DEFAULTS.clientAnnouncement, ...(settings.clientAnnouncement || {}) },
     homeSections: normalizeHomeSections(settings.homeSections),
   });
@@ -200,6 +207,12 @@ export default function AdminCustomization() {
   const updateValue = (i, key, val) =>
     set("aboutValues", form.aboutValues.map((v, idx) => (idx === i ? { ...v, [key]: val } : v)));
   const removeValue = (i) => set("aboutValues", form.aboutValues.filter((_, idx) => idx !== i));
+
+  // ---- Testimonials ----
+  const addTestimonial = () => set("testimonials", [...form.testimonials, { name: "", exam: "", text: "", rating: 5 }]);
+  const updateTestimonial = (i, key, val) =>
+    set("testimonials", form.testimonials.map((t, idx) => (idx === i ? { ...t, [key]: val } : t)));
+  const removeTestimonial = (i) => set("testimonials", form.testimonials.filter((_, idx) => idx !== i));
 
   // ---- Home layout ----
   const toggleSection = (i) =>
@@ -234,6 +247,7 @@ export default function AdminCustomization() {
         contacts: form.contacts.filter((c) => c.value && c.value.trim()),
         aboutValues: form.aboutValues.filter((v) => v.title?.trim() || v.desc?.trim()),
         aboutStats: form.aboutStats.filter((s) => s.value?.trim() || s.label?.trim()),
+        testimonials: form.testimonials.filter((t) => t.text?.trim() || t.name?.trim()),
       };
       await save(payload);
       flash("Saved! Your changes are now live across the site.");
@@ -636,6 +650,32 @@ export default function AdminCustomization() {
               </div>
               {form.statsAuto && <p className="mt-2 text-xs text-slate-400">Pick a metric per row and give it a label. Add as many as you like — every one updates automatically from the live database.</p>}
             </div>
+          </div>
+        </div>
+
+        {/* Testimonials */}
+        <div className="card p-6 lg:col-span-2">
+          <div className="mb-4 flex items-center justify-between">
+            <h3 className="flex items-center gap-2 font-bold"><Star className="h-5 w-5 text-amber-500" /> Testimonials (Home page)</h3>
+            <button type="button" onClick={addTestimonial} className="btn-outline py-1.5"><Plus className="h-4 w-4" /> Add</button>
+          </div>
+          <p className="mb-4 text-sm text-slate-500 dark:text-slate-400">Real student reviews build trust. Add a few with the exam they cleared. To hide the whole section, remove them all or toggle "Testimonials" off in the Home layout above.</p>
+          <div className="space-y-3">
+            {form.testimonials.map((t, i) => (
+              <div key={i} className="flex items-start gap-2 rounded-xl border border-slate-200 p-3 dark:border-slate-700">
+                <div className="flex-1 space-y-2">
+                  <div className="flex flex-col gap-2 sm:flex-row">
+                    <input className="input sm:flex-1" value={t.name} onChange={(e) => updateTestimonial(i, "name", e.target.value)} placeholder="Student name" />
+                    <input className="input sm:flex-1" value={t.exam} onChange={(e) => updateTestimonial(i, "exam", e.target.value)} placeholder="Exam / role (e.g. Cleared SSC CGL 2025)" />
+                    <select className="input sm:w-32" value={t.rating || 5} onChange={(e) => updateTestimonial(i, "rating", Number(e.target.value))}>
+                      {[5, 4, 3, 2, 1].map((r) => <option key={r} value={r}>{r} ★</option>)}
+                    </select>
+                  </div>
+                  <textarea rows={2} className="input resize-none" value={t.text} onChange={(e) => updateTestimonial(i, "text", e.target.value)} placeholder="What the student said…" />
+                </div>
+                <button type="button" onClick={() => removeTestimonial(i)} className="rounded-lg p-2 text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-900/30"><Trash2 className="h-4 w-4" /></button>
+              </div>
+            ))}
           </div>
         </div>
       </div>

@@ -21,6 +21,9 @@ const Home = lazy(() => import("./pages/Home"));
 const About = lazy(() => import("./pages/About"));
 const Contact = lazy(() => import("./pages/Contact"));
 const Pricing = lazy(() => import("./pages/Pricing"));
+const Privacy = lazy(() => import("./pages/Privacy"));
+const Terms = lazy(() => import("./pages/Terms"));
+const Refund = lazy(() => import("./pages/Refund"));
 const Dashboard = lazy(() => import("./pages/Dashboard"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 
@@ -106,6 +109,9 @@ const router = createHashRouter([
       { path: "/about", element: S(About) },
       { path: "/contact", element: S(Contact) },
       { path: "/pricing", element: S(Pricing) },
+      { path: "/privacy", element: S(Privacy) },
+      { path: "/terms", element: S(Terms) },
+      { path: "/refund", element: S(Refund) },
 
       { path: "/quiz", element: S(QuizHome) },
       { path: "/quiz/stream/:streamId", element: S(StreamSubjects) },

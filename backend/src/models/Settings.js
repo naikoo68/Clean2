@@ -20,6 +20,18 @@ const aboutStatSchema = new mongoose.Schema(
   { _id: false }
 );
 
+// Student testimonials shown on the home page (admin-editable).
+const testimonialSchema = new mongoose.Schema(
+  {
+    name: { type: String, default: "" },   // student name
+    exam: { type: String, default: "" },   // exam cleared / role, e.g. "NEET 2025"
+    text: { type: String, default: "" },   // the quote
+    rating: { type: Number, default: 5 },  // 1–5 stars
+    photo: { type: String, default: "" },  // optional image URL / base64
+  },
+  { _id: false }
+);
+
 // Ordered list of home-page sections with visibility (admin drag-to-reorder).
 const homeSectionSchema = new mongoose.Schema(
   { key: { type: String }, visible: { type: Boolean, default: true } },
@@ -54,7 +66,7 @@ const clientPlanSchema = new mongoose.Schema(
   },
   { _id: false }
 );
-const DEFAULT_HOME_SECTIONS = ["hero", "stats", "quickAccess", "features", "howItWorks", "cta"].map((key) => ({ key, visible: true }));
+const DEFAULT_HOME_SECTIONS = ["hero", "stats", "quickAccess", "features", "howItWorks", "testimonials", "cta"].map((key) => ({ key, visible: true }));
 
 // Singleton site-wide settings the admin can customise.
 const settingsSchema = new mongoose.Schema(
@@ -189,6 +201,15 @@ const settingsSchema = new mongoose.Schema(
         { value: "1,20,000+", label: "Total Students" },
         { value: "8,500+", label: "Total Quizzes" },
         { value: "640+", label: "Total Test Series" },
+      ],
+    },
+    // Student testimonials for the home page.
+    testimonials: {
+      type: [testimonialSchema],
+      default: () => [
+        { name: "Aisha Khan", exam: "Cleared SSC CGL 2025", rating: 5, text: "The subject-wise quizzes and instant solutions made my revision so much faster. The analytics showed exactly where I was weak.", photo: "" },
+        { name: "Rahul Verma", exam: "NEET Aspirant", rating: 5, text: "Full-length mock tests feel just like the real exam. Timers, palette, auto-submit — everything is spot on.", photo: "" },
+        { name: "Sneha Patil", exam: "State PSC 2025", rating: 5, text: "I love that I can practise for free and track my rank. It kept me motivated every single day.", photo: "" },
       ],
     },
   },
