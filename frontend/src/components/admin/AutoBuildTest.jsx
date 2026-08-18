@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { X, Wand2, Loader2, Plus, Trash2, CheckCircle2 } from "lucide-react";
-import { contentService, testService } from "../../services";
+import { contentService, practiceService, testService } from "../../services";
 import { QUESTION_TYPE_LABELS } from "../../lib/questions";
 
 // Auto-build a test from a BLUEPRINT: each row says "N questions from Subject
@@ -12,7 +12,10 @@ const TYPE_KEYS = Object.keys(QUESTION_TYPE_LABELS);
 
 const emptyRow = () => ({ subject: "", topic: "", type: "", difficulty: "", count: 10 });
 
-export default function AutoBuildTest({ open, onClose, testId, testName = "", onDone }) {
+// `practice` = true builds a "My Test" from the caller's OWN My Practice quizzes
+// (source = practice bank). Otherwise it builds an admin Test Series from the
+// platform quiz bank. The data sources and payload keys switch accordingly.
+export default function AutoBuildTest({ open, onClose, testId, testName = "", practice = false, onDone }) {
   const [subjects, setSubjects] = useState([]);
   const [topicsBySubject, setTopicsBySubject] = useState({}); // subjectId -> [topics]
   const [rows, setRows] = useState([emptyRow()]);
@@ -27,15 +30,21 @@ export default function AutoBuildTest({ open, onClose, testId, testName = "", on
     setMsg("");
     setReport(null);
     setLoading(true);
-    contentService.subjects().then(setSubjects).catch(() => setSubjects([])).finally(() => setLoading(false));
-  }, [open]);
+    // Practice mode pulls from the caller's own My Quiz subjects; otherwise the
+    // platform quiz bank.
+    const load = practice
+      ? practiceService.allSubjects().then((s) => (s || []).filter((x) => (x.kind ? x.kind === "quiz" : true)))
+      : contentService.subjects();
+    load.then(setSubjects).catch(() => setSubjects([])).finally(() => setLoading(false));
+  }, [open, practice]);
 
   if (!open) return null;
 
-  // Lazy-load a subject's topics the first time it's selected.
+  // Lazy-load a subject's topics the first time it's selected (source-aware).
   const ensureTopics = (subjectId) => {
     if (!subjectId || topicsBySubject[subjectId]) return;
-    contentService.topics(subjectId)
+    const load = practice ? practiceService.adminTopics(subjectId) : contentService.topics(subjectId);
+    load
       .then((t) => setTopicsBySubject((m) => ({ ...m, [subjectId]: t || [] })))
       .catch(() => setTopicsBySubject((m) => ({ ...m, [subjectId]: [] })));
   };
@@ -53,9 +62,12 @@ export default function AutoBuildTest({ open, onClose, testId, testName = "", on
       if (!r.subject || count <= 0) continue;
       const subj = subjects.find((s) => String(s._id) === String(r.subject));
       blueprint.push({
-        subject: r.subject,
+        // Practice source sends practiceSubject/practiceTopic; content source
+        // sends subject/topic. The backend branches on which is present.
+        ...(practice
+          ? { practiceSubject: r.subject, practiceTopic: r.topic || undefined }
+          : { subject: r.subject, topic: r.topic || undefined }),
         section: subj?.name || "",
-        topic: r.topic || undefined,
         type: r.type || undefined,
         difficulty: r.difficulty || undefined,
         count,
@@ -123,7 +135,7 @@ export default function AutoBuildTest({ open, onClose, testId, testName = "", on
                     className="input py-1.5 text-sm disabled:opacity-50"
                   >
                     <option value="">Any topic</option>
-                    {topics.map((t) => <option key={t._id} value={t._id}>{t.title}</option>)}
+                    {topics.map((t) => <option key={t._id} value={t._id}>{t.title || t.name}</option>)}
                   </select>
 
                   <select value={r.type} onChange={(e) => setRow(i, { type: e.target.value })} className="input py-1.5 text-sm">
