@@ -30,8 +30,11 @@ router.get("/browse/:kind/topics/:topicId/items", optionalAuth, browseTopicItems
 // items. Declared before the auth-protected node routes below.
 router.get("/public/node/:token", getPublicNode);
 
-// Play a "My Quiz" practice quiz with immediate answer reveal (questions incl. answers).
-router.get("/quiz/:id/play", protect, playQuiz);
+// Play a "My Quiz" practice quiz with immediate answer reveal (questions incl.
+// answers). optionalAuth: the FREE first quiz of a topic is attemptable without
+// login; playQuiz enforces login+subscription for every other quiz (and
+// login-only for Previous Papers).
+router.get("/quiz/:id/play", optionalAuth, playQuiz);
 
 // The caller's own practice items (client dashboard).
 router.get("/my-items", ...admin, myItems);
