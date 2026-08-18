@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, Navigate } from "react-router-dom";
 import {
   BookMarked,
   FileText,
@@ -453,6 +453,15 @@ export default function Home() {
     ...saved,
     ...DEFAULT_HOME_ORDER.filter((k) => !savedKeys.includes(k)).map((k) => ({ key: k, visible: true })),
   ];
+
+  // A logged-in user should never see the PUBLIC landing page — e.g. after
+  // tapping the browser Back button from their dashboard. Bounce them to their
+  // own home by role (replace = no extra history entry). Declared AFTER all
+  // hooks so the Rules of Hooks are preserved.
+  if (user) {
+    const home = user.role === "admin" ? "/admin" : user.role === "client" ? "/client" : "/dashboard";
+    return <Navigate to={home} replace />;
+  }
 
   return (
     <div>
