@@ -772,6 +772,15 @@ function unwrapWordMath(s) {
 // Assertion, a Reason and 4 options"). Recover A and R from a packed field or
 // the stem so a complete pair is stored; whatever is still missing is dropped by
 // normalize() rather than saved broken.
+// The four fixed options every Assertion–Reason question must use, in order.
+// Used to CONVERT any assertion question to the dedicated format on Regenerate.
+const ASSERTION_OPTIONS = [
+  "Both A and R are true and R is the correct explanation of A",
+  "Both A and R are true but R is NOT the correct explanation of A",
+  "A is true but R is false",
+  "A is false but R is true",
+];
+
 function recoverAssertionReason(assertion, reason, text) {
   let a = String(assertion == null ? "" : assertion).trim();
   let r = String(reason == null ? "" : reason).trim();
@@ -2934,6 +2943,9 @@ function buildExtendPrompt(q, notes, fixOptions = false, extendQuestion = false)
   if (q.explanation) lines.push(`Existing explanation (improve and expand it — keep anything correct): ${q.explanation}`);
   if (notes) lines.push(`MANDATORY user instructions (follow EXACTLY): ${notes}`);
   lines.push(`Write a THOROUGH "explanation". For a plain mcq, the "explanation" box must explain ONLY the correct option (do NOT discuss the incorrect options in it), but STILL fill each of the 4 "optionExplanations" with why that option is right or wrong (leaving the correct option's entry ""). For every OTHER type (matching, statement, pair, pairselect, assertion, table, journal), the "explanation" walks through all options AND fill each of the 4 "optionExplanations" — state whether each option is correct or wrong and why — leaving the correct option's entry "" (for journal, name the accounts debited & credited, their classification and the rule applied, and confirm debit total = credit total). If this is a numerical/quantitative question, SOLVE it yourself step by step — put each calculation step on its own line in the explanation — then check which option is truly correct. If this is a matching / "how many pairs are correctly matched" / statement question, evaluate EACH pair or statement one by one and COUNT the correct ones. If this is a plain FACTUAL/knowledge question, recall the actual established fact and decide which option is truly correct. In EVERY case, if the marked CORRECT answer is wrong, return the corrected "correct" index (0-3); if a value/fact is wrong or no option matches the true answer (e.g. zero pairs match but there is no "None" option, or the correct fact is not listed), return a fixed "options" array of 4 that includes the right choice. Only make such a correction when you are genuinely confident it is wrong; if unsure, leave the answer as-is and just explain. Do NOT change the question's wording. Write any math as inline LaTeX between $...$ (never \\( \\) or \\[ \\]). If the question is CALCULATION-based, set "numerical": true and leave all four "optionExplanations" empty "" (the step-by-step working in the explanation is enough — no per-option notes). Return ONLY one valid JSON object.`);
+  if (q.type === "assertion") {
+    lines.push(`ENSURE THE DEDICATED ASSERTION–REASON FORMAT: return a NON-EMPTY "assertion" (the full Assertion A sentence) and a NON-EMPTY "reason" (the full Reason R sentence) as SEPARATE fields — if A and/or R are currently packed into the stem, the options, or written inline as "Assertion (A): … Reason (R): …", SPLIT them out into these two fields. Keep "text" as ONLY the short intro line with NO A/R copy inside it. The 4 "options" MUST remain EXACTLY the four standard choices in this order: "Both A and R are true and R is the correct explanation of A", "Both A and R are true but R is NOT the correct explanation of A", "A is true but R is false", "A is false but R is true"; keep the same correct answer unless it is genuinely wrong, in which case return the corrected 0-based "correct" index.`);
+  }
   if (fixOptions && (!q.type || q.type === "mcq" || q.type === "journal")) {
     lines.push(`ALSO FIX THE OPTIONS (do this in addition): keep the question stem and the CORRECT option EXACTLY as given, but make sure all four options belong to the SAME real-world category/type as the correct answer${q.type === "journal" ? " — for a journal question every option must be a COMPLETE, BALANCED journal entry / ledger posting in the standard \"Account A/c Dr. amount // To Account A/c amount\" format (debit total = credit total), amounts as plain numbers (no \"$\"), and the wrong ones must be classic accounting mistakes (reversed Dr/Cr, wrong account, wrong classification)" : ""}. If any option is off-category, unrelated or an obvious give-away (for example a bird or a flower listed among tree names), REPLACE only those wrong options with real, closely-related same-category distractors that match their language, form, length and specificity. Return the full corrected "options" array of EXACTLY 4 (the correct option's text unchanged) plus the 0-based "correct" index for it. Do NOT change the stem or which answer is correct.`);
   }
@@ -3259,6 +3271,26 @@ function buildExtendSet(q, parsed, extendQuestion = false, shuffleOptions = fals
   // LAST: optionally reorder the (possibly just-fixed) options, keeping the same
   // correct answer — so the answer's position is shuffled without breaking it.
   if (shuffleOptions) applyOptionShuffle(set, q);
+  // ASSERTION–REASON: guarantee the dedicated format even on Extend. Recover A
+  // and R into their own fields (splitting a packed field/the stem), strip the
+  // A/R copy from the stem, and force the four standard A/R options — so an
+  // old/broken assertion question becomes properly structured. The answer index
+  // is kept (Extend never changes it unless the AI supplied a corrected one).
+  if (q.type === "assertion") {
+    const ar = recoverAssertionReason(
+      parsed?.assertion != null ? parsed.assertion : q.assertion,
+      parsed?.reason != null ? parsed.reason : q.reason,
+      set.text || parsed?.text || q.text
+    );
+    if (ar.assertion) set.assertion = ar.assertion;
+    if (ar.reason) set.reason = ar.reason;
+    const intro = stripAssertionFromStem(set.text || parsed?.text || q.text || "");
+    set.text = intro || "Consider the following Assertion (A) and Reason (R):";
+    set.options = [...ASSERTION_OPTIONS];
+    if (!(Number.isInteger(set.correct) && set.correct >= 0 && set.correct <= 3)) {
+      set.correct = Number.isInteger(q.correct) && q.correct >= 0 && q.correct <= 3 ? q.correct : 0;
+    }
+  }
   return set;
 }
 
@@ -3514,6 +3546,8 @@ export async function extendOneExplanation(req, res) {
     correct: set.correct ?? q.correct, // reflect any answer correction so the UI updates
     options: set.options || q.options,
     text: set.text ?? q.text, // reflect any extended/longer stem so the UI updates
+    assertion: set.assertion ?? q.assertion, // reflect recovered A/R so the UI updates
+    reason: set.reason ?? q.reason,
   });
 }
 
@@ -3577,6 +3611,9 @@ function buildRegenPrompt(q, notes, { fixOptions = true, extendQuestion = false 
     lines.push(`This is a REARRANGE (sentence rearrangement) question. Return the FOUR sentences in "columnA" as an array of 4 complete sentences (no numbering) and make "text" ONLY the instruction line (e.g. "Rearrange the following sentences to form a meaningful paragraph:"). If the four sentences are currently EMBEDDED IN THE STEM paragraph, SPLIT them out into "columnA". The 4 "options" are orderings written as Roman numerals joined by hyphens (e.g. "IV-II-I-III"), matching columnA order (columnA[0]=I, [1]=II, [2]=III, [3]=IV); exactly ONE is the correct logical order.`);
   } else if (fixOptions && q.type === "statement") {
     lines.push(`This is a STATEMENT question. Return the statements in "columnA" (an array, no numbering) and make "text" ONLY the intro line. If the statements are currently EMBEDDED IN THE STEM, SPLIT them out into "columnA".`);
+  }
+  if (q.type === "assertion") {
+    lines.push(`This is an ASSERTION–REASON question — return it in the DEDICATED FORMAT. Provide a NON-EMPTY "assertion" (the full Assertion A sentence) and a NON-EMPTY "reason" (the full Reason R sentence) as SEPARATE fields. If A and/or R are currently packed into the stem, the options, or written inline as "Assertion (A): … Reason (R): …", SPLIT them out into these two fields. Make "text" ONLY the short intro line (e.g. "Consider the following Assertion (A) and Reason (R):") with NO A/R copy inside it. The 4 "options" MUST be EXACTLY, in this order: "Both A and R are true and R is the correct explanation of A", "Both A and R are true but R is NOT the correct explanation of A", "A is true but R is false", "A is false but R is true". Set "correct" to the 0-based index (0-3) that truly holds after evaluating A and R.`);
   }
   // When the user ticks "Extend the question length", allow (only) the STEM to
   // be rewritten a little longer — same rules and 3-line cap as Extend.
@@ -3812,6 +3849,29 @@ function buildRegenSet(q, parsed, { fixOptions = true, extendQuestion = false, s
     } else {
       set.text = parsed.text;
     }
+  }
+  // ASSERTION–REASON: convert the question into the DEDICATED format. Recover A
+  // and R into their own fields (splitting a packed field/the stem), remove the
+  // A/R copy from the stem, and FORCE the four standard A/R options — so an old
+  // or badly-shaped assertion question becomes properly structured on Regenerate
+  // (and on Extend, which keeps the answer). Runs for both fixOptions on/off.
+  if (q.type === "assertion") {
+    const ar = recoverAssertionReason(
+      parsed.assertion != null ? parsed.assertion : q.assertion,
+      parsed.reason != null ? parsed.reason : q.reason,
+      parsed.text || q.text
+    );
+    if (ar.assertion) set.assertion = ar.assertion;
+    if (ar.reason) set.reason = ar.reason;
+    // Intro-only stem — never carries the A/R sentences (they render from their
+    // own boxes). Falls back to a standard intro when nothing else is left.
+    const intro = stripAssertionFromStem(parsed.text || q.text || "");
+    set.text = intro || "Consider the following Assertion (A) and Reason (R):";
+    // Always enforce the four canonical A/R options and a valid answer index.
+    set.options = [...ASSERTION_OPTIONS];
+    set.correct = Number.isInteger(parsed.correct) && parsed.correct >= 0 && parsed.correct <= 3
+      ? parsed.correct
+      : (Number.isInteger(q.correct) && q.correct >= 0 && q.correct <= 3 ? q.correct : 0);
   }
   // Strip any leading "1."/"I." marker — the app auto-numbers the columns.
   if (Array.isArray(parsed.columnA) && Array.isArray(q.columnA) && parsed.columnA.length === q.columnA.length) set.columnA = parsed.columnA.map(stripListMarker);
@@ -4140,6 +4200,8 @@ export async function regenerateQuestion(req, res) {
     tableRows: set.tableRows || q.tableRows,
     columnA: set.columnA || q.columnA, // reflect reshuffled columns in the live preview
     columnB: set.columnB || q.columnB,
+    assertion: set.assertion ?? q.assertion, // reflect recovered A/R in the live preview
+    reason: set.reason ?? q.reason,
   });
 }
 
