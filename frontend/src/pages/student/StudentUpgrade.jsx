@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { Crown, Tag, Gift, Loader2, AlarmClock, ShieldCheck, GraduationCap, Check } from "lucide-react";
+import { Link } from "react-router-dom";
+import { Crown, Tag, Gift, Loader2, AlarmClock, ShieldCheck, GraduationCap, Check, CheckCircle2, ArrowRight } from "lucide-react";
 import { authService, studentSubscriptionService } from "../../services";
 import { useAuth } from "../../context/AuthContext";
 import { useSettings } from "../../context/SettingsContext";
@@ -48,6 +49,12 @@ export default function StudentUpgrade({ onClose }) {
   const [offer, setOffer] = useState(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [done, setDone] = useState(false);   // just subscribed successfully
+  const [renewing, setRenewing] = useState(false); // active user chose to renew early
+
+  // Whether this student currently has an active subscription.
+  const active = user?.studentSubscribed === true ||
+    !!(user?.studentPlanExpiresAt && new Date(user.studentPlanExpiresAt).getTime() > Date.now());
 
   useEffect(() => {
     authService
@@ -63,14 +70,14 @@ export default function StudentUpgrade({ onClose }) {
 
   // Live price preview (debounced) when the plan or codes change.
   useEffect(() => {
-    let active = true;
+    let alive = true;
     const t = setTimeout(() => {
       authService
         .validateOffer({ plan: planKey, couponCode: coupon, referralCode: referral, email: user?.email, audience: "student" })
-        .then((r) => active && setOffer(r))
-        .catch(() => active && setOffer(null));
+        .then((r) => alive && setOffer(r))
+        .catch(() => alive && setOffer(null));
     }, 400);
-    return () => { active = false; clearTimeout(t); };
+    return () => { alive = false; clearTimeout(t); };
   }, [planKey, coupon, referral, user?.email]);
 
   const selectedPlan = plans.find((p) => p.key === planKey) || plans[0];
@@ -130,8 +137,20 @@ export default function StudentUpgrade({ onClose }) {
           rzp.open();
         });
       }
-      await refreshUser(); // extends validity → gated features unlock automatically
-      if (onClose) onClose();
+      // Re-fetch the profile: activation extends validity server-side. Confirm
+      // it actually took effect before celebrating (guards against a payment
+      // that succeeded but whose activation didn't persist).
+      const u = await refreshUser();
+      const nowActive = u?.studentSubscribed === true ||
+        !!(u?.studentPlanExpiresAt && new Date(u.studentPlanExpiresAt).getTime() > Date.now());
+      if (nowActive) {
+        setDone(true);
+        // In a gate (has onClose) the gate re-renders into the unlocked content;
+        // on the standalone /subscribe page the success screen (below) shows.
+        if (onClose) onClose();
+      } else {
+        setError("Your payment went through but we couldn't activate the subscription. Please refresh the page — if it still doesn't unlock, contact support with your payment ID.");
+      }
     } catch (e) {
       setError(e.message || "Subscription failed. Please try again.");
     } finally {
@@ -144,6 +163,56 @@ export default function StudentUpgrade({ onClose }) {
     if (planKey === "trial") return "Start 1-day free trial";
     return `Subscribe · ₹${total}`;
   };
+
+  const fmtDate = (d) => (d ? new Date(d).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" }) : "");
+
+  // Success screen — shown right after a payment/trial activates on the
+  // standalone page (the previous behaviour re-showed the form, which looked
+  // like nothing happened and risked a second payment).
+  if (done) {
+    return (
+      <div className="mx-auto max-w-lg">
+        <div className="card p-6 text-center">
+          <span className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-100 text-emerald-600 dark:bg-emerald-900/40 dark:text-emerald-300">
+            <CheckCircle2 className="h-8 w-8" />
+          </span>
+          <h1 className="mt-4 text-xl font-extrabold">You're all set! 🎉</h1>
+          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+            Your subscription is active{user?.studentPlanExpiresAt ? ` until ${fmtDate(user.studentPlanExpiresAt)}` : ""}. You can now attempt quizzes &amp; test-series and see your Dashboard.
+          </p>
+          <div className="mt-5 flex flex-col gap-2 sm:flex-row sm:justify-center">
+            <Link to="/dashboard" className="btn-primary">Go to Dashboard <ArrowRight className="h-4 w-4" /></Link>
+            <Link to="/test-series" className="btn-outline">Browse test-series</Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Already-subscribed screen — prevents accidentally paying twice. An active
+  // student can still choose to renew/extend early via the button.
+  if (active && !renewing) {
+    return (
+      <div className="mx-auto max-w-lg">
+        {onClose && (
+          <button onClick={onClose} className="mb-3 text-sm font-medium text-slate-500 hover:text-brand-600 dark:text-slate-400">← Back</button>
+        )}
+        <div className="card p-6 text-center">
+          <span className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-100 text-emerald-600 dark:bg-emerald-900/40 dark:text-emerald-300">
+            <ShieldCheck className="h-8 w-8" />
+          </span>
+          <h1 className="mt-4 text-xl font-extrabold">Your subscription is active</h1>
+          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+            {user?.studentTrial ? "You're on the free trial" : "You're subscribed"}{user?.studentPlanExpiresAt ? ` until ${fmtDate(user.studentPlanExpiresAt)}` : ""}. Enjoy full access to quizzes, test-series and your Dashboard.
+          </p>
+          <div className="mt-5 flex flex-col gap-2 sm:flex-row sm:justify-center">
+            <Link to="/dashboard" className="btn-primary">Go to Dashboard <ArrowRight className="h-4 w-4" /></Link>
+            <button onClick={() => { setRenewing(true); if (trialUsed || planKey === "trial") setPlanKey("1m"); }} className="btn-outline">Renew / change plan</button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="mx-auto max-w-lg">
