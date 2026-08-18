@@ -12,6 +12,17 @@ export const DEFAULT_CLIENT_PLANS = [
   { key: "1y", label: "1 Year", cycle: "Yearly", months: 12, price: 899, maxPerBatch: 500, perWindow: 1000, windowMinutes: 5 },
 ];
 
+// Default STUDENT subscription plans (used until an admin edits them in the
+// panel). Students don't get the AI generator, so these carry ONLY pricing
+// (label/months/price) — no AI limits. Prices per the product spec.
+export const DEFAULT_STUDENT_PLANS = [
+  { key: "trial", label: "1-Day Free Trial", cycle: "Trial", months: 0, price: 0, trial: true },
+  { key: "1m", label: "1 Month", cycle: "Monthly", months: 1, price: 149 },
+  { key: "3m", label: "3 Months", cycle: "Quarterly", months: 3, price: 399 },
+  { key: "6m", label: "6 Months", cycle: "Semi-Annually", months: 6, price: 699 },
+  { key: "1y", label: "1 Year", cycle: "Yearly", months: 12, price: 899 },
+];
+
 // The admin-managed client plans (from Settings), or the defaults if none saved.
 export async function getClientPlans() {
   try {
@@ -21,6 +32,23 @@ export async function getClientPlans() {
     /* fall through to defaults */
   }
   return DEFAULT_CLIENT_PLANS;
+}
+
+// The admin-managed student plans (from Settings), or the defaults if none saved.
+export async function getStudentPlans() {
+  try {
+    const s = await Settings.findOne({ key: "site" }).select("studentPlans").lean();
+    if (Array.isArray(s?.studentPlans) && s.studentPlans.length) return s.studentPlans;
+  } catch {
+    /* fall through to defaults */
+  }
+  return DEFAULT_STUDENT_PLANS;
+}
+
+// Resolve the plan catalog for an audience: "student" → student plans,
+// anything else → client plans (the historical default).
+export async function getPlansFor(audience) {
+  return audience === "student" ? getStudentPlans() : getClientPlans();
 }
 
 export function findPlan(plans, key) {

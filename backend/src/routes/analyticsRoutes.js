@@ -12,7 +12,7 @@ import {
   myPerformance,
   myAttemptReview,
 } from "../controllers/analyticsController.js";
-import { protect, authorize, optionalAuth } from "../middleware/auth.js";
+import { protect, authorize, optionalAuth, requireStudentSubscription } from "../middleware/auth.js";
 
 const router = Router();
 const admin = [protect, authorize("admin")];
@@ -24,7 +24,9 @@ router.get("/admin/performance", ...admin, adminPerformance);
 router.get("/admin/performance/user/:userId", ...admin, userPerformanceDetail);
 router.delete("/admin/performance/user/:userId", ...admin, clearUserPerformance);
 router.delete("/admin/performance", ...admin, clearAllPerformance);
-router.get("/me/dashboard", protect, studentDashboard);
+// The performance Dashboard is a premium student feature (gated). Clients &
+// admins pass through requireStudentSubscription untouched.
+router.get("/me/dashboard", protect, requireStudentSubscription, studentDashboard);
 router.get("/me/performance", protect, myPerformance); // a client's own attempts + weak areas (real-time)
 router.get("/me/performance/attempt/:attemptId", protect, myAttemptReview); // full question-by-question review of one attempt
 router.get("/leaderboard", optionalAuth, leaderboard);

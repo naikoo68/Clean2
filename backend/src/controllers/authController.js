@@ -6,7 +6,7 @@ import { razorpayConfigured, verifyPaymentSignature } from "../config/razorpay.j
 import { sendMail } from "../config/mailer.js";
 import { clientBaseFromReq } from "../config/clientUrl.js";
 import { notifyNewUser } from "../utils/notify.js";
-import { getClientPlans } from "../utils/plans.js";
+import { getClientPlans, getPlansFor, getStudentPlans as loadStudentPlans } from "../utils/plans.js";
 import { getSiteName } from "../utils/siteInfo.js";
 
 // Normalise emails so case/whitespace never causes a login mismatch
@@ -55,6 +55,12 @@ const sanitize = (u) => ({
   referralCode: u.referralCode,
   subscriptionPlan: u.subscriptionPlan,
   isTrial: u.isTrial,
+  // Student subscription state — drives the student paywall / gated features.
+  studentPlan: u.studentPlan,
+  studentPlanExpiresAt: u.studentPlanExpiresAt,
+  studentTrial: u.studentTrial === true,
+  studentTrialUsed: u.studentTrialUsed === true,
+  studentSubscribed: !!(u.studentPlanExpiresAt && new Date(u.studentPlanExpiresAt).getTime() > Date.now()),
   // AI access (client accounts) — drives the client workspace's AI tab.
   aiAccess: u.aiAccess === true,
   aiAllowInbuilt: u.aiAllowInbuilt !== false,
@@ -102,8 +108,9 @@ function makeReferralCode(name) {
 
 // Compute the payable price for a plan, applying an optional coupon and/or a
 // valid friend's referral code. Returns null if the plan key is invalid.
-export async function computeOffer({ planKey, couponCode, referralCode, selfEmail }) {
-  const plans = await getClientPlans();
+// `audience` selects the plan catalog: "student" → student plans, else client.
+export async function computeOffer({ planKey, couponCode, referralCode, selfEmail, audience }) {
+  const plans = await getPlansFor(audience);
   const plan = plans.find((p) => p.key === planKey) || null;
   if (!plan) return null;
   const base = plan.price;
@@ -519,14 +526,21 @@ export async function getPlans(req, res) {
   res.json({ plans: await getClientPlans() });
 }
 
+// GET /api/auth/student-plans — public list of STUDENT subscription plans.
+export async function getStudentPlans(req, res) {
+  res.json({ plans: await loadStudentPlans() });
+}
+
 // POST /api/auth/validate-offer — live price preview for a plan with an optional
-// coupon and/or friend's referral code (used by the client registration form).
+// coupon and/or friend's referral code (used by the registration/upgrade forms).
+// Pass audience:"student" in the body to price against the student catalog.
 export async function validateOffer(req, res) {
   const offer = await computeOffer({
     planKey: req.body?.plan,
     couponCode: req.body?.couponCode,
     referralCode: req.body?.referralCode,
     selfEmail: req.body?.email,
+    audience: req.body?.audience,
   });
   if (!offer) return res.status(400).json({ message: "Choose a valid plan." });
   res.json(offer);
