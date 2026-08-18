@@ -77,6 +77,19 @@ const userSchema = new mongoose.Schema(
     couponCode: { type: String },
     isTrial: { type: Boolean, default: false }, // on a free trial (vs a paid plan)
     paymentId: { type: String }, // Razorpay payment id (paid client signups)
+    // ---- STUDENT subscription ----
+    // A separate paywall for "student" accounts (kept distinct from the client
+    // fields above and from the admin-created temporary-account `expiresAt`, so
+    // it never interferes with login/expiry semantics for other roles). A
+    // student needs studentPlanExpiresAt in the FUTURE to reach gated features
+    // (attempting quizzes/test-series and their performance Dashboard).
+    studentPlan: { type: String },              // plan key, e.g. "1m" | "3m" | "6m" | "1y"
+    studentPlanMonths: { type: Number },
+    studentPlanPrice: { type: Number },          // final price paid after coupon/referral
+    studentPlanExpiresAt: { type: Date, default: null }, // subscription validity (null = free tier)
+    studentTrial: { type: Boolean, default: false },     // currently on the free trial
+    studentTrialUsed: { type: Boolean, default: false }, // the one-time free trial has been claimed
+    studentPaymentId: { type: String },          // Razorpay payment id (latest student payment)
     streak: { type: Number, default: 0 },
   },
   { timestamps: true }
