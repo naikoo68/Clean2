@@ -454,13 +454,14 @@ export default function Home() {
     ...DEFAULT_HOME_ORDER.filter((k) => !savedKeys.includes(k)).map((k) => ({ key: k, visible: true })),
   ];
 
-  // A logged-in user should never see the PUBLIC landing page — e.g. after
-  // tapping the browser Back button from their dashboard. Bounce them to their
-  // own home by role (replace = no extra history entry). Declared AFTER all
-  // hooks so the Rules of Hooks are preserved.
-  if (user) {
-    const home = user.role === "admin" ? "/admin" : user.role === "client" ? "/client" : "/dashboard";
-    return <Navigate to={home} replace />;
+  // Only CLIENTS are bounced off the public landing page. The app deliberately
+  // keeps a client inside their own /client workspace (their nav has NO link to
+  // "/"), so reaching this page means an accidental browser-Back — send them
+  // home. Admins ("Switch to Student Mode") and students ("Home" in the navbar)
+  // intentionally visit the public site, so they are NOT redirected. Declared
+  // AFTER all hooks so the Rules of Hooks are preserved.
+  if (user?.role === "client") {
+    return <Navigate to="/client" replace />;
   }
 
   return (
