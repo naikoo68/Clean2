@@ -1054,8 +1054,8 @@ export default function AdminTests() {
                 Student view — answers &amp; explanations are hidden. Use “Reveal answer” on any question to expose it.
               </p>
             )}
-            <QuestionTypeFilter questions={tq} selected={typeFilter} onChange={setTypeFilter} />
             <QuestionSubjectFilter questions={tq} selected={subjectFilter} onChange={setSubjectFilter} />
+            <QuestionTypeFilter questions={tq} selected={typeFilter} onChange={setTypeFilter} />
             <QuestionStatusFilter questions={tq} selected={statusFilter} onChange={setStatusFilter} />
             {!studentView && (() => {
               const shownCount = filterBySubject(filterByStatus(tq.filter((it) => !typeFilter.length || typeFilter.includes(questionTypeKey(it))), statusFilter), subjectFilter).length;
