@@ -16,6 +16,7 @@ import QuestionFormModal from "../../components/admin/QuestionFormModal";
 import QuestionView from "../../components/admin/QuestionView";
 import QuestionTypeFilter from "../../components/admin/QuestionTypeFilter";
 import QuestionStatusFilter, { filterByStatus } from "../../components/admin/QuestionStatusFilter";
+import QuestionSubjectFilter, { filterBySubject } from "../../components/admin/QuestionSubjectFilter";
 import { questionTypeKey, QUESTION_TYPE_LABELS } from "../../lib/questions";
 import ManageTestQuestions from "../../components/admin/ManageTestQuestions";
 import ShareTestModal from "../../components/admin/ShareTestModal";
@@ -92,6 +93,7 @@ export default function AdminTests() {
   const [reopenAfterEdit, setReopenAfterEdit] = useState(null); // question _id to reopen in the preview after editing it there
   const [typeFilter, setTypeFilter] = useState([]); // View All: which question types to show ([] = all)
   const [statusFilter, setStatusFilter] = useState("all"); // View All: updated/not_updated/all
+  const [subjectFilter, setSubjectFilter] = useState(""); // View All: which subject/section to show ("" = all)
   const [delProgress, setDelProgress] = useState(null); // real-time delete-by-type progress: { total, done }
 
 
@@ -191,11 +193,20 @@ export default function AdminTests() {
   // every question when no type is selected) — delete a whole type at once.
   const deleteByType = async () => {
     if (delProgress || !qTest) return;
-    const targets = tq.filter((it) => !typeFilter.length || typeFilter.includes(questionTypeKey(it)));
+    // Delete exactly what's currently SHOWN — respect the Type, Subject and
+    // Status filters together so the count on the button matches the action.
+    const targets = filterBySubject(
+      filterByStatus(tq.filter((it) => !typeFilter.length || typeFilter.includes(questionTypeKey(it))), statusFilter),
+      subjectFilter
+    );
     const ids = targets.map((q) => q._id);
     if (!ids.length) return;
-    const label = typeFilter.length ? typeFilter.map((t) => QUESTION_TYPE_LABELS[t] || t).join(", ") : "all types";
-    if (!window.confirm(`Delete ${ids.length} question(s) of type: ${label} from this test? This cannot be undone.`)) return;
+    const scope = [
+      typeFilter.length ? typeFilter.map((t) => QUESTION_TYPE_LABELS[t] || t).join(", ") : "all types",
+      subjectFilter ? `subject "${subjectFilter}"` : null,
+      statusFilter === "updated" ? "updated only" : statusFilter === "not_updated" ? "not-updated only" : null,
+    ].filter(Boolean).join(", ");
+    if (!window.confirm(`Delete ${ids.length} question(s) (${scope}) from this test? This cannot be undone.`)) return;
     const before = tq.length;
     setDelProgress({ total: ids.length, done: 0 });
     try {
@@ -956,7 +967,7 @@ export default function AdminTests() {
                 load();
               }}
               onViewQuestion={setViewQ}
-              onViewAll={() => { setTypeFilter([]); setStatusFilter("all"); setViewAllQ(true); }}
+              onViewAll={() => { setTypeFilter([]); setStatusFilter("all"); setSubjectFilter(""); setViewAllQ(true); }}
               onDuplicates={() => setDupTest(qTest)}
               onCopyCsv={copyCsv}
               onDownloadCsv={(qs) => downloadCsv(qs, qTest?.name || "test")}
@@ -1030,9 +1041,10 @@ export default function AdminTests() {
               </p>
             )}
             <QuestionTypeFilter questions={tq} selected={typeFilter} onChange={setTypeFilter} />
+            <QuestionSubjectFilter questions={tq} selected={subjectFilter} onChange={setSubjectFilter} />
             <QuestionStatusFilter questions={tq} selected={statusFilter} onChange={setStatusFilter} />
             {!studentView && (() => {
-              const shownCount = filterByStatus(tq.filter((it) => !typeFilter.length || typeFilter.includes(questionTypeKey(it))), statusFilter).length;
+              const shownCount = filterBySubject(filterByStatus(tq.filter((it) => !typeFilter.length || typeFilter.includes(questionTypeKey(it))), statusFilter), subjectFilter).length;
               if (!shownCount) return null;
               return (
                 <div className="mb-3 flex flex-wrap items-center gap-2">
@@ -1056,7 +1068,7 @@ export default function AdminTests() {
               </p>
             )}
             <div className="max-h-[70vh] space-y-4 overflow-y-auto pr-1">
-              {filterByStatus(tq, statusFilter)
+              {filterBySubject(filterByStatus(tq, statusFilter), subjectFilter)
                 .map((it, i) => ({ it, i }))
                 .filter(({ it }) => !typeFilter.length || typeFilter.includes(questionTypeKey(it)))
                 .map(({ it, i }) => (
