@@ -31,7 +31,7 @@ export default function AutoBuildTest({ open, onClose, testId, testName = "", pl
   const [section, setSection] = useState("");
   const [sourceIds, setSourceIds] = useState([]);
   const [rowDim, setRowDim] = useState("subject"); // "subject" | "type"
-  const [type, setType] = useState("");            // single type filter (subject mode only)
+  const [typeFilter, setTypeFilter] = useState([]); // multi type filter (subject mode) — [] = any
   const [cells, setCells] = useState({});
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(false);
@@ -41,7 +41,7 @@ export default function AutoBuildTest({ open, onClose, testId, testName = "", pl
 
   useEffect(() => {
     if (!open) return;
-    setSection(""); setSourceIds([]); setRowDim("subject"); setType(""); setCells({}); setSearch(""); setMsg(""); setReport(null);
+    setSection(""); setSourceIds([]); setRowDim("subject"); setTypeFilter([]); setCells({}); setSearch(""); setMsg(""); setReport(null);
     setLoading(true);
     const load = practice
       ? practiceService.allSubjects().then((s) => (s || []).filter((x) => (x.kind ? x.kind === "quiz" : true)))
@@ -102,7 +102,7 @@ export default function AutoBuildTest({ open, onClose, testId, testName = "", pl
         for (const c of DIFF_COLS) {
           const count = parseInt(cells[cellKey(String(s._id), c.key)], 10) || 0;
           if (count <= 0) continue;
-          out.push({ ...srcKey(String(s._id)), section, type: type || undefined, difficulty: c.key || undefined, count });
+          out.push({ ...srcKey(String(s._id)), section, types: typeFilter.length ? typeFilter : undefined, difficulty: c.key || undefined, count });
         }
       }
     } else {
@@ -208,17 +208,35 @@ export default function AutoBuildTest({ open, onClose, testId, testName = "", pl
                     <button type="button" onClick={() => switchRowDim("subject")} className={`px-3 py-1.5 ${rowDim === "subject" ? "bg-brand-600 text-white" : "bg-white text-slate-600 dark:bg-slate-900 dark:text-slate-300"}`}>By subject</button>
                     <button type="button" onClick={() => switchRowDim("type")} className={`px-3 py-1.5 ${rowDim === "type" ? "bg-brand-600 text-white" : "bg-white text-slate-600 dark:bg-slate-900 dark:text-slate-300"}`}>By type</button>
                   </div>
-                  {rowDim === "subject" && (
-                    <span className="ml-auto flex items-center gap-1 text-sm">
-                      <span className="text-slate-500 dark:text-slate-400">Type</span>
-                      <select value={type} onChange={(e) => setType(e.target.value)} className="input py-1 text-sm">
-                        <option value="">Any</option>
-                        {TYPE_KEYS.map((k) => <option key={k} value={k}>{QUESTION_TYPE_LABELS[k]}</option>)}
-                      </select>
-                    </span>
-                  )}
                   {rowDim === "type" && <span className="ml-auto text-xs text-slate-400">columns = difficulty</span>}
                 </div>
+
+                {/* By-subject mode: pick ONE OR MORE types to include (chips). */}
+                {rowDim === "subject" && (
+                  <div>
+                    <div className="mb-1 flex items-center gap-2">
+                      <span className="text-sm font-semibold">Include types</span>
+                      <span className="text-xs text-slate-400">{typeFilter.length ? `${typeFilter.length} selected` : "Any type"}</span>
+                      {typeFilter.length > 0 && <button type="button" onClick={() => setTypeFilter([])} className="ml-auto text-xs font-medium text-slate-500 hover:underline">Clear</button>}
+                    </div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {TYPE_KEYS.map((k) => {
+                        const on = typeFilter.includes(k);
+                        return (
+                          <button
+                            key={k}
+                            type="button"
+                            onClick={() => setTypeFilter((f) => (on ? f.filter((x) => x !== k) : [...f, k]))}
+                            className={`rounded-full border px-2.5 py-1 text-xs font-semibold transition ${on ? "border-brand-500 bg-brand-600 text-white" : "border-slate-200 bg-white text-slate-600 hover:border-brand-400 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300"}`}
+                          >
+                            {QUESTION_TYPE_LABELS[k]}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <p className="mt-1 text-[11px] text-slate-400">Each subject/difficulty count pulls questions of the ticked type(s) — leave none for any type. For an exact count PER type, use "By type" rows.</p>
+                  </div>
+                )}
 
                 <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-700">
                   <div className="flex items-center gap-1 border-b border-slate-200 bg-slate-50 px-2 py-1.5 text-[11px] font-semibold text-slate-500 dark:border-slate-700 dark:bg-slate-800/60">
