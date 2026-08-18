@@ -15,6 +15,14 @@ const practiceStreamSchema = new mongoose.Schema(
     description: { type: String },
     order: { type: Number, default: 0 },
     isActive: { type: Boolean, default: true },
+    // Public share link (mirrors TestSeries). When publicShare is on, ANYONE
+    // with the publicToken URL can open a page listing every quiz/test under
+    // this stream and take them — no account/login. Enabling cascades the same
+    // public link on to all published items beneath it.
+    publicShare: { type: Boolean, default: false },
+    publicToken: { type: String, index: true, default: null },
+    publicExpiresAt: { type: Date, default: null }, // null = never expires
+    publicViews: { type: Number, default: 0 }, // # opens of the shared page
   },
   { timestamps: true }
 );
