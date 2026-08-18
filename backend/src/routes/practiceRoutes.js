@@ -9,6 +9,7 @@ import {
   playQuiz, allSubjects, myItems, moveItem, updateItem, splitItem, splitTopic, mergeItem, moveQuestions, copyQuestions, shareContent,
   incomingShares, acceptShare, acceptShareJob, declineShare, sharePlacement, removeSharedWithMe,
   startBackup, backupJobStatus, backupJobFile, startRestore, restoreJobStatus,
+  toggleStreamPublicLink, toggleSubjectPublicLink, toggleTopicPublicLink, getPublicNode,
 } from "../controllers/practiceController.js";
 import { protect, authorize, optionalAuth } from "../middleware/auth.js";
 
@@ -24,6 +25,10 @@ router.get("/browse/:kind/streams/:streamId/items", optionalAuth, browseStreamIt
 router.get("/browse/:kind/subjects/:subjectId/topics", optionalAuth, browseTopics); // My Quiz
 router.get("/browse/:kind/subjects/:subjectId/items", optionalAuth, browseItems); // My Test Series
 router.get("/browse/:kind/topics/:topicId/items", optionalAuth, browseTopicItems); // My Quiz
+
+// PUBLIC (no auth): open a shared stream/subject/topic → lists its shareable
+// items. Declared before the auth-protected node routes below.
+router.get("/public/node/:token", getPublicNode);
 
 // Play a "My Quiz" practice quiz with immediate answer reveal (questions incl. answers).
 router.get("/quiz/:id/play", protect, playQuiz);
@@ -61,12 +66,14 @@ router.get("/streams", ...admin, listStreams);
 router.post("/streams", ...admin, createStream);
 router.put("/streams/:id", ...admin, updateStream);
 router.delete("/streams/:id", ...admin, deleteStream);
+router.patch("/streams/:id/public-link", ...admin, toggleStreamPublicLink); // public share link for a whole stream
 router.get("/streams/:streamId/subjects", ...admin, listSubjects);
 
 // Admin — subjects
 router.post("/subjects", ...admin, createSubject);
 router.put("/subjects/:id", ...admin, updateSubject);
 router.delete("/subjects/:id", ...admin, deleteSubject);
+router.patch("/subjects/:id/public-link", ...admin, toggleSubjectPublicLink); // public share link for a whole subject
 router.get("/subjects/:subjectId/items", ...admin, listItems); // My Test Series items
 router.get("/subjects/:subjectId/topics", ...admin, listTopics); // My Quiz topics
 
@@ -76,6 +83,7 @@ router.put("/topics/:id", ...admin, updateTopic);
 router.patch("/topics/:id/move", ...admin, moveTopic); // relocate a topic (+ its quizzes)
 router.post("/topics/:id/split", ...admin, splitTopic); // split all a topic's questions into quizzes of N
 router.delete("/topics/:id", ...admin, deleteTopic);
+router.patch("/topics/:id/public-link", ...admin, toggleTopicPublicLink); // public share link for a whole topic
 router.get("/topics/:topicId/items", ...admin, listTopicItems); // My Quiz quizzes
 
 // Admin — flat list of all practice subjects (for composing tests from practice)
