@@ -945,11 +945,13 @@ export default function AdminPractice({ clientMode = false, fixedKind = "" }) {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h2 className="flex items-center gap-2 text-lg font-bold"><H.icon className="h-5 w-5 text-brand-600" /> {H.title}</h2>
         <div className="flex flex-wrap items-center gap-2">
-          {view === "items" && (hasTopics ? topic : subject) && items.length > 0 && (
+          {view === "items" && (hasTopics ? topic : subject) && (
             <button
               onClick={scanMissingAreas}
               className="btn-outline text-brand-600"
-              title={`Scan all ${L.itemsWord} here for syllabus areas not yet covered`}
+              title={items.length > 0
+                ? `Scan all ${L.itemsWord} here for syllabus areas not yet covered`
+                : `Scan this ${L.groupWord}'s syllabus for areas to cover (works even before you add any ${L.itemsWord})`}
             >
               <ScanSearch className="h-4 w-4" /> Scan Missing Areas
             </button>
