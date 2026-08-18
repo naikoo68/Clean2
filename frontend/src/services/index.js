@@ -99,6 +99,10 @@ export const testService = {
   submit: (id, answers, timeTaken) => api.post(`/tests/${id}/submit`, { answers, timeTaken }),
   // public share link — no account/login needed (auth header omitted)
   getPublic: (token) => api.get(`/tests/public/${token}`, { auth: false }),
+  // FREE first-test-per-subject — playable without login (no auth header). The
+  // backend only returns it when the id is the free preview test of its subject.
+  getFree: (id) => api.get(`/tests/${id}/free`, { auth: false }),
+  submitFree: (id, answers, timeTaken) => api.post(`/tests/${id}/free-submit`, { answers, timeTaken }, { auth: false }),
   registerPublicView: (token) => api.post(`/tests/public/${token}/view`, {}, { auth: false }), // count an open
   submitPublic: (token, answers, timeTaken) => api.post(`/tests/public/${token}/submit`, { answers, timeTaken }, { auth: false }),
   togglePublicLink: (id, enable, expiresAt) => api.patch(`/tests/${id}/public-link`, { enable, ...(expiresAt !== undefined ? { expiresAt } : {}) }),

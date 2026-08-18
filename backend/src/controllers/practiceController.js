@@ -1085,7 +1085,7 @@ const hasQuizAccess = (req, t) =>
 
 export async function browseStreams(req, res) {
   const kind = req.params.kind;
-  const freemium = kind === "quiz" || kind === "paper"; // publicly discoverable
+  const freemium = true; // all practice kinds are publicly discoverable (freemium)
   const grantAll = kind === "test" ? req.user?.myTestAccess === true : req.user?.myQuizAccess === true;
   const items = await TestSeries.find({ practice: true, practiceKind: kind, status: "published", owner: null })
     .select("practiceStream visibleToAll access")
@@ -1096,7 +1096,7 @@ export async function browseStreams(req, res) {
 }
 export async function browseSubjects(req, res) {
   const { kind, streamId } = req.params;
-  const freemium = kind === "quiz" || kind === "paper";
+  const freemium = true; // all practice kinds are publicly discoverable (freemium)
   const grantAll = kind === "test" ? req.user?.myTestAccess === true : req.user?.myQuizAccess === true;
   const items = await TestSeries.find({ practice: true, practiceKind: kind, status: "published", practiceStream: streamId, owner: null })
     .select("practiceSubject visibleToAll access")
@@ -1105,19 +1105,25 @@ export async function browseSubjects(req, res) {
   const subjects = await PracticeSubject.find({ stream: streamId, isActive: true, owner: null }).sort("order name").lean();
   res.json(subjects.filter((s) => ok.has(String(s._id))));
 }
-// My Test Series: items under subject (UNCHANGED — visibility/subscription).
+// My Test Series: items under a subject. PUBLIC list in natural order (Test 1,
+// Test 2, …). The FIRST test is a FREE preview anyone can attempt; the rest are
+// `locked` unless the user has access (login + subscription / share / owner).
 export async function browseItems(req, res) {
   const { kind, subjectId } = req.params;
-  // Additive master grant: a user with myQuizAccess/myTestAccess sees ALL of
-  // that practice type; otherwise the usual per-item visibility applies.
-  const grantAll = kind === "quiz" ? req.user?.myQuizAccess === true : req.user?.myTestAccess === true;
-  const items = await TestSeries.find({ practice: true, practiceKind: kind, status: "published", practiceSubject: subjectId, owner: null })
-    .sort("createdAt")
-    .lean();
+  const grantAll = req.user?.role === "admin" || (kind === "quiz" ? req.user?.myQuizAccess === true : req.user?.myTestAccess === true);
+  const items = (await TestSeries.find({ practice: true, practiceKind: kind, status: "published", practiceSubject: subjectId, owner: null })
+    .lean()).sort(byNatural("name"));
   res.json(
-    items
-      .filter((t) => grantAll || isTestVisibleToUser(t, req.user?._id))
-      .map((t) => ({ _id: t._id, name: t.name, duration: t.duration, marks: t.marks, difficulty: t.difficulty, questionCount: t.questions?.length || 0 }))
+    items.map((t, idx) => {
+      const freePreview = idx === 0; // first test in the subject is free for everyone
+      const hasAccess = grantAll || isTestVisibleToUser(t, req.user?._id) || isSharedWithUser(t, req.user?._id);
+      return {
+        _id: t._id, name: t.name, duration: t.duration, marks: t.marks, difficulty: t.difficulty,
+        questionCount: t.questions?.length || 0,
+        freePreview,
+        locked: !freePreview && !hasAccess,
+      };
+    })
   );
 }
 // My Quiz: topics under a subject that contain ANY published quiz (public —
