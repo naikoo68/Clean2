@@ -115,6 +115,7 @@ export const testService = {
   deleteQuestion: (id, qid) => api.del(`/tests/${id}/questions/${qid}`),
   // pull questions from the quiz/practice bank into a test
   populate: (id, plan) => api.post(`/tests/${id}/populate`, plan), // { quizPlan, practicePlan }
+  autoBuild: (id, blueprint) => api.post(`/tests/${id}/auto-build`, { blueprint }, { timeout: 120000 }), // auto-pick by subject/topic/type/difficulty
   // migration (admin)
   toTestSeries: (id, data) => api.patch(`/tests/${id}/to-test-series`, data), // { exam, post }
   toMyTest: (id, data) => api.patch(`/tests/${id}/to-my-test`, data), // { practiceStream, practiceSubject }
