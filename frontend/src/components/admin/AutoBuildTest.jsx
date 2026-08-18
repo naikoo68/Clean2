@@ -3,18 +3,14 @@ import { X, Wand2, Loader2, CheckCircle2, Search } from "lucide-react";
 import { contentService, practiceService, testService } from "../../services";
 import { QUESTION_TYPE_LABELS } from "../../lib/questions";
 
-// Auto-build a test the EASY way.
+// Auto-build a test with EXACT per-type counts.
 //   1. Pick which of the test's PREDEFINED subjects to fill (from its plan).
 //   2. Tick ONE OR MORE QUIZ SUBJECTS to pull from (e.g. General Science ←
 //      Biology + Physics + Chemistry). No new subjects are created.
-//   3. Fill a GRID. Choose what the rows are:
-//        • By subject → one row per chosen quiz subject.
-//        • By type    → one row per question type (MCQ, Matching, …) so you can
-//                       set MANY types at once; questions are pulled from all
-//                       the ticked subjects combined.
-//      Columns are always difficulty (Easy / Medium / Hard / Any). Type counts
-//      in as many cells as you like; Build pulls them and files them under the
-//      chosen predefined subject.
+//   3. For EACH QUESTION TYPE, type exactly how many you want — split by
+//      difficulty columns (Easy / Medium / Hard / Any). You get precisely that
+//      many of each type. Counts are spread across the ticked source subjects,
+//      and everything is filed under the chosen predefined subject.
 //
 // `plan`     = the test's subjectPlan [{ subject:<name>, count }].
 // `practice` = build a "My Test" from the caller's own My Practice quizzes.
@@ -30,9 +26,7 @@ export default function AutoBuildTest({ open, onClose, testId, testName = "", pl
   const [libSubjects, setLibSubjects] = useState([]);
   const [section, setSection] = useState("");
   const [sourceIds, setSourceIds] = useState([]);
-  const [rowDim, setRowDim] = useState("subject"); // "subject" | "type"
-  const [typeFilter, setTypeFilter] = useState([]); // multi type filter (subject mode) — [] = any
-  const [cells, setCells] = useState({});
+  const [cells, setCells] = useState({}); // `${typeKey}|${diffKey}` -> count
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -41,7 +35,7 @@ export default function AutoBuildTest({ open, onClose, testId, testName = "", pl
 
   useEffect(() => {
     if (!open) return;
-    setSection(""); setSourceIds([]); setRowDim("subject"); setTypeFilter([]); setCells({}); setSearch(""); setMsg(""); setReport(null);
+    setSection(""); setSourceIds([]); setCells({}); setSearch(""); setMsg(""); setReport(null);
     setLoading(true);
     const load = practice
       ? practiceService.allSubjects().then((s) => (s || []).filter((x) => (x.kind ? x.kind === "quiz" : true)))
@@ -68,22 +62,16 @@ export default function AutoBuildTest({ open, onClose, testId, testName = "", pl
     const match = libByName[name.trim().toLowerCase()];
     setSourceIds(match ? [String(match._id)] : []);
   };
-  const toggleSource = (id) => { setSourceIds((ids) => (ids.includes(id) ? ids.filter((x) => x !== id) : [...ids, id])); setCells({}); };
-  const switchRowDim = (d) => { setRowDim(d); setCells({}); };
+  const toggleSource = (id) => setSourceIds((ids) => (ids.includes(id) ? ids.filter((x) => x !== id) : [...ids, id]));
 
   const chosenSubjects = useMemo(
     () => sourceIds.map((id) => libSubjects.find((s) => String(s._id) === id)).filter(Boolean),
     [sourceIds, libSubjects]
   );
 
-  // Grid rows depend on the chosen dimension.
-  const rows = useMemo(() => {
-    if (rowDim === "type") return TYPE_KEYS.map((k) => ({ key: k, label: QUESTION_TYPE_LABELS[k] }));
-    return chosenSubjects.map((s) => ({ key: String(s._id), label: s.name }));
-  }, [rowDim, chosenSubjects]);
-
-  const cellKey = (rowKey, diffKey) => `${rowKey}|${diffKey}`;
-  const setCell = (rowKey, diffKey, v) => setCells((m) => ({ ...m, [cellKey(rowKey, diffKey)]: v }));
+  const cellKey = (typeKey, diffKey) => `${typeKey}|${diffKey}`;
+  const setCell = (typeKey, diffKey, v) => setCells((m) => ({ ...m, [cellKey(typeKey, diffKey)]: v }));
+  const rowTotal = (typeKey) => DIFF_COLS.reduce((s, c) => s + (parseInt(cells[cellKey(typeKey, c.key)], 10) || 0), 0);
   const total = useMemo(() => Object.values(cells).reduce((s, n) => s + (parseInt(n, 10) || 0), 0), [cells]);
 
   const filteredSubjects = useMemo(() => {
@@ -95,28 +83,19 @@ export default function AutoBuildTest({ open, onClose, testId, testName = "", pl
 
   const srcKey = (id) => (practice ? { practiceSubject: id } : { subject: id });
 
+  // For each TYPE × difficulty cell you set, pull EXACTLY that many — spread
+  // evenly across the ticked source subjects so you never over/under-pull.
   const buildBlueprint = () => {
     const out = [];
-    if (rowDim === "subject") {
-      for (const s of chosenSubjects) {
-        for (const c of DIFF_COLS) {
-          const count = parseInt(cells[cellKey(String(s._id), c.key)], 10) || 0;
-          if (count <= 0) continue;
-          out.push({ ...srcKey(String(s._id)), section, types: typeFilter.length ? typeFilter : undefined, difficulty: c.key || undefined, count });
-        }
-      }
-    } else {
-      // By type: each type×difficulty count is spread across the ticked subjects.
-      for (const k of TYPE_KEYS) {
-        for (const c of DIFF_COLS) {
-          const count = parseInt(cells[cellKey(k, c.key)], 10) || 0;
-          if (count <= 0 || !sourceIds.length) continue;
-          const per = Math.floor(count / sourceIds.length);
-          let rem = count % sourceIds.length;
-          for (const id of sourceIds) {
-            const cnt = per + (rem-- > 0 ? 1 : 0);
-            if (cnt > 0) out.push({ ...srcKey(id), section, type: k, difficulty: c.key || undefined, count: cnt });
-          }
+    for (const k of TYPE_KEYS) {
+      for (const c of DIFF_COLS) {
+        const count = parseInt(cells[cellKey(k, c.key)], 10) || 0;
+        if (count <= 0 || !sourceIds.length) continue;
+        const per = Math.floor(count / sourceIds.length);
+        let rem = count % sourceIds.length;
+        for (const id of sourceIds) {
+          const cnt = per + (rem-- > 0 ? 1 : 0);
+          if (cnt > 0) out.push({ ...srcKey(id), section, type: k, difficulty: c.key || undefined, count: cnt });
         }
       }
     }
@@ -127,13 +106,13 @@ export default function AutoBuildTest({ open, onClose, testId, testName = "", pl
     if (!section) { setMsg("Choose which subject to fill."); return; }
     if (!sourceIds.length) { setMsg("Tick at least one quiz subject to pull from."); return; }
     const blueprint = buildBlueprint();
-    if (!blueprint.length) { setMsg("Type a count in at least one cell of the grid."); return; }
+    if (!blueprint.length) { setMsg("Type how many questions you want for at least one type."); return; }
     setBusy(true); setMsg(""); setReport(null);
     try {
       const res = await testService.autoBuild(testId, blueprint);
       const n = res?.inserted ?? 0;
       setReport(res?.report || []);
-      setMsg(n ? `\u2713 Added ${n} question(s) to "${section}".` : "No matching questions were found — try higher counts, 'Any', or other subjects/types.");
+      setMsg(n ? `\u2713 Added ${n} question(s) to "${section}".` : "No matching questions were found — try higher counts, 'Any' difficulty, or more source subjects.");
       if (n) { onDone?.(n); setCells({}); }
     } catch (e) {
       setMsg(e.message || "Couldn't build the test.");
@@ -155,7 +134,7 @@ export default function AutoBuildTest({ open, onClose, testId, testName = "", pl
           <button type="button" onClick={onClose}><X className="h-5 w-5" /></button>
         </div>
         <p className="mb-4 text-sm text-slate-500 dark:text-slate-400">
-          Choose which of this test's <b>subjects</b> to fill, tick <b>one or more quiz subjects</b> to pull from, then fill the grid. Switch rows to <b>By type</b> to set several question types at once. Nothing new is created.
+          Choose which of this test's <b>subjects</b> to fill, tick <b>one or more quiz subjects</b> to pull from, then type <b>exactly how many questions per question type</b> (split by difficulty). You get precisely those counts. Nothing new is created.
         </p>
 
         {loading ? (
@@ -187,7 +166,7 @@ export default function AutoBuildTest({ open, onClose, testId, testName = "", pl
                     <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search quiz subjects…" className="w-full bg-transparent text-sm outline-none" />
                     <span className="flex-shrink-0 text-xs text-slate-400">{sourceIds.length} selected</span>
                   </div>
-                  <div className="max-h-36 space-y-0.5 overflow-y-auto p-2">
+                  <div className="max-h-32 space-y-0.5 overflow-y-auto p-2">
                     {filteredSubjects.map((s) => (
                       <label key={s._id} className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1 text-sm hover:bg-slate-50 dark:hover:bg-slate-800/60">
                         <input type="checkbox" checked={sourceIds.includes(String(s._id))} onChange={() => toggleSource(String(s._id))} className="h-4 w-4 accent-brand-600" />
@@ -200,70 +179,38 @@ export default function AutoBuildTest({ open, onClose, testId, testName = "", pl
               </div>
             )}
 
+            {/* PER-TYPE COUNT GRID — the exact number you want of each type */}
             {section && sourceIds.length > 0 && (
-              <>
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="text-sm font-semibold">Rows:</span>
-                  <div className="inline-flex overflow-hidden rounded-lg border border-slate-200 text-xs font-semibold dark:border-slate-700">
-                    <button type="button" onClick={() => switchRowDim("subject")} className={`px-3 py-1.5 ${rowDim === "subject" ? "bg-brand-600 text-white" : "bg-white text-slate-600 dark:bg-slate-900 dark:text-slate-300"}`}>By subject</button>
-                    <button type="button" onClick={() => switchRowDim("type")} className={`px-3 py-1.5 ${rowDim === "type" ? "bg-brand-600 text-white" : "bg-white text-slate-600 dark:bg-slate-900 dark:text-slate-300"}`}>By type</button>
-                  </div>
-                  {rowDim === "type" && <span className="ml-auto text-xs text-slate-400">columns = difficulty</span>}
-                </div>
-
-                {/* By-subject mode: pick ONE OR MORE types to include (chips). */}
-                {rowDim === "subject" && (
-                  <div>
-                    <div className="mb-1 flex items-center gap-2">
-                      <span className="text-sm font-semibold">Include types</span>
-                      <span className="text-xs text-slate-400">{typeFilter.length ? `${typeFilter.length} selected` : "Any type"}</span>
-                      {typeFilter.length > 0 && <button type="button" onClick={() => setTypeFilter([])} className="ml-auto text-xs font-medium text-slate-500 hover:underline">Clear</button>}
-                    </div>
-                    <div className="flex flex-wrap gap-1.5">
-                      {TYPE_KEYS.map((k) => {
-                        const on = typeFilter.includes(k);
-                        return (
-                          <button
-                            key={k}
-                            type="button"
-                            onClick={() => setTypeFilter((f) => (on ? f.filter((x) => x !== k) : [...f, k]))}
-                            className={`rounded-full border px-2.5 py-1 text-xs font-semibold transition ${on ? "border-brand-500 bg-brand-600 text-white" : "border-slate-200 bg-white text-slate-600 hover:border-brand-400 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300"}`}
-                          >
-                            {QUESTION_TYPE_LABELS[k]}
-                          </button>
-                        );
-                      })}
-                    </div>
-                    <p className="mt-1 text-[11px] text-slate-400">Each subject/difficulty count pulls questions of the ticked type(s) — leave none for any type. For an exact count PER type, use "By type" rows.</p>
-                  </div>
-                )}
-
+              <div>
+                <label className="mb-1 block text-sm font-semibold">How many of each question type</label>
                 <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-700">
                   <div className="flex items-center gap-1 border-b border-slate-200 bg-slate-50 px-2 py-1.5 text-[11px] font-semibold text-slate-500 dark:border-slate-700 dark:bg-slate-800/60">
-                    <span className="min-w-0 flex-1">{rowDim === "type" ? "Question type" : "Quiz subject"}</span>
+                    <span className="min-w-0 flex-1">Question type</span>
                     {DIFF_COLS.map((c) => <span key={c.key} className="w-12 flex-shrink-0 text-center">{c.label}</span>)}
+                    <span className="w-10 flex-shrink-0 text-center">Total</span>
                   </div>
-                  <div className="max-h-56 overflow-y-auto">
-                    {rows.map((r) => (
-                      <div key={r.key} className="flex items-center gap-1 px-2 py-1">
-                        <span className="min-w-0 flex-1 truncate text-xs text-slate-700 dark:text-slate-200">{r.label}</span>
+                  <div className="max-h-64 overflow-y-auto">
+                    {TYPE_KEYS.map((k) => (
+                      <div key={k} className="flex items-center gap-1 px-2 py-1">
+                        <span className="min-w-0 flex-1 truncate text-xs text-slate-700 dark:text-slate-200">{QUESTION_TYPE_LABELS[k]}</span>
                         {DIFF_COLS.map((c) => (
                           <input
                             key={c.key}
                             type="number" min="0"
-                            value={cells[cellKey(r.key, c.key)] || ""}
-                            onChange={(e) => setCell(r.key, c.key, e.target.value)}
+                            value={cells[cellKey(k, c.key)] || ""}
+                            onChange={(e) => setCell(k, c.key, e.target.value)}
                             placeholder="0"
                             className="w-12 flex-shrink-0 rounded-md border border-slate-200 bg-white py-1 text-center text-xs outline-none focus:border-brand-400 dark:border-slate-700 dark:bg-slate-900"
                           />
                         ))}
+                        <span className="w-10 flex-shrink-0 text-center text-xs font-semibold text-slate-500 dark:text-slate-400">{rowTotal(k) || ""}</span>
                       </div>
                     ))}
                   </div>
                 </div>
-                {rowDim === "type" && <p className="text-[11px] text-slate-400">Each count is spread across the {chosenSubjects.length} ticked subject(s).</p>}
+                <p className="mt-1 text-[11px] text-slate-400">You'll get exactly these counts per type. Each is spread across the {chosenSubjects.length} ticked subject(s). Leave the difficulty columns and use <b>Any</b> if you don't need a difficulty split.</p>
                 {total > 0 && <p className="text-xs text-slate-400">Total to add to {section}: <b>{total}</b> question(s).</p>}
-              </>
+              </div>
             )}
           </div>
         )}
