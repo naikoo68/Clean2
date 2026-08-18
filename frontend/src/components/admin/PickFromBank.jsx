@@ -86,8 +86,19 @@ export default function PickFromBank({ open, onClose, testId, plan = [], title =
       questions.forEach((q) => (n[q._id] = q));
       return n;
     });
+  // Deselect only the questions currently shown in this drill-down.
+  const deselectAllVisible = () =>
+    setChosen((c) => {
+      const n = { ...c };
+      questions.forEach((q) => delete n[q._id]);
+      return n;
+    });
+  const clearAll = () => setChosen({}); // clear EVERY ticked question across all drill-downs
 
   const chosenCount = Object.keys(chosen).length;
+  // How many of the currently-shown questions are ticked (drives Select/Deselect all).
+  const shownSelectedCount = questions.reduce((k, q) => k + (chosen[q._id] ? 1 : 0), 0);
+  const allShownSelected = questions.length > 0 && shownSelectedCount === questions.length;
 
   const add = async () => {
     if (!chosenCount) { setMsg("Tick at least one question."); return; }
@@ -215,7 +226,12 @@ export default function PickFromBank({ open, onClose, testId, plan = [], title =
         <div className={`rounded-xl border border-slate-200 dark:border-slate-700 ${full ? "flex min-h-0 flex-1 flex-col" : ""}`}>
           <div className="flex items-center justify-between border-b border-slate-200 px-3 py-2 text-xs dark:border-slate-700">
             <span className="font-semibold text-slate-500">{questions.length} question(s) here</span>
-            {questions.length > 0 && <button onClick={selectAllVisible} className="font-semibold text-brand-600 hover:underline">Select all here</button>}
+            {questions.length > 0 && (
+              <div className="flex items-center gap-3">
+                <button onClick={selectAllVisible} disabled={allShownSelected} className="font-semibold text-brand-600 hover:underline disabled:opacity-40 disabled:no-underline">Select all here</button>
+                <button onClick={deselectAllVisible} disabled={shownSelectedCount === 0} className="font-semibold text-slate-500 hover:underline disabled:opacity-40 disabled:no-underline">Deselect all here</button>
+              </div>
+            )}
           </div>
           <div className={`space-y-1.5 overflow-y-auto p-2 ${full ? "min-h-0 flex-1" : "max-h-64"}`}>
             {loadingQ ? (
@@ -244,8 +260,13 @@ export default function PickFromBank({ open, onClose, testId, plan = [], title =
         {msg && <p className="mt-3 text-sm font-medium">{msg}</p>}
 
         <div className="mt-5 flex items-center justify-between gap-3">
-          <span className="inline-flex items-center gap-1 text-sm font-semibold text-emerald-600 dark:text-emerald-400">
-            {chosenCount > 0 && <><CheckCircle2 className="h-4 w-4" /> {chosenCount} selected</>}
+          <span className="inline-flex items-center gap-2 text-sm font-semibold text-emerald-600 dark:text-emerald-400">
+            {chosenCount > 0 && (
+              <>
+                <CheckCircle2 className="h-4 w-4" /> {chosenCount} selected
+                <button type="button" onClick={clearAll} className="font-medium text-slate-500 hover:underline dark:text-slate-400">Clear all</button>
+              </>
+            )}
           </span>
           <div className="flex gap-3">
             <button type="button" onClick={onClose} className="btn-outline">Close</button>
