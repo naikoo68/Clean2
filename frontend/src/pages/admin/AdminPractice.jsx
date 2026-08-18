@@ -17,6 +17,7 @@ import QuestionStatusFilter, { filterByStatus } from "../../components/admin/Que
 import { questionTypeKey, QUESTION_TYPE_LABELS } from "../../lib/questions";
 import AddToTestModal from "../../components/admin/AddToTestModal";
 import PickFromBank from "../../components/admin/PickFromBank";
+import AutoBuildTest from "../../components/admin/AutoBuildTest";
 import ManageTestQuestions from "../../components/admin/ManageTestQuestions";
 import SubjectPlanEditor from "../../components/admin/SubjectPlanEditor";
 import ShareTestModal from "../../components/admin/ShareTestModal";
@@ -155,6 +156,7 @@ export default function AdminPractice({ clientMode = false, fixedKind = "" }) {
   const [gapPrefill, setGapPrefill] = useState(null); // {topic, subtopics, avoid} when generating from the scan gaps
   const [topicStems, setTopicStems] = useState([]); // stems of ALL quizzes in this topic → coverage panel scans the whole topic
   const [bankOpen, setBankOpen] = useState(false); // hand-pick questions from the bank
+  const [autoOpen, setAutoOpen] = useState(false); // auto-build My Test from My Practice quizzes
   const [dupOpen, setDupOpen] = useState(false);
   const [dupScope, setDupScope] = useState({ params: null, name: "" }); // duplicate-scan target
   const [viewQ, setViewQ] = useState(null);
@@ -1192,6 +1194,7 @@ export default function AdminPractice({ clientMode = false, fixedKind = "" }) {
               onAiGenerate={(subject) => { setForceSection(subject); setAiTarget(null); setGapPrefill(null); setTopicStems([]); gatherTopicStems(); setAiOpen(true); }}
               onImportWeb={(subject) => { setForceSection(subject); setAiTarget(null); setImportOpen(true); }}
               onPickFromBank={(subject) => { setForceSection(subject); setBankOpen(true); }}
+              onAutoBuild={() => setAutoOpen(true)}
               onExtendExplanations={() => setExtendItem(qItem)}
               onExtendQuestion={(item) => setExtendOneItem(item)}
               extendingId={extendingQId}
@@ -1367,6 +1370,15 @@ export default function AdminPractice({ clientMode = false, fixedKind = "" }) {
         defaultSection={normSection(forceSection)}
         title={`Hand-pick questions — ${qItem?.name || ""}${normSection(forceSection) ? ` (${normSection(forceSection)})` : ""}`}
         onClose={() => { setBankOpen(false); setForceSection(""); }}
+        onDone={async () => { await reloadTq(); load(view); }}
+      />
+
+      <AutoBuildTest
+        open={autoOpen}
+        testId={qItem?._id}
+        testName={qItem?.name || ""}
+        practice
+        onClose={() => setAutoOpen(false)}
         onDone={async () => { await reloadTq(); load(view); }}
       />
 

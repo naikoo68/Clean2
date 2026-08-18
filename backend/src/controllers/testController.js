@@ -132,21 +132,42 @@ export async function autoBuildTest(req, res) {
   const usedIds = [];      // library question ids already picked THIS run (avoid duplicates across rows)
 
   for (const row of rows) {
-    const sid = oid(row?.subject);
     const count = Math.max(0, Math.min(500, parseInt(row?.count, 10) || 0));
     const section = String(row?.section || "").trim();
-    if (!sid || !count) continue;
+    if (!count) continue;
 
-    const match = { subject: sid, testSeries: { $exists: false }, ...scope };
-    if (usedIds.length) match._id = { $nin: usedIds };
+    const match = { testSeries: { $exists: false }, ...scope };
 
-    // Optional TOPIC filter — Question.topic is a free string, so resolve the
-    // topic to its sessions and match questions in those sessions (reliable).
-    if (row?.topic) {
-      const tid = oid(row.topic);
-      const sessions = tid ? await Session.find({ topic: tid }).select("_id").lean() : [];
-      match.session = { $in: sessions.map((s) => s._id) }; // empty → matches nothing (correctly yields 0)
+    if (row?.practiceSubject) {
+      // PRACTICE source (My Tests) — pull from the caller's own My Quiz items
+      // under the chosen practice subject (+ optional practice topic). Practice
+      // questions live INSIDE practice quiz items (TestSeries), so resolve those
+      // item ids and match questions belonging to them.
+      const psid = oid(row.practiceSubject);
+      if (!psid) continue;
+      const itemFilter = { practice: true, practiceKind: "quiz", practiceSubject: psid, ...scope };
+      const ptid = row?.practiceTopic ? oid(row.practiceTopic) : null;
+      if (ptid) itemFilter.practiceTopic = ptid;
+      const items = await TestSeries.find(itemFilter).select("_id").lean();
+      const itemIds = items.map((i) => i._id);
+      if (!itemIds.length) { report.push({ subject: section || "(subject)", topic: row?.practiceTopic || null, type: row?.type || null, difficulty: row?.difficulty || null, requested: count, got: 0 }); continue; }
+      delete match.testSeries; // practice questions DO have a testSeries (their quiz item)
+      match.testSeries = { $in: itemIds };
+    } else {
+      // CONTENT quiz-bank source (admin Test Series) — match by content Subject.
+      const sid = oid(row?.subject);
+      if (!sid) continue;
+      match.subject = sid;
+      // Optional TOPIC filter — Question.topic is a free string, so resolve the
+      // topic to its sessions and match questions in those sessions (reliable).
+      if (row?.topic) {
+        const tid = oid(row.topic);
+        const sessions = tid ? await Session.find({ topic: tid }).select("_id").lean() : [];
+        match.session = { $in: sessions.map((s) => s._id) }; // empty → matches nothing (correctly yields 0)
+      }
     }
+
+    if (usedIds.length) match._id = { $nin: usedIds };
     if (row?.type && ALLOWED_TYPES.includes(row.type)) match.type = row.type;
     if (row?.difficulty && DIFFS.includes(row.difficulty)) match.difficulty = row.difficulty;
 
@@ -156,7 +177,7 @@ export async function autoBuildTest(req, res) {
     if (section) pulled[section] = (pulled[section] || 0) + qs.length;
     report.push({
       subject: section || "(subject)",
-      topic: row?.topic || null,
+      topic: row?.topic || row?.practiceTopic || null,
       type: row?.type || null,
       difficulty: row?.difficulty || null,
       requested: count,
