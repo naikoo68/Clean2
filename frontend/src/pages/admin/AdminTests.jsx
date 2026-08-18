@@ -10,8 +10,9 @@ import AiImport from "../../components/admin/AiImport";
 import SubjectPlanEditor from "../../components/admin/SubjectPlanEditor";
 import PickFromBank from "../../components/admin/PickFromBank";
 import WeightageFill from "../../components/admin/WeightageFill";
+import AutoBuildTest from "../../components/admin/AutoBuildTest";
 import DuplicatesModal from "../../components/admin/DuplicatesModal";
-import { Files, Maximize2, Minimize2, Loader2, CheckCircle2 } from "lucide-react";
+import { Files, Maximize2, Minimize2, Loader2, CheckCircle2, Wand2 } from "lucide-react";
 import QuestionFormModal from "../../components/admin/QuestionFormModal";
 import QuestionView from "../../components/admin/QuestionView";
 import QuestionTypeFilter from "../../components/admin/QuestionTypeFilter";
@@ -67,6 +68,7 @@ export default function AdminTests() {
   const [importTest, setImportTest] = useState(null); // import-from-web questions for a test
   const [bankTest, setBankTest] = useState(null); // manual pick-from-bank for a test
   const [weightTest, setWeightTest] = useState(null); // auto-fill by subject (weightage)
+  const [autoTest, setAutoTest] = useState(null); // auto-build by subject/topic/type/difficulty blueprint
   const [dupTest, setDupTest] = useState(null); // find-duplicates within a test
   const [shareTest, setShareTest] = useState(null); // public share-link modal target
   const [extendTest, setExtendTest] = useState(null); // AI extend-explanations target
@@ -594,6 +596,9 @@ export default function AdminTests() {
                       <button onClick={() => setWeightTest(t)} title="Add by subject (weightage) — auto-pull N questions per subject" className="rounded-lg p-2 text-brand-600 hover:bg-brand-50 dark:hover:bg-brand-900/30">
                         <Scale className="h-4 w-4" />
                       </button>
+                      <button onClick={() => setAutoTest(t)} title="Auto-build — pick questions by subject, topic, type & difficulty" className="rounded-lg p-2 text-violet-600 hover:bg-violet-50 dark:hover:bg-violet-900/30">
+                        <Wand2 className="h-4 w-4" />
+                      </button>
 
                       <button onClick={() => setDupTest(t)} title="Find duplicate questions in this test" className="rounded-lg p-2 text-brand-600 hover:bg-brand-50 dark:hover:bg-brand-900/30">
                         <Files className="h-4 w-4" />
@@ -929,6 +934,14 @@ export default function AdminTests() {
         title={`Add by subject (weightage)${weightTest ? ` — ${weightTest.name}` : ""}`}
         onClose={() => setWeightTest(null)}
         onDone={() => load()}
+      />
+
+      <AutoBuildTest
+        open={!!autoTest}
+        testId={autoTest?._id}
+        testName={autoTest?.name || ""}
+        onClose={() => { setAutoTest(null); if (qTest) reloadTq(); }}
+        onDone={() => { load(); if (qTest) reloadTq(); }}
       />
 
       <DuplicatesModal

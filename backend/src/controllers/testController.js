@@ -97,6 +97,90 @@ export async function populateTest(req, res) {
   res.json({ inserted: copies.length });
 }
 
+// POST /api/tests/:id/auto-build  (admin/client)
+// Body: { blueprint: [ { subject, section?, topic?, type?, difficulty?, count } ] }
+// Automatically PICKS questions from the existing Quiz bank matching each row's
+// subject (+ optional topic / type / difficulty) and COPIES them into this test
+// as new question docs. This is the richer sibling of populateTest — instead of
+// just "N per subject", each row can also constrain the topic, question type and
+// difficulty, so an admin can compose a blueprint like:
+//   "10 Easy MCQs from Physics", "5 Hard Matching from Biology › Genetics", …
+export async function autoBuildTest(req, res) {
+  const test = await TestSeries.findById(req.params.id);
+  if (!test) return res.status(404).json({ message: "Test not found" });
+  if (!canManage(req, test)) return res.status(403).json({ message: "Not your content" });
+
+  const rows = Array.isArray(req.body?.blueprint) ? req.body.blueprint : [];
+  if (!rows.length) return res.status(400).json({ message: "Add at least one blueprint row." });
+
+  const owner = ownerValue(req);
+  const scope = ownerFilter(req);
+  const ALLOWED_TYPES = ["mcq", "numericalmcq", "matching", "statement", "pair", "pairselect", "image", "table", "assertion", "journal", "ledger", "rearrange", "diagram"];
+  const DIFFS = ["Easy", "Medium", "Hard"];
+  const oid = (v) => { try { return new mongoose.Types.ObjectId(String(v)); } catch { return null; } };
+
+  const toCopy = (q, section) => {
+    const doc = { testSeries: test._id, status: "published", owner };
+    if (section) doc.section = section;
+    for (const f of COPY_FIELDS) if (q[f] !== undefined) doc[f] = q[f];
+    return doc;
+  };
+
+  const copies = [];
+  const pulled = {};       // section name -> how many were pulled (weightage)
+  const report = [];       // per-row: what was requested vs actually found
+  const usedIds = [];      // library question ids already picked THIS run (avoid duplicates across rows)
+
+  for (const row of rows) {
+    const sid = oid(row?.subject);
+    const count = Math.max(0, Math.min(500, parseInt(row?.count, 10) || 0));
+    const section = String(row?.section || "").trim();
+    if (!sid || !count) continue;
+
+    const match = { subject: sid, testSeries: { $exists: false }, ...scope };
+    if (usedIds.length) match._id = { $nin: usedIds };
+
+    // Optional TOPIC filter — Question.topic is a free string, so resolve the
+    // topic to its sessions and match questions in those sessions (reliable).
+    if (row?.topic) {
+      const tid = oid(row.topic);
+      const sessions = tid ? await Session.find({ topic: tid }).select("_id").lean() : [];
+      match.session = { $in: sessions.map((s) => s._id) }; // empty → matches nothing (correctly yields 0)
+    }
+    if (row?.type && ALLOWED_TYPES.includes(row.type)) match.type = row.type;
+    if (row?.difficulty && DIFFS.includes(row.difficulty)) match.difficulty = row.difficulty;
+
+    const qs = await Question.aggregate([{ $match: match }, { $sample: { size: count } }]);
+    for (const q of qs) usedIds.push(q._id);
+    copies.push(...qs.map((q) => toCopy(q, section)));
+    if (section) pulled[section] = (pulled[section] || 0) + qs.length;
+    report.push({
+      subject: section || "(subject)",
+      topic: row?.topic || null,
+      type: row?.type || null,
+      difficulty: row?.difficulty || null,
+      requested: count,
+      got: qs.length,
+    });
+  }
+
+  if (copies.length) {
+    const created = await Question.insertMany(copies);
+    // Keep the test's subjectPlan (the "questions by subject" view) accurate.
+    const plan = [...(test.subjectPlan || [])];
+    for (const [subject, count] of Object.entries(pulled)) {
+      const existing = plan.find((p) => (p.subject || "") === subject);
+      if (existing) existing.count = (existing.count || 0) + count;
+      else plan.push({ subject, count });
+    }
+    await TestSeries.findByIdAndUpdate(test._id, {
+      $push: { questions: { $each: created.map((c) => c._id) } },
+      $set: { subjectPlan: plan },
+    });
+  }
+  res.json({ inserted: copies.length, report });
+}
+
 // GET /api/tests  — list published tests visible to the requesting user
 export async function listTests(req, res) {
   const { category, post, exam } = req.query;
