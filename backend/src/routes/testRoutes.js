@@ -24,6 +24,8 @@ import {
   getPublicTest,
   submitPublicTest,
   registerPublicView,
+  getFreeTest,
+  submitFreeTest,
   listSharedTests,
   listPublicAttempts,
 } from "../controllers/testController.js";
@@ -58,6 +60,10 @@ router.patch("/:id/move-series", ...admin, moveTestSeries); // Test Series → a
 router.patch("/from-quiz/:id/to-my-quiz", ...admin, quizToMyQuiz); // Quiz → My Quiz
 router.patch("/:id/to-quiz", ...admin, toQuiz); // My Quiz → Quiz
 router.delete("/:id/questions/:qid", ...manage, deleteTestQuestion);
+// FREE first-test-per-subject — no login needed (optionalAuth). Declared before
+// the generic "/:id" so they resolve to these handlers.
+router.get("/:id/free", optionalAuth, getFreeTest);
+router.post("/:id/free-submit", optionalAuth, submitFreeTest);
 router.get("/:id", protect, getTest);
 router.post("/:id/submit", protect, submitTest);
 

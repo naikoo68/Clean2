@@ -108,10 +108,11 @@ function CbtSubmitted({ result, test, candidate, navigate }) {
 }
 
 export default function TestAttempt() {
-  const { testId, token, cbtToken } = useParams();
+  const { testId, token, cbtToken, freeId } = useParams();
   const isPublic = !!token; // opened via /public/test/:token — no login needed
   const isCbt = !!cbtToken; // opened via /cbt/exam/:token — sign in with name+email
-  const anonymous = isPublic || isCbt; // no logged-in user → hide student-only UI
+  const isFree = !!freeId; // FREE first-test-per-subject preview — no login needed
+  const anonymous = isPublic || isCbt || isFree; // no logged-in user → hide student-only UI
   const navigate = useNavigate();
   const { user } = useAuth();
   const isClient = user?.role === "client"; // clients return to their own workspace
@@ -171,7 +172,7 @@ export default function TestAttempt() {
     }
     setLoading(true);
     setError("");
-    (isPublic ? testService.getPublic(token) : testService.get(testId))
+    (isPublic ? testService.getPublic(token) : isFree ? testService.getFree(freeId) : testService.get(testId))
       .then((t) => {
         // A shared QUIZ (practiceKind "quiz") should open in the quiz-style
         // player, not this exam UI. Redirect old /public/test links accordingly.
@@ -189,7 +190,7 @@ export default function TestAttempt() {
       })
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false));
-  }, [testId, token, cbtToken, isPublic, isCbt, seed, navigate, startCbtExam]);
+  }, [testId, token, cbtToken, freeId, isPublic, isCbt, isFree, seed, navigate, startCbtExam]);
 
   useEffect(load, [load]);
 
@@ -225,6 +226,8 @@ export default function TestAttempt() {
         ? await cbtService.submit(cbtToken, { name: candidate?.name, email: candidate?.email, sessionToken: candidate?.sessionToken, answers: byId, timeTaken: elapsed })
         : isPublic
         ? await testService.submitPublic(token, byId, elapsed)
+        : isFree
+        ? await testService.submitFree(freeId, byId, elapsed)
         : await testService.submit(testId, byId, elapsed);
       setResult(res);
     } catch (e) {
@@ -233,7 +236,7 @@ export default function TestAttempt() {
       setSubmitting(false);
       if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
     }
-  }, [answers, questions, test, remaining, testId, token, cbtToken, isPublic, isCbt, candidate, submitting, result]);
+  }, [answers, questions, test, remaining, testId, token, cbtToken, freeId, isPublic, isCbt, isFree, candidate, submitting, result]);
 
   // Countdown with auto-submit at 0.
   useEffect(() => {
@@ -403,6 +406,12 @@ export default function TestAttempt() {
               {!anonymous && <FeedbackButton context="test" source={testSource} label="Give Feedback" className="btn-outline" />}
               {isPublic ? (
                 <button onClick={() => navigate("/")} className="btn-primary">Done</button>
+              ) : isFree && !user ? (
+                // Free preview finished by a guest — nudge them to unlock the rest.
+                <>
+                  <button onClick={() => navigate(-1)} className="btn-outline">Back to Tests</button>
+                  <button onClick={() => navigate("/register")} className="btn-primary">Sign up to unlock all tests</button>
+                </>
               ) : isClient ? (
                 <button onClick={() => navigate("/client")} className="btn-primary">Back to My Practice</button>
               ) : (
