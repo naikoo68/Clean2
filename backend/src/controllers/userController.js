@@ -1,6 +1,6 @@
 import crypto from "crypto";
 import User from "../models/User.js";
-import { getClientPlans } from "../utils/plans.js";
+import { getClientPlans, getStudentPlans } from "../utils/plans.js";
 import TestSeries from "../models/TestSeries.js";
 import Question from "../models/Question.js";
 import PracticeStream from "../models/PracticeStream.js";
@@ -101,7 +101,23 @@ export async function createUser(req, res) {
     expiry = d;
   }
 
-  const user = await User.create({ name, email, password, role, plan, isEmailVerified: true, expiresAt: expiry });
+  const doc = { name, email, password, role, plan, isEmailVerified: true, expiresAt: expiry };
+
+  // Optional student subscription granted at creation (admin manual grant).
+  if (req.body.studentPlan) {
+    const key = String(req.body.studentPlan);
+    doc.studentPlan = key;
+    const plans = await getStudentPlans();
+    const p = plans.find((x) => x.key === key);
+    if (p) { doc.studentPlanMonths = p.months; doc.studentPlanPrice = p.price; doc.studentTrial = !!p.trial; }
+  }
+  if (req.body.studentPlanExpiresAt) {
+    const d = new Date(req.body.studentPlanExpiresAt);
+    if (isNaN(d.getTime())) return res.status(400).json({ message: "Invalid student subscription date" });
+    doc.studentPlanExpiresAt = d;
+  }
+
+  const user = await User.create(doc);
   const obj = user.toObject();
   delete obj.password;
   res.status(201).json(obj);
@@ -159,6 +175,39 @@ export async function updateUser(req, res) {
         user.subscriptionPrice = p.price;
         user.isTrial = !!p.trial;
       }
+    }
+  }
+
+  // Student subscription (admin manual grant / extend / remove). This is the
+  // validity that gates a STUDENT's access to attempting quizzes/test-series &
+  // their performance Dashboard — separate from the temp-account `expiresAt`
+  // below. `studentPlan` sets the plan key (+ its months/price from the student
+  // catalog); `studentPlanExpiresAt` sets/clears the validity date.
+  if ("studentPlan" in req.body) {
+    const key = String(req.body.studentPlan || "");
+    if (!key) {
+      user.studentPlan = undefined;
+      user.studentPlanMonths = undefined;
+      user.studentPlanPrice = undefined;
+      user.studentTrial = false;
+    } else {
+      user.studentPlan = key;
+      const plans = await getStudentPlans();
+      const p = plans.find((x) => x.key === key);
+      if (p) {
+        user.studentPlanMonths = p.months;
+        user.studentPlanPrice = p.price;
+        user.studentTrial = !!p.trial;
+      }
+    }
+  }
+  if ("studentPlanExpiresAt" in req.body) {
+    if (!req.body.studentPlanExpiresAt) {
+      user.studentPlanExpiresAt = null; // clears → back to the free tier
+    } else {
+      const d = new Date(req.body.studentPlanExpiresAt);
+      if (isNaN(d.getTime())) return res.status(400).json({ message: "Invalid student subscription date" });
+      user.studentPlanExpiresAt = d;
     }
   }
 
