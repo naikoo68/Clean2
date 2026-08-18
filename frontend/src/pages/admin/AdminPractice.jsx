@@ -22,6 +22,7 @@ import AutoBuildTest from "../../components/admin/AutoBuildTest";
 import ManageTestQuestions from "../../components/admin/ManageTestQuestions";
 import SubjectPlanEditor from "../../components/admin/SubjectPlanEditor";
 import ShareTestModal from "../../components/admin/ShareTestModal";
+import ShareNodeModal from "../../components/admin/ShareNodeModal";
 import ShareByEmailModal from "../../components/client/ShareByEmailModal";
 import IncomingSharesInbox from "../../components/client/IncomingSharesInbox";
 import ExtendExplanationsModal from "../../components/admin/ExtendExplanationsModal";
@@ -173,6 +174,7 @@ export default function AdminPractice({ clientMode = false, fixedKind = "" }) {
   const [delProgress, setDelProgress] = useState(null); // real-time delete-by-type progress: { total, done }
   const [moveModal, setMoveModal] = useState(null); // { ids } — open the destination picker to move these question ids
   const [shareItem, setShareItem] = useState(null); // public share-link modal target (tests)
+  const [shareNode, setShareNode] = useState(null); // public share-link modal target for a stream/subject/topic → { node, level }
   const [shareEmailTarget, setShareEmailTarget] = useState(null); // account-to-account share (stream/subject/topic/item)
   const [migrateItem, setMigrateItem] = useState(null); // per-quiz migrate modal target (My Quiz)
   const [paperFilesItem, setPaperFilesItem] = useState(null); // Previous Papers: paper/answer-key PDF + info modal target
@@ -1045,6 +1047,9 @@ export default function AdminPractice({ clientMode = false, fixedKind = "" }) {
                     </button>
                   )}
                   {view !== "items" && (
+                    <button onClick={() => setShareNode({ node: item, level: view === "streams" ? "stream" : view === "subjects" ? "subject" : "topic" })} title="Share a public link to this whole stream/subject/topic (anyone can open & take everything under it — no login)" className={`rounded-lg p-2 hover:bg-emerald-50 dark:hover:bg-emerald-900/30 ${item.publicShare ? "text-emerald-600" : "text-slate-500 hover:text-emerald-600 dark:text-slate-400"}`}><Share2 className="h-4 w-4" /></button>
+                  )}
+                  {view !== "items" && (
                     <button onClick={() => setShareEmailTarget({ level: view === "streams" ? "stream" : view === "subjects" ? "subject" : "topic", id: item._id, name: item.name })} title="Send to another user by email (they must have an account)" className="rounded-lg p-2 text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-900/30"><Send className="h-4 w-4" /></button>
                   )}
                   {view !== "items" && (
@@ -1665,6 +1670,17 @@ export default function AdminPractice({ clientMode = false, fixedKind = "" }) {
         />
       )}
 
+      {shareNode && (
+        <ShareNodeModal
+          node={shareNode.node}
+          level={shareNode.level}
+          onClose={() => setShareNode(null)}
+          onUpdated={(patch) => {
+            setShareNode((s) => (s ? { ...s, node: { ...s.node, ...patch } } : s));
+            setItems((list) => list.map((x) => (x._id === shareNode.node._id ? { ...x, ...patch } : x)));
+          }}
+        />
+      )}
       {shareItem && (
         <ShareTestModal
           test={shareItem}

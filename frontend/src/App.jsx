@@ -28,6 +28,7 @@ const WriteReview = lazy(() => import("./pages/WriteReview"));
 const Dashboard = lazy(() => import("./pages/Dashboard"));
 const Account = lazy(() => import("./pages/Account"));
 const NotFound = lazy(() => import("./pages/NotFound"));
+const PublicNode = lazy(() => import("./pages/PublicNode"));
 
 const QuizHome = lazy(() => import("./pages/quiz/QuizHome"));
 const StreamSubjects = lazy(() => import("./pages/quiz/StreamSubjects"));
@@ -179,6 +180,11 @@ const router = createHashRouter([
   {
     path: "/public/quiz/:token",
     element: S(PracticeQuizPlay),
+  },
+  // Public shared NODE (stream/subject/topic) — lists every quiz/test under it
+  {
+    path: "/public/node/:token",
+    element: S(PublicNode),
   },
   // Public exam PORTAL — the single shareable web page listing all live exams
   {
