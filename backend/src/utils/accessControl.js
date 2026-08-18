@@ -25,3 +25,11 @@ export function isSharedWithUser(doc, userId) {
   if (!userId) return false;
   return (doc?.sharedWith || []).some((u) => String(u) === String(userId));
 }
+
+// True when the user holds an ACTIVE student subscription (paid or trial). A
+// subscribed student gets full access to all practice quizzes & test-series —
+// this is the core perk of the student plans, so it unlocks the same content
+// the per-account myQuizAccess/myTestAccess master grants do.
+export function hasActiveSubscription(user) {
+  return !!(user?.studentPlanExpiresAt && new Date(user.studentPlanExpiresAt).getTime() > Date.now());
+}
