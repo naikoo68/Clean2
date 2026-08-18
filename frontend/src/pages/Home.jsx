@@ -197,6 +197,9 @@ export default function Home() {
               <Link to="/practice/paper" className="btn-outline text-base">
                 <FileText className="h-5 w-5" /> Previous Papers
               </Link>
+              <Link to="/practice" className="btn-outline text-base">
+                <ListChecks className="h-5 w-5" /> My Practice
+              </Link>
             </div>
             {/* Search all content — streams, subjects, topics, quizzes & tests */}
             <div className="mt-6 mx-auto max-w-lg">
