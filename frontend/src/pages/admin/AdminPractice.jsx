@@ -14,6 +14,7 @@ import PaperFilesModal from "../../components/admin/PaperFilesModal";
 import QuestionView from "../../components/admin/QuestionView";
 import QuestionTypeFilter from "../../components/admin/QuestionTypeFilter";
 import QuestionStatusFilter, { filterByStatus } from "../../components/admin/QuestionStatusFilter";
+import QuestionSubjectFilter, { filterBySubject } from "../../components/admin/QuestionSubjectFilter";
 import { questionTypeKey, QUESTION_TYPE_LABELS } from "../../lib/questions";
 import AddToTestModal from "../../components/admin/AddToTestModal";
 import PickFromBank from "../../components/admin/PickFromBank";
@@ -166,6 +167,7 @@ export default function AdminPractice({ clientMode = false, fixedKind = "" }) {
   const [studentView, setStudentView] = useState(true); // View All: defaults to student view (answers hidden)
   const [typeFilter, setTypeFilter] = useState([]); // View All: which question types to show ([] = all)
   const [statusFilter, setStatusFilter] = useState("all"); // View All: updated/not_updated/all
+  const [subjectFilter, setSubjectFilter] = useState(""); // View All: which subject/section to show ("" = all)
   const [reopenAfterEdit, setReopenAfterEdit] = useState(null); // question _id to reopen in the preview after editing it there
   const [selQ, setSelQ] = useState(() => new Set()); // ticked questions to move (full-quiz view)
   const [delProgress, setDelProgress] = useState(null); // real-time delete-by-type progress: { total, done }
@@ -803,7 +805,7 @@ export default function AdminPractice({ clientMode = false, fixedKind = "" }) {
   // every question when no type is selected) — delete a whole type at once.
   const deleteByType = async () => {
     if (delProgress || !qItem) return;
-    const targets = tq.filter((it) => !typeFilter.length || typeFilter.includes(questionTypeKey(it)));
+    const targets = filterBySubject(tq, subjectFilter).filter((it) => !typeFilter.length || typeFilter.includes(questionTypeKey(it)));
     const ids = targets.map((q) => q._id);
     if (!ids.length) return;
     const label = typeFilter.length ? typeFilter.map((t) => QUESTION_TYPE_LABELS[t] || t).join(", ") : "all types";
@@ -1186,7 +1188,7 @@ export default function AdminPractice({ clientMode = false, fixedKind = "" }) {
                 load("items");
               }}
               onViewQuestion={setViewQ}
-              onViewAll={() => { setTypeFilter([]); setStatusFilter("all"); setViewAll(true); }}
+              onViewAll={() => { setTypeFilter([]); setStatusFilter("all"); setSubjectFilter(""); setViewAll(true); }}
               onDuplicates={() => { setDupScope({ params: { testSeries: qItem._id }, name: qItem.name }); setDupOpen(true); }}
               onCopyCsv={copyCsv}
               onDownloadCsv={downloadCsv}
@@ -1281,7 +1283,7 @@ export default function AdminPractice({ clientMode = false, fixedKind = "" }) {
             {!studentView && tq.length > 0 && (() => {
               // "Select all" respects the active TYPE filter: it selects every
               // VISIBLE (filtered) question at once, so you can grab a whole type.
-              const visible = tq.filter((it) => !typeFilter.length || typeFilter.includes(questionTypeKey(it)));
+              const visible = filterBySubject(tq, subjectFilter).filter((it) => !typeFilter.length || typeFilter.includes(questionTypeKey(it)));
               const allSel = visible.length > 0 && visible.every((it) => selQ.has(it._id));
               return (
                 <div className="mb-3 flex flex-wrap items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 p-2 text-xs dark:border-slate-700 dark:bg-slate-800/60">
@@ -1298,10 +1300,11 @@ export default function AdminPractice({ clientMode = false, fixedKind = "" }) {
                 </div>
               );
             })()}
+            <QuestionSubjectFilter questions={tq} selected={subjectFilter} onChange={setSubjectFilter} />
             <QuestionTypeFilter questions={tq} selected={typeFilter} onChange={setTypeFilter} />
             <QuestionStatusFilter questions={tq} selected={statusFilter} onChange={setStatusFilter} />
             {!studentView && (() => {
-              const shownCount = filterByStatus(tq.filter((it) => !typeFilter.length || typeFilter.includes(questionTypeKey(it))), statusFilter).length;
+              const shownCount = filterByStatus(filterBySubject(tq, subjectFilter).filter((it) => !typeFilter.length || typeFilter.includes(questionTypeKey(it))), statusFilter).length;
               if (!shownCount) return null;
               return (
                 <div className="mb-3 flex flex-wrap items-center gap-2">
@@ -1314,13 +1317,13 @@ export default function AdminPractice({ clientMode = false, fixedKind = "" }) {
                       : `Delete all ${shownCount}`}
                   </button>
                   <button
-                    onClick={() => openMove(tq.filter((it) => !typeFilter.length || typeFilter.includes(questionTypeKey(it))).map((q) => q._id))}
+                    onClick={() => openMove(filterBySubject(tq, subjectFilter).filter((it) => !typeFilter.length || typeFilter.includes(questionTypeKey(it))).map((q) => q._id))}
                     className="inline-flex items-center gap-1.5 rounded-lg border border-brand-200 px-3 py-1.5 text-xs font-semibold text-brand-600 transition hover:bg-brand-50 dark:border-brand-900/50 dark:hover:bg-brand-900/20"
                   >
                     <ArrowRightLeft className="h-3.5 w-3.5" /> {typeFilter.length ? `Move these ${shownCount}…` : `Move all ${shownCount}…`}
                   </button>
                   <button
-                    onClick={() => openCopy(tq.filter((it) => !typeFilter.length || typeFilter.includes(questionTypeKey(it))).map((q) => q._id))}
+                    onClick={() => openCopy(filterBySubject(tq, subjectFilter).filter((it) => !typeFilter.length || typeFilter.includes(questionTypeKey(it))).map((q) => q._id))}
                     className="inline-flex items-center gap-1.5 rounded-lg border border-brand-200 px-3 py-1.5 text-xs font-semibold text-brand-600 transition hover:bg-brand-50 dark:border-brand-900/50 dark:hover:bg-brand-900/20"
                     title="Duplicate these questions into another quiz (originals stay here)"
                   >
@@ -1338,7 +1341,7 @@ export default function AdminPractice({ clientMode = false, fixedKind = "" }) {
               </p>
             )}
             <div className="max-h-[70vh] space-y-4 overflow-y-auto pr-1">
-              {filterByStatus(tq, statusFilter)
+              {filterByStatus(filterBySubject(tq, subjectFilter), statusFilter)
                 .map((it, i) => ({ it, i }))
                 .filter(({ it }) => !typeFilter.length || typeFilter.includes(questionTypeKey(it)))
                 .map(({ it, i }) => (
