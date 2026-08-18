@@ -14,6 +14,7 @@ import PracticeTopic from "../models/PracticeTopic.js";
 import Quiz from "../models/Quiz.js";
 import Session from "../models/Session.js";
 import { duplicateQuestions } from "../utils/duplicateQuestions.js";
+import { byNatural } from "../utils/naturalSort.js";
 
 // A caller may manage a test/question only within their own space: clients only
 // their own owned items; admins only the shared (ownerless) platform items.
@@ -261,12 +262,65 @@ export async function getTest(req, res) {
   // Additive master grant for practice content: myQuizAccess unlocks all My-Quiz
   // items, myTestAccess unlocks all My-Test items.
   const masterGrant = test.practice === true && ((test.practiceKind === "quiz" || test.practiceKind === "paper") ? req.user?.myQuizAccess === true : req.user?.myTestAccess === true);
-  if (req.user?.role !== "admin" && !isOwner && !masterGrant && !isTestVisibleToUser(test.toObject(), req.user?._id) && !isSharedWithUser(test, req.user?._id)) {
-    return res.status(403).json({ message: "You don't have access to this test, or your access has expired." });
+  // FREE preview: the first My-Test in a subject is attemptable by anyone (so a
+  // logged-in user without a subscription can still open it via this path).
+  const freePreviewOk = await isFreePreviewTest(test);
+  if (req.user?.role !== "admin" && !isOwner && !masterGrant && !freePreviewOk && !isTestVisibleToUser(test.toObject(), req.user?._id) && !isSharedWithUser(test, req.user?._id)) {
+    return res.status(403).json({ message: "A subscription is needed for this test. The first test in each subject is free." });
   }
   const obj = test.toObject();
   delete obj.access; // hide access list from students
   res.json(obj); // subject/question/option shuffling is done per-attempt on the client
+}
+
+// The FIRST published My-Test in a subject (natural name order) is a FREE
+// preview anyone may attempt without login or subscription — mirrors the free
+// first quiz per topic. (Hoisted function declaration so getTest can use it.)
+async function isFreePreviewTest(test) {
+  if (!test || test.practice !== true || test.practiceKind !== "test" || !test.practiceSubject) return false;
+  const siblings = (await TestSeries.find({
+    practice: true, practiceKind: "test", status: "published",
+    practiceSubject: test.practiceSubject, owner: test.owner || null,
+  }).select("_id name").lean()).sort(byNatural("name"));
+  return siblings.length > 0 && String(siblings[0]._id) === String(test._id);
+}
+
+// GET /api/tests/:id/free — no-auth load of the FREE first test of a subject
+// (exam-style, answers stripped). Any non-free test needs the normal auth path.
+export async function getFreeTest(req, res) {
+  const test = await TestSeries.findById(req.params.id)
+    .populate({ path: "questions", select: "-correct -explanation -optionExplanations" });
+  if (!test) return res.status(404).json({ message: "Test not found" });
+  if (!(await isFreePreviewTest(test))) {
+    return res.status(req.user ? 403 : 401).json({ message: "A subscription is needed for this test. The first test in each subject is free." });
+  }
+  const obj = test.toObject();
+  delete obj.access;
+  res.json(obj);
+}
+
+// POST /api/tests/:id/free-submit — grade the FREE first test for a guest. No
+// account required (nothing stored against a user); only the free-preview test.
+export async function submitFreeTest(req, res) {
+  const { answers = {}, timeTaken = 0 } = req.body;
+  const test = await TestSeries.findById(req.params.id).populate("questions");
+  if (!test) return res.status(404).json({ message: "Test not found" });
+  if (!(await isFreePreviewTest(test))) {
+    return res.status(req.user ? 403 : 401).json({ message: "A subscription is needed for this test. The first test in each subject is free." });
+  }
+  const g = gradeSubmission(test, answers);
+  await TestSeries.findByIdAndUpdate(test._id, { $inc: { attempts: 1 } });
+  PublicAttempt.create({
+    testSeries: test._id,
+    total: g.total, attempted: g.attempted, correct: g.correct, incorrect: g.incorrect,
+    skipped: g.skipped, score: g.score, maxScore: g.maxScore, percentage: g.percentage,
+    timeTaken: Number(timeTaken) || 0,
+  }).catch(() => {});
+  res.status(201).json({
+    total: g.total, attempted: g.attempted, skipped: g.skipped, correct: g.correct,
+    incorrect: g.incorrect, score: g.score, maxScore: g.maxScore, percentage: g.percentage,
+    timeTaken, review: g.review,
+  });
 }
 
 // GET /api/tests/:id/access  (admin) — all users with their access to this test

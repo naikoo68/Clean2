@@ -65,8 +65,13 @@ export default function PracticeBrowse() {
       if (item.locked) return navigate("/pricing"); // needs a subscription
       return navigate(`/practice/quiz/play/${item._id}`);
     }
-    // My Test Series → full test interface (timed, submit at end).
+    // My Test Series → full test interface (timed, submit at end). The FIRST
+    // test in each subject is FREE for everyone; the rest need login+subscription.
+    if (item.freePreview) {
+      return navigate(user ? `/test-series/attempt/${item._id}` : `/practice/test/free/${item._id}`);
+    }
     if (!user) return navigate("/login");
+    if (item.locked) return navigate("/pricing");
     navigate(`/test-series/attempt/${item._id}`);
   };
 
@@ -82,15 +87,15 @@ export default function PracticeBrowse() {
           {rows.map((it, i) => {
             // Freemium state for My Quiz: the first quiz per topic is free; the
             // rest are locked until login + subscription. Papers need login.
-            const isFreeQuiz = kind === "quiz" && it.freePreview;
+            const isFreeItem = !!it.freePreview; // first quiz/test in a topic/subject
             const isLocked = !!it.locked;
             const paperNeedsLogin = kind === "paper" && it.loginOnly && !user;
-            const btnLabel = isFreeQuiz ? "Start free" : isLocked ? (it.loginOnly ? "Log in to open" : "Subscribe to unlock") : "Start";
+            const btnLabel = isFreeItem ? "Start free" : isLocked ? (it.loginOnly ? "Log in to open" : "Subscribe to unlock") : "Start";
             return (
               <div key={it._id} style={{ animationDelay: `${i * 40}ms` }} className="card animate-fade-in-up p-6 opacity-0">
                 <div className="flex items-start justify-between gap-2">
                   <h3 className="text-lg font-bold">{it.name}</h3>
-                  {isFreeQuiz && (
+                  {isFreeItem && (
                     <span className="inline-flex flex-shrink-0 items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-bold text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300"><Unlock className="h-3 w-3" /> Free</span>
                   )}
                   {isLocked && (
