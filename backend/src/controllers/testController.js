@@ -5,7 +5,7 @@ import Question from "../models/Question.js";
 import Attempt from "../models/Attempt.js";
 import PublicAttempt from "../models/PublicAttempt.js";
 import User from "../models/User.js";
-import { isTestVisibleToUser, findAccessEntry, isSharedWithUser } from "../utils/accessControl.js";
+import { isTestVisibleToUser, findAccessEntry, isSharedWithUser, hasActiveSubscription } from "../utils/accessControl.js";
 import { notifyNewContent } from "../utils/notify.js";
 import { ownerValue, ownerFilter } from "../utils/ownership.js";
 import PracticeStream from "../models/PracticeStream.js";
@@ -265,7 +265,8 @@ export async function getTest(req, res) {
   // FREE preview: the first My-Test in a subject is attemptable by anyone (so a
   // logged-in user without a subscription can still open it via this path).
   const freePreviewOk = await isFreePreviewTest(test);
-  if (req.user?.role !== "admin" && !isOwner && !masterGrant && !freePreviewOk && !isTestVisibleToUser(test.toObject(), req.user?._id) && !isSharedWithUser(test, req.user?._id)) {
+  // An active student subscription unlocks every test-series.
+  if (req.user?.role !== "admin" && !isOwner && !masterGrant && !freePreviewOk && !hasActiveSubscription(req.user) && !isTestVisibleToUser(test.toObject(), req.user?._id) && !isSharedWithUser(test, req.user?._id)) {
     return res.status(403).json({ message: "A subscription is needed for this test. The first test in each subject is free." });
   }
   const obj = test.toObject();

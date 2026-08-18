@@ -6,7 +6,7 @@ import TestSeries from "../models/TestSeries.js";
 import Question from "../models/Question.js";
 import User from "../models/User.js";
 import ContentShare from "../models/ContentShare.js";
-import { isTestVisibleToUser, isSharedWithUser } from "../utils/accessControl.js";
+import { isTestVisibleToUser, isSharedWithUser, hasActiveSubscription } from "../utils/accessControl.js";
 import { ownerFilter, ownerValue } from "../utils/ownership.js";
 import { sendMail, isMailConfigured } from "../config/mailer.js";
 import { clientBaseFromReq } from "../config/clientUrl.js";
@@ -559,7 +559,7 @@ export async function playQuiz(req, res) {
       if (!req.user) {
         return res.status(401).json({ message: "Log in and subscribe to attempt this quiz. The first quiz in each topic is free." });
       }
-      if (req.user.role !== "admin" && !owns(req, item) && req.user.myQuizAccess !== true && !isTestVisibleToUser(item.toObject(), req.user._id) && !isSharedWithUser(item, req.user._id)) {
+      if (req.user.role !== "admin" && !owns(req, item) && req.user.myQuizAccess !== true && !hasActiveSubscription(req.user) && !isTestVisibleToUser(item.toObject(), req.user._id) && !isSharedWithUser(item, req.user._id)) {
         return res.status(403).json({ message: "A subscription is needed to attempt this quiz. The first quiz in each topic is free." });
       }
     }
@@ -1080,6 +1080,7 @@ export async function sharePlacement(req, res) {
 const hasQuizAccess = (req, t) =>
   req.user?.role === "admin" ||
   req.user?.myQuizAccess === true ||
+  hasActiveSubscription(req.user) || // active student subscription unlocks all quizzes
   isTestVisibleToUser(t, req.user?._id) ||
   isSharedWithUser(t, req.user?._id);
 
@@ -1116,7 +1117,7 @@ export async function browseItems(req, res) {
   res.json(
     items.map((t, idx) => {
       const freePreview = idx === 0; // first test in the subject is free for everyone
-      const hasAccess = grantAll || isTestVisibleToUser(t, req.user?._id) || isSharedWithUser(t, req.user?._id);
+      const hasAccess = grantAll || hasActiveSubscription(req.user) || isTestVisibleToUser(t, req.user?._id) || isSharedWithUser(t, req.user?._id);
       return {
         _id: t._id, name: t.name, duration: t.duration, marks: t.marks, difficulty: t.difficulty,
         questionCount: t.questions?.length || 0,
@@ -1146,7 +1147,7 @@ export async function browseStreamItems(req, res) {
   if (kind === "paper") {
     return res.json(items.map((t) => ({ _id: t._id, name: t.name, duration: t.duration, marks: t.marks, difficulty: t.difficulty, questionCount: t.questions?.length || 0, loginOnly: true, locked: !req.user })));
   }
-  const grantAll = kind === "quiz" ? req.user?.myQuizAccess === true : req.user?.myTestAccess === true;
+  const grantAll = (kind === "quiz" ? req.user?.myQuizAccess === true : req.user?.myTestAccess === true) || hasActiveSubscription(req.user);
   res.json(
     items
       .filter((t) => grantAll || isTestVisibleToUser(t, req.user?._id))
