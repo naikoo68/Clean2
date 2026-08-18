@@ -29,7 +29,7 @@ import {
   listSharedTests,
   listPublicAttempts,
 } from "../controllers/testController.js";
-import { protect, authorize, optionalAuth } from "../middleware/auth.js";
+import { protect, authorize, optionalAuth, requireStudentSubscription } from "../middleware/auth.js";
 
 const router = Router();
 const admin = [protect, authorize("admin")];
@@ -64,8 +64,11 @@ router.delete("/:id/questions/:qid", ...manage, deleteTestQuestion);
 // the generic "/:id" so they resolve to these handlers.
 router.get("/:id/free", optionalAuth, getFreeTest);
 router.post("/:id/free-submit", optionalAuth, submitFreeTest);
-router.get("/:id", protect, getTest);
-router.post("/:id/submit", protect, submitTest);
+// Attempting a test-series requires an active student subscription (admins &
+// clients pass through; free/public/CBT attempts use the separate /free and
+// /public endpoints above and are unaffected).
+router.get("/:id", protect, requireStudentSubscription, getTest);
+router.post("/:id/submit", protect, requireStudentSubscription, submitTest);
 
 router.post("/", ...admin, createTest);
 router.put("/:id", ...manage, updateTest);

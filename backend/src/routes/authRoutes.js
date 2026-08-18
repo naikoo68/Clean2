@@ -11,6 +11,7 @@ import {
   getMe,
   updateProfile,
   getPlans,
+  getStudentPlans,
   validateOffer,
 } from "../controllers/authController.js";
 import { attachUser } from "../middleware/auth.js";
@@ -18,6 +19,7 @@ import { attachUser } from "../middleware/auth.js";
 const router = Router();
 
 router.get("/plans", getPlans);
+router.get("/student-plans", getStudentPlans);
 router.post("/validate-offer", validateOffer);
 router.post("/register", register);
 router.post("/verify-otp", verifyOtp);

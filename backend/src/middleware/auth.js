@@ -62,6 +62,30 @@ export function authorize(...roles) {
   };
 }
 
+// True when a "student" account has an ACTIVE paid/trial subscription (its
+// studentPlanExpiresAt is in the future). Non-students are always considered
+// "active" here — their access is governed by their own role rules.
+export function studentSubscriptionActive(user) {
+  if (!user) return false;
+  if (user.role !== "student") return true;
+  return !!(user.studentPlanExpiresAt && new Date(user.studentPlanExpiresAt).getTime() > Date.now());
+}
+
+// Gate premium student features (attempting quizzes/test-series, the
+// performance Dashboard) behind an active student subscription. Anonymous
+// callers (no req.user — e.g. optionalAuth routes serving public/free previews)
+// and non-student roles (admin/client) pass through untouched; only a
+// logged-in student WITHOUT an active plan is blocked. Responds 402 with
+// { subscriptionRequired: true } so the frontend can show the upgrade paywall.
+export function requireStudentSubscription(req, res, next) {
+  if (!req.user) return next(); // anonymous — leave public/free flows alone
+  if (studentSubscriptionActive(req.user)) return next();
+  return res.status(402).json({
+    subscriptionRequired: true,
+    message: "A subscription is required to access this. Please choose a plan to continue.",
+  });
+}
+
 // Attaches req.user if a valid token is present, but never blocks the request.
 export async function optionalAuth(req, res, next) {
   const header = req.headers.authorization;
