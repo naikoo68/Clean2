@@ -182,6 +182,13 @@ export const practiceService = {
   mergeItem: (id, sourceIds) => api.post(`/practice/items/${id}/merge`, { sourceIds }), // merge other My-Quiz items (same topic) into this one
   moveQuestions: (id, questionIds, targetId) => api.post(`/practice/items/${id}/move-questions`, { questionIds, targetId }), // move selected questions to another quiz (same topic)
   copyQuestions: (id, questionIds, targetId) => api.post(`/practice/items/${id}/copy-questions`, { questionIds, targetId }), // copy selected questions into another quiz (originals kept)
+  // Public share link for a WHOLE node (stream/subject/topic). Enabling cascades
+  // a public link to every published item beneath it; disabling turns them off.
+  // level = "stream" | "subject" | "topic".
+  toggleNodePublicLink: (level, id, enable, expiresAt) =>
+    api.patch(`/practice/${level}s/${id}/public-link`, { enable, ...(expiresAt !== undefined ? { expiresAt } : {}) }),
+  // PUBLIC (no login): open a shared stream/subject/topic → its shareable items.
+  getPublicNode: (token) => api.get(`/practice/public/node/${token}`, { auth: false }),
 };
 
 // ---- CBT online exams (single public portal; name+email sign-in; deferred results) ----

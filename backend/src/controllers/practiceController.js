@@ -1,3 +1,4 @@
+import crypto from "crypto";
 import PracticeStream from "../models/PracticeStream.js";
 import PracticeSubject from "../models/PracticeSubject.js";
 import PracticeTopic from "../models/PracticeTopic.js";
@@ -1115,6 +1116,108 @@ export async function browseTopicItems(req, res) {
   );
 }
 
+
+/* ---------------- Public share links for practice NODES (stream / subject / topic) ----------------
+   Mirrors TestSeries public sharing, but for a whole node. Enabling a node mints
+   a token (once, reused so the link is stable) AND turns on a public link for
+   every published item beneath it — minting each item's own token if needed — so
+   the shared page's items are directly playable via the existing
+   /public/quiz|test/:token players. Disabling cascades OFF too. */
+
+const newPublicToken = () => crypto.randomBytes(12).toString("hex");
+const nodePublicExpired = (n) => n.publicExpiresAt && new Date(n.publicExpiresAt).getTime() < Date.now();
+
+// Shared toggle. `childField` = the TestSeries field that points at this node.
+async function toggleNodeLink(Model, childField, req, res) {
+  const node = await Model.findById(req.params.id);
+  if (!node) return res.status(404).json({ message: "Not found" });
+  if (!owns(req, node)) return res.status(403).json({ message: "Not your content" });
+
+  const enable = req.body?.enable !== false; // default: enable
+  if (enable) {
+    node.publicShare = true;
+    if (!node.publicToken) node.publicToken = newPublicToken();
+  } else {
+    node.publicShare = false;
+  }
+  // Optional expiry: explicit value sets it; null/"" clears it (never expires).
+  if ("expiresAt" in (req.body || {})) {
+    if (!req.body.expiresAt) {
+      node.publicExpiresAt = null;
+    } else {
+      const d = new Date(req.body.expiresAt);
+      if (isNaN(d.getTime())) return res.status(400).json({ message: "Invalid expiry date" });
+      node.publicExpiresAt = d;
+    }
+  }
+  await node.save();
+
+  // Cascade to the published items beneath this node (same owner) so the shared
+  // page can actually open them via their own public links.
+  const childFilter = { practice: true, [childField]: node._id, ...ownerFilter(req) };
+  if (enable) {
+    const children = await TestSeries.find({ ...childFilter, status: "published" }).select("_id publicToken");
+    const ops = children.map((c) => ({
+      updateOne: {
+        filter: { _id: c._id },
+        update: {
+          $set: {
+            publicShare: true,
+            publicExpiresAt: node.publicExpiresAt || null, // items don't outlive the shared page
+            ...(c.publicToken ? {} : { publicToken: newPublicToken() }),
+          },
+        },
+      },
+    }));
+    if (ops.length) await TestSeries.bulkWrite(ops);
+  } else {
+    await TestSeries.updateMany(childFilter, { $set: { publicShare: false } });
+  }
+
+  res.json({ publicShare: node.publicShare, publicToken: node.publicToken, publicExpiresAt: node.publicExpiresAt });
+}
+
+export async function toggleStreamPublicLink(req, res) { return toggleNodeLink(PracticeStream, "practiceStream", req, res); }
+export async function toggleSubjectPublicLink(req, res) { return toggleNodeLink(PracticeSubject, "practiceSubject", req, res); }
+export async function toggleTopicPublicLink(req, res) { return toggleNodeLink(PracticeTopic, "practiceTopic", req, res); }
+
+// GET /api/practice/public/node/:token — anonymous. Finds the stream/subject/
+// topic that owns this token and returns its published, publicly-shared items
+// (name + minimal meta + each item's OWN public token so the page can link
+// straight to the existing quiz/test players). No questions/answers exposed.
+export async function getPublicNode(req, res) {
+  const token = req.params.token;
+  let level = null;
+  let node = await PracticeStream.findOne({ publicToken: token, publicShare: true });
+  if (node) level = "stream";
+  if (!node) { node = await PracticeSubject.findOne({ publicToken: token, publicShare: true }); if (node) level = "subject"; }
+  if (!node) { node = await PracticeTopic.findOne({ publicToken: token, publicShare: true }); if (node) level = "topic"; }
+  if (!node) return res.status(404).json({ message: "This link is invalid or public sharing was turned off." });
+  if (nodePublicExpired(node)) return res.status(403).json({ message: "This public link has expired." });
+
+  const field = level === "stream" ? "practiceStream" : level === "subject" ? "practiceSubject" : "practiceTopic";
+  const items = (await TestSeries.find({
+    practice: true,
+    [field]: node._id,
+    owner: node.owner || null,
+    status: "published",
+    publicShare: true,
+    publicToken: { $ne: null },
+  }).select("name practiceKind duration marks difficulty questions publicToken publicExpiresAt").lean())
+    .filter((t) => !(t.publicExpiresAt && new Date(t.publicExpiresAt).getTime() < Date.now()))
+    .sort(byNatural("name"))
+    .map((t) => ({
+      name: t.name,
+      kind: t.practiceKind || "quiz",
+      duration: t.duration,
+      marks: t.marks,
+      difficulty: t.difficulty,
+      questionCount: t.questions?.length || 0,
+      token: t.publicToken, // opens via /public/quiz|test/:token
+    }));
+
+  res.json({ level, name: node.name, description: node.description || "", items });
+}
 
 /* ---------------- Backup / Restore (a client's own My Practice content) ---------------- */
 
