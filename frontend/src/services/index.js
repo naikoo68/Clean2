@@ -137,6 +137,9 @@ export const practiceService = {
   streamItems: (kind, streamId) => api.get(`/practice/browse/${kind}/streams/${streamId}/items`), // Previous Papers — items directly under a stream
   // My Quiz play — full questions WITH answers for instant reveal (quiz-style)
   quizPlay: (id) => api.get(`/practice/quiz/${id}/play`),
+  // FREE first-quiz-per-topic — playable without login (no auth header). The
+  // backend only returns it when the id is the free preview quiz of its topic.
+  freeQuizPlay: (id) => api.get(`/practice/quiz/${id}/play`, { auth: false }),
   // The caller's own practice items (client dashboard) — flat quiz + test list
   myItems: () => api.get("/practice/my-items"),
   // Back up / restore ALL of my own My Practice content — background jobs with

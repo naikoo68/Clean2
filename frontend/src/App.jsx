@@ -181,6 +181,11 @@ const router = createHashRouter([
     path: "/public/quiz/:token",
     element: S(PracticeQuizPlay),
   },
+  // FREE first-quiz-per-topic — attemptable without login (freemium preview)
+  {
+    path: "/practice/quiz/free/:freeId",
+    element: S(PracticeQuizPlay),
+  },
   // Public shared NODE (stream/subject/topic) — lists every quiz/test under it
   {
     path: "/public/node/:token",

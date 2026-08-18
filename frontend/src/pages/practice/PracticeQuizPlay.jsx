@@ -68,9 +68,10 @@ const TIMER_OPTIONS = [
 // bookmarks. Loads questions WITH answers from the practice endpoint and
 // records the attempt via testService.submit (so it shows in My Progress).
 export default function PracticeQuizPlay() {
-  const { itemId, token } = useParams();
+  const { itemId, token, freeId } = useParams();
   const isPublic = !!token; // opened via a public share link (no login needed)
-  const playId = itemId || token;
+  const isFree = !!freeId; // FREE first-quiz-per-topic preview (no login needed)
+  const playId = itemId || token || freeId;
   const navigate = useNavigate();
   const { user } = useAuth();
   const isClient = user?.role === "client"; // clients return to their own workspace
@@ -132,7 +133,7 @@ export default function PracticeQuizPlay() {
   const load = useCallback(() => {
     setLoading(true);
     setError("");
-    (isPublic ? testService.getPublic(token) : practiceService.quizPlay(itemId))
+    (isPublic ? testService.getPublic(token) : isFree ? practiceService.freeQuizPlay(freeId) : practiceService.quizPlay(itemId))
       .then((data) => {
         setQuestions(shuffleAll(data.questions || [], seed)); // reshuffle options
         setTitle(data.name || "Practice Quiz");
@@ -140,7 +141,7 @@ export default function PracticeQuizPlay() {
       })
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false));
-  }, [itemId, token, isPublic, seed]);
+  }, [itemId, token, freeId, isPublic, isFree, seed]);
   useEffect(load, [load]);
 
   // Count a public OPEN once per browser (impression tracking for shared links).
@@ -203,9 +204,10 @@ export default function PracticeQuizPlay() {
     });
     let graded = null;
     try {
-      graded = await (isPublic
-        ? testService.submitPublic(token, byId, seconds)
-        : testService.submit(itemId, byId, seconds));
+      // FREE preview quizzes are graded LOCALLY (no server attempt is recorded
+      // for a guest); public links and logged-in plays record on the server.
+      if (isPublic) graded = await testService.submitPublic(token, byId, seconds);
+      else if (!isFree) graded = await testService.submit(itemId, byId, seconds);
     } catch {
       /* still show a local result even if recording fails */
     }
@@ -229,7 +231,7 @@ export default function PracticeQuizPlay() {
     setResult(graded);
     setSubmitting(false);
     if (document.fullscreenElement) document.exitFullscreen?.().catch(() => {});
-  }, [answers, questions, seconds, itemId, token, isPublic, storageKey]);
+  }, [answers, questions, seconds, itemId, token, isPublic, isFree, storageKey]);
 
   if (loading) return <div className="container-page"><Loading label="Loading quiz..." /></div>;
   if (error) return <div className="container-page"><ErrorState message={error} onRetry={load} /></div>;
@@ -306,11 +308,17 @@ export default function PracticeQuizPlay() {
             <PaperExport title={title || "Practice Quiz"} questions={questions} />
             {isPublic ? (
               <button onClick={() => navigate("/")} className="btn-primary">Done</button>
+            ) : isFree && !user ? (
+              // Free preview finished by a guest — nudge them to unlock the rest.
+              <>
+                <button onClick={() => navigate(-1)} className="btn-outline">Back to Quizzes</button>
+                <button onClick={() => navigate("/register")} className="btn-primary">Sign up to unlock all quizzes</button>
+              </>
             ) : isClient ? (
               <button onClick={() => navigate("/client")} className="btn-primary">Back to My Practice</button>
             ) : (
               <>
-                <button onClick={() => navigate(isPublic ? "/" : -1)} className="btn-primary">Back to Quizzes</button>
+                <button onClick={() => navigate(-1)} className="btn-primary">Back to Quizzes</button>
                 <button onClick={() => navigate("/dashboard")} className="btn-outline">My Progress</button>
               </>
             )}
