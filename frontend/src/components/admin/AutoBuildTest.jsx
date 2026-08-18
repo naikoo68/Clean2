@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { X, Wand2, Loader2, CheckCircle2, Search } from "lucide-react";
+import { X, Wand2, Loader2, CheckCircle2, Search, Maximize2, Minimize2 } from "lucide-react";
 import { contentService, practiceService, testService } from "../../services";
 import { QUESTION_TYPE_LABELS } from "../../lib/questions";
 
@@ -32,6 +32,7 @@ export default function AutoBuildTest({ open, onClose, testId, testName = "", pl
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState("");
   const [report, setReport] = useState(null);
+  const [fullScreen, setFullScreen] = useState(false); // expand the dialog to fill the screen
 
   useEffect(() => {
     if (!open) return;
@@ -121,13 +122,23 @@ export default function AutoBuildTest({ open, onClose, testId, testName = "", pl
   const noSources = !loading && libSubjects.length === 0;
 
   return (
-    <div className="fixed inset-0 z-[55] flex items-start justify-center overflow-y-auto bg-black/50 p-4">
-      <div className="my-8 w-full max-w-lg animate-scale-in card p-6">
+    <div className={`fixed inset-0 z-[55] flex justify-center overflow-y-auto bg-black/50 ${fullScreen ? "items-stretch p-0" : "items-start p-4"}`}>
+      <div className={`animate-scale-in card ${fullScreen ? "m-0 min-h-full w-full max-w-none rounded-none p-4 sm:p-6" : "my-8 w-full max-w-lg p-6"}`}>
         <div className="mb-2 flex items-center justify-between">
           <h3 className="flex items-center gap-2 text-lg font-bold">
             <Wand2 className="h-5 w-5 text-brand-600" /> Auto-build{testName ? ` \u2014 ${testName}` : ""}
           </h3>
-          <button type="button" onClick={onClose}><X className="h-5 w-5" /></button>
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              onClick={() => setFullScreen((f) => !f)}
+              title={fullScreen ? "Exit full screen" : "Full screen"}
+              className="rounded-lg p-1 text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800"
+            >
+              {fullScreen ? <Minimize2 className="h-5 w-5" /> : <Maximize2 className="h-5 w-5" />}
+            </button>
+            <button type="button" onClick={onClose}><X className="h-5 w-5" /></button>
+          </div>
         </div>
         <p className="mb-4 text-sm text-slate-500 dark:text-slate-400">
           Choose which of this test's <b>subjects</b> to fill, tick <b>one or more quiz subjects</b> to pull from, then — for each ticked subject — type exactly how many questions you want per <b>type</b> and <b>difficulty</b>. You get precisely those counts. Nothing new is created.
@@ -162,7 +173,7 @@ export default function AutoBuildTest({ open, onClose, testId, testName = "", pl
                     <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search quiz subjects…" className="w-full bg-transparent text-sm outline-none" />
                     <span className="flex-shrink-0 text-xs text-slate-400">{sourceIds.length} selected</span>
                   </div>
-                  <div className="max-h-28 space-y-0.5 overflow-y-auto p-2">
+                  <div className={`space-y-0.5 overflow-y-auto p-2 ${fullScreen ? "max-h-[35vh]" : "max-h-28"}`}>
                     {filteredSubjects.map((s) => (
                       <label key={s._id} className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1 text-sm hover:bg-slate-50 dark:hover:bg-slate-800/60">
                         <input type="checkbox" checked={sourceIds.includes(String(s._id))} onChange={() => toggleSource(String(s._id))} className="h-4 w-4 accent-brand-600" />
@@ -179,7 +190,7 @@ export default function AutoBuildTest({ open, onClose, testId, testName = "", pl
             {section && chosenSubjects.length > 0 && (
               <div>
                 <label className="mb-1 block text-sm font-semibold">How many from each subject &amp; type</label>
-                <div className="max-h-72 space-y-3 overflow-y-auto pr-1">
+                <div className={`space-y-3 overflow-y-auto pr-1 ${fullScreen ? "max-h-[60vh]" : "max-h-72"}`}>
                   {chosenSubjects.map((s) => (
                     <div key={s._id} className="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-700">
                       <div className="flex items-center justify-between gap-2 border-b border-slate-200 bg-brand-50 px-2 py-1.5 dark:border-slate-700 dark:bg-brand-900/20">
