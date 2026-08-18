@@ -5,7 +5,9 @@
 // present, WITH its question count, plus an "All" chip — so an admin can see at a
 // glance how many questions each subject has in the test, and filter to just one.
 //
-// Renders nothing when there are fewer than 2 subjects (nothing to break down).
+// Renders nothing only when the list is empty. With a single subject group it
+// still shows (so the admin always sees the per-subject breakdown); when every
+// question is untagged it shows a "No subject" chip plus a hint explaining why.
 //
 // Props:
 //  - questions: the full (unfiltered) question list
@@ -36,7 +38,10 @@ export default function QuestionSubjectFilter({ questions = [], selected = "", o
     if (b === UNASSIGNED) return -1;
     return a.localeCompare(b);
   });
-  if (subjects.length <= 1) return null; // only one subject — nothing to break down
+  if (subjects.length < 1) return null; // no questions at all — nothing to show
+  // True only when the single group is the "untagged" bucket — i.e. no question
+  // carries a subject/section, so there's no real breakdown to offer.
+  const onlyUnassigned = subjects.length === 1 && subjects[0] === UNASSIGNED;
 
   const chipClass = (active) =>
     `rounded-full border px-3 py-1 text-xs font-semibold transition ${
@@ -56,6 +61,11 @@ export default function QuestionSubjectFilter({ questions = [], selected = "", o
           {s} ({counts[s]})
         </button>
       ))}
+      {onlyUnassigned && (
+        <span className="w-full text-xs text-slate-400">
+          These questions aren’t tagged to a subject yet — Auto-build assigns subjects automatically, or set a section when adding questions.
+        </span>
+      )}
     </div>
   );
 }
