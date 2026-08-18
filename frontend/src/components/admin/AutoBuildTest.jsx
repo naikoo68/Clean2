@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { X, Wand2, Loader2, Plus, Trash2, CheckCircle2 } from "lucide-react";
+import { X, Wand2, Loader2, Plus, Trash2, CheckCircle2, Copy, ListPlus } from "lucide-react";
 import { contentService, practiceService, testService } from "../../services";
 import { QUESTION_TYPE_LABELS } from "../../lib/questions";
 
@@ -10,7 +10,7 @@ import { QUESTION_TYPE_LABELS } from "../../lib/questions";
 const DIFFS = ["Easy", "Medium", "Hard"];
 const TYPE_KEYS = Object.keys(QUESTION_TYPE_LABELS);
 
-const emptyRow = () => ({ subject: "", topic: "", type: "", difficulty: "", count: 10 });
+const emptyRow = () => ({ subject: "", topic: "", type: "", difficulty: "", count: 5 });
 
 // `practice` = true builds a "My Test" from the caller's OWN My Practice quizzes
 // (source = practice bank). Otherwise it builds an admin Test Series from the
@@ -50,8 +50,21 @@ export default function AutoBuildTest({ open, onClose, testId, testName = "", pr
   };
 
   const setRow = (i, patch) => setRows((rs) => rs.map((r, idx) => (idx === i ? { ...r, ...patch } : r)));
-  const addRow = () => setRows((rs) => [...rs, emptyRow()]);
+  // "Add row" CLONES the last row (keeps subject/type/difficulty) so you don't
+  // re-pick the same dropdowns every time — just tweak the one field you want.
+  const addRow = () => setRows((rs) => {
+    const last = rs[rs.length - 1];
+    if (last) { ensureTopics(last.subject); return [...rs, { ...last }]; }
+    return [...rs, emptyRow()];
+  });
+  const duplicateRow = (i) => setRows((rs) => { const copy = { ...rs[i] }; return [...rs.slice(0, i + 1), copy, ...rs.slice(i + 1)]; });
   const removeRow = (i) => setRows((rs) => (rs.length > 1 ? rs.filter((_, idx) => idx !== i) : rs));
+  // One-click scaffold: a row per subject (Any topic/type/difficulty) with a
+  // sensible default count — the fastest way to a broad, mixed test.
+  const fillAllSubjects = () => {
+    if (!subjects.length) return;
+    setRows(subjects.map((s) => ({ subject: String(s._id), topic: "", type: "", difficulty: "", count: 5 })));
+  };
 
   const totalRequested = rows.reduce((s, r) => s + (r.subject ? Math.max(0, parseInt(r.count, 10) || 0) : 0), 0);
 
@@ -99,8 +112,8 @@ export default function AutoBuildTest({ open, onClose, testId, testName = "", pr
           </h3>
           <button type="button" onClick={onClose}><X className="h-5 w-5" /></button>
         </div>
-        <p className="mb-4 text-sm text-slate-500 dark:text-slate-400">
-          Add rows describing how many questions to pull, from which <b>subject</b> (and optional <b>topic</b>), of a chosen <b>type</b> and <b>difficulty</b>. We automatically pick matching questions from your existing quizzes and add them to the test. Leave Topic / Type / Difficulty on <b>Any</b> to not restrict them.
+        <p className="mb-3 text-sm text-slate-500 dark:text-slate-400">
+          Set how many questions to pull per <b>subject</b>. <b>Fastest:</b> leave Topic / Type / Difficulty on <b>Any</b> and just set a Count — one row can pull a whole subject's worth of random questions. Only add extra rows when you want a specific type or difficulty split.
         </p>
 
         {loading ? (
@@ -154,16 +167,26 @@ export default function AutoBuildTest({ open, onClose, testId, testName = "", pr
                     className="input py-1.5 text-sm" title="How many questions"
                   />
 
-                  <button type="button" onClick={() => removeRow(i)} className="flex-shrink-0 justify-self-end rounded-lg p-2 text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-900/30" title="Remove row">
-                    <Trash2 className="h-4 w-4" />
-                  </button>
+                  <div className="flex flex-shrink-0 justify-self-end">
+                    <button type="button" onClick={() => duplicateRow(i)} className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 hover:text-brand-600 dark:hover:bg-slate-800" title="Duplicate this row">
+                      <Copy className="h-4 w-4" />
+                    </button>
+                    <button type="button" onClick={() => removeRow(i)} className="rounded-lg p-2 text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-900/30" title="Remove row">
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </div>
                 </div>
               );
             })}
-            <button type="button" onClick={addRow} className="btn-outline w-full py-1.5 text-sm">
-              <Plus className="h-4 w-4" /> Add row
-            </button>
-            {totalRequested > 0 && <p className="text-xs text-slate-400">Blueprint total: up to <b>{totalRequested}</b> question(s).</p>}
+            <div className="flex flex-wrap gap-2">
+              <button type="button" onClick={addRow} className="btn-outline flex-1 py-1.5 text-sm">
+                <Plus className="h-4 w-4" /> Add row
+              </button>
+              <button type="button" onClick={fillAllSubjects} className="btn-outline py-1.5 text-sm" title="Add one row per subject (5 each, any type/difficulty) — then adjust counts">
+                <ListPlus className="h-4 w-4" /> Fill all subjects
+              </button>
+            </div>
+            {totalRequested > 0 && <p className="text-xs text-slate-400">Blueprint total: up to <b>{totalRequested}</b> question(s) across <b>{rows.filter((r) => r.subject).length}</b> row(s).</p>}
           </div>
         )}
 
