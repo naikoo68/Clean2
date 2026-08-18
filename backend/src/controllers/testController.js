@@ -168,7 +168,13 @@ export async function autoBuildTest(req, res) {
     }
 
     if (usedIds.length) match._id = { $nin: usedIds };
-    if (row?.type && ALLOWED_TYPES.includes(row.type)) match.type = row.type;
+    // Type filter: a single "type", or a "types" array (match any of them).
+    if (Array.isArray(row?.types)) {
+      const valid = row.types.filter((t) => ALLOWED_TYPES.includes(t));
+      if (valid.length) match.type = { $in: valid };
+    } else if (row?.type && ALLOWED_TYPES.includes(row.type)) {
+      match.type = row.type;
+    }
     if (row?.difficulty && DIFFS.includes(row.difficulty)) match.difficulty = row.difficulty;
 
     const qs = await Question.aggregate([{ $match: match }, { $sample: { size: count } }]);
