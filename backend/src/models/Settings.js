@@ -66,6 +66,20 @@ const clientPlanSchema = new mongoose.Schema(
   },
   { _id: false }
 );
+// A STUDENT subscription plan (admin-managed). Students don't get the AI
+// generator, so a student plan carries ONLY pricing (label/months/price) — no
+// AI limits (unlike clientPlanSchema above).
+const studentPlanSchema = new mongoose.Schema(
+  {
+    key: { type: String, default: "" }, // stable id (e.g. "1m"); referenced by user.studentPlan
+    label: { type: String, default: "Plan" },
+    cycle: { type: String, default: "" }, // Monthly | Quarterly | Semi-Annually | Yearly | Trial (blank = inferred from months)
+    months: { type: Number, default: 1 },
+    price: { type: Number, default: 0 },
+    trial: { type: Boolean, default: false },
+  },
+  { _id: false }
+);
 const DEFAULT_HOME_SECTIONS = ["hero", "stats", "quickAccess", "features", "howItWorks", "testimonials", "cta"].map((key) => ({ key, visible: true }));
 
 // Singleton site-wide settings the admin can customise.
@@ -193,6 +207,20 @@ const settingsSchema = new mongoose.Schema(
         { key: "2m", label: "2 Months", cycle: "Monthly", months: 2, price: 499, maxPerBatch: 100, perWindow: 200, windowMinutes: 5 },
         { key: "6m", label: "6 Months", cycle: "Semi-Annually", months: 6, price: 699, maxPerBatch: 200, perWindow: 400, windowMinutes: 5 },
         { key: "1y", label: "1 Year", cycle: "Yearly", months: 12, price: 899, maxPerBatch: 500, perWindow: 1000, windowMinutes: 5 },
+      ],
+    },
+    // Student subscription plans (pricing only — students have no AI generator).
+    // A student unlocks quiz/test attempts + their performance Dashboard while
+    // their plan is active. Registration is free; students subscribe from the
+    // paywall / pricing page.
+    studentPlans: {
+      type: [studentPlanSchema],
+      default: () => [
+        { key: "trial", label: "1-Day Free Trial", cycle: "Trial", months: 0, price: 0, trial: true },
+        { key: "1m", label: "1 Month", cycle: "Monthly", months: 1, price: 149 },
+        { key: "3m", label: "3 Months", cycle: "Quarterly", months: 3, price: 399 },
+        { key: "6m", label: "6 Months", cycle: "Semi-Annually", months: 6, price: 699 },
+        { key: "1y", label: "1 Year", cycle: "Yearly", months: 12, price: 899 },
       ],
     },
     aboutStats: {

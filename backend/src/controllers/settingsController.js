@@ -37,7 +37,7 @@ export async function updateSettings(req, res) {
     "homeSections",
     "clientAnnouncement",
     "aboutHeading", "aboutIntro", "aboutValues", "aboutStats", "testimonials",
-    "aiMaxPerBatch", "clientPlans",
+    "aiMaxPerBatch", "clientPlans", "studentPlans",
     "fbEnabled", "fbPageId", "fbAutoOnNotice", "fbGraphVersion", "fbPageAccessToken",
     "fbDefaultHashtags", "fbAutoHashtags", "fbExtraTargets",
     "fbSelfieWatermarkUrl", "fbSelfieWatermarkEnabled", "fbSelfieWatermarkPosition", "fbSelfieWatermarkSize", "fbSelfieWatermarkOpacity", "fbSelfieWatermarkShape",
@@ -122,6 +122,32 @@ export async function updateSettings(req, res) {
           maxPerBatch: Math.max(1, Math.min(5000, parseInt(p?.maxPerBatch, 10) || 1)),
           perWindow: Math.max(1, Math.min(100000, parseInt(p?.perWindow, 10) || 1)),
           windowMinutes: Math.max(1, Math.min(1440, parseInt(p?.windowMinutes, 10) || 5)),
+        };
+      })
+      .filter((p) => p.label);
+  }
+
+  // Student subscription plans: pricing only (no AI limits). Keys are kept
+  // stable (referenced by user.studentPlan); a missing key is generated from
+  // the label and de-duplicated so each plan stays uniquely addressable.
+  if (Array.isArray(update.studentPlans)) {
+    const usedKeys = new Set();
+    update.studentPlans = update.studentPlans
+      .map((p) => {
+        const label = String(p?.label || "").trim();
+        let base = String(p?.key || "").trim().toLowerCase().replace(/[^a-z0-9]+/g, "").slice(0, 24);
+        if (!base) base = (label.toLowerCase().replace(/[^a-z0-9]+/g, "").slice(0, 20) || "plan");
+        let key = base;
+        let i = 2;
+        while (usedKeys.has(key)) key = `${base}${i++}`;
+        usedKeys.add(key);
+        return {
+          key,
+          label,
+          cycle: String(p?.cycle || "").trim().slice(0, 30),
+          months: Math.max(0, Math.min(120, parseInt(p?.months, 10) || 0)),
+          price: Math.max(0, Math.min(10000000, parseInt(p?.price, 10) || 0)),
+          trial: !!p?.trial,
         };
       })
       .filter((p) => p.label);

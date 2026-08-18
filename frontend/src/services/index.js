@@ -7,6 +7,9 @@ export const authService = {
     api.post("/auth/register", { name, email, password, ...(role ? { role } : {}), ...extra }, { auth: false }),
   // Client subscription plans + live price preview (coupon / referral).
   plans: () => api.get("/auth/plans", { auth: false }),
+  // Student subscription plans (separate catalog from client plans).
+  studentPlans: () => api.get("/auth/student-plans", { auth: false }),
+  // Live price preview. Pass { audience: "student" } to price student plans.
   validateOffer: (data) => api.post("/auth/validate-offer", data, { auth: false }),
   verifyOtp: (email, otp) => api.post("/auth/verify-otp", { email, otp }, { auth: false }),
   resendOtp: (email) => api.post("/auth/resend-otp", { email }, { auth: false }),
@@ -467,6 +470,13 @@ export const paymentService = {
 export const subscriptionService = {
   order: (data) => api.post("/subscriptions/order", data),
   activate: (data) => api.post("/subscriptions/activate", data),
+};
+
+// ---- Student subscription subscribe / renew (logged-in student, works when
+// the plan has lapsed). Mirrors subscriptionService but for student plans. ----
+export const studentSubscriptionService = {
+  order: (data) => api.post("/student-subscriptions/order", data),
+  activate: (data) => api.post("/student-subscriptions/activate", data),
 };
 
 // ---- Global metadata search (streams/subjects/topics/quizzes/tests) ----

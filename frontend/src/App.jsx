@@ -10,6 +10,7 @@ import { SettingsProvider } from "./context/SettingsContext";
 import { AuthProvider } from "./context/AuthContext";
 import { ZoomProvider } from "./context/ZoomContext";
 import ProtectedRoute from "./components/auth/ProtectedRoute";
+import StudentGate from "./components/auth/StudentGate";
 import ContentProtection from "./components/ui/ContentProtection";
 import ErrorBoundary from "./components/ui/ErrorBoundary";
 import Layout from "./components/layout/Layout";
@@ -56,6 +57,8 @@ const Register = lazy(() => import("./pages/auth/Register"));
 const ClientRegister = lazy(() => import("./pages/auth/ClientRegister"));
 const ForgotPassword = lazy(() => import("./pages/auth/ForgotPassword"));
 const ResetPassword = lazy(() => import("./pages/auth/ResetPassword"));
+
+const StudentUpgrade = lazy(() => import("./pages/student/StudentUpgrade"));
 
 const ClientWorkspace = lazy(() => import("./pages/client/ClientWorkspace"));
 const ClientPerformanceDetails = lazy(() => import("./pages/client/ClientPerformanceDetails"));
@@ -123,7 +126,11 @@ const router = createHashRouter([
       { path: "/quiz/:subjectId", element: S(SubjectTopics) },
       { path: "/quiz/:subjectId/:topicId", element: S(TopicSessions) },
       { path: "/quiz/:subjectId/:topicId/:sessionId", element: S(SessionQuizzes) },
-      { path: "/quiz/:subjectId/:topicId/:sessionId/:quizId", element: S(QuizPlay) },
+      // Playing a specific quiz is gated for logged-in students without an
+      // active plan (they see the upgrade paywall). Anonymous visitors keep the
+      // free preview; admins/clients are unaffected (StudentGate only gates
+      // logged-in students).
+      { path: "/quiz/:subjectId/:topicId/:sessionId/:quizId", element: <StudentGate>{S(QuizPlay)}</StudentGate> },
       { path: "/quiz/:subjectId/:topicId/:sessionId/:quizId/result", element: S(QuizResult) },
 
       { path: "/test-series", element: S(TestExams) },
@@ -135,7 +142,7 @@ const router = createHashRouter([
       { path: "/practice/:kind/:streamId", element: S(PracticeBrowse) },
       { path: "/practice/:kind/:streamId/:subjectId", element: S(PracticeBrowse) },
       { path: "/practice/:kind/:streamId/:subjectId/:topicId", element: S(PracticeBrowse) },
-      { path: "/practice/quiz/play/:itemId", element: <ProtectedRoute>{S(PracticeQuizPlay)}</ProtectedRoute> },
+      { path: "/practice/quiz/play/:itemId", element: <ProtectedRoute><StudentGate>{S(PracticeQuizPlay)}</StudentGate></ProtectedRoute> },
 
       { path: "/study", element: S(StudyHome) },
       { path: "/study/:institutionId", element: S(StudySubjects) },
@@ -150,11 +157,17 @@ const router = createHashRouter([
 
       {
         path: "/dashboard",
-        element: <ProtectedRoute>{S(Dashboard)}</ProtectedRoute>,
+        element: <ProtectedRoute><StudentGate>{S(Dashboard)}</StudentGate></ProtectedRoute>,
       },
       {
         path: "/account",
         element: <ProtectedRoute>{S(Account)}</ProtectedRoute>,
+      },
+      {
+        // Student self-serve subscribe / renew page (reachable any time; also
+        // shown automatically by StudentGate when a gated feature is hit).
+        path: "/subscribe",
+        element: <ProtectedRoute>{S(StudentUpgrade)}</ProtectedRoute>,
       },
     ],
   },
@@ -165,10 +178,11 @@ const router = createHashRouter([
     element: S(ResumeBuilder),
   },
 
-  // Full-screen test interface (outside main layout)
+  // Full-screen test interface (outside main layout). Gated: attempting a
+  // test-series requires an active student subscription (admins/clients pass).
   {
     path: "/test-series/attempt/:testId",
-    element: <ProtectedRoute>{S(TestAttempt)}</ProtectedRoute>,
+    element: <ProtectedRoute><StudentGate>{S(TestAttempt)}</StudentGate></ProtectedRoute>,
   },
 
   // Public shared test — NO login required (anyone with the link can take it)
