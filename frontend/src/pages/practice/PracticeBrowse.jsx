@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useParams, useNavigate } from "react-router-dom";
 import * as Icons from "lucide-react";
-import { ArrowRight, ChevronLeft, Clock, HelpCircle, Play } from "lucide-react";
+import { ArrowRight, ChevronLeft, Clock, HelpCircle, Play, Lock, Unlock } from "lucide-react";
 import { practiceService } from "../../services";
 import { useAuth } from "../../context/AuthContext";
 import { Loading, ErrorState, EmptyState } from "../../components/ui/AsyncState";
@@ -49,11 +49,25 @@ export default function PracticeBrowse() {
   const title = level === "items" ? "Select one to start" : level === "topics" ? "Choose a topic" : level === "subjects" ? "Choose a subject" : KIND_LABEL[kind] || "Practice";
 
   const openItem = (item) => {
-    if (!user) return navigate("/login");
-    // My Quiz → quiz-style player (instant answer reveal + per-question timer).
+    // Previous Papers: LOGIN required, but no subscription.
+    if (kind === "paper") {
+      if (!user) return navigate("/login");
+      return navigate(`/practice/quiz/play/${item._id}`);
+    }
+    // My Quiz: the FIRST quiz in each topic is FREE for everyone.
+    if (kind === "quiz") {
+      if (item.freePreview) {
+        // Logged-in users play the normal (progress-saving) route; guests use
+        // the public free-preview route (no login needed).
+        return navigate(user ? `/practice/quiz/play/${item._id}` : `/practice/quiz/free/${item._id}`);
+      }
+      if (!user) return navigate("/login");
+      if (item.locked) return navigate("/pricing"); // needs a subscription
+      return navigate(`/practice/quiz/play/${item._id}`);
+    }
     // My Test Series → full test interface (timed, submit at end).
-    if (kind === "quiz" || kind === "paper") navigate(`/practice/quiz/play/${item._id}`);
-    else navigate(`/test-series/attempt/${item._id}`);
+    if (!user) return navigate("/login");
+    navigate(`/test-series/attempt/${item._id}`);
   };
 
   return (
@@ -65,17 +79,35 @@ export default function PracticeBrowse() {
         <EmptyState message={level === "items" ? "No practice content available to you here yet." : "Nothing shared with you here yet."} />
       ) : level === "items" ? (
         <div className="mt-10 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-          {rows.map((it, i) => (
-            <div key={it._id} style={{ animationDelay: `${i * 40}ms` }} className="card animate-fade-in-up p-6 opacity-0">
-              <h3 className="text-lg font-bold">{it.name}</h3>
-              <div className="mt-3 flex flex-wrap gap-3 text-sm text-slate-500 dark:text-slate-400">
-                <span className="inline-flex items-center gap-1"><HelpCircle className="h-4 w-4" /> {it.questionCount} Qs</span>
-                {it.duration ? <span className="inline-flex items-center gap-1"><Clock className="h-4 w-4" /> {it.duration} min</span> : null}
-                {it.difficulty && <span>{it.difficulty}</span>}
+          {rows.map((it, i) => {
+            // Freemium state for My Quiz: the first quiz per topic is free; the
+            // rest are locked until login + subscription. Papers need login.
+            const isFreeQuiz = kind === "quiz" && it.freePreview;
+            const isLocked = !!it.locked;
+            const paperNeedsLogin = kind === "paper" && it.loginOnly && !user;
+            const btnLabel = isFreeQuiz ? "Start free" : isLocked ? (it.loginOnly ? "Log in to open" : "Subscribe to unlock") : "Start";
+            return (
+              <div key={it._id} style={{ animationDelay: `${i * 40}ms` }} className="card animate-fade-in-up p-6 opacity-0">
+                <div className="flex items-start justify-between gap-2">
+                  <h3 className="text-lg font-bold">{it.name}</h3>
+                  {isFreeQuiz && (
+                    <span className="inline-flex flex-shrink-0 items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-bold text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300"><Unlock className="h-3 w-3" /> Free</span>
+                  )}
+                  {isLocked && (
+                    <span className="inline-flex flex-shrink-0 items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-xs font-bold text-slate-500 dark:bg-slate-800 dark:text-slate-400"><Lock className="h-3 w-3" /> {it.loginOnly ? "Login" : "Premium"}</span>
+                  )}
+                </div>
+                <div className="mt-3 flex flex-wrap gap-3 text-sm text-slate-500 dark:text-slate-400">
+                  <span className="inline-flex items-center gap-1"><HelpCircle className="h-4 w-4" /> {it.questionCount} Qs</span>
+                  {it.duration ? <span className="inline-flex items-center gap-1"><Clock className="h-4 w-4" /> {it.duration} min</span> : null}
+                  {it.difficulty && <span>{it.difficulty}</span>}
+                </div>
+                <button onClick={() => openItem(it)} className={`mt-4 w-full ${isLocked && !paperNeedsLogin ? "btn-outline" : "btn-primary"}`}>
+                  {isLocked ? <Lock className="h-4 w-4" /> : <Play className="h-4 w-4" />} {btnLabel}
+                </button>
               </div>
-              <button onClick={() => openItem(it)} className="btn-primary mt-4 w-full"><Play className="h-4 w-4" /> Start</button>
-            </div>
-          ))}
+            );
+          })}
         </div>
       ) : (
         <div className="mt-10 grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
