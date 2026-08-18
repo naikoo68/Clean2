@@ -40,6 +40,7 @@ export default function ManageTestQuestions({
   onRegenerateAll,
 }) {
   const [activeSubject, setActiveSubject] = useState(null);
+  const [quickSubject, setQuickSubject] = useState(""); // subject-list "Quick add" target
   const [selectedTq, setSelectedTq] = useState([]);
   const [tqSearch, setTqSearch] = useState("");
   // Real-time progress while bulk-deleting selected questions.
@@ -91,6 +92,50 @@ export default function ManageTestQuestions({
     return (
       <>
         <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">Tap a subject to manage its questions</p>
+
+        {/* Quick add — add questions to ANY subject WITHOUT drilling in first.
+            Pick the target subject, then choose how to add. Mirrors the add
+            options inside a subject; Auto-build is test-wide (no subject). */}
+        {(() => {
+          const planSubjects = (qTest.subjectPlan || []).map((p) => p.subject).filter(Boolean);
+          if (!planSubjects.length) return null;
+          const target = quickSubject || planSubjects[0];
+          const tPlan = (qTest.subjectPlan || []).find((p) => p.subject === target);
+          const tAdded = tq.filter((q) => (q.section || "") === target).length;
+          const tRemaining = tPlan?.count > 0 ? Math.max(0, tPlan.count - tAdded) : null;
+          return (
+            <div className="mt-3 rounded-xl border border-brand-200 bg-brand-50/40 p-3 dark:border-brand-900/50 dark:bg-brand-900/10">
+              <div className="mb-2 flex flex-wrap items-center gap-2">
+                <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">Quick add to</span>
+                <select
+                  value={target}
+                  onChange={(e) => setQuickSubject(e.target.value)}
+                  className="rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-sm font-medium text-slate-700 outline-none focus:border-brand-400 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-200"
+                >
+                  {planSubjects.map((s) => (
+                    <option key={s} value={s}>{s}</option>
+                  ))}
+                </select>
+                {tRemaining != null && (
+                  <span className={`rounded-full px-2 py-0.5 text-xs font-bold ${tRemaining === 0 ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300" : "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300"}`}>
+                    {tRemaining === 0 ? "Complete" : `${tRemaining} remaining`}
+                  </span>
+                )}
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <button onClick={() => onAddQuestion(target)} className="btn-primary py-1.5 text-xs"><Plus className="h-3.5 w-3.5" /> Add Manually</button>
+                <button onClick={() => onBulkUpload(target)} className="btn-outline py-1.5 text-xs"><Upload className="h-3.5 w-3.5" /> Bulk Upload</button>
+                <button onClick={() => onAiGenerate(target)} className="btn-outline py-1.5 text-xs"><Sparkles className="h-3.5 w-3.5" /> AI Generate</button>
+                <button onClick={() => onImportWeb(target)} className="btn-outline py-1.5 text-xs"><Globe className="h-3.5 w-3.5" /> Import from Web</button>
+                <button onClick={() => onPickFromBank(target)} className="btn-outline py-1.5 text-xs"><Library className="h-3.5 w-3.5" /> Pick from Quizzes</button>
+                {onAutoBuild && (
+                  <button onClick={() => onAutoBuild(target)} className="btn-outline py-1.5 text-xs text-violet-600"><Wand2 className="h-3.5 w-3.5" /> Auto-build</button>
+                )}
+              </div>
+            </div>
+          );
+        })()}
+
         <div className="mt-3 space-y-2">
           {(qTest.subjectPlan || []).map((p, i) => {
             const added = tq.filter((q) => (q.section || "") === p.subject).length;
