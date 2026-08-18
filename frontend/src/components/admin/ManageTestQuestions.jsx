@@ -31,6 +31,7 @@ export default function ManageTestQuestions({
   onAiGenerate,
   onImportWeb,
   onPickFromBank,
+  onAutoBuild,
   onExtendExplanations,
   onExtendQuestion,
   extendingId,
@@ -265,6 +266,11 @@ export default function ManageTestQuestions({
             <button onClick={() => onPickFromBank(activeSubject)} className="btn-outline py-2 text-sm">
               <Library className="h-4 w-4" /> Pick from Quizzes
             </button>
+            {onAutoBuild && (
+              <button onClick={() => onAutoBuild(activeSubject)} className="btn-outline py-2 text-sm text-violet-600">
+                <Wand2 className="h-4 w-4" /> Auto-build
+              </button>
+            )}
           </div>
         </div>
       )}
