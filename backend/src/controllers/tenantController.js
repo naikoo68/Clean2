@@ -34,6 +34,7 @@ const sanitize = (t, stats) => ({
   isTrial: t.isTrial,
   expiresAt: t.expiresAt,
   createdAt: t.createdAt,
+  features: t.features || {},
   ...(stats ? { stats } : {}),
 });
 
@@ -122,6 +123,27 @@ export async function updateTenantStatus(req, res) {
   if (!t || t.deleted) return res.status(404).json({ message: "Tenant not found" });
   t.status = status;
   await t.save();
+  res.json(sanitize(t));
+}
+
+// PATCH /api/tenants/:id/features — set which features this institute can use.
+// Body: { features: { <featureKey>: true|false, … } }. Stored as-is; the front
+// end treats a missing/true key as enabled and false as hidden. Super-admin only.
+export async function updateTenantFeatures(req, res) {
+  const input = req.body?.features;
+  if (!input || typeof input !== "object" || Array.isArray(input)) {
+    return res.status(400).json({ message: "features must be an object of key → boolean." });
+  }
+  // Coerce every value to a strict boolean so we never store junk.
+  const features = {};
+  for (const [k, v] of Object.entries(input)) features[String(k)] = v !== false;
+
+  const t = await runUnscoped(() => Tenant.findById(req.params.id));
+  if (!t || t.deleted) return res.status(404).json({ message: "Tenant not found" });
+  t.features = features;
+  t.markModified("features"); // Mixed type — tell Mongoose it changed
+  await t.save();
+  clearTenantCache(); // so the institute admin picks up the change on next load
   res.json(sanitize(t));
 }
 

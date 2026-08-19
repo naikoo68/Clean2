@@ -90,8 +90,8 @@ const sanitize = (u) => ({
 async function tenantInfo(tenantId) {
   if (!tenantId) return undefined;
   try {
-    const t = await Tenant.findById(tenantId).select("slug name").lean();
-    return t ? { slug: t.slug, name: t.name } : undefined;
+    const t = await Tenant.findById(tenantId).select("slug name features").lean();
+    return t ? { slug: t.slug, name: t.name, features: t.features || {} } : undefined;
   } catch {
     return undefined;
   }
