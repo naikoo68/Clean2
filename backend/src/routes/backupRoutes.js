@@ -4,10 +4,13 @@ import {
   startAdminBackup, adminBackupJob, adminBackupFile,
   startAdminRestore, adminRestoreJob,
 } from "../controllers/backupController.js";
-import { protect, superAdminOnly } from "../middleware/auth.js";
+import { protect, authorize } from "../middleware/auth.js";
 
 const router = Router();
-const admin = [protect, superAdminOnly]; // full-library backup/restore is platform-wide (super-admin only)
+// Admins AND institute admins may back up / restore. Every query in the
+// controller is tenant-scoped, so a super-admin backs up the whole platform
+// while an institute admin backs up (and restores into) ONLY their own space.
+const admin = [protect, authorize("admin")];
 // A full-library restore can be a large JSON — allow a higher body limit than
 // the app-wide default just for the restore endpoint.
 const bigJson = express.json({ limit: "60mb" });
