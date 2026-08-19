@@ -26,8 +26,11 @@ const tenantSchema = new mongoose.Schema(
     },
 
     // Optional custom domain (Phase 6). Sparse+unique so many tenants can leave
-    // it blank without colliding.
-    customDomain: { type: String, trim: true, lowercase: true, default: "", index: { unique: true, sparse: true } },
+    // it unset without colliding. IMPORTANT: no `default` — a default of "" is a
+    // real value that the sparse index would still index, so a 2nd tenant with
+    // "" would collide. Leaving it undefined keeps the field ABSENT (which the
+    // sparse index correctly ignores).
+    customDomain: { type: String, trim: true, lowercase: true, index: { unique: true, sparse: true } },
 
     // Lifecycle. "pending" = created but not yet paid/activated; "active" =
     // usable; "suspended" = temporarily disabled by the super-admin.
