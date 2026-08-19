@@ -487,6 +487,7 @@ export const tenantService = {
   setStatus: (id, status) => api.patch(`/tenants/${id}/status`, { status }),
   createAdmin: (id, data) => api.post(`/tenants/${id}/admin`, data), // create an institute admin
   setDomain: (id, customDomain) => api.patch(`/tenants/${id}/domain`, { customDomain }), // set/clear custom domain
+  remove: (id) => api.del(`/tenants/${id}`), // permanently delete an institute + all its data
 };
 
 // ---- Public institute self-signup (Phase 5) ----

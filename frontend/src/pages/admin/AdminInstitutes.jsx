@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { School, Plus, UserPlus, X, Search, CheckCircle2, Ban, Users, FileStack, HelpCircle, Store, ShieldCheck, Globe, Copy } from "lucide-react";
+import { School, Plus, UserPlus, X, Search, CheckCircle2, Ban, Users, FileStack, HelpCircle, Store, ShieldCheck, Globe, Copy, Trash2, AlertTriangle } from "lucide-react";
 import { tenantService } from "../../services";
 import { useAuth } from "../../context/AuthContext";
 import { Loading, ErrorState, EmptyState } from "../../components/ui/AsyncState";
@@ -27,6 +27,9 @@ export default function AdminInstitutes() {
   const [domainFor, setDomainFor] = useState(null); // tenant whose custom domain we're editing
   const [domainVal, setDomainVal] = useState("");
   const [dnsInfo, setDnsInfo] = useState(null);
+  const [deleteFor, setDeleteFor] = useState(null); // tenant we're about to permanently delete
+  const [deleteConfirm, setDeleteConfirm] = useState(""); // typed slug — must match to enable delete
+  const [deleting, setDeleting] = useState(false);
 
   const flash = (m) => { setToast(m); setTimeout(() => setToast(""), 2800); };
 
@@ -142,6 +145,28 @@ export default function AdminInstitutes() {
     }
   };
 
+  const openDelete = (t) => { setDeleteFor(t); setDeleteConfirm(""); setError(""); };
+
+  // Permanently delete an institute and ALL its data. Guarded by requiring the
+  // super-admin to type the institute's exact subdomain (slug) first.
+  const deleteTenant = async (e) => {
+    e.preventDefault();
+    if (!deleteFor || deleteConfirm.trim().toLowerCase() !== deleteFor.slug) return;
+    setDeleting(true);
+    setError("");
+    try {
+      await tenantService.remove(deleteFor.id);
+      setTenants((list) => list.filter((x) => x.id !== deleteFor.id));
+      setDeleteFor(null);
+      setDeleteConfirm("");
+      flash("Institute deleted.");
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -207,6 +232,9 @@ export default function AdminInstitutes() {
                 <button onClick={() => { setAdminFor(t); setAdminForm(blankAdmin); setError(""); }} className="btn-outline flex-1 py-2 text-xs"><UserPlus className="h-3.5 w-3.5" /> Add admin</button>
                 <button onClick={() => toggleStatus(t)} disabled={t.isDefault} title={t.isDefault ? "The default institute can't be suspended" : ""} className={`flex-1 rounded-xl py-2 text-xs font-semibold ${t.status === "active" ? "bg-amber-50 text-amber-700 hover:bg-amber-100 dark:bg-amber-900/30 dark:text-amber-300" : "bg-emerald-50 text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-900/30 dark:text-emerald-300"} disabled:opacity-40`}>
                   {t.status === "active" ? <><Ban className="mr-1 inline h-3.5 w-3.5" />Suspend</> : <><CheckCircle2 className="mr-1 inline h-3.5 w-3.5" />Activate</>}
+                </button>
+                <button onClick={() => openDelete(t)} disabled={t.isDefault} title={t.isDefault ? "The default institute can't be deleted" : "Delete this institute permanently"} className="rounded-xl bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700 hover:bg-rose-100 disabled:opacity-40 dark:bg-rose-900/30 dark:text-rose-300">
+                  <Trash2 className="h-3.5 w-3.5" />
                 </button>
               </div>
             </div>
@@ -313,6 +341,35 @@ export default function AdminInstitutes() {
             <div className="mt-6 flex justify-end gap-3">
               <button type="button" onClick={() => setDomainFor(null)} className="btn-outline">Close</button>
               <button type="submit" disabled={saving} className="btn-primary">{saving ? "Saving..." : "Save domain"}</button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {/* Delete institute (permanent) modal */}
+      {deleteFor && (
+        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/50 p-4">
+          <form onSubmit={deleteTenant} className="my-8 w-full max-w-md animate-scale-in card p-6">
+            <div className="mb-1 flex items-center justify-between">
+              <h3 className="flex items-center gap-2 text-lg font-bold text-rose-600 dark:text-rose-400"><AlertTriangle className="h-5 w-5" /> Delete institute</h3>
+              <button type="button" onClick={() => setDeleteFor(null)}><X className="h-5 w-5" /></button>
+            </div>
+            <p className="mb-3 text-sm text-slate-600 dark:text-slate-300">
+              This permanently deletes <b>{deleteFor.name}</b> and <b>everything inside it</b> — its admins, students, clients, questions, tests and settings. Its subdomain <b>{deleteFor.slug}</b> will become available again. <span className="font-semibold text-rose-600 dark:text-rose-400">This cannot be undone.</span>
+            </p>
+            <div className="mb-3 rounded-xl bg-slate-50 p-3 text-xs text-slate-500 dark:bg-slate-800/60 dark:text-slate-400">
+              Contains: {deleteFor.stats?.students ?? 0} students · {deleteFor.stats?.instituteAdmins ?? 0} admin(s) · {deleteFor.stats?.tests ?? 0} tests · {deleteFor.stats?.questions ?? 0} questions
+            </div>
+            {error && <div className="mb-3 rounded-xl bg-rose-50 px-3 py-2 text-sm text-rose-700 dark:bg-rose-900/30 dark:text-rose-300">{error}</div>}
+            <div>
+              <label className="mb-1.5 block text-sm font-medium">Type <b>{deleteFor.slug}</b> to confirm</label>
+              <input autoFocus autoCapitalize="none" spellCheck={false} className="input" value={deleteConfirm} onChange={(e) => setDeleteConfirm(e.target.value)} placeholder={deleteFor.slug} />
+            </div>
+            <div className="mt-6 flex justify-end gap-3">
+              <button type="button" onClick={() => setDeleteFor(null)} className="btn-outline">Cancel</button>
+              <button type="submit" disabled={deleting || deleteConfirm.trim().toLowerCase() !== deleteFor.slug} className="rounded-xl bg-rose-600 px-4 py-2 text-sm font-semibold text-white hover:bg-rose-700 disabled:opacity-40">
+                {deleting ? "Deleting..." : "Delete permanently"}
+              </button>
             </div>
           </form>
         </div>
