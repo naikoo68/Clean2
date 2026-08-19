@@ -1,5 +1,4 @@
 import Review from "../models/Review.js";
-import Settings from "../models/Settings.js";
 import { sendMail } from "../config/mailer.js";
 
 const clampRating = (r) => {
@@ -56,6 +55,20 @@ export async function createReview(req, res) {
   res.status(201).json({ ok: true, id: review._id });
 }
 
+// GET /api/reviews/approved — PUBLIC: approved reviews for the CURRENT institute
+// (tenant-scoped automatically), shown in the home page "What our students say"
+// section. Because reviews carry the tenant they were submitted under, each
+// institute shows only its own real reviews — never another institute's or any
+// seeded demo data.
+export async function listApprovedReviews(req, res) {
+  const items = await Review.find({ status: "approved" })
+    .sort("-updatedAt")
+    .limit(24)
+    .select("name exam rating text photo")
+    .lean();
+  res.json({ items });
+}
+
 // GET /api/reviews  (admin) — list submissions
 export async function listReviews(req, res) {
   const items = await Review.find().sort("-createdAt").limit(500).lean();
@@ -63,28 +76,13 @@ export async function listReviews(req, res) {
   res.json({ items, pending });
 }
 
-// PATCH /api/reviews/:id/approve  (admin) — approve + publish to home testimonials
+// PATCH /api/reviews/:id/approve  (admin) — approve so it appears on the home
+// page. The home page reads approved reviews directly (tenant-scoped), so there
+// is no separate copy into settings — approving is all that's needed.
 export async function approveReview(req, res) {
   const review = await Review.findById(req.params.id);
   if (!review) return res.status(404).json({ message: "Not found" });
-
-  // Publish to the home-page testimonials only the first time it's approved.
   if (review.status !== "approved") {
-    await Settings.findOneAndUpdate(
-      { key: "site" },
-      {
-        $push: {
-          testimonials: {
-            name: review.name,
-            exam: review.exam || "",
-            text: review.text,
-            rating: review.rating || 5,
-            photo: review.photo || "",
-          },
-        },
-      },
-      { new: true, upsert: true, setDefaultsOnInsert: true }
-    );
     review.status = "approved";
     await review.save();
   }
