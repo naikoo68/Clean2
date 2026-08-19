@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { School, Plus, UserPlus, X, Search, CheckCircle2, Ban, Users, FileStack, HelpCircle, Store, ShieldCheck } from "lucide-react";
+import { School, Plus, UserPlus, X, Search, CheckCircle2, Ban, Users, FileStack, HelpCircle, Store, ShieldCheck, Globe } from "lucide-react";
 import { tenantService } from "../../services";
 import { useAuth } from "../../context/AuthContext";
 import { Loading, ErrorState, EmptyState } from "../../components/ui/AsyncState";
@@ -24,6 +24,9 @@ export default function AdminInstitutes() {
   const [saving, setSaving] = useState(false);
   const [adminFor, setAdminFor] = useState(null); // tenant we're creating an admin for
   const [adminForm, setAdminForm] = useState(blankAdmin);
+  const [domainFor, setDomainFor] = useState(null); // tenant whose custom domain we're editing
+  const [domainVal, setDomainVal] = useState("");
+  const [dnsInfo, setDnsInfo] = useState(null);
 
   const flash = (m) => { setToast(m); setTimeout(() => setToast(""), 2800); };
 
@@ -73,6 +76,25 @@ export default function AdminInstitutes() {
       flash(`Institute ${next === "active" ? "activated" : "suspended"}.`);
     } catch (err) {
       flash(err.message);
+    }
+  };
+
+  const openDomain = (t) => { setDomainFor(t); setDomainVal(t.customDomain || ""); setDnsInfo(null); setError(""); };
+
+  const saveDomain = async (e) => {
+    e.preventDefault();
+    setSaving(true);
+    setError("");
+    try {
+      const res = await tenantService.setDomain(domainFor.id, domainVal.trim());
+      setTenants((list) => list.map((x) => (x.id === domainFor.id ? { ...x, customDomain: res.customDomain || "" } : x)));
+      setDnsInfo(res.dns || null);
+      flash(res.customDomain ? "Custom domain saved." : "Custom domain removed.");
+      if (!res.customDomain) setDomainFor(null);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -144,6 +166,10 @@ export default function AdminInstitutes() {
                 <span className="inline-flex items-center gap-1"><Store className="h-3.5 w-3.5" /> {t.stats?.clients ?? 0} clients</span>
                 <span>{t.stats?.instituteAdmins ?? 0} admin(s)</span>
               </div>
+
+              <button onClick={() => openDomain(t)} className="mt-2 inline-flex max-w-full items-center gap-1 truncate text-xs font-medium text-brand-600 hover:underline dark:text-brand-400">
+                <Globe className="h-3.5 w-3.5 flex-shrink-0" /> {t.customDomain ? t.customDomain : "Add custom domain"}
+              </button>
 
               <div className="mt-4 flex gap-2">
                 <button onClick={() => { setAdminFor(t); setAdminForm(blankAdmin); setError(""); }} className="btn-outline flex-1 py-2 text-xs"><UserPlus className="h-3.5 w-3.5" /> Add admin</button>
@@ -221,6 +247,40 @@ export default function AdminInstitutes() {
             <div className="mt-6 flex justify-end gap-3">
               <button type="button" onClick={() => setAdminFor(null)} className="btn-outline">Cancel</button>
               <button type="submit" disabled={saving} className="btn-primary">{saving ? "Creating..." : "Create Admin"}</button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {/* Custom domain modal */}
+      {domainFor && (
+        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/50 p-4">
+          <form onSubmit={saveDomain} className="my-8 w-full max-w-md animate-scale-in card p-6">
+            <div className="mb-1 flex items-center justify-between">
+              <h3 className="flex items-center gap-2 text-lg font-bold"><Globe className="h-5 w-5 text-brand-600" /> Custom domain</h3>
+              <button type="button" onClick={() => setDomainFor(null)}><X className="h-5 w-5" /></button>
+            </div>
+            <p className="mb-4 text-sm text-slate-500 dark:text-slate-400">For <b>{domainFor.name}</b></p>
+            {error && <div className="mb-3 rounded-xl bg-rose-50 px-3 py-2 text-sm text-rose-700 dark:bg-rose-900/30 dark:text-rose-300">{error}</div>}
+            <div>
+              <label className="mb-1.5 block text-sm font-medium">Domain</label>
+              <input value={domainVal} onChange={(e) => setDomainVal(e.target.value)} placeholder="exam.brightfuture.com" className="input" />
+              <p className="mt-1 text-xs text-slate-400">Leave blank and save to remove the custom domain.</p>
+            </div>
+
+            {dnsInfo && (
+              <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs dark:border-slate-700 dark:bg-slate-800/60">
+                <p className="mb-1 font-semibold text-slate-700 dark:text-slate-200">Next steps — DNS</p>
+                <p className="text-slate-500 dark:text-slate-400">
+                  Point <b>{dnsInfo.cname?.host}</b> to <b>{dnsInfo.cname?.pointsTo}</b> (CNAME), then add the domain in your frontend host (e.g. Vercel) so it's served with SSL.
+                </p>
+                <p className="mt-1 text-slate-400">{dnsInfo.note}</p>
+              </div>
+            )}
+
+            <div className="mt-6 flex justify-end gap-3">
+              <button type="button" onClick={() => setDomainFor(null)} className="btn-outline">Close</button>
+              <button type="submit" disabled={saving} className="btn-primary">{saving ? "Saving..." : "Save domain"}</button>
             </div>
           </form>
         </div>
