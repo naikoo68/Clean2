@@ -2,7 +2,6 @@ import { useEffect, useState, useCallback } from "react";
 import { KeyRound, Plus, Trash2, Pencil, X, CheckCircle2, XCircle, Loader2, RefreshCw, Power, PowerOff, Download, List, Layers, Wand2, AlertTriangle, Eye, EyeOff, Copy, Check, ChevronDown, ChevronUp } from "lucide-react";
 import { aiService } from "../../services";
 import { Loading, ErrorState, EmptyState } from "../../components/ui/AsyncState";
-import AiPlansManager from "../../components/admin/AiPlansManager";
 
 const GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta/openai";
 const PRESETS = [
@@ -524,9 +523,6 @@ export default function AdminAiKeys({ clientMode = false }) {
 
   return (
     <div className="space-y-5">
-      {/* Admin-only: per-batch limit + client plan definitions. */}
-      {!clientMode && <AiPlansManager />}
-
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-extrabold">{clientMode ? "My API Keys" : "AI API Keys"}</h1>
