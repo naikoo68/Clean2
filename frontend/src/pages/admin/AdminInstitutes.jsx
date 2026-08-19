@@ -161,9 +161,19 @@ export default function AdminInstitutes() {
     setFeaturesFor(t);
     setError("");
   };
-  // Open the modal in "all institutes" mode (start with everything enabled).
+  // Open the modal in "all institutes" mode. Seed each toggle from the CURRENT
+  // institutes so it reflects what's already saved: a feature shows ON only if
+  // EVERY institute has it on (so anything you turned off stays off on reopen).
+  // With no institutes yet, default to all-on.
   const openFeaturesAll = () => {
-    setFeaturesForm(Object.fromEntries(INSTITUTE_FEATURES.map((f) => [f.key, true])));
+    const others = tenants.filter((t) => !t.isDefault);
+    const form = {};
+    for (const feat of INSTITUTE_FEATURES) {
+      form[feat.key] = others.length === 0
+        ? true
+        : others.every((t) => (t.features || {})[feat.key] !== false);
+    }
+    setFeaturesForm(form);
     setFeaturesAll(true);
     setError("");
   };
