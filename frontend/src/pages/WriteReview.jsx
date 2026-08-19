@@ -5,6 +5,7 @@ import { reviewService } from "../services";
 import { useAuth } from "../context/AuthContext";
 import { useSettings } from "../context/SettingsContext";
 import Avatar from "../components/ui/Avatar";
+import ReviewsShowcase from "../components/reviews/ReviewsShowcase";
 import { fileToResizedDataUrl } from "../lib/imageResize";
 
 export default function WriteReview() {
@@ -74,7 +75,10 @@ export default function WriteReview() {
 
   return (
     <div className="container-page py-14">
-      <div className="mx-auto max-w-xl">
+      {/* Full wall of this institute's approved reviews (hidden when none). */}
+      <ReviewsShowcase showAll showActions={false} />
+
+      <div className="mx-auto mt-16 max-w-xl">
         <div className="text-center">
           <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-brand-100 text-brand-600 dark:bg-brand-900/40 dark:text-brand-300">
             <MessageSquarePlus className="h-6 w-6" />
