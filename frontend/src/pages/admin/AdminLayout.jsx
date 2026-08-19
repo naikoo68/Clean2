@@ -59,7 +59,7 @@ const nav = [
   { to: "/admin/shared", label: "Shared Links", icon: Share2, feature: "shared" },
   { to: "/admin/cbt", label: "Online Exams", icon: MonitorCheck, feature: "cbt" },
   { to: "/admin/migration", label: "Migration", icon: ArrowRightLeft, superOnly: true },
-  { to: "/admin/clients", label: "Clients", icon: Store, superOnly: true },
+  { to: "/admin/clients", label: "Clients", icon: Store, feature: "clients" },
   { to: "/admin/plans", label: "Plans", icon: Crown, superOnly: true },
   { to: "/admin/coupons", label: "Coupons", icon: Ticket, superOnly: true },
   { to: "/admin/study", label: "Study Material", icon: BookMarked, feature: "study" },
