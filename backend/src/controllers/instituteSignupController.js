@@ -1,12 +1,16 @@
+import crypto from "crypto";
 import Tenant from "../models/Tenant.js";
 import User from "../models/User.js";
 import Settings from "../models/Settings.js";
+import EmailOtp from "../models/EmailOtp.js";
 import generateToken from "../utils/generateToken.js";
 import { computeOffer } from "./authController.js";
 import { getTenantPlans } from "../utils/plans.js";
 import { razorpayConfigured, razorpayKeyId, createRazorpayOrder, verifyPaymentSignature } from "../config/razorpay.js";
 import { runUnscoped } from "../utils/tenantContext.js";
 import { notifyNewUser } from "../utils/notify.js";
+import { sendMail } from "../config/mailer.js";
+import { getSiteName } from "../utils/siteInfo.js";
 
 // PUBLIC institute self-signup (Phase 5): an institute registers, pays via
 // Razorpay (the PLATFORM's account), and its space is auto-provisioned — a
@@ -62,6 +66,79 @@ export async function checkAvailability(req, res) {
   });
 }
 
+// ---- Admin email verification (OTP) ----
+// The institute admin's email is verified BEFORE the (paid) space is created,
+// so we can't hang the code off a User (there isn't one yet). Codes live in the
+// standalone EmailOtp collection, keyed by email, always accessed unscoped.
+const genOtp = () => String(Math.floor(100000 + Math.random() * 900000));
+const hashOtp = (otp) => crypto.createHash("sha256").update(String(otp)).digest("hex");
+const OTP_TTL_MS = 10 * 60 * 1000; // 10 minutes
+
+async function sendSignupOtpEmail(email, otp) {
+  const site = await getSiteName();
+  return sendMail({
+    to: email,
+    fromName: site,
+    subject: `Your ${site} institute verification code`,
+    text: `Your institute sign-up verification code is ${otp}. It expires in 10 minutes.\n\nIf you didn't request this, you can ignore this email.`,
+    html: `<p>Your institute sign-up verification code is:</p>
+           <p style="font-size:28px;font-weight:800;letter-spacing:6px">${otp}</p>
+           <p>It expires in 10 minutes. If you didn't request this, ignore this email.</p>`,
+  });
+}
+
+// Has this email been verified for signup? Used to gate order + provision.
+async function isEmailVerified(email) {
+  if (!email) return false;
+  const rec = await runUnscoped(() => EmailOtp.findOne({ email, verified: true }).select("_id"));
+  return !!rec;
+}
+
+// POST /api/institute-signup/send-otp { email } — email a fresh 6-digit code.
+export async function sendSignupOtp(req, res) {
+  if (!instituteSignupEnabled()) return res.status(400).json({ message: "Institute signup is not available yet." });
+  const email = norm(req.body?.email);
+  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    return res.status(400).json({ message: "Enter a valid email address." });
+  }
+  // Don't let someone verify an email that's already tied to an account.
+  const taken = await runUnscoped(() => User.findOne({ email }).select("_id"));
+  if (taken) return res.status(409).json({ message: "That email is already registered." });
+
+  const otp = genOtp();
+  await runUnscoped(() =>
+    EmailOtp.findOneAndUpdate(
+      { email },
+      { email, otpHash: hashOtp(otp), otpExpires: new Date(Date.now() + OTP_TTL_MS), verified: false, verifiedAt: null },
+      { upsert: true, new: true, setDefaultsOnInsert: true }
+    )
+  );
+
+  const emailSent = await sendSignupOtpEmail(email, otp).catch(() => false);
+  // Only reveal the code on-screen in non-production when email can't be sent.
+  const exposeDevOtp = !emailSent && process.env.NODE_ENV !== "production";
+  res.json({ emailSent, ...(exposeDevOtp ? { devOtp: otp } : {}) });
+}
+
+// POST /api/institute-signup/verify-otp { email, otp } — confirm the code.
+export async function verifySignupOtp(req, res) {
+  const email = norm(req.body?.email);
+  const otp = String(req.body?.otp || "").trim();
+  const rec = await runUnscoped(() => EmailOtp.findOne({ email }));
+  if (!rec || !rec.otpHash || !rec.otpExpires || rec.otpExpires.getTime() < Date.now()) {
+    return res.status(400).json({ message: "Your code has expired. Please request a new one." });
+  }
+  if (hashOtp(otp) !== rec.otpHash) {
+    return res.status(400).json({ message: "Incorrect code. Please try again." });
+  }
+  rec.verified = true;
+  rec.verifiedAt = new Date();
+  rec.otpHash = undefined;
+  rec.otpExpires = undefined;
+  await runUnscoped(() => rec.save());
+  res.json({ verified: true });
+}
+
 // Shared validation + offer resolution for order/provision.
 async function resolveSignup(body) {
   const name = String(body?.name || "").trim();
@@ -86,6 +163,7 @@ export async function createInstituteOrder(req, res) {
   if (!name) return res.status(400).json({ message: "Institute name is required." });
   if (!validSlug(slug) || RESERVED_SLUGS.has(slug)) return res.status(400).json({ message: "Please choose a valid, available subdomain." });
   if (!adminEmail) return res.status(400).json({ message: "Admin email is required." });
+  if (!(await isEmailVerified(adminEmail))) return res.status(400).json({ message: "Please verify your admin email with the code we sent, then continue." });
   if (!offer) return res.status(400).json({ message: "Choose a valid plan." });
 
   const [slugTaken, emailTaken] = await runUnscoped(() =>
@@ -123,6 +201,7 @@ export async function provisionInstitute(req, res) {
   if (!validSlug(slug) || RESERVED_SLUGS.has(slug)) return res.status(400).json({ message: "Please choose a valid, available subdomain." });
   if (!adminName || !adminEmail || !adminPassword) return res.status(400).json({ message: "Admin name, email and password are required." });
   if (adminPassword.length < 6) return res.status(400).json({ message: "Admin password must be at least 6 characters." });
+  if (!(await isEmailVerified(adminEmail))) return res.status(400).json({ message: "Please verify your admin email with the code we sent, then continue." });
   if (!offer) return res.status(400).json({ message: "Choose a valid plan." });
 
   const isTrial = offer.plan.key === "trial";
@@ -197,6 +276,7 @@ export async function provisionInstitute(req, res) {
   }
 
   notifyNewUser(created.admin); // fire-and-forget admin notification
+  runUnscoped(() => EmailOtp.deleteOne({ email: adminEmail })).catch(() => {}); // one-time code, no longer needed
 
   res.status(201).json({
     ok: true,
