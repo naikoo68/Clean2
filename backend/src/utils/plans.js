@@ -23,6 +23,17 @@ export const DEFAULT_STUDENT_PLANS = [
   { key: "1y", label: "1 Year", cycle: "Yearly", months: 12, price: 899 },
 ];
 
+// Default INSTITUTE (tenant) subscription plans — what an institute pays to run
+// its own space on the platform. Pricing only; admin-editable. The trial grants
+// TRIAL_TENANT_DAYS of access (see instituteSignupController). Placeholder
+// prices — the super-admin edits them in Admin → Plans → Institute Plans.
+export const DEFAULT_TENANT_PLANS = [
+  { key: "trial", label: "14-Day Free Trial", cycle: "Trial", months: 0, price: 0, trial: true },
+  { key: "1m", label: "1 Month", cycle: "Monthly", months: 1, price: 1499 },
+  { key: "6m", label: "6 Months", cycle: "Semi-Annually", months: 6, price: 6999 },
+  { key: "1y", label: "1 Year", cycle: "Yearly", months: 12, price: 11999 },
+];
+
 // The admin-managed client plans (from Settings), or the defaults if none saved.
 export async function getClientPlans() {
   try {
@@ -45,10 +56,24 @@ export async function getStudentPlans() {
   return DEFAULT_STUDENT_PLANS;
 }
 
-// Resolve the plan catalog for an audience: "student" → student plans,
-// anything else → client plans (the historical default).
+// The admin-managed institute (tenant) plans (from Settings), or the defaults.
+export async function getTenantPlans() {
+  try {
+    const s = await Settings.findOne({ key: "site" }).select("tenantPlans").lean();
+    if (Array.isArray(s?.tenantPlans) && s.tenantPlans.length) return s.tenantPlans;
+  } catch {
+    /* fall through to defaults */
+  }
+  return DEFAULT_TENANT_PLANS;
+}
+
+// Resolve the plan catalog for an audience:
+//   "student" → student plans, "tenant" → institute plans,
+//   anything else → client plans (the historical default).
 export async function getPlansFor(audience) {
-  return audience === "student" ? getStudentPlans() : getClientPlans();
+  if (audience === "student") return getStudentPlans();
+  if (audience === "tenant") return getTenantPlans();
+  return getClientPlans();
 }
 
 export function findPlan(plans, key) {

@@ -37,7 +37,7 @@ export async function updateSettings(req, res) {
     "homeSections",
     "clientAnnouncement",
     "aboutHeading", "aboutIntro", "aboutValues", "aboutStats", "testimonials",
-    "aiMaxPerBatch", "clientPlans", "studentPlans",
+    "aiMaxPerBatch", "clientPlans", "studentPlans", "tenantPlans",
     "fbEnabled", "fbPageId", "fbAutoOnNotice", "fbGraphVersion", "fbPageAccessToken",
     "fbDefaultHashtags", "fbAutoHashtags", "fbExtraTargets",
     "fbSelfieWatermarkUrl", "fbSelfieWatermarkEnabled", "fbSelfieWatermarkPosition", "fbSelfieWatermarkSize", "fbSelfieWatermarkOpacity", "fbSelfieWatermarkShape",
@@ -127,12 +127,11 @@ export async function updateSettings(req, res) {
       .filter((p) => p.label);
   }
 
-  // Student subscription plans: pricing only (no AI limits). Keys are kept
-  // stable (referenced by user.studentPlan); a missing key is generated from
-  // the label and de-duplicated so each plan stays uniquely addressable.
-  if (Array.isArray(update.studentPlans)) {
+  // Pricing-only plan lists (no AI limits): student + institute plans share the
+  // same normalization — stable/de-duplicated keys, clamped numbers.
+  const normalizePricingPlans = (plans) => {
     const usedKeys = new Set();
-    update.studentPlans = update.studentPlans
+    return plans
       .map((p) => {
         const label = String(p?.label || "").trim();
         let base = String(p?.key || "").trim().toLowerCase().replace(/[^a-z0-9]+/g, "").slice(0, 24);
@@ -151,7 +150,9 @@ export async function updateSettings(req, res) {
         };
       })
       .filter((p) => p.label);
-  }
+  };
+  if (Array.isArray(update.studentPlans)) update.studentPlans = normalizePricingPlans(update.studentPlans);
+  if (Array.isArray(update.tenantPlans)) update.tenantPlans = normalizePricingPlans(update.tenantPlans);
 
   // Make social links absolute so a link pasted without http:// still works.
   if (Array.isArray(update.socialLinks)) {

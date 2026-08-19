@@ -58,6 +58,7 @@ import paymentRoutes from "./routes/paymentRoutes.js";
 import subscriptionRoutes from "./routes/subscriptionRoutes.js";
 import studentSubscriptionRoutes from "./routes/studentSubscriptionRoutes.js";
 import tenantRoutes from "./routes/tenantRoutes.js";
+import instituteSignupRoutes from "./routes/instituteSignupRoutes.js";
 import cbtRoutes from "./routes/cbtRoutes.js";
 import facebookRoutes from "./routes/facebookRoutes.js";
 import userManualRoutes from "./routes/userManualRoutes.js";
@@ -197,6 +198,7 @@ app.use("/api/payments", paymentRoutes); // Razorpay: create orders + config for
 app.use("/api/subscriptions", subscriptionRoutes); // client self-serve upgrade/renew (works when expired)
 app.use("/api/student-subscriptions", studentSubscriptionRoutes); // student self-serve subscribe/renew (works when expired)
 app.use("/api/tenants", tenantRoutes); // multi-tenant SaaS: super-admin management of institutes (Phase 1 foundation)
+app.use("/api/institute-signup", instituteSignupRoutes); // public paid institute self-signup → auto-provision (Phase 5)
 app.use("/api/cbt", cbtRoutes); // CBT online exams (public name+email sign-in, emailed results, admin rankings)
 app.use("/api/facebook", facebookRoutes); // scheduled Facebook question auto-posting (admin)
 app.use("/api/manual", userManualRoutes); // editable User Manual (public read, admin write)
