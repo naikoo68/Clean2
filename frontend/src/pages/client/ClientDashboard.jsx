@@ -35,6 +35,7 @@ import { Loading, ErrorState } from "../../components/ui/AsyncState";
 import ClientPerformance from "./ClientPerformance";
 import IncomingSharesInbox from "../../components/client/IncomingSharesInbox";
 import ShareByEmailModal from "../../components/client/ShareByEmailModal";
+import ReviewsShowcase from "../../components/reviews/ReviewsShowcase";
 
 const previewText = (t, n = 100) => {
   const s = String(t || "").replace(/\$/g, "").replace(/\s+/g, " ").trim();
@@ -658,6 +659,10 @@ export default function ClientDashboard({ onBuild, onUpgrade }) {
 
       {/* Share practice content with another registered user by email. */}
       {shareTarget && <ShareByEmailModal target={shareTarget} onClose={() => setShareTarget(null)} />}
+
+      {/* This institute's approved reviews — shown to clients too (renders
+          nothing until the institute has approved reviews). */}
+      <ReviewsShowcase max={5} />
 
       {/* Question detail — opens on tap, shows the full question + its location. */}
       {detail && (
