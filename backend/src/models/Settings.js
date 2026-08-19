@@ -92,6 +92,9 @@ const settingsSchema = new mongoose.Schema(
     // (every subscription plan includes AI limits, so any active client may use
     // the generator unless an admin explicitly turns it off afterwards).
     aiClientAccessBackfilled: { type: Boolean, default: false },
+    // One-time flag: existing data was assigned to the default tenant (Phase 2
+    // multi-tenancy backfill). Prevents the startup backfill from repeating.
+    tenantsBackfilled: { type: Boolean, default: false },
     siteName: { type: String, default: "My Study Guide" },
     tagline: { type: String, default: "Prepare Smart, Achieve More." },
     logoUrl: { type: String, default: "" }, // image URL or base64 data URI
