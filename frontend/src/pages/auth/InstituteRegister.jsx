@@ -45,6 +45,57 @@ export default function InstituteRegister() {
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState(null); // { slug }
 
+  // Admin-email verification (OTP) — must be completed before signup/payment.
+  const [emailVerified, setEmailVerified] = useState(false);
+  const [otpOpen, setOtpOpen] = useState(false);   // showing the code-entry box
+  const [otpCode, setOtpCode] = useState("");
+  const [otpSending, setOtpSending] = useState(false);
+  const [otpBusy, setOtpBusy] = useState(false);
+  const [otpInfo, setOtpInfo] = useState("");
+  const [otpError, setOtpError] = useState("");
+  const [otpDevCode, setOtpDevCode] = useState(""); // shown only when email delivery isn't configured
+
+  // Typing a different email invalidates any previous verification.
+  const onEmailChange = (e) => {
+    setForm((f) => ({ ...f, adminEmail: e.target.value }));
+    setEmailVerified(false);
+    setOtpOpen(false);
+    setOtpCode("");
+    setOtpInfo(""); setOtpError(""); setOtpDevCode("");
+  };
+
+  const sendOtp = async () => {
+    setOtpInfo(""); setOtpError(""); setOtpDevCode("");
+    const email = form.adminEmail.trim();
+    if (!email) { setOtpError("Enter your admin email first."); return; }
+    setOtpSending(true);
+    try {
+      const r = await instituteSignupService.sendOtp(email);
+      setOtpOpen(true);
+      if (r?.devOtp) setOtpDevCode(r.devOtp);
+      else setOtpInfo("We sent a 6-digit code to your email. Check spam too.");
+    } catch (err) {
+      setOtpError(err.message || "Couldn't send the code. Please try again.");
+    } finally {
+      setOtpSending(false);
+    }
+  };
+
+  const verifyOtp = async () => {
+    setOtpError("");
+    setOtpBusy(true);
+    try {
+      await instituteSignupService.verifyOtp(form.adminEmail.trim(), otpCode.trim());
+      setEmailVerified(true);
+      setOtpOpen(false);
+      setOtpInfo("");
+    } catch (err) {
+      setOtpError(err.message || "Verification failed.");
+    } finally {
+      setOtpBusy(false);
+    }
+  };
+
   useEffect(() => {
     instituteSignupService.config().then((r) => {
       setCfg({ enabled: !!r.enabled, payEnabled: !!r.payEnabled, plans: r.plans?.length ? r.plans : FALLBACK_PLANS });
@@ -112,6 +163,10 @@ export default function InstituteRegister() {
   const submit = async (e) => {
     e.preventDefault();
     setError("");
+    if (!emailVerified) {
+      setError("Please verify your admin email with the code first.");
+      return;
+    }
     if (avail && (!avail.slugAvailable || !avail.emailAvailable)) {
       setError(!avail.slugAvailable ? "That subdomain isn't available." : "That admin email is already registered.");
       return;
@@ -247,9 +302,52 @@ export default function InstituteRegister() {
             <label className="mb-1.5 block text-sm font-medium">Admin email</label>
             <div className="relative">
               <Mail className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-              <input required type="email" autoCapitalize="none" spellCheck={false} value={form.adminEmail} onChange={(e) => setForm({ ...form, adminEmail: e.target.value })} placeholder="you@institute.com" className="input pl-9" />
+              <input required type="email" autoCapitalize="none" spellCheck={false} value={form.adminEmail} onChange={onEmailChange} placeholder="you@institute.com" className="input pl-9 pr-24" disabled={emailVerified} />
+              {emailVerified ? (
+                <span className="absolute right-2.5 top-1/2 inline-flex -translate-y-1/2 items-center gap-1 text-xs font-semibold text-emerald-600 dark:text-emerald-400">
+                  <Check className="h-4 w-4" /> Verified
+                </span>
+              ) : (
+                <button
+                  type="button"
+                  onClick={sendOtp}
+                  disabled={otpSending || !form.adminEmail || (avail && !avail.emailAvailable)}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 rounded-lg bg-brand-600 px-2.5 py-1 text-xs font-semibold text-white hover:bg-brand-700 disabled:opacity-40"
+                >
+                  {otpSending ? "Sending…" : otpOpen ? "Resend" : "Verify"}
+                </button>
+              )}
             </div>
             {form.adminEmail && avail && !avail.emailAvailable && <p className="mt-1 text-xs text-rose-600">Email already registered.</p>}
+            {!emailVerified && !otpOpen && form.adminEmail && (!avail || avail.emailAvailable) && (
+              <p className="mt-1 text-xs text-slate-400">Tap <b>Verify</b> — we'll email you a 6-digit code to confirm this address.</p>
+            )}
+
+            {otpOpen && !emailVerified && (
+              <div className="mt-2 rounded-xl border border-slate-200 p-3 dark:border-slate-700">
+                {otpDevCode && (
+                  <p className="mb-2 rounded-lg bg-amber-50 px-2 py-1.5 text-xs text-amber-800 dark:bg-amber-900/20 dark:text-amber-200">
+                    Email delivery isn't set up yet — your code: <span className="font-mono text-sm font-bold tracking-widest">{otpDevCode}</span>
+                  </p>
+                )}
+                {otpInfo && <p className="mb-2 text-xs text-emerald-600 dark:text-emerald-400">{otpInfo}</p>}
+                {otpError && <p className="mb-2 text-xs text-rose-600">{otpError}</p>}
+                <label className="mb-1 block text-xs font-medium text-slate-500 dark:text-slate-400">Enter the 6-digit code</label>
+                <div className="flex gap-2">
+                  <input
+                    value={otpCode}
+                    onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                    inputMode="numeric"
+                    autoComplete="one-time-code"
+                    placeholder="______"
+                    className="input flex-1 text-center text-lg font-bold tracking-[0.4em]"
+                  />
+                  <button type="button" onClick={verifyOtp} disabled={otpBusy || otpCode.length !== 6} className="btn-primary px-4">
+                    {otpBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : "Verify"}
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
 
@@ -303,13 +401,19 @@ export default function InstituteRegister() {
           I agree to the Terms of Service and Privacy Policy.
         </label>
 
-        <button type="submit" disabled={busy} className="btn-primary w-full">
+        <button type="submit" disabled={busy || !emailVerified} className="btn-primary w-full">
           {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <School className="h-4 w-4" />}
           {busy ? "Setting up…" : isFreePlan ? "Start free trial" : cfg.payEnabled ? `Pay ₹${total} & create institute` : `Create institute`}
         </button>
-        <p className="flex items-center justify-center gap-1 text-center text-xs text-slate-400">
-          <ShieldCheck className="h-3.5 w-3.5" /> {isFreePlan ? "Free trial — no payment needed." : "Secure payment via Razorpay · your institute activates instantly"}
-        </p>
+        {!emailVerified ? (
+          <p className="flex items-center justify-center gap-1 text-center text-xs text-amber-600 dark:text-amber-400">
+            <AlertCircle className="h-3.5 w-3.5" /> Verify your admin email above to continue.
+          </p>
+        ) : (
+          <p className="flex items-center justify-center gap-1 text-center text-xs text-slate-400">
+            <ShieldCheck className="h-3.5 w-3.5" /> {isFreePlan ? "Free trial — no payment needed." : "Secure payment via Razorpay · your institute activates instantly"}
+          </p>
+        )}
       </form>
 
       <p className="mt-6 text-center text-sm text-slate-600 dark:text-slate-300">
