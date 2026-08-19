@@ -336,7 +336,7 @@ export const feedbackService = {
 // ---- Reviews (public submit, admin moderation) ----
 export const reviewService = {
   submit: (data) => api.post("/reviews", data), // public (works logged-in or guest)
-  approved: () => api.get("/reviews/approved", { auth: false }), // public — approved reviews for this institute (home testimonials)
+  approved: (limit) => api.get(`/reviews/approved${limit ? `?limit=${limit}` : ""}`, { auth: false }), // public — approved reviews for this institute
   list: () => api.get("/reviews"), // admin
   approve: (id) => api.patch(`/reviews/${id}/approve`),
   reject: (id) => api.patch(`/reviews/${id}/reject`),
