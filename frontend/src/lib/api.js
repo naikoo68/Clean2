@@ -62,6 +62,22 @@ async function request(path, { method = "GET", body, auth = true, headers = {}, 
     /* non-browser / unavailable — the backend falls back to the default tenant */
   }
 
+  // Shareable tenant links: when the URL carries ?t=<slug> (e.g.
+  // mystudyguideme.vercel.app/?t=acme), target that institute explicitly. This
+  // lets institutes share a public portal link before they own a custom domain.
+  // The backend's resolveTenant prioritises this X-Tenant slug header over the
+  // host, so the visitor sees that institute's branding & data. For logged-in
+  // users the server still binds scope to their OWN tenant, so this can't leak
+  // another institute's private data.
+  try {
+    if (typeof window !== "undefined" && window.location?.search) {
+      const slug = new URLSearchParams(window.location.search).get("t");
+      if (slug && slug.trim()) finalHeaders["X-Tenant"] = slug.trim().toLowerCase();
+    }
+  } catch {
+    /* ignore — no query param available */
+  }
+
   // If the caller passed an already-aborted signal, bail immediately.
   if (signal?.aborted) { const e = new Error("Cancelled"); e.aborted = true; throw e; }
 
