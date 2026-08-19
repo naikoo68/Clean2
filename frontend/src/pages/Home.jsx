@@ -100,6 +100,14 @@ export default function Home() {
     return () => { active = false; };
   }, []);
 
+  // Hero content — editable from the setup wizard / Customization. Falls back to
+  // the built-in copy when an institute hasn't set its own.
+  const heroBadge = settings.heroBadge || "India's smart prep platform";
+  const heroTitle = settings.heroTitle || "Prepare Smart, Achieve More.";
+  const heroSubtitle =
+    settings.heroSubtitle ||
+    "Master every subject with adaptive quizzes, full-length test series, instant results and powerful analytics — built for serious aspirants.";
+
   const fmt = (n) => Number(n || 0).toLocaleString("en-IN");
   const DEFAULT_KEYS = ["students", "quizzes", "tests"];
   const DEFAULT_ROWS = [
@@ -177,18 +185,16 @@ export default function Home() {
         <div className="container-page py-16 lg:py-24">
           {/* Full-width centered header — spans across both columns (above the card too). */}
           <div className="animate-fade-in-up text-center">
-            <span className="badge bg-accent-100 text-accent-700 dark:bg-accent-900/40 dark:text-accent-300">
-              <Star className="h-3.5 w-3.5" /> India's smart prep platform
-            </span>
-            <h1 className="mt-5 text-4xl font-extrabold leading-tight tracking-tight sm:text-5xl lg:text-6xl">
-              Prepare Smart,{" "}
-              <span className="bg-gradient-to-r from-brand-600 to-accent-500 bg-clip-text text-transparent">
-                Achieve More.
+            {heroBadge && (
+              <span className="badge bg-accent-100 text-accent-700 dark:bg-accent-900/40 dark:text-accent-300">
+                <Star className="h-3.5 w-3.5" /> {heroBadge}
               </span>
+            )}
+            <h1 className="mt-5 text-4xl font-extrabold leading-tight tracking-tight sm:text-5xl lg:text-6xl">
+              {heroTitle}
             </h1>
             <p className="mx-auto mt-5 max-w-3xl text-center text-base text-slate-600 dark:text-slate-300 sm:text-lg">
-              Master every subject with adaptive quizzes, full-length test series,
-              instant results and powerful analytics — built for serious aspirants.
+              {heroSubtitle}
             </p>
           </div>
 

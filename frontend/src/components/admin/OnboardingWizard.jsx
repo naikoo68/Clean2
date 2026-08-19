@@ -59,6 +59,9 @@ export default function OnboardingWizard({ onDone }) {
     logoUrl: "",
     siteName: user?.tenant?.name || "",
     tagline: "",
+    heroBadge: "",
+    heroTitle: "",
+    heroSubtitle: "",
     aboutHeading: "",
     aboutIntro: "",
     email: "",
@@ -107,7 +110,14 @@ export default function OnboardingWizard({ onDone }) {
   const next1 = () => {
     if (!f.siteName.trim()) return setError("Please enter your institute name.");
     if (!f.logoUrl) return setError("Please upload your institute logo.");
-    commit({ siteName: f.siteName.trim(), tagline: f.tagline.trim(), logoUrl: f.logoUrl }, 2);
+    commit({
+      siteName: f.siteName.trim(),
+      tagline: f.tagline.trim(),
+      logoUrl: f.logoUrl,
+      heroBadge: f.heroBadge.trim(),
+      heroTitle: f.heroTitle.trim(),
+      heroSubtitle: f.heroSubtitle.trim(),
+    }, 2);
   };
 
   const next2 = () => {
@@ -236,6 +246,25 @@ export default function OnboardingWizard({ onDone }) {
               <div>
                 <label className="mb-1.5 block text-sm font-medium">Tagline <span className="font-normal text-slate-400">(optional)</span></label>
                 <input className="input" value={f.tagline} onChange={(e) => set("tagline", e.target.value)} placeholder="e.g. Prepare Smart, Achieve More." />
+              </div>
+
+              <div className="rounded-xl border border-slate-200 p-3 dark:border-slate-700">
+                <p className="mb-2 text-sm font-semibold">Home page banner <span className="font-normal text-slate-400">(optional)</span></p>
+                <p className="mb-3 text-xs text-slate-400">The big headline area at the top of your website. Leave blank to use sensible defaults.</p>
+                <div className="space-y-3">
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-slate-500">Badge</label>
+                    <input className="input" value={f.heroBadge} onChange={(e) => set("heroBadge", e.target.value)} placeholder="e.g. Bright Future Academy" />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-slate-500">Headline</label>
+                    <input className="input" value={f.heroTitle} onChange={(e) => set("heroTitle", e.target.value)} placeholder="e.g. Prepare Smart, Achieve More." />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-slate-500">Subheading</label>
+                    <textarea className="input min-h-[70px]" value={f.heroSubtitle} onChange={(e) => set("heroSubtitle", e.target.value)} placeholder="One or two lines about what your institute offers." />
+                  </div>
+                </div>
               </div>
             </>
           )}
