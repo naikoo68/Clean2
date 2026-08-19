@@ -161,9 +161,18 @@ export default function AdminLayout() {
       </nav>
 
       <div className="space-y-1 border-t border-slate-200 p-3 dark:border-slate-800">
-        <Link to="/" className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800">
-          <Home className="h-5 w-5" /> Switch to Student Mode
-        </Link>
+        {user?.role === "institute_admin" && user?.tenant?.slug ? (
+          // Institute admins get sent to THEIR OWN public portal (?t=<slug>),
+          // not the platform site. A full-page load is required so the tenant
+          // query param is applied by the API layer for every request.
+          <a href={`/?t=${user.tenant.slug}`} className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800">
+            <Home className="h-5 w-5" /> View my student portal
+          </a>
+        ) : (
+          <Link to="/" className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800">
+            <Home className="h-5 w-5" /> Switch to Student Mode
+          </Link>
+        )}
         <button onClick={handleLogout} className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-900/20">
           <LogOut className="h-5 w-5" /> Log out
         </button>
