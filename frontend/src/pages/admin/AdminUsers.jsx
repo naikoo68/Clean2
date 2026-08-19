@@ -56,7 +56,9 @@ function relativeTo(d) {
 }
 const isExpired = (d) => d && new Date(d).getTime() < Date.now();
 
-export default function AdminUsers() {
+// `role` (optional) restricts the list to one account type (e.g. "student"),
+// used when this screen is embedded as the "Students" tab of the Users hub.
+export default function AdminUsers({ role = "" }) {
   const [users, setUsers] = useState([]);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
@@ -156,13 +158,13 @@ export default function AdminUsers() {
     setLoading(true);
     setError("");
     userService
-      .list()
+      .list("", role)
       .then((res) => setUsers(res.users || []))
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false));
   };
 
-  useEffect(load, []);
+  useEffect(load, [role]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const flash = (msg) => {
     setToast(msg);

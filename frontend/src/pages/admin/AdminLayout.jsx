@@ -15,10 +15,7 @@ import {
   KeyRound,
   Sparkles,
   GraduationCap,
-  Store,
-  School,
   Ticket,
-  Crown,
   ArrowRightLeft,
   Share2,
   MonitorCheck,
@@ -50,7 +47,6 @@ import Avatar from "../../components/ui/Avatar";
 // "admin"); an institute_admin sees the rest, scoped to their own institute.
 const nav = [
   { to: "/admin", label: "Dashboard", icon: LayoutDashboard, end: true },
-  { to: "/admin/institutes", label: "Institutes", icon: School, superOnly: true },
   { to: "/admin/content", label: "Content", icon: BookCopy, feature: "content" },
   { to: "/admin/tests", label: "Test Series", icon: FileStack, feature: "tests" },
   { to: "/admin/practice", label: "My Practice", icon: GraduationCap, feature: "practice" },
@@ -59,8 +55,6 @@ const nav = [
   { to: "/admin/shared", label: "Shared Links", icon: Share2, feature: "shared" },
   { to: "/admin/cbt", label: "Online Exams", icon: MonitorCheck, feature: "cbt" },
   { to: "/admin/migration", label: "Migration", icon: ArrowRightLeft, feature: "migration" },
-  { to: "/admin/clients", label: "Clients", icon: Store, feature: "clients" },
-  { to: "/admin/plans", label: "Plans", icon: Crown, feature: "plans" },
   { to: "/admin/coupons", label: "Coupons", icon: Ticket, feature: "coupons" },
   { to: "/admin/study", label: "Study Material", icon: BookMarked, feature: "study" },
   { to: "/admin/documents", label: "Documents", icon: FileText, feature: "documents" },
