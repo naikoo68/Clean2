@@ -87,6 +87,7 @@ const AdminMigration = lazy(() => import("./pages/admin/AdminMigration"));
 const AdminClients = lazy(() => import("./pages/admin/AdminClients"));
 const AdminCoupons = lazy(() => import("./pages/admin/AdminCoupons"));
 const AdminPlans = lazy(() => import("./pages/admin/AdminPlans"));
+const AdminInstitutes = lazy(() => import("./pages/admin/AdminInstitutes"));
 const AdminAiKeys = lazy(() => import("./pages/admin/AdminAiKeys"));
 const AdminSharedLinks = lazy(() => import("./pages/admin/AdminSharedLinks"));
 const AdminAiStudio = lazy(() => import("./pages/admin/AdminAiStudio"));
@@ -251,12 +252,13 @@ const router = createHashRouter([
   {
     path: "/admin",
     element: (
-      <ProtectedRoute role="admin">
+      <ProtectedRoute role={["admin", "institute_admin"]}>
         {S(AdminLayout)}
       </ProtectedRoute>
     ),
     children: [
       { index: true, element: S(AdminDashboard) },
+      { path: "institutes", element: S(AdminInstitutes) },
       { path: "content", element: S(AdminContent) },
       { path: "tests", element: S(AdminTests) },
       { path: "practice", element: S(AdminPractice) },

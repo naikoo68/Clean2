@@ -16,6 +16,7 @@ import {
   Sparkles,
   GraduationCap,
   Store,
+  School,
   Ticket,
   Crown,
   ArrowRightLeft,
@@ -44,8 +45,11 @@ import GlobalSearch from "../../components/ui/GlobalSearch";
 import { Facebook as FacebookIcon } from "../../components/ui/SocialIcons";
 import Avatar from "../../components/ui/Avatar";
 
+// `superOnly: true` items are visible only to the platform super-admin (role
+// "admin"); an institute_admin sees the rest, scoped to their own institute.
 const nav = [
   { to: "/admin", label: "Dashboard", icon: LayoutDashboard, end: true },
+  { to: "/admin/institutes", label: "Institutes", icon: School, superOnly: true },
   { to: "/admin/content", label: "Content", icon: BookCopy },
   { to: "/admin/tests", label: "Test Series", icon: FileStack },
   { to: "/admin/practice", label: "My Practice", icon: GraduationCap },
@@ -53,10 +57,10 @@ const nav = [
   { to: "/admin/checker", label: "Question Checker", icon: SearchCheck },
   { to: "/admin/shared", label: "Shared Links", icon: Share2 },
   { to: "/admin/cbt", label: "Online Exams", icon: MonitorCheck },
-  { to: "/admin/migration", label: "Migration", icon: ArrowRightLeft },
-  { to: "/admin/clients", label: "Clients", icon: Store },
-  { to: "/admin/plans", label: "Plans", icon: Crown },
-  { to: "/admin/coupons", label: "Coupons", icon: Ticket },
+  { to: "/admin/migration", label: "Migration", icon: ArrowRightLeft, superOnly: true },
+  { to: "/admin/clients", label: "Clients", icon: Store, superOnly: true },
+  { to: "/admin/plans", label: "Plans", icon: Crown, superOnly: true },
+  { to: "/admin/coupons", label: "Coupons", icon: Ticket, superOnly: true },
   { to: "/admin/study", label: "Study Material", icon: BookMarked },
   { to: "/admin/documents", label: "Documents", icon: FileText },
   { to: "/admin/notes", label: "Handwritten Notes", icon: Feather },
@@ -64,16 +68,16 @@ const nav = [
   { to: "/admin/resume", label: "Resume Builder", icon: FileText },
   { to: "/admin/users", label: "Users", icon: Users },
   { to: "/admin/performance", label: "Performance", icon: Trophy },
-  { to: "/admin/storage", label: "Storage", icon: HardDrive },
-  { to: "/admin/backup", label: "Backup & Restore", icon: DatabaseBackup },
+  { to: "/admin/storage", label: "Storage", icon: HardDrive, superOnly: true },
+  { to: "/admin/backup", label: "Backup & Restore", icon: DatabaseBackup, superOnly: true },
   { to: "/admin/feedback", label: "Feedback", icon: MessageSquare },
   { to: "/admin/reviews", label: "Reviews", icon: Star },
   { to: "/admin/messages", label: "Messages", icon: Mail },
   { to: "/admin/notices", label: "Notice Board", icon: Megaphone },
-  { to: "/admin/facebook", label: "Facebook Auto-Post", icon: FacebookIcon },
+  { to: "/admin/facebook", label: "Facebook Auto-Post", icon: FacebookIcon, superOnly: true },
   { to: "/admin/ai-generator", label: "AI Generator", icon: Sparkles },
   { to: "/admin/visualize", label: "Visualization Studio", icon: LayoutGrid },
-  { to: "/admin/ai-keys", label: "AI Keys", icon: KeyRound },
+  { to: "/admin/ai-keys", label: "AI Keys", icon: KeyRound, superOnly: true },
   { to: "/admin/customization", label: "Customization", icon: Palette },
   { to: "/admin/manual", label: "User Manual", icon: BookOpen },
 ];
@@ -131,7 +135,7 @@ export default function AdminLayout() {
       </Link>
 
       <nav className="min-h-0 flex-1 space-y-1 overflow-y-auto px-3">
-        {nav.map((n) => (
+        {nav.filter((n) => !n.superOnly || user?.role === "admin").map((n) => (
           <NavLink
             key={n.to}
             to={n.to}
