@@ -28,6 +28,8 @@ export const INSTITUTE_FEATURES = [
   { key: "aiGenerator", label: "AI Generator" },
   { key: "visualize", label: "Visualization Studio" },
   { key: "aiKeys", label: "AI Keys (APIs)" },
+  { key: "migration", label: "Migration (move content)" },
+  { key: "backup", label: "Backup & Restore (their own data)" },
 ];
 
 // A feature is enabled unless the institute's map explicitly sets it to false.

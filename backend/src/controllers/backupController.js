@@ -25,6 +25,16 @@ import TestSeries from "../models/TestSeries.js";
 import PracticeStream from "../models/PracticeStream.js";
 import PracticeSubject from "../models/PracticeSubject.js";
 import PracticeTopic from "../models/PracticeTopic.js";
+import { tenantStore } from "../utils/tenantContext.js";
+
+// Run a detached background job inside the SAME tenant context as the request
+// that started it, so every query it makes stays scoped to the caller's
+// institute (a super-admin is unscoped → whole platform; an institute admin →
+// only their own data). Without this the job could run without scope.
+function runInTenantContext(fn) {
+  const ctx = tenantStore.getStore() || { tenantId: null, bypass: true };
+  return tenantStore.run(ctx, fn);
+}
 
 const Q_FIELDS = [
   "text", "type", "options", "correct", "difficulty", "explanation",
@@ -72,7 +82,7 @@ export async function startAdminBackup(req, res) {
 
   const jobId = newId();
   jobs.set(jobId, { user: String(req.user._id), kind: "backup", status: "running", phase: "Starting…", total, done: 0, payload: null, error: null, updatedAt: Date.now() });
-  guard(jobId, runAdminBackup(jobId));
+  runInTenantContext(() => guard(jobId, runAdminBackup(jobId)));
   res.status(202).json({ jobId, total });
 }
 
@@ -168,7 +178,7 @@ export async function startAdminRestore(req, res) {
 
   const jobId = newId();
   jobs.set(jobId, { user: String(req.user._id), kind: "restore", status: "running", phase: "Starting…", total, done: 0, result: null, error: null, updatedAt: Date.now() });
-  guard(jobId, runAdminRestore(jobId, data));
+  runInTenantContext(() => guard(jobId, runAdminRestore(jobId, data)));
   res.status(202).json({ jobId, total });
 }
 
