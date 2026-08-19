@@ -499,6 +499,8 @@ export const instituteSignupService = {
     if (email) q.set("email", email);
     return api.get(`/institute-signup/availability?${q.toString()}`, { auth: false });
   },
+  sendOtp: (email) => api.post("/institute-signup/send-otp", { email }, { auth: false }), // email admin a code
+  verifyOtp: (email, otp) => api.post("/institute-signup/verify-otp", { email, otp }, { auth: false }), // confirm code
   order: (data) => api.post("/institute-signup/order", data, { auth: false }),
   provision: (data) => api.post("/institute-signup", data, { auth: false }),
 };
