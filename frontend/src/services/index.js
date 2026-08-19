@@ -479,6 +479,15 @@ export const studentSubscriptionService = {
   activate: (data) => api.post("/student-subscriptions/activate", data),
 };
 
+// ---- Tenants / institutes (super-admin only) ----
+export const tenantService = {
+  list: (search) => api.get(`/tenants${search ? `?search=${encodeURIComponent(search)}` : ""}`),
+  get: (id) => api.get(`/tenants/${id}`),
+  create: (data) => api.post("/tenants", data),
+  setStatus: (id, status) => api.patch(`/tenants/${id}/status`, { status }),
+  createAdmin: (id, data) => api.post(`/tenants/${id}/admin`, data), // create an institute admin
+};
+
 // ---- Global metadata search (streams/subjects/topics/quizzes/tests) ----
 // optionalAuth on the backend: an admin's token unlocks all metadata; guests
 // and students see only public, published content.
