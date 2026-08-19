@@ -18,9 +18,10 @@ export default function Login() {
   const [busy, setBusy] = useState(false);
 
   const dest = location.state?.from || "/dashboard";
-  // Route each role to its home: admins → admin panel, clients → My Practice
-  // workspace, students → their intended destination.
-  const homeFor = (role) => (role === "admin" ? "/admin" : role === "client" ? "/client" : dest);
+  // Route each role to its home: admins & institute admins → admin panel,
+  // clients → My Practice workspace, students → their intended destination.
+  const homeFor = (role) =>
+    (role === "admin" || role === "institute_admin") ? "/admin" : role === "client" ? "/client" : dest;
 
   const submit = async (e) => {
     e.preventDefault();
