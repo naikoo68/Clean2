@@ -17,7 +17,7 @@ export default function AdminLogin() {
     setBusy(true);
     try {
       const profile = await login(form.email, form.password);
-      if (profile?.role !== "admin") {
+      if (profile?.role !== "admin" && profile?.role !== "institute_admin") {
         logout();
         setError("This account does not have admin access.");
         return;
