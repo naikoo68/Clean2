@@ -2,6 +2,7 @@ import { useRef, useState } from "react";
 import { DatabaseBackup, Download, Upload, Loader2, AlertTriangle, CheckCircle2, HardDriveUpload, HardDriveDownload, Save, X } from "lucide-react";
 import { adminBackupService } from "../../services";
 import { useSettings } from "../../context/SettingsContext";
+import { useAuth } from "../../context/AuthContext";
 import { getAccessToken, uploadBackup, listBackups, downloadBackup } from "../../lib/googleDrive";
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -15,6 +16,11 @@ const fmtWhen = (d) => { try { return new Date(d).toLocaleString(undefined, { da
 // Both run as background jobs with a live % progress bar.
 export default function AdminBackup() {
   const { settings, save } = useSettings();
+  const { user } = useAuth();
+  // Google Drive uses the PLATFORM's OAuth Client ID — that connection setting
+  // is super-admin only. Institute admins get simple file backup/restore of
+  // their own data (which is all they need).
+  const isSuper = user?.role === "admin";
   const fileRef = useRef(null);
   const [busy, setBusy] = useState(""); // "" | "backup" | "restore" | "drive-backup" | "drive-restore"
   const [progress, setProgress] = useState(null); // { done, total, phase }
@@ -164,7 +170,7 @@ export default function AdminBackup() {
         </span>
         <div>
           <h1 className="text-xl font-bold leading-none">Backup &amp; Restore</h1>
-          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Save your entire content library — as a file or straight to Google Drive — and restore it anytime.</p>
+          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Save your entire content library {isSuper ? "— as a file or straight to Google Drive — " : "as a file "}and restore it anytime.</p>
         </div>
       </div>
 
@@ -182,8 +188,8 @@ export default function AdminBackup() {
           <input ref={fileRef} type="file" accept="application/json,.json" className="hidden" onChange={onRestoreFile} />
         </div>
 
-        {/* Google Drive actions (only when a Client ID is configured) */}
-        {driveReady && (
+        {/* Google Drive actions — super-admin only (uses the platform Client ID) */}
+        {isSuper && driveReady && (
           <div className="mt-2 flex flex-col gap-2 sm:flex-row">
             <button onClick={backupToDrive} disabled={!!busy} className="btn-outline flex-1">
               {busy === "drive-backup" ? <><Loader2 className="h-4 w-4 animate-spin" /> Backing up to Drive…</> : <><HardDriveUpload className="h-4 w-4" /> Back up to Google Drive</>}
@@ -237,7 +243,8 @@ export default function AdminBackup() {
         </div>
       </div>
 
-      {/* Google Drive connection settings */}
+      {/* Google Drive connection settings — super-admin only (platform Client ID) */}
+      {isSuper && (
       <div className="card mt-4 p-5">
         <h2 className="text-sm font-bold">Google Drive connection</h2>
         <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
@@ -258,6 +265,7 @@ export default function AdminBackup() {
           Status: {driveReady ? <span className="font-semibold text-emerald-600">Connected ✓</span> : <span className="font-semibold text-slate-500">Not connected</span>}
         </p>
       </div>
+      )}
     </div>
   );
 }
