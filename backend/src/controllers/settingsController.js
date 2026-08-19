@@ -68,6 +68,7 @@ export async function updateSettings(req, res) {
 
   const allowed = [
     "siteName", "tagline", "logoUrl", "primaryColor", "accentColor",
+    "heroBadge", "heroTitle", "heroSubtitle",
     "fontFamily", "socialLinks", "contacts",
     "navHeight", "navBrandSize", "navFontSize", "navFontWeight", "navFontFamily", "navTextTransform", "defaultZoom",
     "watermarkEnabled", "watermarkText", "watermarkOpacity", "watermarkSize", "watermarkMode", "restrictCopy", "screenshotGuard", "guardHoldMs", "statsAuto", "notifyOnNewContent",
