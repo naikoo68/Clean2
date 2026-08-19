@@ -3,7 +3,6 @@ import { Search, Ban, CheckCircle2, KeyRound, Crown, UserPlus, Pencil, Trash2, X
 import { userService, testService, authService } from "../../services";
 import Badge from "../../components/ui/Badge";
 import { Loading, ErrorState } from "../../components/ui/AsyncState";
-import StudentPlansManager from "../../components/admin/StudentPlansManager";
 
 // Duration units offered when creating a temporary account.
 const UNIT_MS = { Minutes: 60_000, Hours: 3_600_000, Days: 86_400_000, Weeks: 604_800_000 };
@@ -268,9 +267,6 @@ export default function AdminUsers() {
           <UserPlus className="h-4 w-4" /> Add User
         </button>
       </div>
-
-      {/* Student subscription plans & pricing (pricing-only; no AI limits). */}
-      <StudentPlansManager />
 
       {loading ? (
         <Loading label="Loading users..." />
