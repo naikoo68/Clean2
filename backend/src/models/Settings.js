@@ -97,6 +97,15 @@ const settingsSchema = new mongoose.Schema(
     // One-time flag: existing data was assigned to the default tenant (Phase 2
     // multi-tenancy backfill). Prevents the startup backfill from repeating.
     tenantsBackfilled: { type: Boolean, default: false },
+    // First-run setup wizard: an institute admin is walked through branding,
+    // company/contact and policy setup right after signup. Set true once they
+    // finish (or skip the optional final step) so it won't auto-open again.
+    onboardingCompleted: { type: Boolean, default: false },
+    // Per-institute legal/resource page content. When set, the Privacy / Terms /
+    // Refund pages render this text instead of the generic default copy.
+    privacyPolicy: { type: String, default: "" },
+    termsOfService: { type: String, default: "" },
+    refundPolicy: { type: String, default: "" },
     siteName: { type: String, default: "My Study Guide" },
     tagline: { type: String, default: "Prepare Smart, Achieve More." },
     logoUrl: { type: String, default: "" }, // image URL or base64 data URI

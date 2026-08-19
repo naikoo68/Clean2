@@ -9,6 +9,7 @@ export default function Privacy() {
     <LegalLayout
       title="Privacy Policy"
       updated="August 2026"
+      customBody={settings.privacyPolicy}
       intro={`This Privacy Policy explains how ${name} collects, uses, and protects your information when you use our website and services. By using ${name}, you agree to the practices described below.`}
       sections={[
         {
