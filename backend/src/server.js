@@ -7,6 +7,7 @@ import app from "./app.js";
 import connectDB from "./config/db.js";
 import { seedIfEmpty } from "./utils/seedData.js";
 import { ensureAdminFromEnv } from "./utils/ensureAdmin.js";
+import { backfillTenants } from "./utils/backfillTenants.js";
 import { ensureDefaultStream } from "./utils/ensureDefaultStream.js";
 import { runDueFbSchedules } from "./config/facebook.js";
 import Settings from "./models/Settings.js";
@@ -86,6 +87,25 @@ async function enableClientAiAccess() {
   }
 }
 
+// One-time migration (multi-tenancy Phase 2): assign every EXISTING record to a
+// "default" institute (tenant), so nothing disappears when tenant scoping turns
+// on in Phase 3. Runs once — a flag in Settings prevents repeats — and is
+// idempotent regardless, so a repeat run is harmless. Fully automatic: the
+// admin never has to run anything by hand.
+async function backfillTenantsOnce() {
+  try {
+    const settings = await Settings.findOne({ key: "site" }).select("tenantsBackfilled").lean();
+    if (settings?.tenantsBackfilled) return;
+    const { backfilled } = await backfillTenants();
+    // Atomic flag set so it doesn't clobber the other one-time flags saved
+    // concurrently during startup.
+    await Settings.updateOne({ key: "site" }, { $set: { tenantsBackfilled: true } }, { upsert: true });
+    console.log(`🏫 Assigned ${backfilled} existing record(s) to the default institute (one-time multi-tenant backfill).`);
+  } catch (err) {
+    console.error("Tenant backfill skipped:", err.message);
+  }
+}
+
 async function start() {
   await connectDB();
 
@@ -99,6 +119,9 @@ async function start() {
 
   // Grant AI access to existing client accounts (one-time).
   enableClientAiAccess();
+
+  // Assign existing data to the default institute (one-time multi-tenant backfill).
+  backfillTenantsOnce();
 
   // Facebook scheduled auto-posting: check every minute for due schedules.
   // (The /api/health ping also triggers this as a safety net after downtime.)
