@@ -12,7 +12,7 @@ import { uploadToCloudinary } from "../config/cloudinary.js";
 // sample toppers, "1,20,000+ students", hello@mystudyguide.com, …). Functional
 // defaults (colours, nav sizing, watermark, subscription plans) are left to the
 // schema so the institute still has sensible, working settings.
-function cleanTenantSeed(instituteName) {
+export function cleanTenantSeed(instituteName) {
   return {
     key: "site",
     siteName: instituteName || "",
