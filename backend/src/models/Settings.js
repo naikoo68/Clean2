@@ -85,7 +85,9 @@ const DEFAULT_HOME_SECTIONS = ["hero", "stats", "quickAccess", "features", "howI
 // Singleton site-wide settings the admin can customise.
 const settingsSchema = new mongoose.Schema(
   {
-    key: { type: String, default: "site", unique: true },
+    // NOT globally unique anymore: each tenant has its own "site" settings doc.
+    // Uniqueness is enforced per-tenant by the compound index defined below.
+    key: { type: String, default: "site" },
     // One-time migration flag: existing test series were made private-by-default.
     testsPrivatized: { type: Boolean, default: false },
     // One-time migration flag: existing client accounts were granted AI access
@@ -226,6 +228,18 @@ const settingsSchema = new mongoose.Schema(
         { key: "1y", label: "1 Year", cycle: "Yearly", months: 12, price: 899 },
       ],
     },
+    // Institute (tenant) subscription plans — what an institute pays to run its
+    // own space on the platform (used by the public institute self-signup).
+    // Pricing only. Lives on the DEFAULT tenant's settings (the platform level).
+    tenantPlans: {
+      type: [studentPlanSchema],
+      default: () => [
+        { key: "trial", label: "14-Day Free Trial", cycle: "Trial", months: 0, price: 0, trial: true },
+        { key: "1m", label: "1 Month", cycle: "Monthly", months: 1, price: 1499 },
+        { key: "6m", label: "6 Months", cycle: "Semi-Annually", months: 6, price: 6999 },
+        { key: "1y", label: "1 Year", cycle: "Yearly", months: 12, price: 11999 },
+      ],
+    },
     aboutStats: {
       type: [aboutStatSchema],
       default: () => [
@@ -246,5 +260,10 @@ const settingsSchema = new mongoose.Schema(
   },
   { timestamps: true }
 );
+
+// Per-tenant uniqueness: one settings doc per (tenant, key). Replaces the old
+// global-unique index on `key` (dropped at startup — see ensureSettingsIndexes
+// in server.js) so each institute can have its own "site" settings document.
+settingsSchema.index({ tenantId: 1, key: 1 }, { unique: true });
 
 export default mongoose.model("Settings", settingsSchema);

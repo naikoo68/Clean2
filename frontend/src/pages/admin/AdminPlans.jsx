@@ -1,13 +1,15 @@
 import { useState } from "react";
-import { GraduationCap, Store } from "lucide-react";
+import { GraduationCap, Store, School } from "lucide-react";
 import StudentPlansManager from "../../components/admin/StudentPlansManager";
 import AiPlansManager from "../../components/admin/AiPlansManager";
+import TenantPlansManager from "../../components/admin/TenantPlansManager";
 
-// One place to manage every subscription plan. Two tabs:
-//   • Student Plans — what students subscribe to (pricing only)
-//   • Client Plans  — what self-service clients buy (pricing + AI limits)
+// One place to manage every subscription plan. Three tabs:
+//   • Student Plans   — what students subscribe to (pricing only)
+//   • Client Plans    — what self-service clients buy (pricing + AI limits)
+//   • Institute Plans — what an institute pays to run its own space (pricing)
 export default function AdminPlans() {
-  const [tab, setTab] = useState("student"); // "student" | "client"
+  const [tab, setTab] = useState("student"); // "student" | "client" | "institute"
 
   return (
     <div className="space-y-6">
@@ -36,9 +38,17 @@ export default function AdminPlans() {
         >
           <Store className="h-4 w-4" /> Client Plans
         </button>
+        <button
+          onClick={() => setTab("institute")}
+          className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-sm font-semibold transition ${
+            tab === "institute" ? "bg-brand-600 text-white shadow-sm" : "text-slate-600 dark:text-slate-300"
+          }`}
+        >
+          <School className="h-4 w-4" /> Institute Plans
+        </button>
       </div>
 
-      {tab === "student" ? <StudentPlansManager /> : <AiPlansManager />}
+      {tab === "student" ? <StudentPlansManager /> : tab === "client" ? <AiPlansManager /> : <TenantPlansManager />}
     </div>
   );
 }
