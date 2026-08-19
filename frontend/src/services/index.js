@@ -489,6 +489,7 @@ export const tenantService = {
   createAdmin: (id, data) => api.post(`/tenants/${id}/admin`, data), // create an institute admin
   setDomain: (id, customDomain) => api.patch(`/tenants/${id}/domain`, { customDomain }), // set/clear custom domain
   setFeatures: (id, features) => api.patch(`/tenants/${id}/features`, { features }), // which features this institute can access
+  setAllFeatures: (features) => api.patch(`/tenants/features`, { features }), // apply the same access to EVERY institute at once
   remove: (id) => api.del(`/tenants/${id}`), // permanently delete an institute + all its data
 };
 

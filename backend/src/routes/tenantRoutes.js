@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { listTenants, getTenant, createTenant, updateTenantStatus, createTenantAdmin, setTenantDomain, deleteTenant, updateTenantFeatures } from "../controllers/tenantController.js";
+import { listTenants, getTenant, createTenant, updateTenantStatus, createTenantAdmin, setTenantDomain, deleteTenant, updateTenantFeatures, updateAllTenantsFeatures } from "../controllers/tenantController.js";
 import { protect, superAdminOnly } from "../middleware/auth.js";
 
 const router = Router();
@@ -10,6 +10,7 @@ const superAdmin = [protect, superAdminOnly];
 
 router.get("/", ...superAdmin, listTenants);
 router.post("/", ...superAdmin, createTenant);
+router.patch("/features", ...superAdmin, updateAllTenantsFeatures); // set access for ALL institutes at once
 router.get("/:id", ...superAdmin, getTenant);
 router.patch("/:id/status", ...superAdmin, updateTenantStatus);
 router.post("/:id/admin", ...superAdmin, createTenantAdmin); // create an institute admin for a tenant

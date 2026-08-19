@@ -32,6 +32,7 @@ export default function AdminInstitutes() {
   const [deleteConfirm, setDeleteConfirm] = useState(""); // typed slug — must match to enable delete
   const [deleting, setDeleting] = useState(false);
   const [featuresFor, setFeaturesFor] = useState(null); // tenant whose feature access we're editing
+  const [featuresAll, setFeaturesAll] = useState(false); // true = editing access for ALL institutes at once
   const [featuresForm, setFeaturesForm] = useState({}); // { featureKey: boolean }
   const [savingFeatures, setSavingFeatures] = useState(false);
 
@@ -160,6 +161,13 @@ export default function AdminInstitutes() {
     setFeaturesFor(t);
     setError("");
   };
+  // Open the modal in "all institutes" mode (start with everything enabled).
+  const openFeaturesAll = () => {
+    setFeaturesForm(Object.fromEntries(INSTITUTE_FEATURES.map((f) => [f.key, true])));
+    setFeaturesAll(true);
+    setError("");
+  };
+  const closeFeatures = () => { setFeaturesFor(null); setFeaturesAll(false); };
   const toggleFeature = (key) => setFeaturesForm((s) => ({ ...s, [key]: !s[key] }));
   const setAllFeatures = (val) => setFeaturesForm(Object.fromEntries(INSTITUTE_FEATURES.map((f) => [f.key, val])));
 
@@ -168,10 +176,17 @@ export default function AdminInstitutes() {
     setSavingFeatures(true);
     setError("");
     try {
-      const res = await tenantService.setFeatures(featuresFor.id, featuresForm);
-      setTenants((list) => list.map((x) => (x.id === featuresFor.id ? { ...x, features: res.features || featuresForm } : x)));
-      setFeaturesFor(null);
-      flash("Access updated. The institute admin sees the change on their next load.");
+      if (featuresAll) {
+        await tenantService.setAllFeatures(featuresForm);
+        closeFeatures();
+        flash("Access updated for all institutes.");
+        load(); // refresh every card's features
+      } else {
+        const res = await tenantService.setFeatures(featuresFor.id, featuresForm);
+        setTenants((list) => list.map((x) => (x.id === featuresFor.id ? { ...x, features: res.features || featuresForm } : x)));
+        closeFeatures();
+        flash("Access updated. The institute admin sees the change on their next load.");
+      }
     } catch (err) {
       setError(err.message);
     } finally {
@@ -206,9 +221,14 @@ export default function AdminInstitutes() {
           <h1 className="flex items-center gap-2 text-2xl font-extrabold"><School className="h-6 w-6 text-brand-600" /> Institutes</h1>
           <p className="text-slate-500 dark:text-slate-400">Every institute (tenant) on the platform. Create institutes, give each its own admin, and activate/suspend them.</p>
         </div>
-        <button onClick={() => { setForm(blankTenant); setError(""); setCreateOpen(true); }} className="btn-primary">
-          <Plus className="h-4 w-4" /> New Institute
-        </button>
+        <div className="flex flex-wrap gap-2">
+          <button onClick={openFeaturesAll} className="btn-outline">
+            <ListChecks className="h-4 w-4" /> Manage access (all)
+          </button>
+          <button onClick={() => { setForm(blankTenant); setError(""); setCreateOpen(true); }} className="btn-primary">
+            <Plus className="h-4 w-4" /> New Institute
+          </button>
+        </div>
       </div>
 
       <div className="relative max-w-sm">
@@ -383,15 +403,19 @@ export default function AdminInstitutes() {
         </div>
       )}
 
-      {/* Manage feature access modal */}
-      {featuresFor && (
+      {/* Manage feature access modal (single institute OR all at once) */}
+      {(featuresFor || featuresAll) && (
         <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/50 p-4">
           <form onSubmit={saveFeatures} className="my-8 w-full max-w-lg animate-scale-in card p-6">
             <div className="mb-1 flex items-center justify-between">
-              <h3 className="flex items-center gap-2 text-lg font-bold"><ListChecks className="h-5 w-5 text-brand-600" /> Manage access</h3>
-              <button type="button" onClick={() => setFeaturesFor(null)}><X className="h-5 w-5" /></button>
+              <h3 className="flex items-center gap-2 text-lg font-bold"><ListChecks className="h-5 w-5 text-brand-600" /> {featuresAll ? "Manage access — all institutes" : "Manage access"}</h3>
+              <button type="button" onClick={closeFeatures}><X className="h-5 w-5" /></button>
             </div>
-            <p className="mb-3 text-sm text-slate-500 dark:text-slate-400">Choose which sections <b>{featuresFor.name}</b> can use. Turned-off items are hidden from that institute's admin panel. (Dashboard, Customization &amp; User Manual are always available.)</p>
+            {featuresAll ? (
+              <p className="mb-3 text-sm text-slate-500 dark:text-slate-400">Choose which sections <b>every institute</b> can use. This <b>overwrites the access settings of all institutes</b> (the default/platform space is not affected). Turned-off items are hidden from institute admins.</p>
+            ) : (
+              <p className="mb-3 text-sm text-slate-500 dark:text-slate-400">Choose which sections <b>{featuresFor.name}</b> can use. Turned-off items are hidden from that institute's admin panel. (Dashboard, Customization &amp; User Manual are always available.)</p>
+            )}
             {error && <div className="mb-3 rounded-xl bg-rose-50 px-3 py-2 text-sm text-rose-700 dark:bg-rose-900/30 dark:text-rose-300">{error}</div>}
             <div className="mb-3 flex gap-2">
               <button type="button" onClick={() => setAllFeatures(true)} className="btn-outline py-1 text-xs">Enable all</button>
@@ -406,8 +430,8 @@ export default function AdminInstitutes() {
               ))}
             </div>
             <div className="mt-5 flex justify-end gap-3">
-              <button type="button" onClick={() => setFeaturesFor(null)} className="btn-outline">Cancel</button>
-              <button type="submit" disabled={savingFeatures} className="btn-primary">{savingFeatures ? "Saving..." : "Save access"}</button>
+              <button type="button" onClick={closeFeatures} className="btn-outline">Cancel</button>
+              <button type="submit" disabled={savingFeatures} className="btn-primary">{savingFeatures ? "Saving..." : featuresAll ? "Apply to all institutes" : "Save access"}</button>
             </div>
           </form>
         </div>
