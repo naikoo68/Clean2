@@ -57,6 +57,12 @@ const tenantSchema = new mongoose.Schema(
     // Soft-delete (recoverable), consistent with the User model's pattern.
     deleted: { type: Boolean, default: false },
     deletedAt: { type: Date, default: null },
+
+    // Per-institute feature access (super-admin controlled). A map of
+    // featureKey -> boolean. A feature is ENABLED unless explicitly set to
+    // false, so an empty/missing map means "everything on" (safe default for
+    // existing institutes). The institute admin's sidebar & routes respect this.
+    features: { type: mongoose.Schema.Types.Mixed, default: {} },
   },
   { timestamps: true }
 );
