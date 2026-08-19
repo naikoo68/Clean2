@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { School, Plus, UserPlus, X, Search, CheckCircle2, Ban, Users, FileStack, HelpCircle, Store, ShieldCheck, Globe } from "lucide-react";
+import { School, Plus, UserPlus, X, Search, CheckCircle2, Ban, Users, FileStack, HelpCircle, Store, ShieldCheck, Globe, Copy } from "lucide-react";
 import { tenantService } from "../../services";
 import { useAuth } from "../../context/AuthContext";
 import { Loading, ErrorState, EmptyState } from "../../components/ui/AsyncState";
@@ -29,6 +29,33 @@ export default function AdminInstitutes() {
   const [dnsInfo, setDnsInfo] = useState(null);
 
   const flash = (m) => { setToast(m); setTimeout(() => setToast(""), 2800); };
+
+  // Build & copy the shareable public portal link for an institute. Until each
+  // institute has its own custom domain, students reach it via ?t=<slug> on the
+  // main site (the API layer sends that slug so the visitor sees this
+  // institute's branding & data). Falls back to a hidden textarea on older /
+  // non-secure mobile browsers where navigator.clipboard is unavailable.
+  const copyLink = async (t) => {
+    const link = `${window.location.origin}/?t=${t.slug}`;
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(link);
+      } else {
+        const ta = document.createElement("textarea");
+        ta.value = link;
+        ta.style.position = "fixed";
+        ta.style.opacity = "0";
+        document.body.appendChild(ta);
+        ta.focus();
+        ta.select();
+        document.execCommand("copy");
+        document.body.removeChild(ta);
+      }
+      flash("Public link copied.");
+    } catch {
+      flash(link); // clipboard blocked — at least show the link so it can be copied by hand
+    }
+  };
 
   const load = () => {
     setLoading(true);
@@ -167,9 +194,14 @@ export default function AdminInstitutes() {
                 <span>{t.stats?.instituteAdmins ?? 0} admin(s)</span>
               </div>
 
-              <button onClick={() => openDomain(t)} className="mt-2 inline-flex max-w-full items-center gap-1 truncate text-xs font-medium text-brand-600 hover:underline dark:text-brand-400">
-                <Globe className="h-3.5 w-3.5 flex-shrink-0" /> {t.customDomain ? t.customDomain : "Add custom domain"}
-              </button>
+              <div className="mt-2 flex flex-col gap-1.5">
+                <button onClick={() => openDomain(t)} className="inline-flex max-w-full items-center gap-1 truncate text-xs font-medium text-brand-600 hover:underline dark:text-brand-400">
+                  <Globe className="h-3.5 w-3.5 flex-shrink-0" /> {t.customDomain ? t.customDomain : "Add custom domain"}
+                </button>
+                <button onClick={() => copyLink(t)} className="inline-flex max-w-full items-center gap-1 truncate text-xs font-medium text-slate-500 hover:underline dark:text-slate-400">
+                  <Copy className="h-3.5 w-3.5 flex-shrink-0" /> Copy public link
+                </button>
+              </div>
 
               <div className="mt-4 flex gap-2">
                 <button onClick={() => { setAdminFor(t); setAdminForm(blankAdmin); setError(""); }} className="btn-outline flex-1 py-2 text-xs"><UserPlus className="h-3.5 w-3.5" /> Add admin</button>
