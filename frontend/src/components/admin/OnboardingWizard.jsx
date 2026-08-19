@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { School, ImagePlus, Upload, X, FileText, Check, CheckCircle2, Loader2, ArrowRight, Mail, Phone, Info, Sparkles } from "lucide-react";
 import { useSettings } from "../../context/SettingsContext";
+import { useAuth } from "../../context/AuthContext";
 import { fileToResizedDataUrl } from "../../lib/imageResize";
 
 // Starter policy templates so a new institute can accept sensible defaults (and
@@ -39,33 +40,35 @@ To request help with a payment, reach us using the details on our Contact page.`
 // Each step saves its own fields; the final step marks onboardingCompleted so
 // the wizard never auto-opens again.
 export default function OnboardingWizard({ onDone }) {
-  const { settings, save } = useSettings();
+  const { save } = useSettings();
+  const { user } = useAuth();
   const [step, setStep] = useState(1);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
-  const [f, setF] = useState(() => {
-    const contacts = settings.contacts || [];
-    const byType = (t) => contacts.find((c) => c.type === t)?.value || "";
-    const social = (p) => (settings.socialLinks || []).find((s) => s.platform === p)?.url || "";
-    return {
-      logoUrl: settings.logoUrl || "",
-      siteName: settings.siteName || "",
-      tagline: settings.tagline || "",
-      aboutHeading: settings.aboutHeading || "",
-      aboutIntro: settings.aboutIntro || "",
-      email: byType("email"),
-      phone: byType("phone"),
-      address: byType("address"),
-      privacyPolicy: settings.privacyPolicy || "",
-      termsOfService: settings.termsOfService || "",
-      refundPolicy: settings.refundPolicy || "",
-      facebook: social("facebook"),
-      instagram: social("instagram"),
-      whatsapp: social("whatsapp"),
-      youtube: social("youtube"),
-    };
-  });
+  // Start every field BLANK so the institute enters its OWN details from
+  // scratch — we never prefill leftover/platform values (e.g. the platform's
+  // demo About text or the owner's personal contact info). The only exception
+  // is the institute name, which we seed from the logged-in admin's own tenant
+  // (their real institute name) since that's genuinely theirs. Placeholders show
+  // hypothetical examples to guide them.
+  const [f, setF] = useState(() => ({
+    logoUrl: "",
+    siteName: user?.tenant?.name || "",
+    tagline: "",
+    aboutHeading: "",
+    aboutIntro: "",
+    email: "",
+    phone: "",
+    address: "",
+    privacyPolicy: "",
+    termsOfService: "",
+    refundPolicy: "",
+    facebook: "",
+    instagram: "",
+    whatsapp: "",
+    youtube: "",
+  }));
   const set = (k, v) => setF((s) => ({ ...s, [k]: v }));
 
   const onLogo = async (e) => {
