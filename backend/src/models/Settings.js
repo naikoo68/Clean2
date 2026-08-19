@@ -108,6 +108,11 @@ const settingsSchema = new mongoose.Schema(
     refundPolicy: { type: String, default: "" },
     siteName: { type: String, default: "My Study Guide" },
     tagline: { type: String, default: "Prepare Smart, Achieve More." },
+    // Home-page hero content (the big banner). Blank = fall back to the built-in
+    // default copy on the front end, so an institute can leave them or customise.
+    heroBadge: { type: String, default: "" },   // small pill above the headline
+    heroTitle: { type: String, default: "" },   // the big headline
+    heroSubtitle: { type: String, default: "" }, // the paragraph under the headline
     logoUrl: { type: String, default: "" }, // image URL or base64 data URI
     primaryColor: { type: String, default: "#2563eb" },
     accentColor: { type: String, default: "#f97316" },

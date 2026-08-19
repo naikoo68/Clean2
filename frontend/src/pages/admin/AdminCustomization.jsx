@@ -112,6 +112,9 @@ const CONTACT_TYPES = ["email", "phone", "address"];
 const DEFAULTS = {
   siteName: "My Study Guide",
   tagline: "Prepare Smart, Achieve More.",
+  heroBadge: "",
+  heroTitle: "",
+  heroSubtitle: "",
   logoUrl: "",
   primaryColor: "#2563eb",
   accentColor: "#f97316",
@@ -317,6 +320,24 @@ export default function AdminCustomization() {
             <div>
               <label className="mb-1.5 block text-sm font-medium">Tagline</label>
               <input className="input" value={form.tagline} onChange={(e) => set("tagline", e.target.value)} />
+            </div>
+            <div className="rounded-xl border border-slate-200 p-3 dark:border-slate-700">
+              <p className="mb-2 text-sm font-semibold">Home page banner</p>
+              <p className="mb-3 text-xs text-slate-400">The big headline at the top of your website. Leave blank to use the built-in defaults.</p>
+              <div className="space-y-3">
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-slate-500">Badge</label>
+                  <input className="input" value={form.heroBadge} onChange={(e) => set("heroBadge", e.target.value)} placeholder="e.g. India's smart prep platform" />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-slate-500">Headline</label>
+                  <input className="input" value={form.heroTitle} onChange={(e) => set("heroTitle", e.target.value)} placeholder="e.g. Prepare Smart, Achieve More." />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-slate-500">Subheading</label>
+                  <textarea className="input min-h-[70px]" value={form.heroSubtitle} onChange={(e) => set("heroSubtitle", e.target.value)} placeholder="A line or two about what your institute offers." />
+                </div>
+              </div>
             </div>
             <div>
               <label className="mb-1.5 block text-sm font-medium">Logo (upload an image)</label>
