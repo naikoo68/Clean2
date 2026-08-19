@@ -25,7 +25,8 @@ export default function Navbar() {
   const { user, logout } = useAuth();
   const { zoom, zoomIn, zoomOut } = useZoom();
   const navigate = useNavigate();
-  const isAdmin = user?.role === "admin";
+  // Platform super-admin AND institute admins both use the admin panel.
+  const isAdmin = user?.role === "admin" || user?.role === "institute_admin";
   const isClient = user?.role === "client";
   // Clients only ever use their own My Practice workspace — replace the whole
   // nav with a single link back to it so "Home"/the logo never strands them on
