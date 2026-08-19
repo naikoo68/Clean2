@@ -86,6 +86,7 @@ const AdminPreviousPapers = () => <AdminPractice fixedKind="paper" />;
 const AdminMigration = lazy(() => import("./pages/admin/AdminMigration"));
 const AdminClients = lazy(() => import("./pages/admin/AdminClients"));
 const AdminCoupons = lazy(() => import("./pages/admin/AdminCoupons"));
+const AdminPlans = lazy(() => import("./pages/admin/AdminPlans"));
 const AdminAiKeys = lazy(() => import("./pages/admin/AdminAiKeys"));
 const AdminSharedLinks = lazy(() => import("./pages/admin/AdminSharedLinks"));
 const AdminAiStudio = lazy(() => import("./pages/admin/AdminAiStudio"));
@@ -265,6 +266,7 @@ const router = createHashRouter([
       { path: "migration", element: S(AdminMigration) },
       { path: "clients", element: S(AdminClients) },
       { path: "coupons", element: S(AdminCoupons) },
+      { path: "plans", element: S(AdminPlans) },
       { path: "study", element: S(AdminStudyMaterial) },
       { path: "feedback", element: S(AdminFeedback) },
       { path: "reviews", element: S(AdminReviews) },
