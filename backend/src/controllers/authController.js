@@ -1,5 +1,6 @@
 import crypto from "crypto";
 import User from "../models/User.js";
+import Tenant from "../models/Tenant.js";
 import Coupon from "../models/Coupon.js";
 import generateToken from "../utils/generateToken.js";
 import { razorpayConfigured, verifyPaymentSignature } from "../config/razorpay.js";
@@ -81,6 +82,20 @@ const sanitize = (u) => ({
   featManual: u.featManual !== false,
   featAiGenerator: u.featAiGenerator === true,
 });
+
+// Look up the institute (tenant) a user belongs to, exposing just the public
+// slug + display name. The frontend uses this so an institute admin's
+// "student portal" link can target their OWN institute via ?t=<slug>. The
+// Tenant model is exempt from tenant scoping, so a plain query is safe here.
+async function tenantInfo(tenantId) {
+  if (!tenantId) return undefined;
+  try {
+    const t = await Tenant.findById(tenantId).select("slug name").lean();
+    return t ? { slug: t.slug, name: t.name } : undefined;
+  } catch {
+    return undefined;
+  }
+}
 
 // Client subscription plans now live in Settings (admin-editable, with AI
 // limits). See utils/plans.js — getClientPlans() returns them (or defaults).
@@ -349,7 +364,7 @@ export async function login(req, res) {
       email,
     });
   }
-  res.json({ user: sanitize(user), token: generateToken(user._id) });
+  res.json({ user: { ...sanitize(user), tenant: await tenantInfo(user.tenantId) }, token: generateToken(user._id) });
 }
 
 // POST /api/auth/google  — verify the Google ID token server-side before trusting it.
@@ -456,7 +471,7 @@ export async function resetPassword(req, res) {
 
 // GET /api/auth/me
 export async function getMe(req, res) {
-  res.json({ user: sanitize(req.user) });
+  res.json({ user: { ...sanitize(req.user), tenant: await tenantInfo(req.user.tenantId) } });
 }
 
 // PUT /api/auth/profile — let the signed-in user update their own name / photo
