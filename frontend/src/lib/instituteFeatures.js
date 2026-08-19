@@ -28,6 +28,7 @@ export const INSTITUTE_FEATURES = [
   { key: "aiGenerator", label: "AI Generator" },
   { key: "visualize", label: "Visualization Studio" },
   { key: "aiKeys", label: "AI Keys (APIs)" },
+  { key: "facebook", label: "Facebook Auto-Post (own page/credentials)" },
   { key: "migration", label: "Migration (move content)" },
   { key: "backup", label: "Backup & Restore (their own data)" },
 ];
