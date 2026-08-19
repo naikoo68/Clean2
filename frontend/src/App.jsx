@@ -55,6 +55,7 @@ const TestAttempt = lazy(() => import("./pages/testseries/TestAttempt"));
 const Login = lazy(() => import("./pages/auth/Login"));
 const Register = lazy(() => import("./pages/auth/Register"));
 const ClientRegister = lazy(() => import("./pages/auth/ClientRegister"));
+const InstituteRegister = lazy(() => import("./pages/auth/InstituteRegister"));
 const ForgotPassword = lazy(() => import("./pages/auth/ForgotPassword"));
 const ResetPassword = lazy(() => import("./pages/auth/ResetPassword"));
 
@@ -154,6 +155,7 @@ const router = createHashRouter([
       { path: "/login", element: S(Login) },
       { path: "/register", element: S(Register) },
       { path: "/client/register", element: S(ClientRegister) },
+      { path: "/institute/register", element: S(InstituteRegister) },
       { path: "/forgot-password", element: S(ForgotPassword) },
       { path: "/reset-password/:token", element: S(ResetPassword) },
 
