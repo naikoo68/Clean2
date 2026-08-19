@@ -1,6 +1,7 @@
 import crypto from "crypto";
 import User from "../models/User.js";
 import { getClientPlans, getStudentPlans } from "../utils/plans.js";
+import { runUnscoped } from "../utils/tenantContext.js";
 import TestSeries from "../models/TestSeries.js";
 import Question from "../models/Question.js";
 import PracticeStream from "../models/PracticeStream.js";
@@ -89,7 +90,7 @@ export async function createUser(req, res) {
   if (!name || !email || !password) {
     return res.status(400).json({ message: "Name, email and password are required" });
   }
-  const exists = await User.findOne({ email });
+  const exists = await runUnscoped(() => User.findOne({ email }));
   if (exists) return res.status(409).json({ message: "Email already registered" });
 
   // Optional temporary-account expiry. Must be a valid future date.
@@ -133,7 +134,7 @@ export async function updateUser(req, res) {
   if (req.body.email) {
     const email = norm(req.body.email);
     if (email !== user.email) {
-      const exists = await User.findOne({ email });
+      const exists = await runUnscoped(() => User.findOne({ email }));
       if (exists) return res.status(409).json({ message: "That email is already in use" });
       user.email = email;
     }
