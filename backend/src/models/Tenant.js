@@ -33,6 +33,11 @@ const tenantSchema = new mongoose.Schema(
     // usable; "suspended" = temporarily disabled by the super-admin.
     status: { type: String, enum: ["pending", "active", "suspended"], default: "pending" },
 
+    // The fallback tenant used when a request's host doesn't map to any specific
+    // institute (e.g. the apex domain, local dev). Exactly one tenant should
+    // carry this; the migration sets it on the backfill "default" tenant.
+    isDefault: { type: Boolean, default: false, index: true },
+
     // Institute owner / primary contact (the person who registered it).
     ownerName: { type: String, trim: true, default: "" },
     ownerEmail: { type: String, trim: true, lowercase: true, default: "" },

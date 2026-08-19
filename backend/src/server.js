@@ -1,4 +1,8 @@
 import "dotenv/config";
+// Register global Mongoose plugins (adds `tenantId` to every model) BEFORE
+// ./app.js is imported — app.js pulls in the routes/controllers/models, so the
+// plugin must be registered first or some schemas would compile without it.
+import "./config/registerModelPlugins.js";
 import app from "./app.js";
 import connectDB from "./config/db.js";
 import { seedIfEmpty } from "./utils/seedData.js";
