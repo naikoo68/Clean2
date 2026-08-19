@@ -1,3 +1,4 @@
+import mongoose from "mongoose";
 import Tenant from "../models/Tenant.js";
 import User from "../models/User.js";
 import Question from "../models/Question.js";
@@ -202,5 +203,47 @@ export async function createTenantAdmin(req, res) {
   } catch (e) {
     if (e?.code === 11000) return res.status(409).json({ message: "That email is already registered." });
     return res.status(500).json({ message: e.message || "Could not create the institute admin." });
+  }
+}
+
+// DELETE /api/tenants/:id — PERMANENTLY delete an institute and ALL of its data.
+// Super-admin only. This removes every document belonging to the institute
+// (its admins, students, clients, questions, tests, settings, attempts, …)
+// across every collection that carries a tenantId, then removes the institute
+// record itself so the subdomain/slug becomes available again. Irreversible.
+// The default (platform) institute can never be deleted.
+export async function deleteTenant(req, res) {
+  try {
+    const t = await runUnscoped(() => Tenant.findById(req.params.id));
+    if (!t || t.deleted) return res.status(404).json({ message: "Tenant not found" });
+    if (t.isDefault) return res.status(400).json({ message: "The default institute can't be deleted." });
+
+    const tenantId = t._id;
+    const purged = {};
+
+    await runUnscoped(async () => {
+      // Purge this institute's data from every collection that is tenant-scoped.
+      // We iterate registered models (skipping the Tenant registry itself) and
+      // delete only rows stamped with THIS tenantId — other institutes and the
+      // platform (default tenant) are untouched.
+      for (const name of mongoose.modelNames()) {
+        if (name === "Tenant") continue;
+        const Model = mongoose.model(name);
+        if (!Model?.schema?.path("tenantId")) continue;
+        try {
+          const r = await Model.deleteMany({ tenantId });
+          if (r?.deletedCount) purged[name] = r.deletedCount;
+        } catch {
+          /* skip a model that can't be bulk-deleted; continue with the rest */
+        }
+      }
+      // Finally remove the institute record so its slug/domain frees up.
+      await Tenant.deleteOne({ _id: tenantId });
+    });
+
+    clearTenantCache(); // drop any cached host/slug → tenant mapping immediately
+    return res.json({ ok: true, id: String(tenantId), purged });
+  } catch (e) {
+    return res.status(500).json({ message: e.message || "Could not delete the institute." });
   }
 }
