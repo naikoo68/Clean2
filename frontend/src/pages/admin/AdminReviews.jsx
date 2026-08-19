@@ -130,7 +130,7 @@ export default function AdminReviews() {
       </div>
 
       <p className="mt-4 text-xs text-slate-400">
-        Approving copies the review into your home-page testimonials. To later remove a featured review, edit the list in <b>Customization → Testimonials</b>.
+        Approving publishes the review to your home page's <b>“What our students say”</b> section. Reject or delete to remove it.
       </p>
     </div>
   );

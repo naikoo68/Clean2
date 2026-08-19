@@ -1,6 +1,7 @@
 import { Router } from "express";
 import {
   createReview,
+  listApprovedReviews,
   listReviews,
   approveReview,
   rejectReview,
@@ -10,6 +11,9 @@ import { protect, authorize, optionalAuth } from "../middleware/auth.js";
 
 const router = Router();
 const admin = [protect, authorize("admin")];
+
+// Public: approved reviews for the current institute (home-page testimonials).
+router.get("/approved", listApprovedReviews);
 
 // Anyone (guest, student or client) can submit a review.
 router.post("/", optionalAuth, createReview);
