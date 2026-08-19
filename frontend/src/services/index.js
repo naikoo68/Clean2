@@ -488,6 +488,19 @@ export const tenantService = {
   createAdmin: (id, data) => api.post(`/tenants/${id}/admin`, data), // create an institute admin
 };
 
+// ---- Public institute self-signup (Phase 5) ----
+export const instituteSignupService = {
+  config: () => api.get("/institute-signup/config", { auth: false }), // { enabled, payEnabled, keyId, plans }
+  availability: ({ slug, email }) => {
+    const q = new URLSearchParams();
+    if (slug) q.set("slug", slug);
+    if (email) q.set("email", email);
+    return api.get(`/institute-signup/availability?${q.toString()}`, { auth: false });
+  },
+  order: (data) => api.post("/institute-signup/order", data, { auth: false }),
+  provision: (data) => api.post("/institute-signup", data, { auth: false }),
+};
+
 // ---- Global metadata search (streams/subjects/topics/quizzes/tests) ----
 // optionalAuth on the backend: an admin's token unlocks all metadata; guests
 // and students see only public, published content.

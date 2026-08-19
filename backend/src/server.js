@@ -106,6 +106,20 @@ async function backfillTenantsOnce() {
   }
 }
 
+// Migrate the Settings index from the legacy GLOBAL-unique `key` to a per-tenant
+// compound unique (tenantId, key), so each institute can have its own "site"
+// settings document. Idempotent: drop attempts on a missing index are ignored,
+// and createIndex is a no-op if it already exists. Runs every startup (cheap).
+async function ensureSettingsIndexes() {
+  try {
+    const coll = Settings.collection;
+    try { await coll.dropIndex("key_1"); } catch { /* already gone */ }
+    await coll.createIndex({ tenantId: 1, key: 1 }, { unique: true });
+  } catch (err) {
+    console.error("Settings index migration skipped:", err.message);
+  }
+}
+
 async function start() {
   await connectDB();
 
@@ -113,6 +127,9 @@ async function start() {
   app.listen(PORT, () => {
     console.log(`✔ My Study Guide API running on http://localhost:${PORT}`);
   });
+
+  // Migrate Settings uniqueness to per-tenant (one-time, idempotent).
+  ensureSettingsIndexes();
 
   // Make existing test series private (one-time).
   privatizeExistingTests();
