@@ -20,16 +20,13 @@ import { useSettings } from "../context/SettingsContext";
 import { useAuth } from "../context/AuthContext";
 import { analyticsService, reviewService } from "../services";
 import GlobalSearch from "../components/ui/GlobalSearch";
+import ReviewCards from "../components/reviews/ReviewCards";
 
 // Icons applied by position to the editable stats from Customization.
 const STAT_ICONS = [Users, ListChecks, Layers];
 
 // Default order of home sections (used if none saved / for any missing keys).
 const DEFAULT_HOME_ORDER = ["hero", "stats", "quickAccess", "features", "howItWorks", "testimonials", "cta"];
-
-// Initials for a testimonial avatar when no photo is provided.
-const initials = (name) =>
-  String(name || "").trim().split(/\s+/).slice(0, 2).map((w) => w[0]?.toUpperCase() || "").join("") || "★";
 
 const features = [
   {
@@ -403,34 +400,13 @@ export default function Home() {
                 Real results from learners preparing with {settings.siteName}.
               </p>
             </div>
-            <div className="mt-12 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-              {reviews.map((t, i) => (
-                <figure key={i} className="card flex flex-col p-6">
-                  <div className="flex gap-0.5 text-amber-400">
-                    {Array.from({ length: 5 }).map((_, k) => (
-                      <Star key={k} className={`h-4 w-4 ${k < (t.rating || 5) ? "fill-current" : "opacity-30"}`} />
-                    ))}
-                  </div>
-                  <blockquote className="mt-4 flex-1 text-sm leading-relaxed text-slate-600 dark:text-slate-300">
-                    “{t.text}”
-                  </blockquote>
-                  <figcaption className="mt-5 flex items-center gap-3">
-                    {t.photo ? (
-                      <img src={t.photo} alt={t.name} className="h-11 w-11 rounded-full object-cover" />
-                    ) : (
-                      <span className="flex h-11 w-11 items-center justify-center rounded-full bg-gradient-to-br from-brand-600 to-accent-500 text-sm font-bold text-white">
-                        {initials(t.name)}
-                      </span>
-                    )}
-                    <div>
-                      <p className="text-sm font-bold">{t.name}</p>
-                      {t.exam && <p className="text-xs text-slate-500 dark:text-slate-400">{t.exam}</p>}
-                    </div>
-                  </figcaption>
-                </figure>
-              ))}
+            <div className="mt-12">
+              <ReviewCards items={reviews.slice(0, 5)} />
             </div>
-            <div className="mt-10 text-center">
+            <div className="mt-10 flex flex-wrap justify-center gap-3">
+              {reviews.length > 5 && (
+                <Link to="/review" className="btn-primary"><Star className="h-4 w-4" /> See all reviews</Link>
+              )}
               <Link to="/review" className="btn-outline"><Star className="h-4 w-4" /> Share your review</Link>
             </div>
           </div>

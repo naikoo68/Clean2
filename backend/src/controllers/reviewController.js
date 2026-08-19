@@ -61,9 +61,10 @@ export async function createReview(req, res) {
 // institute shows only its own real reviews — never another institute's or any
 // seeded demo data.
 export async function listApprovedReviews(req, res) {
+  const limit = Math.min(100, Math.max(1, parseInt(req.query.limit, 10) || 24));
   const items = await Review.find({ status: "approved" })
     .sort("-updatedAt")
-    .limit(24)
+    .limit(limit)
     .select("name exam rating text photo")
     .lean();
   res.json({ items });
