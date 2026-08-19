@@ -5,8 +5,12 @@ import Settings from "../models/Settings.js";
 // admin in the panel) and NEVER exposed to the browser. Outbound calls use the
 // global fetch (Node 18+), matching the mailer's HTTP style.
 
-export async function getFacebookConfig() {
-  const s = await Settings.findOne({ key: "site" }).lean();
+// `filter` optionally targets a specific tenant's settings (e.g. { tenantId })
+// so the background scheduler can load each institute's OWN Facebook credentials
+// robustly even when running without a request/tenant context. In a normal
+// request it's omitted and the tenant plugin scopes to the caller's institute.
+export async function getFacebookConfig(filter) {
+  const s = await Settings.findOne({ key: "site", ...(filter || {}) }).lean();
   return {
     enabled: !!s?.fbEnabled,
     pageId: String(s?.fbPageId || "").trim(),
@@ -156,6 +160,7 @@ import Session from "../models/Session.js";
 import Topic from "../models/Topic.js";
 import Quiz from "../models/Quiz.js";
 import { renderQuestionImage } from "./socialImage.js";
+import { tenantStore } from "../utils/tenantContext.js";
 
 const LETTERS = ["A", "B", "C", "D", "E", "F"];
 const ROMAN = ["I", "II", "III", "IV", "V", "VI", "VII", "VIII"];
@@ -426,35 +431,50 @@ export async function runDueFbSchedules() {
   if (fbTickRunning) return;
   fbTickRunning = true;
   try {
-    const cfg = await getFacebookConfig();
-    if (!cfg.enabled || !isFacebookConfigured(cfg)) return; // posting off / not connected
-    const now = new Date();
-    const schedules = await FbSchedule.find({ enabled: true });
-    for (const sch of schedules) {
-      let slot = null;
-      if (sch.mode === "once") {
-        // One-off: fire once when its time has arrived and it hasn't run yet.
-        if (sch.runAt && new Date(sch.runAt).getTime() <= now.getTime() && !sch.lastSlot) slot = "once";
-      } else {
-        slot = dueSlot(sch, now);
-      }
-      if (!slot) continue;
-      // Claim the slot FIRST (persist) so a concurrent tick won't repost it,
-      // then post. If the post fails, lastResult records why.
-      sch.lastSlot = slot === "once" ? "done" : slot;
-      if (sch.mode === "once") sch.enabled = false; // one-off never repeats
-      await sch.save();
-      try {
-        await runScheduleOnce(sch, cfg);
-        await sch.save();
-      } catch (e) {
-        sch.lastResult = `Error: ${e.message}`;
-        await sch.save().catch(() => {});
-      }
+    // Every institute posts to its OWN Facebook page. Find each tenant that has
+    // enabled schedules, then process each inside its own context using its own
+    // credentials — so a post can never go to the wrong institute's page.
+    // (distinct is not tenant-scoped by the plugin, so it sees every tenant.)
+    // "" represents the platform/default space (tenantId null/absent).
+    const rawTids = await FbSchedule.distinct("tenantId", { enabled: true });
+    const keys = [...new Set(rawTids.map((t) => (t ? String(t) : "")))];
+    for (const key of keys) {
+      const tid = key === "" ? null : key;
+      await tenantStore.run({ tenantId: tid, bypass: !tid }, () => runTenantSchedules(tid).catch(() => {}));
     }
   } catch {
     /* never let the scheduler throw */
   } finally {
     fbTickRunning = false;
+  }
+}
+
+// Fire all due schedules for ONE tenant using THAT tenant's own credentials.
+async function runTenantSchedules(tid) {
+  const cfg = await getFacebookConfig({ tenantId: tid ?? null });
+  if (!cfg.enabled || !isFacebookConfigured(cfg)) return; // this institute's posting is off / not connected
+  const now = new Date();
+  const schedules = await FbSchedule.find({ enabled: true, tenantId: tid ?? null });
+  for (const sch of schedules) {
+    let slot = null;
+    if (sch.mode === "once") {
+      // One-off: fire once when its time has arrived and it hasn't run yet.
+      if (sch.runAt && new Date(sch.runAt).getTime() <= now.getTime() && !sch.lastSlot) slot = "once";
+    } else {
+      slot = dueSlot(sch, now);
+    }
+    if (!slot) continue;
+    // Claim the slot FIRST (persist) so a concurrent tick won't repost it,
+    // then post. If the post fails, lastResult records why.
+    sch.lastSlot = slot === "once" ? "done" : slot;
+    if (sch.mode === "once") sch.enabled = false; // one-off never repeats
+    await sch.save();
+    try {
+      await runScheduleOnce(sch, cfg);
+      await sch.save();
+    } catch (e) {
+      sch.lastResult = `Error: ${e.message}`;
+      await sch.save().catch(() => {});
+    }
   }
 }

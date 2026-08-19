@@ -1,9 +1,12 @@
 import { Router } from "express";
 import { listSchedules, createSchedule, updateSchedule, deleteSchedule, postScheduleNow, postQuestionNow, scheduleQuestion, previewQuestionImage, suggestTags } from "../controllers/facebookController.js";
-import { protect, superAdminOnly } from "../middleware/auth.js";
+import { protect, authorize } from "../middleware/auth.js";
 
 const router = Router();
-const admin = [protect, superAdminOnly]; // platform Facebook/Instagram integration (super-admin only)
+// Each institute connects its OWN Facebook/Instagram page. Allow institute
+// admins too; every route is tenant-scoped, so an institute only sees/uses its
+// own schedules, credentials (in its settings) and content.
+const admin = [protect, authorize("admin")];
 
 // Scheduled Facebook question auto-posting (admin only). The Page connection
 // (id/token/enable) lives in Settings; these routes manage the schedules.
