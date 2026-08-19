@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { School, User, Mail, Lock, Globe, Eye, EyeOff, Loader2, AlertCircle, Check, Tag, Gift, ShieldCheck, ArrowRight } from "lucide-react";
 import AuthShell from "../../components/auth/AuthShell";
+import AccountTypeTabs from "../../components/auth/AccountTypeTabs";
 import PlanPicker from "../../components/client/PlanPicker";
 import { useAuth } from "../../context/AuthContext";
 import { useSettings } from "../../context/SettingsContext";
@@ -197,6 +198,7 @@ export default function InstituteRegister() {
 
   return (
     <AuthShell title="Register your institute" subtitle="Get your own branded space with your own admin, students and content.">
+      <AccountTypeTabs active="institute" withInstitute onSelect={(k) => { if (k === "student") navigate("/register"); else if (k === "client") navigate("/client/register"); }} />
       <div className="mb-5 flex items-start gap-2 rounded-xl border border-brand-200 bg-brand-50 px-3 py-2.5 text-sm text-brand-800 dark:border-brand-900/50 dark:bg-brand-900/20 dark:text-brand-200">
         <School className="mt-0.5 h-4 w-4 flex-shrink-0" />
         Your institute gets its own subdomain, branding, admin and fully isolated data.
