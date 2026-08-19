@@ -7,6 +7,7 @@ import { sendMail } from "../config/mailer.js";
 import { clientBaseFromReq } from "../config/clientUrl.js";
 import { notifyNewUser } from "../utils/notify.js";
 import { getClientPlans, getPlansFor, getStudentPlans as loadStudentPlans } from "../utils/plans.js";
+import { runUnscoped } from "../utils/tenantContext.js";
 import { getSiteName } from "../utils/siteInfo.js";
 
 // Normalise emails so case/whitespace never causes a login mismatch
@@ -139,7 +140,7 @@ export async function computeOffer({ planKey, couponCode, referralCode, selfEmai
 
   const ref = String(referralCode || "").trim().toUpperCase();
   if (ref) {
-    const refUser = await User.findOne({ referralCode: ref }).select("email");
+    const refUser = await runUnscoped(() => User.findOne({ referralCode: ref }).select("email"));
     if (refUser && norm(refUser.email) !== norm(selfEmail || "")) {
       discount += REFERRAL_DISCOUNT;
       applied.referral = { code: ref, discount: REFERRAL_DISCOUNT };
@@ -165,7 +166,7 @@ export async function creditReferrer(referredUser) {
   if (!referredUser?.referredBy || referredUser.referrerRewarded) return;
   referredUser.referrerRewarded = true; // mark handled regardless of outcome (caller persists)
 
-  const referrer = await User.findOne({ referralCode: referredUser.referredBy });
+  const referrer = await runUnscoped(() => User.findOne({ referralCode: referredUser.referredBy }));
   // Only client accounts have a validity to extend; skip self-referrals.
   if (!referrer || referrer.role !== "client" || String(referrer._id) === String(referredUser._id)) return;
 
@@ -184,7 +185,7 @@ export async function register(req, res) {
   if (!name || !email || !password) {
     return res.status(400).json({ message: "All fields are required" });
   }
-  const exists = await User.findOne({ email });
+  const exists = await runUnscoped(() => User.findOne({ email }));
   if (exists) return res.status(409).json({ message: "Email already registered" });
 
   // A client account (self-service) only accesses the My Practice section.
@@ -284,7 +285,7 @@ export async function register(req, res) {
 export async function verifyOtp(req, res) {
   const email = norm(req.body.email);
   const { otp } = req.body;
-  const user = await User.findOne({ email }).select("+otpHash +otpExpires");
+  const user = await runUnscoped(() => User.findOne({ email }).select("+otpHash +otpExpires"));
   if (!user) return res.status(400).json({ message: "Account not found" });
 
   if (!user.isEmailVerified) {
@@ -314,7 +315,7 @@ export async function verifyOtp(req, res) {
 // POST /api/auth/resend-otp — send a fresh code
 export async function resendOtp(req, res) {
   const email = norm(req.body.email);
-  const user = await User.findOne({ email });
+  const user = await runUnscoped(() => User.findOne({ email }));
   if (!user) return res.json({ emailSent: false });
   if (user.isEmailVerified) return res.json({ verified: true });
 
@@ -328,7 +329,7 @@ export async function resendOtp(req, res) {
 export async function login(req, res) {
   const { password } = req.body;
   const email = norm(req.body.email);
-  const user = await User.findOne({ email }).select("+password");
+  const user = await runUnscoped(() => User.findOne({ email }).select("+password"));
   if (!user || !(await user.comparePassword(password))) {
     return res.status(401).json({ message: "Invalid email or password" });
   }
@@ -397,7 +398,7 @@ export async function googleLogin(req, res) {
     return res.status(400).json({ message: "Google credential token is required." });
   }
 
-  let user = await User.findOne({ email });
+  let user = await runUnscoped(() => User.findOne({ email }));
   if (!user) {
     user = await User.create({ name, email, googleId, avatar, isEmailVerified: true });
     notifyNewUser(user); // notify admin of the new registration (fire-and-forget)
@@ -414,7 +415,7 @@ export async function verifyEmail(req, res) {
 
 // POST /api/auth/forgot-password
 export async function forgotPassword(req, res) {
-  const user = await User.findOne({ email: norm(req.body.email) });
+  const user = await runUnscoped(() => User.findOne({ email: norm(req.body.email) }));
   // Always return success to avoid leaking which emails exist.
   if (user) {
     user.resetPasswordToken = crypto.randomBytes(20).toString("hex");
@@ -441,10 +442,10 @@ export async function forgotPassword(req, res) {
 
 // POST /api/auth/reset-password/:token
 export async function resetPassword(req, res) {
-  const user = await User.findOne({
+  const user = await runUnscoped(() => User.findOne({
     resetPasswordToken: req.params.token,
     resetPasswordExpires: { $gt: Date.now() },
-  });
+  }));
   if (!user) return res.status(400).json({ message: "Invalid or expired token" });
   user.password = req.body.password;
   user.resetPasswordToken = undefined;
@@ -478,7 +479,7 @@ export async function updateProfile(req, res) {
       return res.status(400).json({ message: "Please enter a valid email address." });
     }
     if (email !== norm(user.email)) {
-      const taken = await User.findOne({ email, _id: { $ne: user._id } }).select("_id");
+      const taken = await runUnscoped(() => User.findOne({ email, _id: { $ne: user._id } }).select("_id"));
       if (taken) {
         return res.status(409).json({ message: "That email is already in use by another account." });
       }

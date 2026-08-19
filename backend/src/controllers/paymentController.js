@@ -1,6 +1,7 @@
 import { razorpayConfigured, razorpayKeyId, createRazorpayOrder } from "../config/razorpay.js";
 import { computeOffer } from "./authController.js";
 import User from "../models/User.js";
+import { runUnscoped } from "../utils/tenantContext.js";
 
 // GET /api/payments/config (public) — whether online payment is enabled + the
 // public key id. The frontend uses this to decide checkout vs. free signup.
@@ -16,7 +17,7 @@ export async function createOrder(req, res) {
 
   const email = String(req.body?.email || "").toLowerCase().trim();
   if (email) {
-    const exists = await User.findOne({ email }).select("_id");
+    const exists = await runUnscoped(() => User.findOne({ email }).select("_id"));
     if (exists) return res.status(409).json({ message: "Email already registered. Please log in instead." });
   }
 
