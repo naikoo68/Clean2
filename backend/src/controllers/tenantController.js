@@ -86,23 +86,29 @@ export async function getTenant(req, res) {
 
 // POST /api/tenants — create an institute (super-admin, manual).
 export async function createTenant(req, res) {
-  const name = String(req.body?.name || "").trim();
-  const slug = normSlug(req.body?.slug || name);
-  if (!name) return res.status(400).json({ message: "Institute name is required" });
-  if (!slug) return res.status(400).json({ message: "A valid subdomain is required" });
-  if (RESERVED_SLUGS.has(slug)) return res.status(409).json({ message: "That subdomain is reserved. Please choose another." });
+  try {
+    const name = String(req.body?.name || "").trim();
+    const slug = normSlug(req.body?.slug || name);
+    if (!name) return res.status(400).json({ message: "Institute name is required" });
+    if (!slug) return res.status(400).json({ message: "A valid subdomain is required" });
+    if (RESERVED_SLUGS.has(slug)) return res.status(409).json({ message: "That subdomain is reserved. Please choose another." });
 
-  const exists = await runUnscoped(() => Tenant.findOne({ slug }));
-  if (exists) return res.status(409).json({ message: "That subdomain is already taken" });
+    const exists = await runUnscoped(() => Tenant.findOne({ slug }));
+    if (exists) return res.status(409).json({ message: "That subdomain is already taken" });
 
-  const t = await Tenant.create({
-    name,
-    slug,
-    ownerName: String(req.body?.ownerName || "").trim(),
-    ownerEmail: String(req.body?.ownerEmail || "").toLowerCase().trim(),
-    status: req.body?.status === "active" ? "active" : "pending",
-  });
-  res.status(201).json(sanitize(t));
+    const t = await Tenant.create({
+      name,
+      slug,
+      ownerName: String(req.body?.ownerName || "").trim(),
+      ownerEmail: String(req.body?.ownerEmail || "").toLowerCase().trim(),
+      status: req.body?.status === "active" ? "active" : "pending",
+    });
+    return res.status(201).json(sanitize(t));
+  } catch (e) {
+    // Always respond — never let an error leave the request hanging.
+    if (e?.code === 11000) return res.status(409).json({ message: "That subdomain is already in use." });
+    return res.status(500).json({ message: e.message || "Could not create the institute." });
+  }
 }
 
 // PATCH /api/tenants/:id/status — activate / suspend an institute.
@@ -128,15 +134,17 @@ const cleanDomain = (d) =>
 // platform (and the frontend host must serve it with SSL) — see the response's
 // `dns` guidance. resolveTenant already maps a matching Host → this tenant.
 export async function setTenantDomain(req, res) {
+  try {
   const t = await runUnscoped(() => Tenant.findById(req.params.id));
   if (!t || t.deleted) return res.status(404).json({ message: "Tenant not found" });
 
   const domain = cleanDomain(req.body?.customDomain);
 
   if (!domain) {
-    t.customDomain = "";
-    await t.save();
+    // UNSET the field (don't store "") so the sparse unique index ignores it.
+    await runUnscoped(() => Tenant.updateOne({ _id: t._id }, { $unset: { customDomain: 1 } }));
     clearTenantCache();
+    t.customDomain = undefined;
     return res.json(sanitize(t));
   }
 
@@ -157,7 +165,7 @@ export async function setTenantDomain(req, res) {
   await t.save();
   clearTenantCache(); // so the new mapping takes effect immediately
 
-  res.json({
+  return res.json({
     ...sanitize(t),
     // DNS the institute must configure for the domain to resolve here.
     dns: {
@@ -165,25 +173,34 @@ export async function setTenantDomain(req, res) {
       note: "Add this domain in your frontend host (e.g. Vercel) so it's served with SSL. Apex domains may need an A record instead of CNAME — follow your host's instructions.",
     },
   });
+  } catch (e) {
+    if (e?.code === 11000) return res.status(409).json({ message: "That domain is already used by another institute." });
+    return res.status(500).json({ message: e.message || "Could not update the custom domain." });
+  }
 }
 
 // POST /api/tenants/:id/admin — create an INSTITUTE ADMIN for a tenant.
 export async function createTenantAdmin(req, res) {
-  const t = await runUnscoped(() => Tenant.findById(req.params.id));
-  if (!t || t.deleted) return res.status(404).json({ message: "Tenant not found" });
+  try {
+    const t = await runUnscoped(() => Tenant.findById(req.params.id));
+    if (!t || t.deleted) return res.status(404).json({ message: "Tenant not found" });
 
-  const name = String(req.body?.name || "").trim();
-  const email = String(req.body?.email || "").toLowerCase().trim();
-  const password = String(req.body?.password || "");
-  if (!name || !email || !password) return res.status(400).json({ message: "Name, email and password are required" });
-  if (password.length < 6) return res.status(400).json({ message: "Password must be at least 6 characters" });
+    const name = String(req.body?.name || "").trim();
+    const email = String(req.body?.email || "").toLowerCase().trim();
+    const password = String(req.body?.password || "");
+    if (!name || !email || !password) return res.status(400).json({ message: "Name, email and password are required" });
+    if (password.length < 6) return res.status(400).json({ message: "Password must be at least 6 characters" });
 
-  const exists = await runUnscoped(() => User.findOne({ email }).select("_id"));
-  if (exists) return res.status(409).json({ message: "Email already registered" });
+    const exists = await runUnscoped(() => User.findOne({ email }).select("_id"));
+    if (exists) return res.status(409).json({ message: "Email already registered" });
 
-  // Explicit tenantId (not from context) — this admin belongs to THIS institute.
-  const user = await runUnscoped(() =>
-    User.create({ name, email, password, role: "institute_admin", tenantId: t._id, isEmailVerified: true })
-  );
-  res.status(201).json({ id: user._id, name: user.name, email: user.email, role: user.role, tenantId: user.tenantId });
+    // Explicit tenantId (not from context) — this admin belongs to THIS institute.
+    const user = await runUnscoped(() =>
+      User.create({ name, email, password, role: "institute_admin", tenantId: t._id, isEmailVerified: true })
+    );
+    return res.status(201).json({ id: user._id, name: user.name, email: user.email, role: user.role, tenantId: user.tenantId });
+  } catch (e) {
+    if (e?.code === 11000) return res.status(409).json({ message: "That email is already registered." });
+    return res.status(500).json({ message: e.message || "Could not create the institute admin." });
+  }
 }
