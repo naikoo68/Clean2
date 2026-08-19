@@ -9,6 +9,7 @@ export default function Refund() {
     <LegalLayout
       title="Refund & Cancellation Policy"
       updated="August 2026"
+      customBody={settings.refundPolicy}
       intro={`This policy explains how refunds and cancellations work for paid subscriptions on ${name}.`}
       sections={[
         {

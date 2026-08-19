@@ -9,6 +9,7 @@ export default function Terms() {
     <LegalLayout
       title="Terms of Service"
       updated="August 2026"
+      customBody={settings.termsOfService}
       intro={`Welcome to ${name}. By accessing or using our website and services, you agree to these Terms of Service. Please read them carefully.`}
       sections={[
         {

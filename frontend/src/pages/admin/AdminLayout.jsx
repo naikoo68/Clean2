@@ -41,6 +41,7 @@ import { useTheme } from "../../context/ThemeContext";
 import { useAuth } from "../../context/AuthContext";
 import { useSettings } from "../../context/SettingsContext";
 import { messageService } from "../../services";
+import OnboardingWizard from "../../components/admin/OnboardingWizard";
 import GlobalSearch from "../../components/ui/GlobalSearch";
 import { Facebook as FacebookIcon } from "../../components/ui/SocialIcons";
 import Avatar from "../../components/ui/Avatar";
@@ -98,6 +99,10 @@ export default function AdminLayout() {
   const { theme, toggleTheme } = useTheme();
   const { user, logout } = useAuth();
   const { settings } = useSettings();
+  // First-run setup wizard: auto-opens for a fresh institute admin until they
+  // finish it. Never shown to the platform super-admin (role "admin").
+  const [wizardDone, setWizardDone] = useState(false);
+  const showOnboarding = user?.role === "institute_admin" && settings?.onboardingCompleted !== true && !wizardDone;
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -182,6 +187,8 @@ export default function AdminLayout() {
 
   return (
     <div className="flex min-h-screen bg-slate-50 dark:bg-slate-950">
+      {showOnboarding && <OnboardingWizard onDone={() => setWizardDone(true)} />}
+
       {/* Desktop sidebar */}
       <aside className="hidden w-64 flex-shrink-0 border-r border-slate-200 bg-white lg:block dark:border-slate-800 dark:bg-slate-900">
         <div className="sticky top-0 h-screen">

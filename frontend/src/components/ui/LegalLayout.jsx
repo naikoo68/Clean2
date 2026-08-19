@@ -6,12 +6,19 @@ import { useSettings } from "../../context/SettingsContext";
 // `sections` is an array of { h, p } where `p` is a string or an array of
 // strings/JSX rendered as paragraphs. Company name + contact email are pulled
 // from site settings so white-label buyers get their own details automatically.
-export default function LegalLayout({ title, updated, intro, sections = [] }) {
+export default function LegalLayout({ title, updated, intro, sections = [], customBody = "" }) {
   const { settings } = useSettings();
   const email = (settings.contacts || []).find((c) => c.type === "email")?.value;
 
   // Scroll to top when opening a legal page.
   useEffect(() => { window.scrollTo(0, 0); }, [title]);
+
+  // When an institute has supplied its own policy text (set in the setup
+  // wizard / Customization), show that verbatim instead of the generic default
+  // copy. Blank lines separate paragraphs; the default `intro`/`sections` are
+  // used only when no custom text exists.
+  const hasCustom = typeof customBody === "string" && customBody.trim().length > 0;
+  const customParagraphs = hasCustom ? customBody.trim().split(/\n{2,}/).map((p) => p.trim()).filter(Boolean) : [];
 
   return (
     <div className="container-page py-14">
@@ -26,20 +33,28 @@ export default function LegalLayout({ title, updated, intro, sections = [] }) {
           </div>
         </div>
 
-        {intro && <p className="mt-6 text-slate-600 dark:text-slate-300">{intro}</p>}
+        {!hasCustom && intro && <p className="mt-6 text-slate-600 dark:text-slate-300">{intro}</p>}
 
-        <div className="mt-8 space-y-8">
-          {sections.map((s, i) => (
-            <section key={i}>
-              <h2 className="text-lg font-bold text-slate-900 dark:text-white">{s.h}</h2>
-              <div className="mt-2 space-y-3 text-sm leading-relaxed text-slate-600 dark:text-slate-300">
-                {(Array.isArray(s.p) ? s.p : [s.p]).map((para, k) => (
-                  <p key={k}>{para}</p>
-                ))}
-              </div>
-            </section>
-          ))}
-        </div>
+        {hasCustom ? (
+          <div className="mt-8 space-y-3 whitespace-pre-line text-sm leading-relaxed text-slate-600 dark:text-slate-300">
+            {customParagraphs.map((para, k) => (
+              <p key={k}>{para}</p>
+            ))}
+          </div>
+        ) : (
+          <div className="mt-8 space-y-8">
+            {sections.map((s, i) => (
+              <section key={i}>
+                <h2 className="text-lg font-bold text-slate-900 dark:text-white">{s.h}</h2>
+                <div className="mt-2 space-y-3 text-sm leading-relaxed text-slate-600 dark:text-slate-300">
+                  {(Array.isArray(s.p) ? s.p : [s.p]).map((para, k) => (
+                    <p key={k}>{para}</p>
+                  ))}
+                </div>
+              </section>
+            ))}
+          </div>
+        )}
 
         <div className="mt-10 rounded-2xl border border-slate-200 bg-slate-50 p-5 text-sm text-slate-600 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300">
           <p className="font-semibold text-slate-900 dark:text-white">Questions?</p>
