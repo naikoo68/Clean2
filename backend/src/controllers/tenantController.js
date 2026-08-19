@@ -147,6 +147,24 @@ export async function updateTenantFeatures(req, res) {
   res.json(sanitize(t));
 }
 
+// PATCH /api/tenants/features — set the SAME feature access on EVERY institute
+// at once (all non-default, non-deleted tenants). Body: { features: {...} }.
+// Overwrites each institute's individual feature settings. Super-admin only.
+export async function updateAllTenantsFeatures(req, res) {
+  const input = req.body?.features;
+  if (!input || typeof input !== "object" || Array.isArray(input)) {
+    return res.status(400).json({ message: "features must be an object of key → boolean." });
+  }
+  const features = {};
+  for (const [k, v] of Object.entries(input)) features[String(k)] = v !== false;
+
+  const result = await runUnscoped(() =>
+    Tenant.updateMany({ isDefault: { $ne: true }, deleted: { $ne: true } }, { $set: { features } })
+  );
+  clearTenantCache();
+  res.json({ ok: true, updated: result?.modifiedCount ?? 0, features });
+}
+
 // Basic hostname validation (a registrable domain, e.g. exam.brightfuture.com).
 const DOMAIN_RE = /^(?=.{1,253}$)([a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,}$/;
 const cleanDomain = (d) =>
