@@ -13,6 +13,7 @@ import { runDueFbSchedules } from "./config/facebook.js";
 import Settings from "./models/Settings.js";
 import TestSeries from "./models/TestSeries.js";
 import User from "./models/User.js";
+import Tenant from "./models/Tenant.js";
 
 const PORT = process.env.PORT || 5000;
 
@@ -120,6 +121,20 @@ async function ensureSettingsIndexes() {
   }
 }
 
+// One-time cleanup: earlier the Tenant.customDomain field defaulted to "" and
+// carried a unique+sparse index. Because "" is a real value it got indexed, so
+// creating a SECOND institute collided on the empty string. We removed the
+// default; here we UNSET any existing "" values so the sparse unique index only
+// tracks real custom domains. Idempotent.
+async function cleanTenantCustomDomains() {
+  try {
+    const r = await Tenant.updateMany({ customDomain: "" }, { $unset: { customDomain: 1 } });
+    if (r.modifiedCount) console.log(`🧹 Cleared empty customDomain on ${r.modifiedCount} tenant(s).`);
+  } catch (err) {
+    console.error("customDomain cleanup skipped:", err.message);
+  }
+}
+
 async function start() {
   await connectDB();
 
@@ -130,6 +145,9 @@ async function start() {
 
   // Migrate Settings uniqueness to per-tenant (one-time, idempotent).
   ensureSettingsIndexes();
+
+  // Clear legacy empty customDomain values so a 2nd institute can be created.
+  cleanTenantCustomDomains();
 
   // Make existing test series private (one-time).
   privatizeExistingTests();
