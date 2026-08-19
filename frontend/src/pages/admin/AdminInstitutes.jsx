@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
-import { School, Plus, UserPlus, X, Search, CheckCircle2, Ban, Users, FileStack, HelpCircle, Store, ShieldCheck, Globe, Copy, Trash2, AlertTriangle } from "lucide-react";
+import { School, Plus, UserPlus, X, Search, CheckCircle2, Ban, Users, FileStack, HelpCircle, Store, ShieldCheck, Globe, Copy, Trash2, AlertTriangle, ListChecks } from "lucide-react";
 import { tenantService } from "../../services";
+import { INSTITUTE_FEATURES } from "../../lib/instituteFeatures";
 import { useAuth } from "../../context/AuthContext";
 import { Loading, ErrorState, EmptyState } from "../../components/ui/AsyncState";
 import Badge from "../../components/ui/Badge";
@@ -30,6 +31,9 @@ export default function AdminInstitutes() {
   const [deleteFor, setDeleteFor] = useState(null); // tenant we're about to permanently delete
   const [deleteConfirm, setDeleteConfirm] = useState(""); // typed slug — must match to enable delete
   const [deleting, setDeleting] = useState(false);
+  const [featuresFor, setFeaturesFor] = useState(null); // tenant whose feature access we're editing
+  const [featuresForm, setFeaturesForm] = useState({}); // { featureKey: boolean }
+  const [savingFeatures, setSavingFeatures] = useState(false);
 
   const flash = (m) => { setToast(m); setTimeout(() => setToast(""), 2800); };
 
@@ -147,6 +151,34 @@ export default function AdminInstitutes() {
 
   const openDelete = (t) => { setDeleteFor(t); setDeleteConfirm(""); setError(""); };
 
+  // Feature access: open the modal seeded from the institute's saved features
+  // (a feature is ON unless explicitly false).
+  const openFeatures = (t) => {
+    const f = {};
+    for (const feat of INSTITUTE_FEATURES) f[feat.key] = (t.features || {})[feat.key] !== false;
+    setFeaturesForm(f);
+    setFeaturesFor(t);
+    setError("");
+  };
+  const toggleFeature = (key) => setFeaturesForm((s) => ({ ...s, [key]: !s[key] }));
+  const setAllFeatures = (val) => setFeaturesForm(Object.fromEntries(INSTITUTE_FEATURES.map((f) => [f.key, val])));
+
+  const saveFeatures = async (e) => {
+    e.preventDefault();
+    setSavingFeatures(true);
+    setError("");
+    try {
+      const res = await tenantService.setFeatures(featuresFor.id, featuresForm);
+      setTenants((list) => list.map((x) => (x.id === featuresFor.id ? { ...x, features: res.features || featuresForm } : x)));
+      setFeaturesFor(null);
+      flash("Access updated. The institute admin sees the change on their next load.");
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSavingFeatures(false);
+    }
+  };
+
   // Permanently delete an institute and ALL its data. Guarded by requiring the
   // super-admin to type the institute's exact subdomain (slug) first.
   const deleteTenant = async (e) => {
@@ -226,6 +258,11 @@ export default function AdminInstitutes() {
                 <button onClick={() => copyLink(t)} className="inline-flex max-w-full items-center gap-1 truncate text-xs font-medium text-slate-500 hover:underline dark:text-slate-400">
                   <Copy className="h-3.5 w-3.5 flex-shrink-0" /> Copy public link
                 </button>
+                {!t.isDefault && (
+                  <button onClick={() => openFeatures(t)} className="inline-flex max-w-full items-center gap-1 truncate text-xs font-medium text-brand-600 hover:underline dark:text-brand-400">
+                    <ListChecks className="h-3.5 w-3.5 flex-shrink-0" /> Manage access
+                  </button>
+                )}
               </div>
 
               <div className="mt-4 flex gap-2">
@@ -341,6 +378,36 @@ export default function AdminInstitutes() {
             <div className="mt-6 flex justify-end gap-3">
               <button type="button" onClick={() => setDomainFor(null)} className="btn-outline">Close</button>
               <button type="submit" disabled={saving} className="btn-primary">{saving ? "Saving..." : "Save domain"}</button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {/* Manage feature access modal */}
+      {featuresFor && (
+        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/50 p-4">
+          <form onSubmit={saveFeatures} className="my-8 w-full max-w-lg animate-scale-in card p-6">
+            <div className="mb-1 flex items-center justify-between">
+              <h3 className="flex items-center gap-2 text-lg font-bold"><ListChecks className="h-5 w-5 text-brand-600" /> Manage access</h3>
+              <button type="button" onClick={() => setFeaturesFor(null)}><X className="h-5 w-5" /></button>
+            </div>
+            <p className="mb-3 text-sm text-slate-500 dark:text-slate-400">Choose which sections <b>{featuresFor.name}</b> can use. Turned-off items are hidden from that institute's admin panel. (Dashboard, Customization &amp; User Manual are always available.)</p>
+            {error && <div className="mb-3 rounded-xl bg-rose-50 px-3 py-2 text-sm text-rose-700 dark:bg-rose-900/30 dark:text-rose-300">{error}</div>}
+            <div className="mb-3 flex gap-2">
+              <button type="button" onClick={() => setAllFeatures(true)} className="btn-outline py-1 text-xs">Enable all</button>
+              <button type="button" onClick={() => setAllFeatures(false)} className="btn-outline py-1 text-xs">Disable all</button>
+            </div>
+            <div className="max-h-[50vh] space-y-1.5 overflow-y-auto pr-1">
+              {INSTITUTE_FEATURES.map((f) => (
+                <label key={f.key} className="flex cursor-pointer items-center justify-between gap-3 rounded-xl border border-slate-200 px-3 py-2 dark:border-slate-700">
+                  <span className="text-sm font-medium">{f.label}</span>
+                  <input type="checkbox" className="h-4 w-4 accent-brand-600" checked={featuresForm[f.key] !== false} onChange={() => toggleFeature(f.key)} />
+                </label>
+              ))}
+            </div>
+            <div className="mt-5 flex justify-end gap-3">
+              <button type="button" onClick={() => setFeaturesFor(null)} className="btn-outline">Cancel</button>
+              <button type="submit" disabled={savingFeatures} className="btn-primary">{savingFeatures ? "Saving..." : "Save access"}</button>
             </div>
           </form>
         </div>

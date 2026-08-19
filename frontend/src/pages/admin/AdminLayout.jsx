@@ -51,34 +51,34 @@ import Avatar from "../../components/ui/Avatar";
 const nav = [
   { to: "/admin", label: "Dashboard", icon: LayoutDashboard, end: true },
   { to: "/admin/institutes", label: "Institutes", icon: School, superOnly: true },
-  { to: "/admin/content", label: "Content", icon: BookCopy },
-  { to: "/admin/tests", label: "Test Series", icon: FileStack },
-  { to: "/admin/practice", label: "My Practice", icon: GraduationCap },
-  { to: "/admin/previous-papers", label: "Previous Papers", icon: Files },
-  { to: "/admin/checker", label: "Question Checker", icon: SearchCheck },
-  { to: "/admin/shared", label: "Shared Links", icon: Share2 },
-  { to: "/admin/cbt", label: "Online Exams", icon: MonitorCheck },
+  { to: "/admin/content", label: "Content", icon: BookCopy, feature: "content" },
+  { to: "/admin/tests", label: "Test Series", icon: FileStack, feature: "tests" },
+  { to: "/admin/practice", label: "My Practice", icon: GraduationCap, feature: "practice" },
+  { to: "/admin/previous-papers", label: "Previous Papers", icon: Files, feature: "previousPapers" },
+  { to: "/admin/checker", label: "Question Checker", icon: SearchCheck, feature: "checker" },
+  { to: "/admin/shared", label: "Shared Links", icon: Share2, feature: "shared" },
+  { to: "/admin/cbt", label: "Online Exams", icon: MonitorCheck, feature: "cbt" },
   { to: "/admin/migration", label: "Migration", icon: ArrowRightLeft, superOnly: true },
   { to: "/admin/clients", label: "Clients", icon: Store, superOnly: true },
   { to: "/admin/plans", label: "Plans", icon: Crown, superOnly: true },
   { to: "/admin/coupons", label: "Coupons", icon: Ticket, superOnly: true },
-  { to: "/admin/study", label: "Study Material", icon: BookMarked },
-  { to: "/admin/documents", label: "Documents", icon: FileText },
-  { to: "/admin/notes", label: "Handwritten Notes", icon: Feather },
-  { to: "/admin/pdf-builder", label: "PDF Builder", icon: FilePlus2 },
-  { to: "/admin/resume", label: "Resume Builder", icon: FileText },
-  { to: "/admin/users", label: "Users", icon: Users },
-  { to: "/admin/performance", label: "Performance", icon: Trophy },
+  { to: "/admin/study", label: "Study Material", icon: BookMarked, feature: "study" },
+  { to: "/admin/documents", label: "Documents", icon: FileText, feature: "documents" },
+  { to: "/admin/notes", label: "Handwritten Notes", icon: Feather, feature: "notes" },
+  { to: "/admin/pdf-builder", label: "PDF Builder", icon: FilePlus2, feature: "pdfBuilder" },
+  { to: "/admin/resume", label: "Resume Builder", icon: FileText, feature: "resume" },
+  { to: "/admin/users", label: "Users", icon: Users, feature: "users" },
+  { to: "/admin/performance", label: "Performance", icon: Trophy, feature: "performance" },
   { to: "/admin/storage", label: "Storage", icon: HardDrive, superOnly: true },
   { to: "/admin/backup", label: "Backup & Restore", icon: DatabaseBackup, superOnly: true },
-  { to: "/admin/feedback", label: "Feedback", icon: MessageSquare },
-  { to: "/admin/reviews", label: "Reviews", icon: Star },
-  { to: "/admin/messages", label: "Messages", icon: Mail },
-  { to: "/admin/notices", label: "Notice Board", icon: Megaphone },
+  { to: "/admin/feedback", label: "Feedback", icon: MessageSquare, feature: "feedback" },
+  { to: "/admin/reviews", label: "Reviews", icon: Star, feature: "reviews" },
+  { to: "/admin/messages", label: "Messages", icon: Mail, feature: "messages" },
+  { to: "/admin/notices", label: "Notice Board", icon: Megaphone, feature: "notices" },
   { to: "/admin/facebook", label: "Facebook Auto-Post", icon: FacebookIcon, superOnly: true },
-  { to: "/admin/ai-generator", label: "AI Generator", icon: Sparkles },
-  { to: "/admin/visualize", label: "Visualization Studio", icon: LayoutGrid },
-  { to: "/admin/ai-keys", label: "AI Keys (APIs)", icon: KeyRound }, // institute admins manage their OWN keys (tenant-scoped); super-admin manages platform keys
+  { to: "/admin/ai-generator", label: "AI Generator", icon: Sparkles, feature: "aiGenerator" },
+  { to: "/admin/visualize", label: "Visualization Studio", icon: LayoutGrid, feature: "visualize" },
+  { to: "/admin/ai-keys", label: "AI Keys (APIs)", icon: KeyRound, feature: "aiKeys" }, // institute admins manage their OWN keys (tenant-scoped); super-admin manages platform keys
   { to: "/admin/customization", label: "Customization", icon: Palette },
   { to: "/admin/manual", label: "User Manual", icon: BookOpen },
 ];
@@ -105,6 +105,25 @@ export default function AdminLayout() {
   const showOnboarding = user?.role === "institute_admin" && settings?.onboardingCompleted !== true && !wizardDone;
   const navigate = useNavigate();
   const location = useLocation();
+
+  // Per-institute feature access. For an institute admin, features their
+  // super-admin turned OFF are hidden from the sidebar; the platform super-admin
+  // (role "admin") always sees everything. A feature is ON unless set to false.
+  const instituteFeatures = user?.role === "institute_admin" ? (user?.tenant?.features || {}) : null;
+  const visibleNav = nav.filter((n) => {
+    if (n.superOnly && user?.role !== "admin") return false;
+    if (instituteFeatures && n.feature && instituteFeatures[n.feature] === false) return false;
+    return true;
+  });
+
+  // Guard direct-URL access: if an institute admin opens a page for a feature
+  // they don't have, send them back to the dashboard.
+  useEffect(() => {
+    if (!instituteFeatures) return;
+    const hit = nav.find((n) => n.feature && (location.pathname === n.to || location.pathname.startsWith(n.to + "/")));
+    if (hit && instituteFeatures[hit.feature] === false) navigate("/admin", { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.pathname]);
 
   // Keep the unread-messages badge fresh
   useEffect(() => {
@@ -140,7 +159,7 @@ export default function AdminLayout() {
       </Link>
 
       <nav className="min-h-0 flex-1 space-y-1 overflow-y-auto px-3">
-        {nav.filter((n) => !n.superOnly || user?.role === "admin").map((n) => (
+        {visibleNav.map((n) => (
           <NavLink
             key={n.to}
             to={n.to}
