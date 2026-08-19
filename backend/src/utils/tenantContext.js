@@ -45,7 +45,16 @@ export function runWithTenant(ctx, fn) {
 }
 
 // Run `fn` with tenant scoping DISABLED — for lookups that are intentionally
-// global (e.g. resolving a user by JWT id, super-admin cross-tenant queries).
+// global (e.g. resolving a user by JWT id, login by email, super-admin
+// cross-tenant queries).
+//
+// IMPORTANT: we `await fn()` INSIDE the bypass context. Mongoose queries are
+// lazy — `User.findOne(...)` only executes when awaited/`.then()`-ed. If we just
+// returned the un-executed query, it would run AFTER this function returns —
+// back under the request's normal (scoped) context — silently defeating the
+// bypass. Awaiting here forces the query to execute (and its scoping hook to
+// run) while the bypass context is active. This is the bug that stopped
+// institute admins/students from being found by email.
 export function runUnscoped(fn) {
-  return tenantStore.run({ tenantId: null, bypass: true }, fn);
+  return tenantStore.run({ tenantId: null, bypass: true }, async () => await fn());
 }
