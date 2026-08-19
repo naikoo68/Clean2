@@ -18,11 +18,14 @@ const escapeRegex = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 // GET /api/users  (admin) — with optional search & pagination
 export async function listUsers(req, res) {
-  const { search = "", page = 1, limit = 20 } = req.query;
+  const { search = "", page = 1, limit = 20, role = "" } = req.query;
   const escaped = escapeRegex(search);
   const filter = search
     ? { $or: [{ name: new RegExp(escaped, "i") }, { email: new RegExp(escaped, "i") }] }
     : {};
+  // Optional role filter (e.g. ?role=student) so the Users hub's "Students" tab
+  // shows only students. Omitted → every account (unchanged behaviour).
+  if (role) filter.role = role;
   const users = await User.find(filter)
     .select("-password")
     .sort("-createdAt")
