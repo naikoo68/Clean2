@@ -7,6 +7,7 @@ import generateToken from "../utils/generateToken.js";
 import { computeOffer } from "./authController.js";
 import { getTenantPlans } from "../utils/plans.js";
 import { razorpayConfigured, razorpayKeyId, createRazorpayOrder, verifyPaymentSignature } from "../config/razorpay.js";
+import { cleanTenantSeed } from "./settingsController.js";
 import { runUnscoped } from "../utils/tenantContext.js";
 import { notifyNewUser } from "../utils/notify.js";
 import { sendMail } from "../config/mailer.js";
@@ -251,9 +252,10 @@ export async function provisionInstitute(req, res) {
       });
 
       try {
-        // The institute's own settings/branding (name pre-filled). Explicit
-        // tenantId so the compound (tenantId,key) unique index is satisfied.
-        await Settings.create({ key: "site", tenantId: tenant._id, siteName: name });
+        // The institute's own settings — seeded CLEAN (its name only, no platform
+        // demo About/contacts/testimonials), identical to a manually-created
+        // institute. Explicit tenantId satisfies the compound (tenantId,key) index.
+        await Settings.create({ ...cleanTenantSeed(name), tenantId: tenant._id });
 
         const admin = await User.create({
           name: adminName,
