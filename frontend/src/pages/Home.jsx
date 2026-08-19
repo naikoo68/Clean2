@@ -18,7 +18,7 @@ import {
 } from "lucide-react";
 import { useSettings } from "../context/SettingsContext";
 import { useAuth } from "../context/AuthContext";
-import { analyticsService } from "../services";
+import { analyticsService, reviewService } from "../services";
 import GlobalSearch from "../components/ui/GlobalSearch";
 
 // Icons applied by position to the editable stats from Customization.
@@ -91,6 +91,16 @@ export default function Home() {
       clearInterval(id);
       document.removeEventListener("visibilitychange", onVisible);
     };
+  }, []);
+
+  // Approved reviews for THIS institute (tenant-scoped by the API) drive the
+  // "What our students say" section — so every institute shows only its own real
+  // reviews, never seeded demo testimonials.
+  const [reviews, setReviews] = useState([]);
+  useEffect(() => {
+    let active = true;
+    reviewService.approved().then((r) => active && setReviews(r.items || [])).catch(() => {});
+    return () => { active = false; };
   }, []);
 
   const fmt = (n) => Number(n || 0).toLocaleString("en-IN");
@@ -381,7 +391,7 @@ export default function Home() {
     ),
 
     testimonials:
-      (settings.testimonials?.length ? settings.testimonials : []).length > 0 ? (
+      reviews.length > 0 ? (
         <section className="bg-slate-50 py-20 dark:bg-slate-900/40">
           <div className="container-page">
             <div className="mx-auto max-w-2xl text-center">
@@ -394,7 +404,7 @@ export default function Home() {
               </p>
             </div>
             <div className="mt-12 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-              {settings.testimonials.map((t, i) => (
+              {reviews.map((t, i) => (
                 <figure key={i} className="card flex flex-col p-6">
                   <div className="flex gap-0.5 text-amber-400">
                     {Array.from({ length: 5 }).map((_, k) => (
