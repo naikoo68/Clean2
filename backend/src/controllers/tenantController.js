@@ -3,6 +3,7 @@ import User from "../models/User.js";
 import Question from "../models/Question.js";
 import TestSeries from "../models/TestSeries.js";
 import { runUnscoped } from "../utils/tenantContext.js";
+import { clearTenantCache } from "../middleware/tenant.js";
 
 // Super-admin management of tenants (institutes) + the super-admin console data
 // (per-institute stats, create an institute admin). All routes run behind
@@ -115,6 +116,55 @@ export async function updateTenantStatus(req, res) {
   t.status = status;
   await t.save();
   res.json(sanitize(t));
+}
+
+// Basic hostname validation (a registrable domain, e.g. exam.brightfuture.com).
+const DOMAIN_RE = /^(?=.{1,253}$)([a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,}$/;
+const cleanDomain = (d) =>
+  String(d || "").trim().toLowerCase().replace(/^https?:\/\//, "").replace(/\/.*$/, "").replace(/\.$/, "");
+
+// PATCH /api/tenants/:id/domain — set or clear an institute's custom domain.
+// Super-admin only. The institute must then point that domain's DNS at the
+// platform (and the frontend host must serve it with SSL) — see the response's
+// `dns` guidance. resolveTenant already maps a matching Host → this tenant.
+export async function setTenantDomain(req, res) {
+  const t = await runUnscoped(() => Tenant.findById(req.params.id));
+  if (!t || t.deleted) return res.status(404).json({ message: "Tenant not found" });
+
+  const domain = cleanDomain(req.body?.customDomain);
+
+  if (!domain) {
+    t.customDomain = "";
+    await t.save();
+    clearTenantCache();
+    return res.json(sanitize(t));
+  }
+
+  if (!DOMAIN_RE.test(domain)) {
+    return res.status(400).json({ message: "Enter a valid domain, e.g. exam.yourinstitute.com" });
+  }
+  // Never allow claiming the platform's own domain / a subdomain of it.
+  const root = String(process.env.ROOT_DOMAIN || "").toLowerCase().replace(/^\./, "");
+  if (root && (domain === root || domain.endsWith("." + root))) {
+    return res.status(400).json({ message: "Use a domain the institute owns — not the platform domain." });
+  }
+  const taken = await runUnscoped(() =>
+    Tenant.findOne({ customDomain: domain, _id: { $ne: t._id }, deleted: { $ne: true } }).select("_id")
+  );
+  if (taken) return res.status(409).json({ message: "That domain is already used by another institute." });
+
+  t.customDomain = domain;
+  await t.save();
+  clearTenantCache(); // so the new mapping takes effect immediately
+
+  res.json({
+    ...sanitize(t),
+    // DNS the institute must configure for the domain to resolve here.
+    dns: {
+      cname: { host: domain, pointsTo: root ? `app.${root}` : "your platform frontend host" },
+      note: "Add this domain in your frontend host (e.g. Vercel) so it's served with SSL. Apex domains may need an A record instead of CNAME — follow your host's instructions.",
+    },
+  });
 }
 
 // POST /api/tenants/:id/admin — create an INSTITUTE ADMIN for a tenant.

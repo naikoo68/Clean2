@@ -486,6 +486,7 @@ export const tenantService = {
   create: (data) => api.post("/tenants", data),
   setStatus: (id, status) => api.patch(`/tenants/${id}/status`, { status }),
   createAdmin: (id, data) => api.post(`/tenants/${id}/admin`, data), // create an institute admin
+  setDomain: (id, customDomain) => api.patch(`/tenants/${id}/domain`, { customDomain }), // set/clear custom domain
 };
 
 // ---- Public institute self-signup (Phase 5) ----
