@@ -78,7 +78,7 @@ const nav = [
   { to: "/admin/facebook", label: "Facebook Auto-Post", icon: FacebookIcon, superOnly: true },
   { to: "/admin/ai-generator", label: "AI Generator", icon: Sparkles },
   { to: "/admin/visualize", label: "Visualization Studio", icon: LayoutGrid },
-  { to: "/admin/ai-keys", label: "AI Keys", icon: KeyRound, superOnly: true },
+  { to: "/admin/ai-keys", label: "AI Keys (APIs)", icon: KeyRound }, // institute admins manage their OWN keys (tenant-scoped); super-admin manages platform keys
   { to: "/admin/customization", label: "Customization", icon: Palette },
   { to: "/admin/manual", label: "User Manual", icon: BookOpen },
 ];
