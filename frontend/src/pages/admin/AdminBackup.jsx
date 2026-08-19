@@ -170,7 +170,7 @@ export default function AdminBackup() {
         </span>
         <div>
           <h1 className="text-xl font-bold leading-none">Backup &amp; Restore</h1>
-          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Save your entire content library {isSuper ? "— as a file or straight to Google Drive — " : "as a file "}and restore it anytime.</p>
+          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Save your entire content library — as a file or straight to Google Drive — and restore it anytime.</p>
         </div>
       </div>
 
@@ -188,8 +188,10 @@ export default function AdminBackup() {
           <input ref={fileRef} type="file" accept="application/json,.json" className="hidden" onChange={onRestoreFile} />
         </div>
 
-        {/* Google Drive actions — super-admin only (uses the platform Client ID) */}
-        {isSuper && driveReady && (
+        {/* Google Drive actions — shown to everyone when Drive is available.
+            Each user backs up to THEIR OWN Google Drive (per-user sign-in); the
+            Client ID is just the app identifier. */}
+        {driveReady && (
           <div className="mt-2 flex flex-col gap-2 sm:flex-row">
             <button onClick={backupToDrive} disabled={!!busy} className="btn-outline flex-1">
               {busy === "drive-backup" ? <><Loader2 className="h-4 w-4 animate-spin" /> Backing up to Drive…</> : <><HardDriveUpload className="h-4 w-4" /> Back up to Google Drive</>}
