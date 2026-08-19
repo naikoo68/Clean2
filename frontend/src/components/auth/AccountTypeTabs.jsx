@@ -1,14 +1,18 @@
-import { GraduationCap, Store } from "lucide-react";
+import { GraduationCap, Store, School } from "lucide-react";
 
-// Segmented Student / Client selector shown on the auth pages.
-// `active` is "student" | "client"; onSelect(key) fires when a tab is clicked.
-export default function AccountTypeTabs({ active, onSelect }) {
+// Segmented account-type selector shown on the auth pages.
+// `active` is "student" | "client" | "institute"; onSelect(key) fires on click.
+// Pass `withInstitute` to show the third "Institute" tab (used on the register
+// pages so a coaching institute can sign up for its own branded space — it's
+// left off the Login page, which has no separate institute login).
+export default function AccountTypeTabs({ active, onSelect, withInstitute = false }) {
   const tabs = [
     { key: "student", label: "Student", Icon: GraduationCap },
     { key: "client", label: "Client", Icon: Store },
+    ...(withInstitute ? [{ key: "institute", label: "Institute", Icon: School }] : []),
   ];
   return (
-    <div className="mb-5 grid grid-cols-2 gap-1 rounded-xl bg-slate-100 p-1 dark:bg-slate-800">
+    <div className={`mb-5 grid gap-1 rounded-xl bg-slate-100 p-1 dark:bg-slate-800 ${withInstitute ? "grid-cols-3" : "grid-cols-2"}`}>
       {tabs.map((t) => (
         <button
           key={t.key}
