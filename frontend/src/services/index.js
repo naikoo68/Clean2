@@ -437,7 +437,13 @@ export const userManualService = {
 
 // ---- Users (admin) ----
 export const userService = {
-  list: (search = "") => api.get(`/users${search ? `?search=${encodeURIComponent(search)}` : ""}`),
+  list: (search = "", role = "") => {
+    const q = new URLSearchParams();
+    if (search) q.set("search", search);
+    if (role) q.set("role", role);
+    const qs = q.toString();
+    return api.get(`/users${qs ? `?${qs}` : ""}`);
+  },
   clients: (search = "") => api.get(`/users/clients${search ? `?search=${encodeURIComponent(search)}` : ""}`),
   deletedClients: () => api.get("/users/clients/deleted"), // Recycle bin (soft-deleted clients)
   restore: (id) => api.post(`/users/${id}/restore`), // restore a soft-deleted client

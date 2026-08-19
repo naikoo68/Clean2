@@ -75,6 +75,7 @@ const AdminReviews = lazy(() => import("./pages/admin/AdminReviews"));
 const AdminStorage = lazy(() => import("./pages/admin/AdminStorage"));
 const AdminBackup = lazy(() => import("./pages/admin/AdminBackup"));
 const AdminUsers = lazy(() => import("./pages/admin/AdminUsers"));
+const AdminPeople = lazy(() => import("./pages/admin/AdminPeople"));
 const AdminMessages = lazy(() => import("./pages/admin/AdminMessages"));
 const AdminCustomization = lazy(() => import("./pages/admin/AdminCustomization"));
 const AdminUserManual = lazy(() => import("./pages/admin/AdminUserManual"));
@@ -274,7 +275,7 @@ const router = createHashRouter([
       { path: "study", element: S(AdminStudyMaterial) },
       { path: "feedback", element: S(AdminFeedback) },
       { path: "reviews", element: S(AdminReviews) },
-      { path: "users", element: S(AdminUsers) },
+      { path: "users", element: S(AdminPeople) },
       { path: "performance", element: S(AdminPerformance) },
       { path: "storage", element: S(AdminStorage) },
       { path: "backup", element: S(AdminBackup) },
