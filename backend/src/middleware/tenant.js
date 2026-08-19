@@ -1,4 +1,5 @@
 import Tenant from "../models/Tenant.js";
+import { tenantStore } from "../utils/tenantContext.js";
 
 // Resolves the current institute (tenant) for a request and annotates it as
 // req.tenant / req.tenantId. Resolution order:
@@ -43,6 +44,7 @@ async function lookupTenant(host, headerSlug) {
 }
 
 export async function resolveTenant(req, res, next) {
+  let ctx = { tenantId: null, tenant: null, bypass: false };
   try {
     const host = baseHost(req.headers["x-forwarded-host"] || req.headers.host);
     const headerSlug = String(req.headers["x-tenant"] || "").toLowerCase().trim();
@@ -59,11 +61,14 @@ export async function resolveTenant(req, res, next) {
     }
     req.tenant = tenant || null;
     req.tenantId = tenant?._id || null;
+    ctx = { tenantId: req.tenantId, tenant: req.tenant, bypass: false };
   } catch {
     req.tenant = null;
     req.tenantId = null;
   }
-  next();
+  // Run the REST of the request inside the tenant context so every downstream
+  // query can be auto-scoped. (Everything after next() inherits this store.)
+  tenantStore.run(ctx, () => next());
 }
 
 // Clear the resolution cache (call after creating/renaming/suspending a tenant).

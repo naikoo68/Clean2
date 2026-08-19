@@ -1,5 +1,6 @@
 import jwt from "jsonwebtoken";
 import User from "../models/User.js";
+import { runUnscoped } from "../utils/tenantContext.js";
 
 // Verifies the JWT from the Authorization header and attaches req.user.
 export async function protect(req, res, next) {
@@ -13,7 +14,7 @@ export async function protect(req, res, next) {
   }
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    const user = await User.findById(decoded.id);
+    const user = await runUnscoped(() => User.findById(decoded.id));
     if (!user) return res.status(401).json({ message: "User no longer exists" });
     if (user.status === "blocked") {
       return res.status(403).json({ message: "Your account has been blocked" });
@@ -41,7 +42,7 @@ export async function attachUser(req, res, next) {
   if (!token) return res.status(401).json({ message: "Not authorized, no token" });
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    const user = await User.findById(decoded.id);
+    const user = await runUnscoped(() => User.findById(decoded.id));
     if (!user) return res.status(401).json({ message: "User no longer exists" });
     if (user.status === "blocked") return res.status(403).json({ message: "Your account has been blocked" });
     if (user.deleted) return res.status(403).json({ message: "This account has been deleted" });
@@ -92,7 +93,7 @@ export async function optionalAuth(req, res, next) {
   if (header && header.startsWith("Bearer ")) {
     try {
       const decoded = jwt.verify(header.split(" ")[1], process.env.JWT_SECRET);
-      const user = await User.findById(decoded.id);
+      const user = await runUnscoped(() => User.findById(decoded.id));
       const expired = user?.expiresAt && user.expiresAt.getTime() < Date.now();
       if (user && user.status !== "blocked" && !user.deleted && !expired) req.user = user;
     } catch {
