@@ -70,6 +70,7 @@ import { isMailConfigured, verifyMail } from "./config/mailer.js";
 import { isCloudinaryConfigured } from "./config/cloudinary.js";
 
 import { protect, authorize } from "./middleware/auth.js";
+import { resolveTenant } from "./middleware/tenant.js";
 
 const app = express();
 
@@ -102,6 +103,12 @@ app.use((req, res, next) => {
 });
 app.use(express.urlencoded({ extended: true }));
 if (process.env.NODE_ENV !== "test") app.use(morgan("dev"));
+
+// Multi-tenancy: resolve the current institute (from X-Tenant header / custom
+// domain / subdomain / default) and run the rest of the request inside its
+// tenant context. Harmless when enforcement is off — it just annotates the
+// request; the model plugin only auto-scopes queries when TENANT_ENFORCEMENT=on.
+app.use(resolveTenant);
 
 // Rate limit auth endpoints
 const authLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 50 });
