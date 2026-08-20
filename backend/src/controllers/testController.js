@@ -727,9 +727,9 @@ export async function shareTestPreview(req, res) {
   let image = `${clientBase}/og-image.png`;
   const firstQObj = count ? test.questions[0] : null;
   if (firstQObj?.text) {
-    // "v5" busts previously-cached images (landscape card that scales to fit BOTH
-    // the full question AND all options — including journal/ledger tables).
-    const key = crypto.createHash("sha1").update(`v5|${test._id}|${firstQObj.text}`).digest("hex");
+    // "v6" busts previously-cached images (full-size 4:5 card, question at the
+    // top, any overflow cropped at the bottom).
+    const key = crypto.createHash("sha1").update(`v6|${test._id}|${firstQObj.text}`).digest("hex");
     if (test.publicPreviewImage && test.publicPreviewKey === key) {
       image = test.publicPreviewImage; // reuse the cached render
     } else {
