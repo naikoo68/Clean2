@@ -40,6 +40,16 @@ function looksLikeCurrentAffairs(text) {
   return CURRENT_AFFAIRS_RE.test(String(text || ""));
 }
 
+// Subjects for which the English/grammar instruction presets are relevant.
+const LANG_SUBJECT_RE = /\b(english|hindi|urdu|sanskrit|kashmiri|dogri|punjabi|arabic|persian|grammar|vocabulary|comprehension|language)\b/i;
+// One-tap Instructions presets for language subjects — fill the notes box.
+const ENGLISH_PRESETS = [
+  { label: "Grammar", text: "Focus on English grammar. Each question is a sentence with a blank (or an underlined error); give 4 options with exactly one correct. Cover tenses, articles, prepositions, conjunctions, subject–verb agreement, voice and narration. In the explanation, state the grammar rule that applies." },
+  { label: "Vocabulary", text: "Focus on English vocabulary: synonyms, antonyms, one-word substitution, and idioms & phrases. The question names the target word/idiom; the 4 options are candidate meanings with exactly one correct. Explain the meaning and why each other option is wrong." },
+  { label: "Comprehension", text: "Write a short 3–4 sentence passage, then create MCQs on it. Begin EVERY question's text with the SAME passage so each question is fully self-contained. Cover main idea, inference and vocabulary-in-context; 4 options with one correct." },
+  { label: "Sentence correction", text: "Give a sentence with one underlined part; the 4 options are replacements for that part (include a 'No improvement' option). Exactly one is correct. Explain the error and the rule." },
+];
+
 export default function AiGenerate({ open, onClose, onUpload, title = "Generate Questions with AI", sections = [], existingQuestions = [], defaultSection = "", allowNewTarget = false, newLeafLabel = "quiz", currentTargetName = "", existingItems = [], defaultTopic = "", defaultSubtopics = "", defaultDest = "current", coverageQuestions = [] }) {
   const { user } = useAuth();
   // Clients granted BOTH sources may pick which one this generation uses.
@@ -1009,6 +1019,22 @@ export default function AiGenerate({ open, onClose, onUpload, title = "Generate 
             </p>
 
             <label className="mb-1 mt-3 block text-sm font-semibold">Instructions (optional — followed strictly)</label>
+            {LANG_SUBJECT_RE.test(section || "") && (
+              <div className="mb-1.5 flex flex-wrap items-center gap-1.5">
+                <span className="text-xs text-slate-400">English presets:</span>
+                {ENGLISH_PRESETS.map((p) => (
+                  <button
+                    key={p.label}
+                    type="button"
+                    onClick={() => setNotes(p.text)}
+                    title={p.text}
+                    className="rounded-full border border-brand-200 bg-brand-50 px-2.5 py-1 text-xs font-medium text-brand-700 hover:bg-brand-100 dark:border-brand-800 dark:bg-brand-900/30 dark:text-brand-300"
+                  >
+                    {p.label}
+                  </button>
+                ))}
+              </div>
+            )}
             <textarea
               rows={2}
               className="input resize-y"
