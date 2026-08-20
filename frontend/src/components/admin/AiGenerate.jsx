@@ -388,6 +388,7 @@ export default function AiGenerate({ open, onClose, onUpload, title = "Generate 
       try {
         ({ jobId, requested } = await aiService.generate({
           topic: topic.trim(),
+          subject: (section || "").trim() || undefined, // the subject (e.g. English) → language-aware generation
           // A per-subtopic "Generate" button passes the single subtopic to focus
           // on; otherwise use whatever is typed in the Subtopics box.
           subtopics: (overrideSubtopics != null ? overrideSubtopics : subtopics).trim() || undefined,
