@@ -1,11 +1,12 @@
 import { useState } from "react";
 import { X, Share2, Copy, Check, Clock } from "lucide-react";
 import { testService } from "../../services";
+import { publicShareUrl } from "../../lib/shareLink";
 
-// Build the public URL for a share token (hash-router friendly). A My Quiz opens
-// in the quiz-style player; everything else uses the exam-style test player.
-const publicUrl = (token, kind) =>
-  `${window.location.origin}${window.location.pathname}#/public/${kind === "quiz" ? "quiz" : "test"}/${token}`;
+// Build the public URL for a share token. Points at the backend preview
+// endpoint so WhatsApp/Facebook show a rich card (subject, topic, name + first
+// question); it redirects a human on to the right in-app player.
+const publicUrl = (token, kind) => publicShareUrl(token, kind);
 
 // ISO date -> value for <input type="datetime-local"> (local time).
 const toLocalInput = (iso) => {

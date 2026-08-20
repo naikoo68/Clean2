@@ -64,6 +64,7 @@ import facebookRoutes from "./routes/facebookRoutes.js";
 import userManualRoutes from "./routes/userManualRoutes.js";
 import backupRoutes from "./routes/backupRoutes.js";
 import recycleBinRoutes from "./routes/recycleBinRoutes.js";
+import { shareTestPreview } from "./controllers/testController.js";
 import { releaseEndedCbtExams } from "./controllers/cbtController.js";
 import { runDueFbSchedules } from "./config/facebook.js";
 import { notFound, errorHandler } from "./middleware/error.js";
@@ -202,6 +203,11 @@ app.use("/api/institute-signup", instituteSignupRoutes); // public paid institut
 app.use("/api/cbt", cbtRoutes); // CBT online exams (public name+email sign-in, emailed results, admin rankings)
 app.use("/api/facebook", facebookRoutes); // scheduled Facebook question auto-posting (admin)
 app.use("/api/manual", userManualRoutes); // editable User Manual (public read, admin write)
+
+// Rich social preview for a shared quiz/test link (WhatsApp/Facebook crawlers).
+// Serves per-item Open Graph HTML (subject, topic, name + first question) and
+// redirects a human visitor on to the in-app player. Public, no auth.
+app.get("/s/:token", shareTestPreview);
 
 // Errors
 app.use(notFound);
