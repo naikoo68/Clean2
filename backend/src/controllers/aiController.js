@@ -534,6 +534,9 @@ function buildUserPrompt({ topic, count, difficulty, types, notes, plan, avoid, 
       ? `The SOURCE MATERIAL at the end is a set of EXISTING exam questions. RECAST / RESHAPE the FACTS in them into the requested question TYPES — e.g. bundle several related facts into a "consider the following statements" question, turn a single fact into an assertion–reason, or build a matching / pair question from related facts. REUSE the underlying knowledge but produce the NEW format requested: do NOT simply copy an MCQ unchanged, and do NOT alter the underlying facts. Spread across the material so different facts are used.`
       : `Create the questions BASED ON the source material given at the end. Draw the facts and content from that material (you may use closely-related general knowledge to complete a question, but stay on the material's topics).`);
   }
+  if (subject && String(subject).trim()) {
+    lines.push(`Subject: ${String(subject).trim()}. Interpret the topic within this subject so ambiguous topic names are understood in the right context (e.g. "Articles" under an English subject means grammar articles a/an/the, NOT news articles or history).`);
+  }
   lines.push(`Topic / syllabus: ${topic}.`);
   if (language) lines.push(LANGUAGE_FOCUS);
   lines.push(TOPIC_SCOPE_RULE);
