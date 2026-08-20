@@ -16,8 +16,9 @@ import Session from "../models/Session.js";
 import Tenant from "../models/Tenant.js";
 import { duplicateQuestions } from "../utils/duplicateQuestions.js";
 import { byNatural } from "../utils/naturalSort.js";
-import { runUnscoped } from "../utils/tenantContext.js";
+import { runUnscoped, runWithTenant } from "../utils/tenantContext.js";
 import { clientBaseFromReq } from "../config/clientUrl.js";
+import { renderQuestionImage } from "../config/socialImage.js";
 
 // A caller may manage a test/question only within their own space: clients only
 // their own owned items; admins only the shared (ownerless) platform items.
@@ -672,7 +673,9 @@ export async function shareTestPreview(req, res) {
   try {
     test = await runUnscoped(() =>
       TestSeries.findOne({ publicToken: token, publicShare: true })
-        .populate("questions", "text")
+        // Include the fields the first-question preview card needs (NOT "correct"
+        // — the preview must never reveal the answer).
+        .populate("questions", "text options type difficulty columnA columnB assertion reason")
         .populate("practiceSubject", "name")
         .populate("practiceTopic", "name")
         .populate("practiceStream", "name")
@@ -703,7 +706,36 @@ export async function shareTestPreview(req, res) {
   if (firstQ) descBits.push(`Q1: ${firstQ}`);
   const description = descBits.join(" — ") || "Tap to start on My Study Guide.";
   const siteName = tenant?.name || "My Study Guide";
-  const image = `${clientBase}/og-image.png`;
+
+  // Preview image: render a card of the FIRST question (so the card isn't the
+  // generic logo). Rendering uploads to Cloudinary, so cache the URL on the item
+  // and only re-render when the first question changes. Falls back to the
+  // generic og-image when Cloudinary isn't configured or a render fails.
+  let image = `${clientBase}/og-image.png`;
+  const firstQObj = count ? test.questions[0] : null;
+  if (firstQObj?.text) {
+    const key = crypto.createHash("sha1").update(`${test._id}|${firstQObj.text}`).digest("hex");
+    if (test.publicPreviewImage && test.publicPreviewKey === key) {
+      image = test.publicPreviewImage; // reuse the cached render
+    } else {
+      try {
+        // Render within the item's OWN tenant context so the card uses that
+        // institute's site name / brand colour.
+        const rendered = await runWithTenant(
+          { tenantId: test.tenantId || null, bypass: !test.tenantId },
+          () => renderQuestionImage(firstQObj, { hideCta: true, includeAnswer: false })
+        );
+        if (rendered?.url) {
+          image = rendered.url;
+          // Cache for next time (best-effort; don't block the response on it).
+          runUnscoped(() => TestSeries.updateOne(
+            { _id: test._id },
+            { $set: { publicPreviewImage: rendered.url, publicPreviewKey: key } }
+          )).catch(() => {});
+        }
+      } catch { /* keep the generic fallback image */ }
+    }
+  }
 
   // Where a human should land — the real SPA player on the SAME site they came
   // from. Include the institute slug (?t=) for non-default tenants so the app
