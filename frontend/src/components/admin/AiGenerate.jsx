@@ -50,7 +50,7 @@ const ENGLISH_PRESETS = [
   { label: "Sentence correction", text: "Give a sentence with one underlined part; the 4 options are replacements for that part (include a 'No improvement' option). Exactly one is correct. Explain the error and the rule." },
 ];
 
-export default function AiGenerate({ open, onClose, onUpload, title = "Generate Questions with AI", sections = [], existingQuestions = [], defaultSection = "", allowNewTarget = false, newLeafLabel = "quiz", currentTargetName = "", existingItems = [], defaultTopic = "", defaultSubtopics = "", defaultDest = "current", coverageQuestions = [] }) {
+export default function AiGenerate({ open, onClose, onUpload, title = "Generate Questions with AI", sections = [], subjectName = "", existingQuestions = [], defaultSection = "", allowNewTarget = false, newLeafLabel = "quiz", currentTargetName = "", existingItems = [], defaultTopic = "", defaultSubtopics = "", defaultDest = "current", coverageQuestions = [] }) {
   const { user } = useAuth();
   // Clients granted BOTH sources may pick which one this generation uses.
   const isClient = user?.role === "client" && user?.aiAccess;
@@ -398,7 +398,7 @@ export default function AiGenerate({ open, onClose, onUpload, title = "Generate 
       try {
         ({ jobId, requested } = await aiService.generate({
           topic: topic.trim(),
-          subject: (section || "").trim() || undefined, // the subject (e.g. English) → language-aware generation
+          subject: ((section || subjectName) || "").trim() || undefined, // subject context (e.g. General English) → disambiguates the topic + language-aware
           // A per-subtopic "Generate" button passes the single subtopic to focus
           // on; otherwise use whatever is typed in the Subtopics box.
           subtopics: (overrideSubtopics != null ? overrideSubtopics : subtopics).trim() || undefined,
@@ -754,15 +754,22 @@ export default function AiGenerate({ open, onClose, onUpload, title = "Generate 
               </div>
             )}
 
-            {sections.length > 0 && (
+            {/* Show the subject so it's clear which subject (and topic) this is
+                for — and so the AI has the subject as context. When the item has
+                a multi-subject plan we show a picker; otherwise a read-only label. */}
+            {sections.length > 0 ? (
               <div className="mb-3">
-                <label className="mb-1 block text-sm font-semibold">Add to subject</label>
+                <label className="mb-1 block text-sm font-semibold">Subject</label>
                 <select className="input" value={section} onChange={(e) => setSection(e.target.value)}>
                   <option value="">— No subject —</option>
                   {sections.map((s, i) => <option key={i} value={s}>{s}</option>)}
                 </select>
               </div>
-            )}
+            ) : (section || subjectName) ? (
+              <div className="mb-3 rounded-lg bg-slate-50 px-3 py-2 text-sm dark:bg-slate-800/60">
+                <span className="text-slate-400">Subject:</span> <b>{section || subjectName}</b>
+              </div>
+            ) : null}
 
             {avoidStems.length > 0 && preview.length === 0 && (
               <div className="mb-3 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-xs text-emerald-700 dark:border-emerald-900/50 dark:bg-emerald-900/20 dark:text-emerald-300">

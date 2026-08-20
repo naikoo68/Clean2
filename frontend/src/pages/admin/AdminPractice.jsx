@@ -1415,6 +1415,7 @@ export default function AdminPractice({ clientMode = false, fixedKind = "" }) {
       <AiGenerate
         open={aiOpen}
         sections={sectionsOf(qItem)}
+        subjectName={subject?.name || ""}
         defaultSection={normSection(forceSection)}
         title={`Generate with AI — ${qItem?.name || (gapPrefill ? `new ${kind} (missing areas)` : (otherTypesTopic ? "other question types (all quizzes)" : ""))}${normSection(forceSection) ? ` (${normSection(forceSection)})` : ""}`}
         onClose={() => { setAiOpen(false); setForceSection(""); setGapPrefill(null); setOtherTypesTopic(false); }}
