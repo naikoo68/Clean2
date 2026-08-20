@@ -13,8 +13,11 @@ import PracticeSubject from "../models/PracticeSubject.js";
 import PracticeTopic from "../models/PracticeTopic.js";
 import Quiz from "../models/Quiz.js";
 import Session from "../models/Session.js";
+import Tenant from "../models/Tenant.js";
 import { duplicateQuestions } from "../utils/duplicateQuestions.js";
 import { byNatural } from "../utils/naturalSort.js";
+import { runUnscoped } from "../utils/tenantContext.js";
+import { clientBaseFromReq } from "../config/clientUrl.js";
 
 // A caller may manage a test/question only within their own space: clients only
 // their own owned items; admins only the shared (ownerless) platform items.
@@ -609,6 +612,123 @@ export async function registerPublicView(req, res) {
   if (publicLinkExpired(test)) return res.status(403).json({ message: "This public test link has expired." });
   await TestSeries.updateOne({ _id: test._id }, { $inc: { publicViews: 1 } });
   res.json({ ok: true });
+}
+
+/* ------- Rich link preview for social apps (WhatsApp / Facebook / etc.) ------- */
+// Social crawlers do NOT run JavaScript, so the SPA's static Open Graph card is
+// the ONLY thing they ever see — which is why every shared quiz/test showed the
+// same generic "My Study Guide" preview. This endpoint (GET /s/:token) instead
+// returns REAL HTML whose og: tags describe THIS quiz/test — its subject, topic,
+// name (e.g. "Quiz 1") and its FIRST question — so the WhatsApp/Facebook preview
+// is meaningful. A human who taps the link is then redirected on to the actual
+// in-app player (with the institute's ?t= slug so the right tenant loads).
+
+// Escape a string for safe insertion into HTML text/attributes.
+function escHtml(s) {
+  return String(s ?? "")
+    .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+}
+
+// Turn a question stem into a clean one-line preview: strip $…$ math delimiters,
+// **bold** markers and stray LaTeX, collapse whitespace, then trim to length.
+function stemPreview(t, max = 170) {
+  let s = String(t ?? "")
+    .replace(/\$\$?/g, "")
+    .replace(/\*\*/g, "")
+    .replace(/\\[a-zA-Z]+\s?/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (s.length > max) s = s.slice(0, max - 1).trimEnd() + "…";
+  return s;
+}
+
+// GET /s/:token — server-rendered preview + redirect for a shared quiz/test.
+export async function shareTestPreview(req, res) {
+  const token = String(req.params.token || "");
+  const clientBase = (clientBaseFromReq(req) || "").replace(/\/$/, "");
+
+  // The public token is globally unique, and this endpoint is hit by crawlers
+  // with NO tenant header — so look the item up UNSCOPED to find it in ANY
+  // institute. (Safe: a random 12-byte token isn't guessable across tenants.)
+  let test = null;
+  try {
+    test = await runUnscoped(() =>
+      TestSeries.findOne({ publicToken: token, publicShare: true })
+        .populate("questions", "text")
+        .populate("practiceSubject", "name")
+        .populate("practiceTopic", "name")
+        .populate("practiceStream", "name")
+        .lean()
+    );
+  } catch { /* fall through to the generic redirect below */ }
+
+  const expired = test && test.publicExpiresAt && new Date(test.publicExpiresAt).getTime() < Date.now();
+  // Invalid / disabled / expired → just send the visitor to the site home.
+  if (!test || expired) return res.redirect(302, clientBase || "/");
+
+  const tenant = test.tenantId
+    ? await runUnscoped(() => Tenant.findById(test.tenantId).select("slug customDomain name isDefault").lean()).catch(() => null)
+    : null;
+
+  const kind = test.practiceKind === "quiz" ? "quiz" : "test";
+  const kindLabel = kind === "quiz" ? "Quiz" : (test.practiceKind === "paper" ? "Paper" : "Test");
+  const subject = test.practiceSubject?.name || test.practiceStream?.name || "";
+  const topic = test.practiceTopic?.name || "";
+  const count = Array.isArray(test.questions) ? test.questions.length : 0;
+  const firstQ = count ? stemPreview(test.questions[0]?.text) : "";
+
+  const crumb = [subject, topic].filter(Boolean).join(" › ");
+  const title = [crumb, test.name].filter(Boolean).join(" — ") || `${kindLabel} — My Study Guide`;
+  const descBits = [];
+  if (count) descBits.push(`${kindLabel} · ${count} question${count === 1 ? "" : "s"}`);
+  if (firstQ) descBits.push(`Q1: ${firstQ}`);
+  const description = descBits.join(" — ") || "Tap to start on My Study Guide.";
+  const siteName = tenant?.name || "My Study Guide";
+  const image = `${clientBase}/og-image.png`;
+
+  // Where a human should land — the real SPA player. Include the institute slug
+  // (?t=) so the app resolves the right tenant; a custom domain needs no slug.
+  let target;
+  if (tenant?.customDomain) {
+    target = `https://${tenant.customDomain}/#/public/${kind}/${token}`;
+  } else {
+    const t = (tenant && !tenant.isDefault && tenant.slug) ? `?t=${encodeURIComponent(tenant.slug)}` : "";
+    target = `${clientBase}/${t}#/public/${kind}/${token}`;
+  }
+
+  res.set("Content-Type", "text/html; charset=utf-8");
+  res.set("Cache-Control", "public, max-age=300"); // let crawlers cache briefly
+  res.send(`<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>${escHtml(title)}</title>
+<meta name="description" content="${escHtml(description)}">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="${escHtml(siteName)}">
+<meta property="og:title" content="${escHtml(title)}">
+<meta property="og:description" content="${escHtml(description)}">
+<meta property="og:image" content="${escHtml(image)}">
+<meta property="og:url" content="${escHtml(target)}">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="${escHtml(title)}">
+<meta name="twitter:description" content="${escHtml(description)}">
+<meta name="twitter:image" content="${escHtml(image)}">
+<link rel="canonical" href="${escHtml(target)}">
+<meta http-equiv="refresh" content="0; url=${escHtml(target)}">
+<script>location.replace(${JSON.stringify(target)});</script>
+<style>body{font-family:system-ui,-apple-system,sans-serif;background:#0b1220;color:#e5e7eb;margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;text-align:center;padding:24px}a{color:#93c5fd}</style>
+</head>
+<body>
+<div>
+<h1>${escHtml(title)}</h1>
+<p>${escHtml(description)}</p>
+<p>Opening… if it doesn't, <a href="${escHtml(target)}">tap here to start</a>.</p>
+</div>
+</body>
+</html>`);
 }
 
 // Turn OFF any public share link whose expiry has passed, so expired links drop
