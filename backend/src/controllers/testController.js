@@ -540,6 +540,13 @@ export async function togglePublicLink(req, res) {
     }
   }
 
+  // Turning a link back ON must make it live again: if the (old or supplied)
+  // expiry is already in the PAST, clear it — otherwise re-enabling would
+  // immediately report the link as "expired". A future expiry is kept as-is.
+  if (enable && test.publicExpiresAt && new Date(test.publicExpiresAt).getTime() < Date.now()) {
+    test.publicExpiresAt = null;
+  }
+
   await test.save();
   res.json({ publicShare: test.publicShare, publicToken: test.publicToken, publicExpiresAt: test.publicExpiresAt });
 }
@@ -552,8 +559,12 @@ function publicLinkExpired(test) {
 // GET /api/tests/public/:token — fetch a publicly shared test for taking. No
 // auth required. Correct answers/explanations are stripped (like getTest).
 export async function getPublicTest(req, res) {
-  const test = await TestSeries.findOne({ publicToken: req.params.token, publicShare: true })
-    .populate("questions");
+  // The share token is globally unique and a public visitor has no reliable
+  // tenant context — so look up UNSCOPED so the link works for ANY institute
+  // (otherwise a tenant-scoped query returns "invalid" for another institute's
+  // quiz). Safe: a random 12-byte token isn't guessable across tenants.
+  const test = await runUnscoped(() =>
+    TestSeries.findOne({ publicToken: req.params.token, publicShare: true }).populate("questions"));
   if (!test) return res.status(404).json({ message: "This test link is invalid or public sharing was turned off." });
   if (publicLinkExpired(test)) return res.status(403).json({ message: "This public test link has expired." });
   const obj = test.toObject();
@@ -576,19 +587,20 @@ export async function getPublicTest(req, res) {
 // simply returned. The test's attempt counter is still incremented.
 export async function submitPublicTest(req, res) {
   const { answers = {}, timeTaken = 0 } = req.body;
-  const test = await TestSeries.findOne({ publicToken: req.params.token, publicShare: true }).populate("questions");
+  const test = await runUnscoped(() =>
+    TestSeries.findOne({ publicToken: req.params.token, publicShare: true }).populate("questions"));
   if (!test) return res.status(404).json({ message: "This test link is invalid or public sharing was turned off." });
   if (publicLinkExpired(test)) return res.status(403).json({ message: "This public test link has expired." });
 
   const g = gradeSubmission(test, answers);
-  await TestSeries.findByIdAndUpdate(test._id, { $inc: { attempts: 1 } });
+  await runUnscoped(() => TestSeries.findByIdAndUpdate(test._id, { $inc: { attempts: 1 } }));
   // Record the anonymous completion so the admin can track shared-link usage.
-  PublicAttempt.create({
+  runUnscoped(() => PublicAttempt.create({
     testSeries: test._id,
     total: g.total, attempted: g.attempted, correct: g.correct, incorrect: g.incorrect,
     skipped: g.skipped, score: g.score, maxScore: g.maxScore, percentage: g.percentage,
     timeTaken: Number(timeTaken) || 0,
-  }).catch(() => {}); // never let tracking break the taker's result
+  }).catch(() => {})); // never let tracking break the taker's result
   res.status(201).json({
     total: g.total,
     attempted: g.attempted,
@@ -607,10 +619,11 @@ export async function submitPublicTest(req, res) {
 // link. No auth. The client calls this once per browser (localStorage-guarded)
 // so it approximates unique opens rather than every page refresh.
 export async function registerPublicView(req, res) {
-  const test = await TestSeries.findOne({ publicToken: req.params.token, publicShare: true }).select("_id publicShare publicExpiresAt");
+  const test = await runUnscoped(() =>
+    TestSeries.findOne({ publicToken: req.params.token, publicShare: true }).select("_id publicShare publicExpiresAt"));
   if (!test) return res.status(404).json({ message: "This test link is invalid or public sharing was turned off." });
   if (publicLinkExpired(test)) return res.status(403).json({ message: "This public test link has expired." });
-  await TestSeries.updateOne({ _id: test._id }, { $inc: { publicViews: 1 } });
+  await runUnscoped(() => TestSeries.updateOne({ _id: test._id }, { $inc: { publicViews: 1 } }));
   res.json({ ok: true });
 }
 
