@@ -40,9 +40,7 @@ function looksLikeCurrentAffairs(text) {
   return CURRENT_AFFAIRS_RE.test(String(text || ""));
 }
 
-// Subjects for which the English/grammar instruction presets are relevant.
-const LANG_SUBJECT_RE = /\b(english|hindi|urdu|sanskrit|kashmiri|dogri|punjabi|arabic|persian|grammar|vocabulary|comprehension|language)\b/i;
-// One-tap Instructions presets for language subjects — fill the notes box.
+// One-tap Instructions presets for language/English question sets — fill the notes box.
 const ENGLISH_PRESETS = [
   { label: "Grammar", text: "Focus on English grammar. Each question is a sentence with a blank (or an underlined error); give 4 options with exactly one correct. Cover tenses, articles, prepositions, conjunctions, subject–verb agreement, voice and narration. In the explanation, state the grammar rule that applies." },
   { label: "Vocabulary", text: "Focus on English vocabulary: synonyms, antonyms, one-word substitution, and idioms & phrases. The question names the target word/idiom; the 4 options are candidate meanings with exactly one correct. Explain the meaning and why each other option is wrong." },
@@ -1019,22 +1017,21 @@ export default function AiGenerate({ open, onClose, onUpload, title = "Generate 
             </p>
 
             <label className="mb-1 mt-3 block text-sm font-semibold">Instructions (optional — followed strictly)</label>
-            {LANG_SUBJECT_RE.test([section, topic, subtopics].filter(Boolean).join(" ")) && (
-              <div className="mb-1.5 flex flex-wrap items-center gap-1.5">
-                <span className="text-xs text-slate-400">English presets:</span>
-                {ENGLISH_PRESETS.map((p) => (
-                  <button
-                    key={p.label}
-                    type="button"
-                    onClick={() => setNotes(p.text)}
-                    title={p.text}
-                    className="rounded-full border border-brand-200 bg-brand-50 px-2.5 py-1 text-xs font-medium text-brand-700 hover:bg-brand-100 dark:border-brand-800 dark:bg-brand-900/30 dark:text-brand-300"
-                  >
-                    {p.label}
-                  </button>
-                ))}
-              </div>
-            )}
+            {/* English/language instruction presets — always available; tap to fill the box. */}
+            <div className="mb-1.5 flex flex-wrap items-center gap-1.5">
+              <span className="text-xs text-slate-400">English presets:</span>
+              {ENGLISH_PRESETS.map((p) => (
+                <button
+                  key={p.label}
+                  type="button"
+                  onClick={() => setNotes(p.text)}
+                  title={p.text}
+                  className="rounded-full border border-brand-200 bg-brand-50 px-2.5 py-1 text-xs font-medium text-brand-700 hover:bg-brand-100 dark:border-brand-800 dark:bg-brand-900/30 dark:text-brand-300"
+                >
+                  {p.label}
+                </button>
+              ))}
+            </div>
             <textarea
               rows={2}
               className="input resize-y"
