@@ -727,9 +727,9 @@ export async function shareTestPreview(req, res) {
   let image = `${clientBase}/og-image.png`;
   const firstQObj = count ? test.questions[0] : null;
   if (firstQObj?.text) {
-    // "v6" busts previously-cached images (full-size 4:5 card, question at the
-    // top, any overflow cropped at the bottom).
-    const key = crypto.createHash("sha1").update(`v6|${test._id}|${firstQObj.text}`).digest("hex");
+    // "v7" busts previously-cached images (landscape 1.91:1 card Facebook never
+    // crops — full question always visible).
+    const key = crypto.createHash("sha1").update(`v7|${test._id}|${firstQObj.text}`).digest("hex");
     if (test.publicPreviewImage && test.publicPreviewKey === key) {
       image = test.publicPreviewImage; // reuse the cached render
     } else {
@@ -738,7 +738,13 @@ export async function shareTestPreview(req, res) {
         // institute's site name / brand colour.
         const rendered = await runWithTenant(
           { tenantId: test.tenantId || null, bypass: !test.tenantId },
-          () => renderQuestionImage(firstQObj, { preview: true, subtitle: crumb, hideCta: true, includeAnswer: false })
+          () => renderQuestionImage(firstQObj, {
+            preview: true,
+            subtitle: crumb,
+            footer: `${kindLabel}${count ? ` · ${count} question${count === 1 ? "" : "s"}` : ""} · Tap to start`,
+            hideCta: true,
+            includeAnswer: false,
+          })
         );
         if (rendered?.url) {
           image = rendered.url;

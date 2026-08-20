@@ -304,58 +304,53 @@ async function buildQuestionSvg(q, opts = {}) {
 // options are tables that can't fit a preview, so we show a clear pointer to
 // open the link instead (the full tables render in the quiz itself).
 async function buildPreviewSvg(q, opts = {}) {
-  // Portrait 4:5 card (1080x up to 1350 — the TALLEST ratio Facebook shows). The
-  // question + options are drawn at FULL size, top-anchored, so the question is
-  // always big and complete at the top. If a question is so long it overflows,
-  // it's cropped at the BOTTOM (never the top).
-  const W = 1080, PAD = 56, HEADER = 118, MAXH = 1350;
+  // LANDSCAPE card (1200x630 = 1.91:1) — the one ratio Facebook/LinkedIn/etc.
+  // show WITHOUT cropping. So the FULL QUESTION is guaranteed visible everywhere
+  // (auto-sized to be as big as possible while still complete). Normal MCQ
+  // options are listed; journal/ledger table options can't fit a preview, so we
+  // show a "view options in the quiz" line (the tables render inside the quiz).
+  const W = 1200, H = 630, PAD = 64;
   const brand = opts.brandColor || "#4f46e5";
   const siteName = esc(uni(opts.siteName || "My Study Guide"));
   const subtitle = opts.subtitle ? esc(uni(opts.subtitle)) : "";
+  const footer = opts.footer ? esc(uni(opts.footer)) : "";
   const els = [];
-  let y = subtitle ? 172 : 150; // start just below the header bar
 
-  // Full-size question stem (never shrunk / truncated).
-  const stemPrep = await prepareContent(q.text || "Question", W - 2 * PAD, { size: 42, color: "#0f172a", weight: "800" });
-  els.push(...stemPrep.emit(PAD, y));
-  y += stemPrep.height + 24;
+  const optsAreTables = Array.isArray(q.options) && q.options.some((o) => isPipeTable(o));
+  const listOptions = !optsAreTables && Array.isArray(q.options) && q.options.length > 0;
 
-  // Options — INCLUDING journal/ledger pipe tables (rendered as real grids), all
-  // at full size.
-  if (Array.isArray(q.options) && q.options.length) {
-    const prompt = { matching: "Choose the correct matching sequence:", pair: "How many pairs are correctly matched?", pairselect: "Which pairs are correctly matched?", statement: "Which statement(s) is/are correct?" }[q.type] || "Choose the correct option:";
-    els.push(T(PAD, y + 22, 26, "#64748b", esc(prompt))); y += 46;
-    for (let i = 0; i < q.options.length; i++) {
-      if (y > MAXH) break; // already past the card — stop (the rest crops below)
-      const availW = W - 2 * PAD - 76 - 24;
-      let boxH;
-      if (isPipeTable(q.options[i])) {
-        const tbl = buildOptionTable(q.options[i], PAD + 76, y + 12, availW, { fs: 20 });
-        boxH = Math.max(64, tbl.height + 24);
-        els.push(RR(PAD, y, W - 2 * PAD, boxH, 16, "#ffffff", "#e2e8f0", 2));
-        els.push(tbl.svg);
-      } else {
-        const prep = await prepareContent(q.options[i], availW, { size: 30, color: "#1e293b", weight: "500" });
-        boxH = Math.max(66, prep.height + 26);
-        els.push(RR(PAD, y, W - 2 * PAD, boxH, 16, "#ffffff", "#e2e8f0", 2));
-        els.push(...prep.emit(PAD + 76, y + (boxH - prep.height) / 2));
-      }
-      els.push(RR(PAD + 18, y + boxH / 2 - 19, 38, 38, 19, "#eef2ff"));
-      els.push(T(PAD + 37, y + boxH / 2 + 8, 22, brand, `(${String.fromCharCode(97 + i)})`, { weight: "700", anchor: "middle" }));
-      y += boxH + 14;
-    }
+  const contentTop = 156;
+  const footerY = H - 42;
+  // Space the stem may occupy (leave room for options / the CTA line below).
+  const stemBottom = listOptions ? 356 : footerY - 54;
+
+  // Auto-size the question so it's as BIG as possible while fitting fully.
+  let size = 52, prep;
+  for (;;) {
+    prep = await prepareContent(q.text || "Question", W - 2 * PAD, { size, color: "#0f172a", weight: "800" });
+    if (prep.height <= stemBottom - contentTop || size <= 26) break;
+    size -= 3;
   }
+  els.push(...prep.emit(PAD, contentTop));
+  let y = contentTop + prep.height + 18;
 
-  // Card height = full-size content, but never taller than 4:5 (so a very long
-  // question crops at the BOTTOM, keeping the question full & big at the top).
-  const H = Math.max(680, Math.min(MAXH, y + 28));
+  if (listOptions) {
+    for (let i = 0; i < q.options.length && y < footerY - 46; i++) {
+      const line = truncToWidth(`(${String.fromCharCode(97 + i)})  ${uni(q.options[i])}`, 30, W - 2 * PAD);
+      els.push(T(PAD, y + 28, 30, "#334155", esc(line)));
+      y += 46;
+    }
+  } else if (optsAreTables) {
+    els.push(T(PAD, y + 30, 30, brand, "👉 Open to view the answer options", { weight: "700" }));
+  }
 
   return `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">
     <rect width="${W}" height="${H}" fill="#f8fafc"/>
-    <rect x="0" y="0" width="${W}" height="${HEADER}" fill="${brand}"/>
-    ${T(PAD, 68, 40, "#ffffff", siteName, { weight: "800" })}
-    ${subtitle ? T(PAD, 102, 26, "#e0e7ff", subtitle) : ""}
+    <rect x="0" y="0" width="${W}" height="128" fill="${brand}"/>
+    ${T(PAD, 60, 42, "#ffffff", siteName, { weight: "800" })}
+    ${subtitle ? T(PAD, 104, 27, "#e0e7ff", subtitle) : ""}
     ${els.join("\n    ")}
+    ${footer ? T(PAD, footerY, 27, "#64748b", footer, { weight: "600" }) : ""}
     <rect x="0" y="${H - 8}" width="${W}" height="8" fill="${brand}"/>
   </svg>`;
 }
