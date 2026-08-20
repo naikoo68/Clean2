@@ -727,7 +727,15 @@ export async function shareTestPreview(req, res) {
   let image = `${clientBase}/og-image.png`;
   const firstQObj = count ? test.questions[0] : null;
   if (firstQObj?.text) {
-    const key = crypto.createHash("sha1").update(`${test._id}|${firstQObj.text}`).digest("hex");
+    // Journal/ledger questions have PIPE-DELIMITED TABLE options ("| Date | ... |")
+    // that render as unreadable raw pipe text in a small preview card, so we omit
+    // the options for those and show just the (clear) question stem. Normal MCQ
+    // options render fine and are kept.
+    const optionsAreTables = ["journal", "ledger"].includes(firstQObj.type)
+      || (Array.isArray(firstQObj.options) && firstQObj.options.some((o) => String(o || "").includes("|")));
+    const includeOptions = !optionsAreTables;
+    // "v2" busts previously-cached images that were rendered before this fix.
+    const key = crypto.createHash("sha1").update(`v2|${test._id}|${includeOptions}|${firstQObj.text}`).digest("hex");
     if (test.publicPreviewImage && test.publicPreviewKey === key) {
       image = test.publicPreviewImage; // reuse the cached render
     } else {
@@ -736,7 +744,7 @@ export async function shareTestPreview(req, res) {
         // institute's site name / brand colour.
         const rendered = await runWithTenant(
           { tenantId: test.tenantId || null, bypass: !test.tenantId },
-          () => renderQuestionImage(firstQObj, { hideCta: true, includeAnswer: false })
+          () => renderQuestionImage(firstQObj, { hideCta: true, includeAnswer: false, includeOptions })
         );
         if (rendered?.url) {
           image = rendered.url;
