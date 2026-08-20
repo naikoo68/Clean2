@@ -304,46 +304,59 @@ async function buildQuestionSvg(q, opts = {}) {
 // options are tables that can't fit a preview, so we show a clear pointer to
 // open the link instead (the full tables render in the quiz itself).
 async function buildPreviewSvg(q, opts = {}) {
-  const W = 1200, H = 630, PAD = 60;
+  const W = 1200, H = 630, PAD = 56;
   const brand = opts.brandColor || "#4f46e5";
   const siteName = esc(uni(opts.siteName || "My Study Guide"));
   const subtitle = opts.subtitle ? esc(uni(opts.subtitle)) : "";
-  const els = [];
+  const contentTop = 150;
+  const body = []; // everything below the header — scaled as one group to fit
+  let y = contentTop;
 
-  const optsAreTables = Array.isArray(q.options) && q.options.some((o) => isPipeTable(o));
-  const hasListOptions = !optsAreTables && Array.isArray(q.options) && q.options.length > 0;
+  // Question stem (full, never truncated).
+  const stemPrep = await prepareContent(q.text || "Question", W - 2 * PAD, { size: 40, color: "#0f172a", weight: "800" });
+  body.push(...stemPrep.emit(PAD, y));
+  y += stemPrep.height + 22;
 
-  const availW = W - 2 * PAD;
-  const stemTop = 172;
-  // Reserve space at the bottom for options / the "open link" hint.
-  const stemBottomLimit = optsAreTables ? 470 : (hasListOptions ? 360 : H - 60);
-
-  // Auto-shrink the stem font until the whole question fits above the limit.
-  let size = 46, prep;
-  for (;;) {
-    prep = await prepareContent(q.text || "Question", availW, { size, color: "#0f172a", weight: "800" });
-    if (prep.height <= stemBottomLimit - stemTop || size <= 24) break;
-    size -= 4;
-  }
-  els.push(...prep.emit(PAD, stemTop));
-  let y = stemTop + prep.height + 26;
-
-  if (hasListOptions) {
-    for (let i = 0; i < q.options.length && y < H - 58; i++) {
-      const line = truncToWidth(`(${String.fromCharCode(97 + i)})  ${uni(q.options[i])}`, 30, availW);
-      els.push(T(PAD, y + 24, 30, "#334155", esc(line)));
-      y += 46;
+  // Options — INCLUDING journal/ledger pipe tables (rendered as real grids).
+  if (Array.isArray(q.options) && q.options.length) {
+    const prompt = { matching: "Choose the correct matching sequence:", pair: "How many pairs are correctly matched?", pairselect: "Which pairs are correctly matched?", statement: "Which statement(s) is/are correct?" }[q.type] || "Choose the correct option:";
+    body.push(T(PAD, y + 20, 24, "#64748b", esc(prompt))); y += 42;
+    for (let i = 0; i < q.options.length; i++) {
+      const availW = W - 2 * PAD - 76 - 24;
+      let boxH;
+      if (isPipeTable(q.options[i])) {
+        const tbl = buildOptionTable(q.options[i], PAD + 76, y + 10, availW, { fs: 17 });
+        boxH = Math.max(56, tbl.height + 20);
+        body.push(RR(PAD, y, W - 2 * PAD, boxH, 14, "#ffffff", "#e2e8f0", 2));
+        body.push(tbl.svg);
+      } else {
+        const prep = await prepareContent(q.options[i], availW, { size: 28, color: "#1e293b", weight: "500" });
+        boxH = Math.max(56, prep.height + 22);
+        body.push(RR(PAD, y, W - 2 * PAD, boxH, 14, "#ffffff", "#e2e8f0", 2));
+        body.push(...prep.emit(PAD + 76, y + (boxH - prep.height) / 2));
+      }
+      body.push(RR(PAD + 16, y + boxH / 2 - 18, 36, 36, 18, "#eef2ff"));
+      body.push(T(PAD + 34, y + boxH / 2 + 7, 20, brand, `(${String.fromCharCode(97 + i)})`, { weight: "700", anchor: "middle" }));
+      y += boxH + 12;
     }
-  } else if (optsAreTables) {
-    els.push(T(PAD, H - 52, 30, brand, "👉 Open the link to view the options", { weight: "700" }));
   }
+
+  // Fit-to-card: scale the whole body so the FULL question AND all options fit
+  // inside the fixed landscape card — which Facebook/etc. show WITHOUT cropping.
+  // Complex table questions shrink (smaller but complete); simple ones stay full
+  // size. Scaling is anchored to the top-centre so it stays centred.
+  const contentBottom = y;
+  const avail = H - contentTop - 26;
+  const natural = Math.max(1, contentBottom - contentTop);
+  const s = Math.min(1, avail / natural);
+  const group = `<g transform="translate(${W / 2},${contentTop}) scale(${s.toFixed(4)}) translate(${-(W / 2)},${-contentTop})">${body.join("\n    ")}</g>`;
 
   return `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">
     <rect width="${W}" height="${H}" fill="#f8fafc"/>
     <rect x="0" y="0" width="${W}" height="120" fill="${brand}"/>
     ${T(PAD, 58, 40, "#ffffff", siteName, { weight: "800" })}
     ${subtitle ? T(PAD, 100, 26, "#e0e7ff", subtitle) : ""}
-    ${els.join("\n    ")}
+    ${group}
     <rect x="0" y="${H - 8}" width="${W}" height="8" fill="${brand}"/>
   </svg>`;
 }
