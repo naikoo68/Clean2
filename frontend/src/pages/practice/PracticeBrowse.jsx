@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useParams, useNavigate } from "react-router-dom";
 import * as Icons from "lucide-react";
-import { ArrowRight, ChevronLeft, Clock, HelpCircle, Play, Lock, Unlock } from "lucide-react";
+import { ArrowRight, ChevronLeft, Clock, HelpCircle, Play, Lock, Unlock, Eye } from "lucide-react";
 import { practiceService } from "../../services";
 import { useAuth } from "../../context/AuthContext";
 import { Loading, ErrorState, EmptyState } from "../../components/ui/AsyncState";
@@ -106,6 +106,7 @@ export default function PracticeBrowse() {
                   <span className="inline-flex items-center gap-1"><HelpCircle className="h-4 w-4" /> {it.questionCount} Qs</span>
                   {it.duration ? <span className="inline-flex items-center gap-1"><Clock className="h-4 w-4" /> {it.duration} min</span> : null}
                   {it.difficulty && <span>{it.difficulty}</span>}
+                  <span className="inline-flex items-center gap-1" title="Total views"><Eye className="h-4 w-4" /> {(it.views || 0).toLocaleString()}</span>
                 </div>
                 <button onClick={() => openItem(it)} className={`mt-4 w-full ${isLocked && !paperNeedsLogin ? "btn-outline" : "btn-primary"}`}>
                   {isLocked ? <Lock className="h-4 w-4" /> : <Play className="h-4 w-4" />} {btnLabel}
