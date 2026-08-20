@@ -86,6 +86,7 @@ export default function PracticeQuizPlay() {
   const [questions, setQuestions] = useState([]);
   const [title, setTitle] = useState("Practice Quiz");
   const [views, setViews] = useState(0); // total times this quiz was opened (shown to users)
+  const [quizId, setQuizId] = useState(null); // the loaded quiz id (for view counting on every open)
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -140,6 +141,7 @@ export default function PracticeQuizPlay() {
         setQuestions(shuffleAll(data.questions || [], seed)); // reshuffle options
         setTitle(data.name || "Practice Quiz");
         setViews(data.views || 0);
+        setQuizId(data._id || null);
         setPaper({ paperPdfUrl: data.paperPdfUrl || "", answerKeyPdfUrl: data.answerKeyPdfUrl || "", answerKeys: Array.isArray(data.answerKeys) ? data.answerKeys : [], additionalInfo: data.additionalInfo || "" });
       })
       .catch((e) => setError(e.message))
@@ -156,17 +158,18 @@ export default function PracticeQuizPlay() {
     testService.registerPublicView(token).catch(() => {});
   }, [isPublic, token]);
 
-  // Count a play-open once per browser for logged-in students/clients and the
-  // free preview (public opens are already counted by the effect above).
+  // Count a VISIT — every time the quiz is opened, by any audience (student,
+  // client, free preview or public link). This is a TOTAL views counter, so it
+  // climbs on every open; we reflect the new totals live in the UI.
   useEffect(() => {
-    if (isPublic) return;
-    const id = isFree ? freeId : itemId;
-    if (!id) return;
-    const key = `mpm-qview-${id}`;
-    if (localStorage.getItem(key)) return;
-    localStorage.setItem(key, "1");
-    testService.registerView(id).catch(() => {});
-  }, [isPublic, isFree, freeId, itemId]);
+    if (!quizId) return;
+    testService.registerView(quizId)
+      .then((r) => {
+        if (r?.views != null) setViews(r.views);
+        setQuestions((qs) => qs.map((qq) => ({ ...qq, views: (qq.views || 0) + 1 })));
+      })
+      .catch(() => {});
+  }, [quizId]);
 
   // Saved position may point past a changed question list — clamp it.
   useEffect(() => {

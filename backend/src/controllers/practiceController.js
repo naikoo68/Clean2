@@ -1122,6 +1122,7 @@ export async function browseItems(req, res) {
       return {
         _id: t._id, name: t.name, duration: t.duration, marks: t.marks, difficulty: t.difficulty,
         questionCount: t.questions?.length || 0,
+        views: t.views || 0,
         freePreview,
         locked: !freePreview && !hasAccess,
       };
@@ -1146,13 +1147,13 @@ export async function browseStreamItems(req, res) {
   const { kind, streamId } = req.params;
   const items = (await TestSeries.find({ practice: true, practiceKind: kind, status: "published", practiceStream: streamId, owner: null }).lean()).sort(byNatural("name"));
   if (kind === "paper") {
-    return res.json(items.map((t) => ({ _id: t._id, name: t.name, duration: t.duration, marks: t.marks, difficulty: t.difficulty, questionCount: t.questions?.length || 0, loginOnly: true, locked: !req.user })));
+    return res.json(items.map((t) => ({ _id: t._id, name: t.name, duration: t.duration, marks: t.marks, difficulty: t.difficulty, questionCount: t.questions?.length || 0, views: t.views || 0, loginOnly: true, locked: !req.user })));
   }
   const grantAll = (kind === "quiz" ? req.user?.myQuizAccess === true : req.user?.myTestAccess === true) || hasActiveSubscription(req.user);
   res.json(
     items
       .filter((t) => grantAll || isTestVisibleToUser(t, req.user?._id))
-      .map((t) => ({ _id: t._id, name: t.name, duration: t.duration, marks: t.marks, difficulty: t.difficulty, questionCount: t.questions?.length || 0 }))
+      .map((t) => ({ _id: t._id, name: t.name, duration: t.duration, marks: t.marks, difficulty: t.difficulty, questionCount: t.questions?.length || 0, views: t.views || 0 }))
   );
 }
 // My Quiz: quizzes under a topic. PUBLIC list in natural order (Quiz 1, Quiz 2,
@@ -1167,6 +1168,7 @@ export async function browseTopicItems(req, res) {
       return {
         _id: t._id, name: t.name, duration: t.duration, marks: t.marks, difficulty: t.difficulty,
         questionCount: t.questions?.length || 0,
+        views: t.views || 0,
         freePreview,
         locked: !freePreview && !hasQuizAccess(req, t),
       };
