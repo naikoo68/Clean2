@@ -616,41 +616,34 @@ export async function submitPublicTest(req, res) {
   });
 }
 
-// Increment the shown-to-everyone "views" counter on a quiz/test AND on each of
-// its questions (a per-question total, aggregated across every quiz it's in).
-// Run UNSCOPED so it works for guests (public/free) whose request has no tenant
-// context — these are just non-sensitive counters keyed by id.
-async function bumpViews(test) {
-  if (!test?._id) return;
-  await runUnscoped(async () => {
-    await TestSeries.updateOne({ _id: test._id }, { $inc: { views: 1 } });
-    const ids = (test.questions || []).map((q) => (q && q._id) ? q._id : q).filter(Boolean);
-    if (ids.length) await Question.updateMany({ _id: { $in: ids } }, { $inc: { views: 1 } });
-  });
-}
-
 // POST /api/tests/public/:token/view — count that someone OPENED the public
 // link. No auth. The client calls this once per browser (localStorage-guarded)
-// so it approximates unique opens rather than every page refresh.
+// so it approximates unique opens rather than every page refresh. (This is the
+// admin's reach/impressions metric; the user-facing "views" are counted by
+// registerView on every open instead.)
 export async function registerPublicView(req, res) {
   const test = await runUnscoped(() =>
-    TestSeries.findOne({ publicToken: req.params.token, publicShare: true }).select("_id publicShare publicExpiresAt questions"));
+    TestSeries.findOne({ publicToken: req.params.token, publicShare: true }).select("_id publicShare publicExpiresAt"));
   if (!test) return res.status(404).json({ message: "This test link is invalid or public sharing was turned off." });
   if (publicLinkExpired(test)) return res.status(403).json({ message: "This public test link has expired." });
   await runUnscoped(() => TestSeries.updateOne({ _id: test._id }, { $inc: { publicViews: 1 } }));
-  await bumpViews(test); // also bump the user-facing views (quiz + its questions)
   res.json({ ok: true });
 }
 
-// POST /api/tests/:id/view — count that someone OPENED this quiz/test to PLAY it
-// (any audience: logged-in student/client, or the no-login free preview). The
-// client calls this once per browser (localStorage-guarded) so it approximates
-// unique views rather than every refresh. optionalAuth: works for guests too.
+// POST /api/tests/:id/view — count a VISIT: every time someone opens this
+// quiz/test to play it (any audience — student, client, free preview, or the
+// public shared link). This is a TOTAL views/visits counter (NOT unique) so it
+// climbs on every open. It also bumps each question's own views total. Returns
+// the new quiz views count so the UI can show it live. optionalAuth: guests too.
 export async function registerView(req, res) {
-  const test = await runUnscoped(() => TestSeries.findById(req.params.id).select("_id questions"));
-  if (!test) return res.status(404).json({ message: "Not found" });
-  await bumpViews(test);
-  res.json({ ok: true });
+  const found = await runUnscoped(() => TestSeries.findById(req.params.id).select("_id questions"));
+  if (!found) return res.status(404).json({ message: "Not found" });
+  const ids = (found.questions || []).map((q) => (q && q._id) ? q._id : q).filter(Boolean);
+  const updated = await runUnscoped(async () => {
+    if (ids.length) await Question.updateMany({ _id: { $in: ids } }, { $inc: { views: 1 } });
+    return TestSeries.findByIdAndUpdate(found._id, { $inc: { views: 1 } }, { new: true }).select("views");
+  });
+  res.json({ ok: true, views: updated?.views || 0 });
 }
 
 /* ------- Rich link preview for social apps (WhatsApp / Facebook / etc.) ------- */
