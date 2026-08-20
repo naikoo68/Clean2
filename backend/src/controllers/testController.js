@@ -616,15 +616,40 @@ export async function submitPublicTest(req, res) {
   });
 }
 
+// Increment the shown-to-everyone "views" counter on a quiz/test AND on each of
+// its questions (a per-question total, aggregated across every quiz it's in).
+// Run UNSCOPED so it works for guests (public/free) whose request has no tenant
+// context — these are just non-sensitive counters keyed by id.
+async function bumpViews(test) {
+  if (!test?._id) return;
+  await runUnscoped(async () => {
+    await TestSeries.updateOne({ _id: test._id }, { $inc: { views: 1 } });
+    const ids = (test.questions || []).map((q) => (q && q._id) ? q._id : q).filter(Boolean);
+    if (ids.length) await Question.updateMany({ _id: { $in: ids } }, { $inc: { views: 1 } });
+  });
+}
+
 // POST /api/tests/public/:token/view — count that someone OPENED the public
 // link. No auth. The client calls this once per browser (localStorage-guarded)
 // so it approximates unique opens rather than every page refresh.
 export async function registerPublicView(req, res) {
   const test = await runUnscoped(() =>
-    TestSeries.findOne({ publicToken: req.params.token, publicShare: true }).select("_id publicShare publicExpiresAt"));
+    TestSeries.findOne({ publicToken: req.params.token, publicShare: true }).select("_id publicShare publicExpiresAt questions"));
   if (!test) return res.status(404).json({ message: "This test link is invalid or public sharing was turned off." });
   if (publicLinkExpired(test)) return res.status(403).json({ message: "This public test link has expired." });
   await runUnscoped(() => TestSeries.updateOne({ _id: test._id }, { $inc: { publicViews: 1 } }));
+  await bumpViews(test); // also bump the user-facing views (quiz + its questions)
+  res.json({ ok: true });
+}
+
+// POST /api/tests/:id/view — count that someone OPENED this quiz/test to PLAY it
+// (any audience: logged-in student/client, or the no-login free preview). The
+// client calls this once per browser (localStorage-guarded) so it approximates
+// unique views rather than every refresh. optionalAuth: works for guests too.
+export async function registerView(req, res) {
+  const test = await runUnscoped(() => TestSeries.findById(req.params.id).select("_id questions"));
+  if (!test) return res.status(404).json({ message: "Not found" });
+  await bumpViews(test);
   res.json({ ok: true });
 }
 

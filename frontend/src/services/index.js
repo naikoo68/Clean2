@@ -107,6 +107,7 @@ export const testService = {
   getFree: (id) => api.get(`/tests/${id}/free`, { auth: false }),
   submitFree: (id, answers, timeTaken) => api.post(`/tests/${id}/free-submit`, { answers, timeTaken }, { auth: false }),
   registerPublicView: (token) => api.post(`/tests/public/${token}/view`, {}, { auth: false }), // count an open
+  registerView: (id) => api.post(`/tests/${id}/view`, {}), // count a play-open (student/client/free) → views
   submitPublic: (token, answers, timeTaken) => api.post(`/tests/public/${token}/submit`, { answers, timeTaken }, { auth: false }),
   togglePublicLink: (id, enable, expiresAt) => api.patch(`/tests/${id}/public-link`, { enable, ...(expiresAt !== undefined ? { expiresAt } : {}) }),
   // admin

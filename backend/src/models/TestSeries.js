@@ -61,6 +61,11 @@ const testSeriesSchema = new mongoose.Schema(
     schedule: { type: Date },
     status: { type: String, enum: ["draft", "scheduled", "published"], default: "draft" },
     attempts: { type: Number, default: 0 },
+    // Total times this quiz/test was OPENED to play, across ALL audiences
+    // (students, clients, free previews and public share links). Unlike
+    // publicViews (public links only), this is shown to END USERS on the play
+    // page — not just to the admin.
+    views: { type: Number, default: 0 },
     // Public share link. When publicShare is on, ANYONE with the publicToken
     // URL can take this test without an account or login (read-only public
     // access — attempts are graded but not stored against a user).
