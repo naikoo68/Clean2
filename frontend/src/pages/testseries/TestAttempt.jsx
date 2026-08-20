@@ -204,17 +204,18 @@ export default function TestAttempt() {
     testService.registerPublicView(token).catch(() => {});
   }, [isPublic, token]);
 
-  // Count a play-open once per browser for logged-in students/clients and the
-  // free preview (public + CBT opens are counted by their own effects).
+  // Count a VISIT — every time this test is opened, by any audience (student,
+  // client, free preview or public link). TOTAL views (climbs on every open);
+  // we reflect the new totals live in the UI. (CBT keeps its own cbtViews.)
   useEffect(() => {
-    if (isPublic || isCbt) return;
-    const id = isFree ? freeId : testId;
-    if (!id) return;
-    const key = `mpm-qview-${id}`;
-    if (localStorage.getItem(key)) return;
-    localStorage.setItem(key, "1");
-    testService.registerView(id).catch(() => {});
-  }, [isPublic, isCbt, isFree, freeId, testId]);
+    if (isCbt || !test?._id) return;
+    testService.registerView(test._id)
+      .then((r) => {
+        if (r?.views != null) setTest((t) => (t ? { ...t, views: r.views } : t));
+        setQuestions((qs) => qs.map((qq) => ({ ...qq, views: (qq.views || 0) + 1 })));
+      })
+      .catch(() => {});
+  }, [isCbt, test?._id]);
 
   // Count a CBT exam OPEN once per browser (impression tracking for the exam).
   useEffect(() => {
