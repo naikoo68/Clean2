@@ -72,6 +72,12 @@ const testSeriesSchema = new mongoose.Schema(
     // How many people OPENED the public link (counted once per browser). Lets the
     // admin see reach/impressions, not just completions.
     publicViews: { type: Number, default: 0 },
+    // Cached social-preview image: a rendered card of the FIRST question, shown
+    // in the WhatsApp/Facebook link preview instead of the generic logo card.
+    // publicPreviewKey marks which question it was built from so it re-renders
+    // only when the first question changes.
+    publicPreviewImage: { type: String, default: "" },
+    publicPreviewKey: { type: String, default: "" },
     // CBT (Computer-Based Test) online exam. Exams are surfaced on ONE public
     // exam-portal web page (a single shareable link). cbtEnabled = this test has
     // been ADDED to that portal; cbtLive = the admin's live on/off switch that
