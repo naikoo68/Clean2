@@ -1025,20 +1025,36 @@ export default function AiGenerate({ open, onClose, onUpload, title = "Generate 
             </p>
 
             <label className="mb-1 mt-3 block text-sm font-semibold">Instructions (optional — followed strictly)</label>
-            {/* English/language instruction presets — always available; tap to fill the box. */}
+            {/* English/language instruction presets — always available. Tap to
+                ADD a preset to the box, tap again to REMOVE it, so several can be
+                combined (e.g. Grammar + Vocabulary). Active ones are highlighted. */}
             <div className="mb-1.5 flex flex-wrap items-center gap-1.5">
-              <span className="text-xs text-slate-400">English presets:</span>
-              {ENGLISH_PRESETS.map((p) => (
-                <button
-                  key={p.label}
-                  type="button"
-                  onClick={() => setNotes(p.text)}
-                  title={p.text}
-                  className="rounded-full border border-brand-200 bg-brand-50 px-2.5 py-1 text-xs font-medium text-brand-700 hover:bg-brand-100 dark:border-brand-800 dark:bg-brand-900/30 dark:text-brand-300"
-                >
-                  {p.label}
-                </button>
-              ))}
+              <span className="text-xs text-slate-400">English presets (tap to add/remove — pick more than one):</span>
+              {ENGLISH_PRESETS.map((p) => {
+                const active = (notes || "").includes(p.text);
+                return (
+                  <button
+                    key={p.label}
+                    type="button"
+                    aria-pressed={active}
+                    onClick={() => setNotes((prev) => {
+                      const cur = prev || "";
+                      if (cur.includes(p.text)) {
+                        // Remove this preset (and tidy up leftover blank lines).
+                        return cur.split(p.text).join("").replace(/\n{3,}/g, "\n\n").trim();
+                      }
+                      // Add it after whatever is already there.
+                      return cur.trim() ? `${cur.trim()}\n\n${p.text}` : p.text;
+                    })}
+                    title={p.text}
+                    className={`rounded-full border px-2.5 py-1 text-xs font-medium transition ${active
+                      ? "border-brand-600 bg-brand-600 text-white hover:bg-brand-700 dark:border-brand-500 dark:bg-brand-600"
+                      : "border-brand-200 bg-brand-50 text-brand-700 hover:bg-brand-100 dark:border-brand-800 dark:bg-brand-900/30 dark:text-brand-300"}`}
+                  >
+                    {active ? "✓ " : ""}{p.label}
+                  </button>
+                );
+              })}
             </div>
             <textarea
               rows={2}
