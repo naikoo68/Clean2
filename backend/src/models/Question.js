@@ -75,6 +75,9 @@ const questionSchema = new mongoose.Schema(
     // after answering so the student learns why each choice is right/wrong.
     optionExplanations: { type: [String], default: undefined },
     status: { type: String, enum: ["draft", "published"], default: "draft" },
+    // Total times this question has been viewed by end users (aggregated across
+    // every quiz/test it appears in). Shown to users, not just admin.
+    views: { type: Number, default: 0 },
     // Recycle Bin (soft delete) — see utils/softDelete.js.
     deleted: { type: Boolean, default: false },
     deletedAt: { type: Date, default: null },
