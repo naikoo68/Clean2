@@ -304,59 +304,58 @@ async function buildQuestionSvg(q, opts = {}) {
 // options are tables that can't fit a preview, so we show a clear pointer to
 // open the link instead (the full tables render in the quiz itself).
 async function buildPreviewSvg(q, opts = {}) {
-  const W = 1200, H = 630, PAD = 56;
+  // Portrait 4:5 card (1080x up to 1350 — the TALLEST ratio Facebook shows). The
+  // question + options are drawn at FULL size, top-anchored, so the question is
+  // always big and complete at the top. If a question is so long it overflows,
+  // it's cropped at the BOTTOM (never the top).
+  const W = 1080, PAD = 56, HEADER = 118, MAXH = 1350;
   const brand = opts.brandColor || "#4f46e5";
   const siteName = esc(uni(opts.siteName || "My Study Guide"));
   const subtitle = opts.subtitle ? esc(uni(opts.subtitle)) : "";
-  const contentTop = 150;
-  const body = []; // everything below the header — scaled as one group to fit
-  let y = contentTop;
+  const els = [];
+  let y = subtitle ? 172 : 150; // start just below the header bar
 
-  // Question stem (full, never truncated).
-  const stemPrep = await prepareContent(q.text || "Question", W - 2 * PAD, { size: 40, color: "#0f172a", weight: "800" });
-  body.push(...stemPrep.emit(PAD, y));
-  y += stemPrep.height + 22;
+  // Full-size question stem (never shrunk / truncated).
+  const stemPrep = await prepareContent(q.text || "Question", W - 2 * PAD, { size: 42, color: "#0f172a", weight: "800" });
+  els.push(...stemPrep.emit(PAD, y));
+  y += stemPrep.height + 24;
 
-  // Options — INCLUDING journal/ledger pipe tables (rendered as real grids).
+  // Options — INCLUDING journal/ledger pipe tables (rendered as real grids), all
+  // at full size.
   if (Array.isArray(q.options) && q.options.length) {
     const prompt = { matching: "Choose the correct matching sequence:", pair: "How many pairs are correctly matched?", pairselect: "Which pairs are correctly matched?", statement: "Which statement(s) is/are correct?" }[q.type] || "Choose the correct option:";
-    body.push(T(PAD, y + 20, 24, "#64748b", esc(prompt))); y += 42;
+    els.push(T(PAD, y + 22, 26, "#64748b", esc(prompt))); y += 46;
     for (let i = 0; i < q.options.length; i++) {
+      if (y > MAXH) break; // already past the card — stop (the rest crops below)
       const availW = W - 2 * PAD - 76 - 24;
       let boxH;
       if (isPipeTable(q.options[i])) {
-        const tbl = buildOptionTable(q.options[i], PAD + 76, y + 10, availW, { fs: 17 });
-        boxH = Math.max(56, tbl.height + 20);
-        body.push(RR(PAD, y, W - 2 * PAD, boxH, 14, "#ffffff", "#e2e8f0", 2));
-        body.push(tbl.svg);
+        const tbl = buildOptionTable(q.options[i], PAD + 76, y + 12, availW, { fs: 20 });
+        boxH = Math.max(64, tbl.height + 24);
+        els.push(RR(PAD, y, W - 2 * PAD, boxH, 16, "#ffffff", "#e2e8f0", 2));
+        els.push(tbl.svg);
       } else {
-        const prep = await prepareContent(q.options[i], availW, { size: 28, color: "#1e293b", weight: "500" });
-        boxH = Math.max(56, prep.height + 22);
-        body.push(RR(PAD, y, W - 2 * PAD, boxH, 14, "#ffffff", "#e2e8f0", 2));
-        body.push(...prep.emit(PAD + 76, y + (boxH - prep.height) / 2));
+        const prep = await prepareContent(q.options[i], availW, { size: 30, color: "#1e293b", weight: "500" });
+        boxH = Math.max(66, prep.height + 26);
+        els.push(RR(PAD, y, W - 2 * PAD, boxH, 16, "#ffffff", "#e2e8f0", 2));
+        els.push(...prep.emit(PAD + 76, y + (boxH - prep.height) / 2));
       }
-      body.push(RR(PAD + 16, y + boxH / 2 - 18, 36, 36, 18, "#eef2ff"));
-      body.push(T(PAD + 34, y + boxH / 2 + 7, 20, brand, `(${String.fromCharCode(97 + i)})`, { weight: "700", anchor: "middle" }));
-      y += boxH + 12;
+      els.push(RR(PAD + 18, y + boxH / 2 - 19, 38, 38, 19, "#eef2ff"));
+      els.push(T(PAD + 37, y + boxH / 2 + 8, 22, brand, `(${String.fromCharCode(97 + i)})`, { weight: "700", anchor: "middle" }));
+      y += boxH + 14;
     }
   }
 
-  // Fit-to-card: scale the whole body so the FULL question AND all options fit
-  // inside the fixed landscape card — which Facebook/etc. show WITHOUT cropping.
-  // Complex table questions shrink (smaller but complete); simple ones stay full
-  // size. Scaling is anchored to the top-centre so it stays centred.
-  const contentBottom = y;
-  const avail = H - contentTop - 26;
-  const natural = Math.max(1, contentBottom - contentTop);
-  const s = Math.min(1, avail / natural);
-  const group = `<g transform="translate(${W / 2},${contentTop}) scale(${s.toFixed(4)}) translate(${-(W / 2)},${-contentTop})">${body.join("\n    ")}</g>`;
+  // Card height = full-size content, but never taller than 4:5 (so a very long
+  // question crops at the BOTTOM, keeping the question full & big at the top).
+  const H = Math.max(680, Math.min(MAXH, y + 28));
 
   return `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">
     <rect width="${W}" height="${H}" fill="#f8fafc"/>
-    <rect x="0" y="0" width="${W}" height="120" fill="${brand}"/>
-    ${T(PAD, 58, 40, "#ffffff", siteName, { weight: "800" })}
-    ${subtitle ? T(PAD, 100, 26, "#e0e7ff", subtitle) : ""}
-    ${group}
+    <rect x="0" y="0" width="${W}" height="${HEADER}" fill="${brand}"/>
+    ${T(PAD, 68, 40, "#ffffff", siteName, { weight: "800" })}
+    ${subtitle ? T(PAD, 102, 26, "#e0e7ff", subtitle) : ""}
+    ${els.join("\n    ")}
     <rect x="0" y="${H - 8}" width="${W}" height="8" fill="${brand}"/>
   </svg>`;
 }
