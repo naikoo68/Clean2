@@ -1203,7 +1203,7 @@ export default function AdminPractice({ clientMode = false, fixedKind = "" }) {
               onAiGenerate={(subject) => { setForceSection(subject); setAiTarget(null); setGapPrefill(null); setTopicStems([]); gatherTopicStems(); setAiOpen(true); }}
               onImportWeb={(subject) => { setForceSection(subject); setAiTarget(null); setImportOpen(true); }}
               onPickFromBank={(subject) => { setForceSection(subject); setBankOpen(true); }}
-              onAutoBuild={() => setAutoOpen(true)}
+              onAutoBuild={kind === "test" ? () => setAutoOpen(true) : undefined}
               onExtendExplanations={() => setExtendItem(qItem)}
               onExtendQuestion={(item) => setExtendOneItem(item)}
               extendingId={extendingQId}
