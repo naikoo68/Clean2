@@ -105,6 +105,52 @@ async function prepareContent(str, availW, { size, color, weight = "400" }) {
   return { height: Math.max(lineH, lines.length * lineH), emit: (x, yTop) => lines.map((ln, k) => T(x, yTop + size + k * lineH, size, color, esc(ln), { weight })) };
 }
 
+// Does an option look like a PIPE-DELIMITED TABLE (journal/ledger answers)?
+const isPipeTable = (s) => String(s || "").includes("|");
+
+// Parse "| a | b |\n| c | d |" into a 2D array of trimmed cells, dropping the
+// empty leading/trailing cells created by the outer pipes.
+function parsePipeTable(str) {
+  const rows = String(str || "").split(/\r?\n/).map((r) => r.trim()).filter(Boolean);
+  const cells = rows.map((r) => {
+    let parts = r.split("|");
+    if (parts.length && parts[0].trim() === "") parts = parts.slice(1);
+    if (parts.length && parts[parts.length - 1].trim() === "") parts = parts.slice(0, -1);
+    return parts.map((c) => c.trim());
+  }).filter((r) => r.length);
+  const cols = cells.reduce((m, r) => Math.max(m, r.length), 1);
+  return { cells, cols };
+}
+
+// Truncate text with an ellipsis so it fits within pixel width `w` at font `fs`.
+function truncToWidth(t, fs, w) {
+  let s = String(t || "");
+  if (measure(s, fs) <= w) return s;
+  while (s.length > 1 && measure(s + "…", fs) > w) s = s.slice(0, -1);
+  return s + "…";
+}
+
+// Render a pipe-table option as a real bordered grid (so journal/ledger answers
+// are readable in the card instead of a wall of "|" characters). Returns the
+// SVG string and the height consumed.
+function buildOptionTable(str, x, y, width, { fs = 18 } = {}) {
+  const { cells, cols } = parsePipeTable(str);
+  const colW = width / cols;
+  const rowH = Math.round(fs * 1.9);
+  const parts = [];
+  cells.forEach((row, r) => {
+    const ry = y + r * rowH;
+    const isHeader = r === 0;
+    for (let c = 0; c < cols; c++) {
+      const cx = x + c * colW;
+      parts.push(RR(cx, ry, colW, rowH, 0, isHeader ? "#eef2ff" : "#ffffff", "#cbd5e1", 1));
+      const txt = truncToWidth(uni(row[c] || ""), fs, colW - 10);
+      if (txt) parts.push(T(cx + 6, ry + rowH * 0.68, fs, "#0f172a", esc(txt), { weight: isHeader ? "700" : "400" }));
+    }
+  });
+  return { svg: parts.join(""), height: cells.length * rowH };
+}
+
 async function buildQuestionSvg(q, opts = {}) {
   const W = 1080, PAD = 56;
   const brand = opts.brandColor || "#4f46e5";
@@ -178,6 +224,18 @@ async function buildQuestionSvg(q, opts = {}) {
     for (let i = 0; i < q.options.length; i++) {
       const correct = opts.includeAnswer && i === q.correct;
       const availW = W - 2 * PAD - 76 - 24;
+      // Journal/ledger options are pipe tables — render them as a real grid so
+      // they're readable, instead of raw "| | |" text.
+      if (isPipeTable(q.options[i])) {
+        const tbl = buildOptionTable(q.options[i], PAD + 76, y + 12, availW);
+        const boxH = Math.max(66, tbl.height + 24);
+        els.push(RR(PAD, y, W - 2 * PAD, boxH, 16, "#ffffff", "#e2e8f0", 2));
+        els.push(RR(PAD + 18, y + boxH / 2 - 19, 38, 38, 19, "#f1f5f9"));
+        els.push(T(PAD + 37, y + boxH / 2 + 8, 22, "#475569", `(${String.fromCharCode(97 + i)})`, { weight: "700", anchor: "middle" }));
+        els.push(tbl.svg);
+        y += boxH + 14;
+        continue;
+      }
       const prep = await prepareContent(q.options[i], availW, { size: 30, color: correct ? "#065f46" : "#1e293b", weight: correct ? "700" : "500" });
       const boxH = Math.max(66, prep.height + 26);
       els.push(RR(PAD, y, W - 2 * PAD, boxH, 16, correct ? "#ecfdf5" : "#ffffff", correct ? "#059669" : "#e2e8f0", 2));
@@ -192,7 +250,8 @@ async function buildQuestionSvg(q, opts = {}) {
 
   if (opts.hashtags) { els.push(T(PAD, y + 30, 26, brand, esc(uni(opts.hashtags)))); y += 40; }
 
-  const H = Math.max(1080, Math.min(1350, y + 40));
+  // Allow a taller card so multi-row table options (journal/ledger) aren't cut off.
+  const H = Math.max(1080, Math.min(2600, y + 40));
   // Selfie watermark: embed a circular clipped image if configured.
   let watermarkSvg = "";
   if (opts.selfieWatermarkUrl) {
