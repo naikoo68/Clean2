@@ -727,9 +727,9 @@ export async function shareTestPreview(req, res) {
   let image = `${clientBase}/og-image.png`;
   const firstQObj = count ? test.questions[0] : null;
   if (firstQObj?.text) {
-    // "v4" busts previously-cached images (now a landscape card that always shows
-    // the full question, so Facebook doesn't crop the stem off the top).
-    const key = crypto.createHash("sha1").update(`v4|${test._id}|${firstQObj.text}`).digest("hex");
+    // "v5" busts previously-cached images (landscape card that scales to fit BOTH
+    // the full question AND all options — including journal/ledger tables).
+    const key = crypto.createHash("sha1").update(`v5|${test._id}|${firstQObj.text}`).digest("hex");
     if (test.publicPreviewImage && test.publicPreviewKey === key) {
       image = test.publicPreviewImage; // reuse the cached render
     } else {
