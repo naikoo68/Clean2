@@ -18,6 +18,7 @@ import {
   Search,
   LogOut,
   Mail,
+  Eye,
 } from "lucide-react";
 import { testService, cbtService } from "../../services";
 import { useAuth } from "../../context/AuthContext";
@@ -202,6 +203,18 @@ export default function TestAttempt() {
     localStorage.setItem(key, "1");
     testService.registerPublicView(token).catch(() => {});
   }, [isPublic, token]);
+
+  // Count a play-open once per browser for logged-in students/clients and the
+  // free preview (public + CBT opens are counted by their own effects).
+  useEffect(() => {
+    if (isPublic || isCbt) return;
+    const id = isFree ? freeId : testId;
+    if (!id) return;
+    const key = `mpm-qview-${id}`;
+    if (localStorage.getItem(key)) return;
+    localStorage.setItem(key, "1");
+    testService.registerView(id).catch(() => {});
+  }, [isPublic, isCbt, isFree, freeId, testId]);
 
   // Count a CBT exam OPEN once per browser (impression tracking for the exam).
   useEffect(() => {
@@ -563,7 +576,10 @@ export default function TestAttempt() {
       <Watermark />
       <header className="sticky top-0 z-30 border-b border-slate-200 bg-white px-4 py-3 dark:border-slate-800 dark:bg-slate-900">
         <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-2">
-          <h1 className="min-w-0 flex-1 truncate text-sm font-bold sm:text-base">{test.name}</h1>
+          <div className="flex min-w-0 flex-1 items-center gap-2">
+            <h1 className="min-w-0 truncate text-sm font-bold sm:text-base">{test.name}</h1>
+            <span className="hidden flex-shrink-0 items-center gap-1 text-xs text-slate-400 sm:inline-flex" title="Total views of this test"><Eye className="h-3.5 w-3.5" /> {(test.views || 0).toLocaleString()}</span>
+          </div>
           <div className="flex flex-wrap items-center justify-end gap-2">
             <span
               className={`flex items-center gap-1.5 rounded-xl px-3 py-2 font-mono text-sm font-bold sm:px-4 sm:text-base ${
@@ -599,6 +615,7 @@ export default function TestAttempt() {
           <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 pb-3 dark:border-slate-800">
             <span className="flex flex-wrap items-center gap-2 font-bold">
               Question {current + 1} of {questions.length}
+              <span className="inline-flex items-center gap-1 text-xs font-normal text-slate-400" title="Views of this question"><Eye className="h-3 w-3" /> {(q.views || 0).toLocaleString()}</span>
               {questionDateText(q) && (
                 <span className="inline-flex items-center gap-1 text-xs font-normal text-slate-400"><Clock className="h-3 w-3" /> {questionDateText(q)}</span>
               )}

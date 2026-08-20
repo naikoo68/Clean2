@@ -24,6 +24,7 @@ import {
   getPublicTest,
   submitPublicTest,
   registerPublicView,
+  registerView,
   getFreeTest,
   submitFreeTest,
   listSharedTests,
@@ -64,6 +65,9 @@ router.delete("/:id/questions/:qid", ...manage, deleteTestQuestion);
 // the generic "/:id" so they resolve to these handlers.
 router.get("/:id/free", optionalAuth, getFreeTest);
 router.post("/:id/free-submit", optionalAuth, submitFreeTest);
+// Count a play-open (views), any audience. optionalAuth so guests (free preview)
+// and logged-in students/clients both work. Declared before the generic "/:id".
+router.post("/:id/view", optionalAuth, registerView);
 // Attempting a test-series requires an active student subscription (admins &
 // clients pass through; free/public/CBT attempts use the separate /free and
 // /public endpoints above and are unaffected).
