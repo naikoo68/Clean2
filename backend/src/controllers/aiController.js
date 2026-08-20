@@ -377,6 +377,18 @@ export async function aiStatus(req, res) {
 const TOPIC_SCOPE_RULE =
   "TOPIC SCOPE DISCIPLINE (critical): treat the given topic as a SPECIFIC, self-contained syllabus chapter and cover ONLY what genuinely belongs to it. Do NOT drift into ADJACENT / sibling topics that are studied as their OWN separate chapters. For example, if the topic is Physiography (relief, landforms, mountains, plateaus, plains, passes, glaciers, geology, tectonics) then EXCLUDE Drainage / River systems, Climate, Soils, Natural vegetation, Wildlife, Population and Economy — each of those is its own separate topic. Likewise Climate excludes physiography and rivers; Rivers / Drainage excludes climate and relief; and so on for any topic. If a concept overlaps two topics, treat it ONLY from the named topic's angle and never as the sibling topic's own content.";
 
+// Detects a LANGUAGE subject (English, Hindi, etc.) from the subject/topic/notes
+// so generation can focus on grammar/vocabulary/comprehension instead of the
+// general-knowledge (history/dates/laws/current-affairs) framing used elsewhere.
+const LANGUAGE_SUBJECT_RE = /\b(english|hindi|urdu|sanskrit|kashmiri|dogri|punjabi|arabic|persian|grammar|vocabulary|comprehension|prepositions?|tenses?|synonyms?|antonyms?|idioms?|one[-\s]word|verbal ability|error spotting|sentence (?:correction|improvement)|cloze|para\s?jumbles?)\b/i;
+function isLanguageSubject(subject, topic, notes) {
+  return LANGUAGE_SUBJECT_RE.test(`${subject || ""} ${topic || ""} ${notes || ""}`);
+}
+
+// Instruction that redirects a language/English batch away from the GK framing.
+const LANGUAGE_FOCUS =
+  "LANGUAGE / GRAMMAR SUBJECT (overrides the general framing above): this is an ENGLISH-language question set — focus ENTIRELY on language skills. Cover grammar (parts of speech, tenses, articles, prepositions, conjunctions, subject–verb agreement, active/passive voice, direct/indirect narration, sentence transformation), vocabulary (synonyms, antonyms, one-word substitution, idioms & phrases, spellings, commonly-confused words), sentence correction / improvement, error spotting, fill-in-the-blanks / cloze, and reading comprehension. Do NOT frame questions around history, dates, laws/bills/acts, geography, current affairs, government policies, or the 'introduction/definitions/causes/effects' of a general-knowledge topic — those categories DO NOT apply here. Every question must test a language RULE or USAGE (or comprehension of a supplied passage), never recall of an event or date, and MUST NOT require any calculation. For reading comprehension, put the short passage INSIDE each question's own \"text\" so it is fully self-contained. In the explanation, state the grammar/usage rule (or the passage evidence) — not historical facts, dates or formulas.";
+
 const SYSTEM_PROMPT = `You are an exam-preparation question writer. You output ONLY valid JSON, no markdown, no commentary.
 Return an object of the exact shape: {"questions": [ ... ]}.
 Each question object uses these fields:
@@ -462,8 +474,9 @@ function parseStringArray(text) {
 // spread across the whole breadth instead of repeating a few obvious facts.
 // Best-effort: returns [] on any failure, in which case generation proceeds
 // without explicit subtopic assignment (the prompt still asks for variety).
-async function outlineSubtopics({ endpoints, model, topic, notes, source, want }) {
+async function outlineSubtopics({ endpoints, model, topic, notes, source, want, subject = "" }) {
   const n = Math.min(40, Math.max(12, want || 12));
+  const language = isLanguageSubject(subject, topic, notes);
   const parts = [
     `Act as a subject specialist building a COMPLETE SYLLABUS MAP for exam-preparation question writing.`,
     `List ${n} DISTINCT, specific subtopics/syllabus points that TOGETHER comprehensively cover the topic below, exactly as covered in NCERT, standard university textbooks and competitive examinations (and current affairs where relevant).`,
@@ -471,9 +484,16 @@ async function outlineSubtopics({ endpoints, model, topic, notes, source, want }
   ];
   if (source) parts.push(`Draw the subtopics from this source material:\n${String(source).slice(0, 4000)}`);
   if (notes) parts.push(`Respect these user instructions: ${notes}`);
-  parts.push(
-    `Span EVERY applicable category so the whole syllabus is represented: definitions & terminology, components, classification, principles, causes, processes & mechanisms, types, characteristics, distribution, factors, effects, importance, advantages/disadvantages, applications, examples, exceptions, comparisons, frequently-confused concepts, numericals/formulas and maps/diagrams (where applicable), plus current affairs, recent research and government policies. Also include, where they apply, the historical, geographical, scientific, economic, environmental, political, technological and current dimensions and the regional, national and international aspects.`
-  );
+  if (language) {
+    parts.push(LANGUAGE_FOCUS);
+    parts.push(
+      `Span the LANGUAGE syllabus so the whole subject is represented: grammar areas (parts of speech, tenses, articles, prepositions, conjunctions, subject–verb agreement, voice, narration, sentence transformation, punctuation), vocabulary (synonyms, antonyms, one-word substitution, idioms & phrases, spellings, commonly-confused words), sentence correction / improvement, error spotting, fill-in-the-blanks / cloze, and reading comprehension. Do NOT include history, dates, laws, geography, current affairs or general-knowledge categories — they do not apply to a language subject.`
+    );
+  } else {
+    parts.push(
+      `Span EVERY applicable category so the whole syllabus is represented: definitions & terminology, components, classification, principles, causes, processes & mechanisms, types, characteristics, distribution, factors, effects, importance, advantages/disadvantages, applications, examples, exceptions, comparisons, frequently-confused concepts, numericals/formulas and maps/diagrams (where applicable), plus current affairs, recent research and government policies. Also include, where they apply, the historical, geographical, scientific, economic, environmental, political, technological and current dimensions and the regional, national and international aspects.`
+    );
+  }
   parts.push(
     `Deliberately include the less-obvious areas, not just the few headline facts. Each item must be a short phrase (3-10 words), specific enough to write several unique questions about, and must NOT overlap in meaning with another item.`
   );
@@ -506,14 +526,16 @@ async function outlineSubtopics({ endpoints, model, topic, notes, source, want }
   return [];
 }
 
-function buildUserPrompt({ topic, count, difficulty, types, notes, plan, avoid, source, focus, numerical = false, reshape = false }) {
+function buildUserPrompt({ topic, count, difficulty, types, notes, plan, avoid, source, focus, numerical = false, reshape = false, subject = "" }) {
   const lines = [];
+  const language = isLanguageSubject(subject, topic, notes);
   if (source) {
     lines.push(reshape
       ? `The SOURCE MATERIAL at the end is a set of EXISTING exam questions. RECAST / RESHAPE the FACTS in them into the requested question TYPES — e.g. bundle several related facts into a "consider the following statements" question, turn a single fact into an assertion–reason, or build a matching / pair question from related facts. REUSE the underlying knowledge but produce the NEW format requested: do NOT simply copy an MCQ unchanged, and do NOT alter the underlying facts. Spread across the material so different facts are used.`
       : `Create the questions BASED ON the source material given at the end. Draw the facts and content from that material (you may use closely-related general knowledge to complete a question, but stay on the material's topics).`);
   }
   lines.push(`Topic / syllabus: ${topic}.`);
+  if (language) lines.push(LANGUAGE_FOCUS);
   lines.push(TOPIC_SCOPE_RULE);
 
   if (Array.isArray(focus) && focus.length) {
@@ -1237,7 +1259,7 @@ function planGaps(planArr, collected, reserved) {
 }
 
 async function runGenerationJob(id, ctx) {
-  const { workers, fallbackWorkers = [], model, topic, notes, plan, count, difficulty, types, target, avoid, owner = null, source = "", userSubtopics = [], numerical = false, reshape = false } = ctx;
+  const { workers, fallbackWorkers = [], model, topic, notes, subject = "", plan, count, difficulty, types, target, avoid, owner = null, source = "", userSubtopics = [], numerical = false, reshape = false } = ctx;
   const job = genJobs.get(id);
   const deadline = Date.now() + 8 * 60 * 1000; // overall time budget
   if (!job.keyStats) job.keyStats = {}; // live per-key activity for THIS run
@@ -1323,6 +1345,7 @@ async function runGenerationJob(id, ctx) {
         model,
         topic,
         notes,
+        subject,
         source,
         want: target,
       });
@@ -1376,8 +1399,8 @@ async function runGenerationJob(id, ctx) {
       const res = reserveChunk();
       if (!res) break; // nothing left to generate
       const prompt = plan
-        ? buildUserPrompt({ topic, notes, plan: res.chunk, avoid: avoidNow(), source, focus: res.focus, numerical, reshape })
-        : buildUserPrompt({ topic, notes, count: res.n, difficulty, types, avoid: avoidNow(), source, focus: res.focus, numerical, reshape });
+        ? buildUserPrompt({ topic, notes, subject, plan: res.chunk, avoid: avoidNow(), source, focus: res.focus, numerical, reshape })
+        : buildUserPrompt({ topic, notes, subject, count: res.n, difficulty, types, avoid: avoidNow(), source, focus: res.focus, numerical, reshape });
       const maxTokens = Math.min(16000, 1800 + res.n * 1000);
       attempts += 1;
       // Live per-key activity for this run (surfaced via jobStatus.keyStats).
@@ -1611,6 +1634,8 @@ export async function generateQuestions(req, res) {
   if (!topic) return res.status(400).json({ message: "A topic is required (or provide source material)." });
 
   const notes = String(req.body?.notes || "").trim();
+  // Subject/section name (e.g. "English") so generation can be language-aware.
+  const subject = String(req.body?.subject || "").trim();
 
   // Optional explicit subtopics the user wants questions spread across. Accepts
   // a newline/comma/semicolon-separated string OR an array. When provided we use
@@ -1695,7 +1720,7 @@ export async function generateQuestions(req, res) {
     : []; // may include EVERY existing question in the whole topic (across its quizzes) so new questions don't duplicate them
 
   // Fire-and-forget — the client polls /api/ai/job/:id for progress.
-  guardJob(id, runGenerationJob(id, { workers, fallbackWorkers, model, topic, notes, plan, count, difficulty, types, target, avoid, owner: jobOwner, source, userSubtopics, numerical: !!req.body?.numerical, reshape: !!req.body?.reshape }));
+  guardJob(id, runGenerationJob(id, { workers, fallbackWorkers, model, topic, notes, subject, plan, count, difficulty, types, target, avoid, owner: jobOwner, source, userSubtopics, numerical: !!req.body?.numerical, reshape: !!req.body?.reshape }));
 
   res.json({ jobId: id, requested: target, model });
 }
