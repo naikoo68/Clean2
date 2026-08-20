@@ -1,20 +1,24 @@
-import { api } from "./api";
-
 // Build the shareable PUBLIC link for a quiz/test token.
 //
-// We point at the backend's server-rendered "/s/:token" HTML endpoint (NOT the
-// SPA hash route). Social apps like WhatsApp and Facebook never run JavaScript,
-// so they can only read Open Graph tags that exist in the initial HTML. The SPA
-// is a hash-router that boots via JS, so a "#/public/..." link always shows the
-// generic site card. The backend endpoint returns per-item og: tags (subject,
-// topic, the quiz/test name and its first question) for a rich preview, then
-// redirects a human visitor on to the real in-app player.
+// The link points at "/s/:token" ON THE SITE'S OWN DOMAIN (e.g.
+// https://mystudyguideme.vercel.app/s/<token>). A Vercel rewrite proxies that
+// path to the backend, which returns server-rendered Open Graph HTML so social
+// apps like WhatsApp/Facebook — which never run JavaScript — get a rich preview
+// (subject, topic, the quiz/test name and its first question). The backend then
+// redirects a human visitor on to the real in-app player, staying on this same
+// domain (so it also works for an institute's custom domain).
 //
-// Falls back to the old in-app hash URL if the API origin can't be determined
-// (e.g. VITE_API_URL unset in local dev).
+// On localhost dev (no Vercel rewrite) we fall back to the in-app hash route so
+// the link still opens the player directly.
 export function publicShareUrl(token, kind) {
-  const origin = String(api.baseUrl || "").replace(/\/api\/?$/, "");
-  if (origin && /^https?:\/\//.test(origin)) return `${origin}/s/${token}`;
+  try {
+    const host = window.location.hostname || "";
+    const isLocal = /^(localhost|127\.|0\.0\.0\.0)/.test(host);
+    if (!isLocal) return `${window.location.origin}/s/${token}`;
+  } catch { /* non-browser — fall through to hash route */ }
   const k = kind === "quiz" || kind === "My Quiz" ? "quiz" : "test";
-  return `${window.location.origin}${window.location.pathname}#/public/${k}/${token}`;
+  const base = (typeof window !== "undefined" && window.location)
+    ? `${window.location.origin}${window.location.pathname}`
+    : "";
+  return `${base}#/public/${k}/${token}`;
 }
