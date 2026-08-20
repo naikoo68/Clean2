@@ -36,6 +36,30 @@ function normalizeDelimiters(t) {
 // on non-math segments so real LaTeX commands (\neq, \nu, \times…) are safe.
 const fixProseNewlines = (t) => t.replace(/\\r\\n|\\n|\\r/g, "\n");
 
+// Render inline markdown **bold** inside a PROSE segment. AI models wrap the key
+// term in a question/explanation with double asterisks (e.g. "**elucidate**");
+// without this the literal asterisks show up as text. We ONLY handle the
+// double-asterisk form: a lone "*" (multiplication like "2*3", a bullet) is left
+// untouched, so we never mangle ordinary text. Returns an array of React nodes
+// (or a plain string when there is no bold markup — the common, cheap case).
+function renderInlineMarkdown(text, keyPrefix) {
+  const src = fixProseNewlines(String(text ?? ""));
+  const re = /\*\*(.+?)\*\*/g; // **bold** (non-greedy, so each pair is separate)
+  const out = [];
+  let last = 0;
+  let m;
+  let idx = 0;
+  while ((m = re.exec(src)) !== null) {
+    if (m.index > last) out.push(src.slice(last, m.index));
+    out.push(<strong key={`${keyPrefix}-b${idx}`}>{m[1]}</strong>);
+    last = m.index + m[0].length;
+    idx += 1;
+  }
+  if (idx === 0) return src; // no markup → plain string (cheap common case)
+  if (last < src.length) out.push(src.slice(last));
+  return out;
+}
+
 // Does the text between a pair of "$" actually look like MATH — or is it prose
 // that got trapped because a stray "$" (a currency sign like "$300"/"$900")
 // mis-paired with a real math delimiter? AI explanations frequently write money
@@ -106,7 +130,7 @@ export default function MathText({ children, className = "" }) {
 
   if (!text.includes("$")) {
     // `whitespace-pre-line` preserves real line breaks in multi-line text.
-    return <span className={`whitespace-pre-line ${className}`}>{fixProseNewlines(text)}</span>;
+    return <span className={`whitespace-pre-line ${className}`}>{renderInlineMarkdown(text, "s")}</span>;
   }
 
   const parts = parseMathParts(text);
@@ -125,7 +149,7 @@ export default function MathText({ children, className = "" }) {
             }}
           />
         ) : (
-          <span key={i}>{fixProseNewlines(p.value)}</span>
+          <span key={i}>{renderInlineMarkdown(p.value, `p${i}`)}</span>
         )
       )}
     </span>
