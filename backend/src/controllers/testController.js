@@ -643,10 +643,27 @@ function stemPreview(t, max = 170) {
   return s;
 }
 
+// Resolve the SITE base URL to use for the preview image and the human redirect.
+// A /s/:token link is shared on the site's OWN domain and proxied to this API by
+// Vercel, which forwards the original site host in x-forwarded-host (different
+// from this API's own host). Using it keeps everything on the SAME site the
+// visitor came from — the main app OR an institute's custom domain — with NO
+// server env required. Falls back to CLIENT_URL, then the request origin.
+function siteBaseFromReq(req) {
+  const first = (h) => String(h || "").split(",")[0].trim();
+  const xfh = first(req.headers["x-forwarded-host"]);
+  const proto = first(req.headers["x-forwarded-proto"]) || "https";
+  const host = first(req.headers.host);
+  if (xfh && xfh !== host && !/^(localhost|127\.)/.test(xfh)) return `${proto}://${xfh}`.replace(/\/$/, "");
+  const env = String(process.env.CLIENT_URL || "").replace(/\/$/, "");
+  if (env) return env;
+  return (clientBaseFromReq(req) || "").replace(/\/$/, "");
+}
+
 // GET /s/:token — server-rendered preview + redirect for a shared quiz/test.
 export async function shareTestPreview(req, res) {
   const token = String(req.params.token || "");
-  const clientBase = (clientBaseFromReq(req) || "").replace(/\/$/, "");
+  const clientBase = siteBaseFromReq(req);
 
   // The public token is globally unique, and this endpoint is hit by crawlers
   // with NO tenant header — so look the item up UNSCOPED to find it in ANY
@@ -664,8 +681,9 @@ export async function shareTestPreview(req, res) {
   } catch { /* fall through to the generic redirect below */ }
 
   const expired = test && test.publicExpiresAt && new Date(test.publicExpiresAt).getTime() < Date.now();
-  // Invalid / disabled / expired → just send the visitor to the site home.
-  if (!test || expired) return res.redirect(302, clientBase || "/");
+  // Invalid / disabled / expired → send the visitor to the site home. Relative
+  // "/" resolves to the site the link was opened on (via the transparent proxy).
+  if (!test || expired) return res.redirect(302, "/");
 
   const tenant = test.tenantId
     ? await runUnscoped(() => Tenant.findById(test.tenantId).select("slug customDomain name isDefault").lean()).catch(() => null)
@@ -687,15 +705,17 @@ export async function shareTestPreview(req, res) {
   const siteName = tenant?.name || "My Study Guide";
   const image = `${clientBase}/og-image.png`;
 
-  // Where a human should land — the real SPA player. Include the institute slug
-  // (?t=) so the app resolves the right tenant; a custom domain needs no slug.
-  let target;
-  if (tenant?.customDomain) {
-    target = `https://${tenant.customDomain}/#/public/${kind}/${token}`;
-  } else {
-    const t = (tenant && !tenant.isDefault && tenant.slug) ? `?t=${encodeURIComponent(tenant.slug)}` : "";
-    target = `${clientBase}/${t}#/public/${kind}/${token}`;
-  }
+  // Where a human should land — the real SPA player on the SAME site they came
+  // from. Include the institute slug (?t=) for non-default tenants so the app
+  // resolves the right institute (harmless on a custom domain, which resolves by
+  // host anyway).
+  const tSlug = (tenant && !tenant.isDefault && tenant.slug) ? `?t=${encodeURIComponent(tenant.slug)}` : "";
+  // RELATIVE target for the human redirect: because Vercel serves this page
+  // transparently under the site's own domain, a relative URL always resolves
+  // to the correct site — even if we couldn't determine the absolute base. The
+  // absolute form is used only for crawler metadata (og:url / canonical).
+  const targetRel = `/${tSlug}#/public/${kind}/${token}`;
+  const target = `${clientBase}${targetRel}`;
 
   res.set("Content-Type", "text/html; charset=utf-8");
   res.set("Cache-Control", "public, max-age=300"); // let crawlers cache briefly
@@ -717,15 +737,15 @@ export async function shareTestPreview(req, res) {
 <meta name="twitter:description" content="${escHtml(description)}">
 <meta name="twitter:image" content="${escHtml(image)}">
 <link rel="canonical" href="${escHtml(target)}">
-<meta http-equiv="refresh" content="0; url=${escHtml(target)}">
-<script>location.replace(${JSON.stringify(target)});</script>
+<meta http-equiv="refresh" content="0; url=${escHtml(targetRel)}">
+<script>location.replace(${JSON.stringify(targetRel)});</script>
 <style>body{font-family:system-ui,-apple-system,sans-serif;background:#0b1220;color:#e5e7eb;margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;text-align:center;padding:24px}a{color:#93c5fd}</style>
 </head>
 <body>
 <div>
 <h1>${escHtml(title)}</h1>
 <p>${escHtml(description)}</p>
-<p>Opening… if it doesn't, <a href="${escHtml(target)}">tap here to start</a>.</p>
+<p>Opening… if it doesn't, <a href="${escHtml(targetRel)}">tap here to start</a>.</p>
 </div>
 </body>
 </html>`);
