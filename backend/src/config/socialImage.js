@@ -296,8 +296,61 @@ async function buildQuestionSvg(q, opts = {}) {
   </svg>`;
 }
 
+// Build a LANDSCAPE (1200x630) preview card for a SHARED LINK. Social apps —
+// especially Facebook — crop link-preview images to a landscape window, so a
+// tall portrait card (stem + four full tables) gets its question cut off. This
+// card guarantees the FULL QUESTION is always visible: the stem auto-shrinks to
+// fit, and for normal MCQs the options are listed compactly. Journal/ledger
+// options are tables that can't fit a preview, so we show a clear pointer to
+// open the link instead (the full tables render in the quiz itself).
+async function buildPreviewSvg(q, opts = {}) {
+  const W = 1200, H = 630, PAD = 60;
+  const brand = opts.brandColor || "#4f46e5";
+  const siteName = esc(uni(opts.siteName || "My Study Guide"));
+  const subtitle = opts.subtitle ? esc(uni(opts.subtitle)) : "";
+  const els = [];
+
+  const optsAreTables = Array.isArray(q.options) && q.options.some((o) => isPipeTable(o));
+  const hasListOptions = !optsAreTables && Array.isArray(q.options) && q.options.length > 0;
+
+  const availW = W - 2 * PAD;
+  const stemTop = 172;
+  // Reserve space at the bottom for options / the "open link" hint.
+  const stemBottomLimit = optsAreTables ? 470 : (hasListOptions ? 360 : H - 60);
+
+  // Auto-shrink the stem font until the whole question fits above the limit.
+  let size = 46, prep;
+  for (;;) {
+    prep = await prepareContent(q.text || "Question", availW, { size, color: "#0f172a", weight: "800" });
+    if (prep.height <= stemBottomLimit - stemTop || size <= 24) break;
+    size -= 4;
+  }
+  els.push(...prep.emit(PAD, stemTop));
+  let y = stemTop + prep.height + 26;
+
+  if (hasListOptions) {
+    for (let i = 0; i < q.options.length && y < H - 58; i++) {
+      const line = truncToWidth(`(${String.fromCharCode(97 + i)})  ${uni(q.options[i])}`, 30, availW);
+      els.push(T(PAD, y + 24, 30, "#334155", esc(line)));
+      y += 46;
+    }
+  } else if (optsAreTables) {
+    els.push(T(PAD, H - 52, 30, brand, "👉 Open the link to view the options", { weight: "700" }));
+  }
+
+  return `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">
+    <rect width="${W}" height="${H}" fill="#f8fafc"/>
+    <rect x="0" y="0" width="${W}" height="120" fill="${brand}"/>
+    ${T(PAD, 58, 40, "#ffffff", siteName, { weight: "800" })}
+    ${subtitle ? T(PAD, 100, 26, "#e0e7ff", subtitle) : ""}
+    ${els.join("\n    ")}
+    <rect x="0" y="${H - 8}" width="${W}" height="8" fill="${brand}"/>
+  </svg>`;
+}
+
 // Render a question to a hosted PNG URL (via Cloudinary). Returns { url } on
 // success or { error } with the REAL reason (so the UI can show what failed).
+// Pass { preview: true } for the landscape shared-link card (full question).
 export async function renderQuestionImage(q, opts = {}) {
   if (!isCloudinaryConfigured()) return { error: "Cloudinary keys are not set on the server (CLOUDINARY_CLOUD_NAME / API_KEY / API_SECRET)." };
   try {
@@ -311,7 +364,8 @@ export async function renderQuestionImage(q, opts = {}) {
       selfieOpts.selfieWatermarkPosition = s.fbSelfieWatermarkPosition || "bottom-right";
       selfieOpts.selfieWatermarkShape = s.fbSelfieWatermarkShape || "circle";
     }
-    const svg = await buildQuestionSvg(q, {
+    const builder = opts.preview ? buildPreviewSvg : buildQuestionSvg;
+    const svg = await builder(q, {
       ...opts,
       ...selfieOpts,
       siteName: opts.siteName || s?.siteName || "My Study Guide",

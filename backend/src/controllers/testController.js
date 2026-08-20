@@ -727,9 +727,9 @@ export async function shareTestPreview(req, res) {
   let image = `${clientBase}/og-image.png`;
   const firstQObj = count ? test.questions[0] : null;
   if (firstQObj?.text) {
-    // "v3" busts previously-cached images (journal/ledger options now render as
-    // proper tables in the card instead of being hidden).
-    const key = crypto.createHash("sha1").update(`v3|${test._id}|${firstQObj.text}`).digest("hex");
+    // "v4" busts previously-cached images (now a landscape card that always shows
+    // the full question, so Facebook doesn't crop the stem off the top).
+    const key = crypto.createHash("sha1").update(`v4|${test._id}|${firstQObj.text}`).digest("hex");
     if (test.publicPreviewImage && test.publicPreviewKey === key) {
       image = test.publicPreviewImage; // reuse the cached render
     } else {
@@ -738,7 +738,7 @@ export async function shareTestPreview(req, res) {
         // institute's site name / brand colour.
         const rendered = await runWithTenant(
           { tenantId: test.tenantId || null, bypass: !test.tenantId },
-          () => renderQuestionImage(firstQObj, { hideCta: true, includeAnswer: false })
+          () => renderQuestionImage(firstQObj, { preview: true, subtitle: crumb, hideCta: true, includeAnswer: false })
         );
         if (rendered?.url) {
           image = rendered.url;
