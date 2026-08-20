@@ -762,7 +762,23 @@ export async function shareTestPreview(req, res) {
   // to the correct site — even if we couldn't determine the absolute base. The
   // absolute form is used only for crawler metadata (og:url / canonical).
   const targetRel = `/${tSlug}#/public/${kind}/${token}`;
-  const target = `${clientBase}${targetRel}`;
+
+  // The canonical URL for crawlers must be THIS share page (which returns the
+  // rich preview), NOT the SPA player. Facebook re-reads og:url as the object's
+  // true address — if it pointed at the app it would show the app's GENERIC card
+  // instead of our per-quiz preview (WhatsApp doesn't re-read, which is why it
+  // worked there but Facebook didn't).
+  const shareUrl = `${clientBase}/s/${token}`;
+
+  // Only real browsers get auto-redirected to the player. A crawler must NOT be
+  // redirected — otherwise it follows through to the SPA and reads its generic
+  // card. This makes the rich preview work everywhere (Facebook, Telegram,
+  // LinkedIn, Discord, Slack, X/Twitter, iMessage, …), not just WhatsApp.
+  const ua = String(req.headers["user-agent"] || "");
+  const isCrawler = /facebookexternalhit|facebot|twitterbot|whatsapp|telegrambot|linkedinbot|slackbot|discordbot|googlebot|bingbot|embedly|quora link preview|pinterest|redditbot|applebot|vkshare|w3c_validator|iframely|skypeuripreview|viber|line|tumblr|flipboard|nuzzel|bitlybot|bot|crawler|spider|preview/i.test(ua);
+  const redirectTags = isCrawler
+    ? ""
+    : `<meta http-equiv="refresh" content="0; url=${escHtml(targetRel)}">\n<script>location.replace(${JSON.stringify(targetRel)});</script>`;
 
   res.set("Content-Type", "text/html; charset=utf-8");
   res.set("Cache-Control", "public, max-age=300"); // let crawlers cache briefly
@@ -778,14 +794,14 @@ export async function shareTestPreview(req, res) {
 <meta property="og:title" content="${escHtml(title)}">
 <meta property="og:description" content="${escHtml(description)}">
 <meta property="og:image" content="${escHtml(image)}">
-<meta property="og:url" content="${escHtml(target)}">
+<meta property="og:image:alt" content="${escHtml(title)}">
+<meta property="og:url" content="${escHtml(shareUrl)}">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="${escHtml(title)}">
 <meta name="twitter:description" content="${escHtml(description)}">
 <meta name="twitter:image" content="${escHtml(image)}">
-<link rel="canonical" href="${escHtml(target)}">
-<meta http-equiv="refresh" content="0; url=${escHtml(targetRel)}">
-<script>location.replace(${JSON.stringify(targetRel)});</script>
+<link rel="canonical" href="${escHtml(shareUrl)}">
+${redirectTags}
 <style>body{font-family:system-ui,-apple-system,sans-serif;background:#0b1220;color:#e5e7eb;margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;text-align:center;padding:24px}a{color:#93c5fd}</style>
 </head>
 <body>
