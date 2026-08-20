@@ -22,6 +22,7 @@ import {
   ZoomOut,
   Trophy,
   Search,
+  Eye,
 } from "lucide-react";
 import { practiceService, testService } from "../../services";
 import { useAuth } from "../../context/AuthContext";
@@ -84,6 +85,7 @@ export default function PracticeQuizPlay() {
 
   const [questions, setQuestions] = useState([]);
   const [title, setTitle] = useState("Practice Quiz");
+  const [views, setViews] = useState(0); // total times this quiz was opened (shown to users)
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -137,6 +139,7 @@ export default function PracticeQuizPlay() {
       .then((data) => {
         setQuestions(shuffleAll(data.questions || [], seed)); // reshuffle options
         setTitle(data.name || "Practice Quiz");
+        setViews(data.views || 0);
         setPaper({ paperPdfUrl: data.paperPdfUrl || "", answerKeyPdfUrl: data.answerKeyPdfUrl || "", answerKeys: Array.isArray(data.answerKeys) ? data.answerKeys : [], additionalInfo: data.additionalInfo || "" });
       })
       .catch((e) => setError(e.message))
@@ -152,6 +155,18 @@ export default function PracticeQuizPlay() {
     localStorage.setItem(key, "1");
     testService.registerPublicView(token).catch(() => {});
   }, [isPublic, token]);
+
+  // Count a play-open once per browser for logged-in students/clients and the
+  // free preview (public opens are already counted by the effect above).
+  useEffect(() => {
+    if (isPublic) return;
+    const id = isFree ? freeId : itemId;
+    if (!id) return;
+    const key = `mpm-qview-${id}`;
+    if (localStorage.getItem(key)) return;
+    localStorage.setItem(key, "1");
+    testService.registerView(id).catch(() => {});
+  }, [isPublic, isFree, freeId, itemId]);
 
   // Saved position may point past a changed question list — clamp it.
   useEffect(() => {
@@ -616,9 +631,15 @@ export default function PracticeQuizPlay() {
       </div>
 
       <div className="mb-5">
-        <div className="mb-1.5 flex justify-between text-sm">
-          <span className="font-medium">Question {current + 1} of {questions.length}</span>
-          <span className="text-slate-500">{Object.keys(answers).length} answered</span>
+        <div className="mb-1.5 flex flex-wrap items-center justify-between gap-2 text-sm">
+          <span className="flex items-center gap-2 font-medium">
+            Question {current + 1} of {questions.length}
+            <span className="inline-flex items-center gap-1 text-xs font-normal text-slate-400" title="Views of this question"><Eye className="h-3.5 w-3.5" /> {(q.views || 0).toLocaleString()}</span>
+          </span>
+          <span className="flex items-center gap-3 text-slate-500">
+            <span className="inline-flex items-center gap-1 text-xs" title="Total views of this quiz"><Eye className="h-3.5 w-3.5" /> {(views || 0).toLocaleString()} views</span>
+            <span>{Object.keys(answers).length} answered</span>
+          </span>
         </div>
         <ProgressBar value={((current + 1) / questions.length) * 100} />
       </div>

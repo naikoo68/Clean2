@@ -570,8 +570,9 @@ export async function playQuiz(req, res) {
     name: obj.name,
     duration: obj.duration,
     difficulty: obj.difficulty,
+    views: obj.views || 0, // total quiz opens (shown to the user)
     questionCount: obj.questions.length,
-    questions: obj.questions, // includes correct / explanation / optionExplanations
+    questions: obj.questions, // includes correct / explanation / optionExplanations (each also carries `views`)
     // Previous Papers extras (empty for normal quizzes): the student can open
     // the actual question-paper PDF / answer-key PDF and read the extra notes.
     paperPdfUrl: obj.paperPdfUrl || "",
