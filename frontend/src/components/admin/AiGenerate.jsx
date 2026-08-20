@@ -1019,7 +1019,7 @@ export default function AiGenerate({ open, onClose, onUpload, title = "Generate 
             </p>
 
             <label className="mb-1 mt-3 block text-sm font-semibold">Instructions (optional — followed strictly)</label>
-            {LANG_SUBJECT_RE.test(section || "") && (
+            {LANG_SUBJECT_RE.test([section, topic, subtopics].filter(Boolean).join(" ")) && (
               <div className="mb-1.5 flex flex-wrap items-center gap-1.5">
                 <span className="text-xs text-slate-400">English presets:</span>
                 {ENGLISH_PRESETS.map((p) => (
