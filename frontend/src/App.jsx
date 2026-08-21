@@ -140,7 +140,7 @@ const router = createHashRouter([
       { path: "/quiz/:subjectId/:topicId/:sessionId/:quizId/result", element: S(QuizResult) },
       // Slideshow / presentation mode — auto-advancing question → answer player
       // meant for screen-recording (e.g. YouTube). Admin-only.
-      { path: "/quiz/:subjectId/:topicId/:sessionId/:quizId/slideshow", element: <ProtectedRoute role={["admin", "institute_admin"]}>{S(QuizSlideshow)}</ProtectedRoute> },
+      { path: "/quiz/:subjectId/:topicId/:sessionId/:quizId/slideshow", element: <ProtectedRoute role={["admin"]}>{S(QuizSlideshow)}</ProtectedRoute> },
 
       { path: "/test-series", element: S(TestExams) },
       { path: "/test-series/:examId", element: S(ExamPosts) },
@@ -154,7 +154,7 @@ const router = createHashRouter([
       { path: "/practice/quiz/play/:itemId", element: <ProtectedRoute><StudentGate>{S(PracticeQuizPlay)}</StudentGate></ProtectedRoute> },
       // Slideshow / presentation mode for a "My Practice" quiz — for screen-
       // recording a video tutorial. Restricted to content owners (admin/client).
-      { path: "/practice/quiz/slideshow/:itemId", element: <ProtectedRoute role={["admin", "institute_admin", "client"]}>{S(PracticeSlideshow)}</ProtectedRoute> },
+      { path: "/practice/quiz/slideshow/:itemId", element: <ProtectedRoute role={["admin"]}>{S(PracticeSlideshow)}</ProtectedRoute> },
 
       { path: "/study", element: S(StudyHome) },
       { path: "/study/:institutionId", element: S(StudySubjects) },
