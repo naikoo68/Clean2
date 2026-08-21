@@ -14,6 +14,7 @@ import {
   Film,
   Settings2,
   Repeat,
+  Download,
 } from "lucide-react";
 import MathText from "../ui/MathText";
 import OptionContent from "../ui/OptionContent";
@@ -105,10 +106,13 @@ export default function SlideshowPlayer({ questions = [], quizTitle = "Quiz", cr
 
   const [fullscreen, setFullscreen] = useState(false);
   const [controlsVisible, setControlsVisible] = useState(true);
+  const [recording, setRecording] = useState(false);
+  const [recError, setRecError] = useState("");
   const containerRef = useRef(null);
   const lastTickRef = useRef(null);
   const remainingRef = useRef(0);
   const hideTimerRef = useRef(null);
+  const mediaRecorderRef = useRef(null);
 
   const siteName = settings?.siteName || "My Study Guide";
 
@@ -136,6 +140,14 @@ export default function SlideshowPlayer({ questions = [], quizTitle = "Quiz", cr
     lastTickRef.current = null;
   }, [phaseDuration]);
 
+  // Reached the natural end. Stop playback and, if we're recording a video,
+  // stop the recorder — which triggers the download in its onstop handler.
+  const finish = useCallback(() => {
+    setPlaying(false);
+    const rec = mediaRecorderRef.current;
+    if (rec && rec.state !== "inactive") rec.stop();
+  }, []);
+
   const advance = useCallback(() => {
     if (stage === "intro") { goToStage("q", 0, "show"); return; }
     if (stage === "q") {
@@ -143,14 +155,14 @@ export default function SlideshowPlayer({ questions = [], quizTitle = "Quiz", cr
       if (index < slides.length - 1) goToStage("q", index + 1, "show");
       else if (config.showOutro) goToStage("outro");
       else if (config.loop) goToStage(config.showIntro ? "intro" : "q", 0, "show");
-      else setPlaying(false);
+      else finish();
       return;
     }
     if (stage === "outro") {
       if (config.loop) goToStage(config.showIntro ? "intro" : "q", 0, "show");
-      else setPlaying(false);
+      else finish();
     }
-  }, [stage, phase, index, slides.length, config.showOutro, config.showIntro, config.loop, goToStage]);
+  }, [stage, phase, index, slides.length, config.showOutro, config.showIntro, config.loop, goToStage, finish]);
 
   const goBack = useCallback(() => {
     if (stage === "q" && phase === "reveal") { goToStage("q", index, "show"); return; }
@@ -189,6 +201,55 @@ export default function SlideshowPlayer({ questions = [], quizTitle = "Quiz", cr
   };
 
   const restart = () => {
+    goToStage(config.showIntro ? "intro" : "q", 0, "show");
+    setPlaying(true);
+  };
+
+  // Record the slideshow to a downloadable video, entirely in the browser.
+  // Uses the Screen Capture API: the user shares this tab, we play the show
+  // start-to-finish, then a .webm file downloads automatically at the end.
+  const startRecording = async () => {
+    setRecError("");
+    if (!navigator.mediaDevices?.getDisplayMedia || typeof MediaRecorder === "undefined") {
+      setRecError("Your browser can't record here. Use the latest Chrome or Edge on desktop — or just screen-record manually while it plays.");
+      return;
+    }
+    let stream;
+    try {
+      stream = await navigator.mediaDevices.getDisplayMedia({ video: { frameRate: 30 }, audio: true });
+    } catch {
+      setRecError("Screen sharing was cancelled. To download a video, allow sharing and pick “This Tab”.");
+      return;
+    }
+    const mime = ["video/webm;codecs=vp9", "video/webm;codecs=vp8", "video/webm"].find((m) => MediaRecorder.isTypeSupported(m)) || "";
+    const rec = new MediaRecorder(stream, mime ? { mimeType: mime } : undefined);
+    const chunks = [];
+    rec.ondataavailable = (e) => { if (e.data && e.data.size) chunks.push(e.data); };
+    rec.onstop = () => {
+      stream.getTracks().forEach((t) => t.stop());
+      const blob = new Blob(chunks, { type: rec.mimeType || "video/webm" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${(quizTitle || "quiz").replace(/[^\w-]+/g, "_")}-slideshow.webm`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 10000);
+      setRecording(false);
+      mediaRecorderRef.current = null;
+    };
+    // If the user stops sharing from the browser's own bar, wrap up cleanly.
+    stream.getVideoTracks()[0]?.addEventListener("ended", () => {
+      if (rec.state !== "inactive") rec.stop();
+    });
+    mediaRecorderRef.current = rec;
+    rec.start();
+    setRecording(true);
+    // Force a clean, finite run: no loop and keep the outro so recording ends.
+    setConfig((c) => ({ ...c, loop: false, showOutro: true }));
+    setControlsVisible(false);
+    setStarted(true);
     goToStage(config.showIntro ? "intro" : "q", 0, "show");
     setPlaying(true);
   };
@@ -337,6 +398,19 @@ export default function SlideshowPlayer({ questions = [], quizTitle = "Quiz", cr
             <button onClick={begin} className="btn-primary w-full justify-center py-3 text-base">
               <Play className="h-5 w-5" /> Start slideshow
             </button>
+
+            <button
+              onClick={startRecording}
+              disabled={recording}
+              className="btn-outline w-full justify-center py-3 text-base disabled:opacity-60"
+            >
+              <Download className="h-5 w-5" /> {recording ? "Recording…" : "Record & download video"}
+            </button>
+            {recError && <p className="text-sm font-medium text-rose-600 dark:text-rose-400">{recError}</p>}
+            <p className="text-xs text-slate-400">
+              Downloading records this tab: when asked, share <b>“This Tab”</b>. The slideshow plays start-to-finish and a
+              <b> .webm</b> video saves automatically at the end. (Works in Chrome/Edge on desktop.)
+            </p>
           </div>
         </div>
       </div>
@@ -434,21 +508,32 @@ export default function SlideshowPlayer({ questions = [], quizTitle = "Quiz", cr
             <AssertionReasonView q={q} />
 
             <div className="mt-6 space-y-3">
-              {displayOptions(q).map((opt, idx) => (
-                <div key={idx} className={optionClass(idx)}>
-                  <span
-                    className={`flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl border text-sm font-bold ${
-                      reveal && idx === q.correct
-                        ? "border-emerald-500 bg-emerald-500 text-white"
-                        : "border-slate-300 dark:border-slate-600"
-                    }`}
-                  >
-                    {isMatching ? `(${String.fromCharCode(97 + idx)})` : optionLabels[idx]}
-                  </span>
-                  <span className="flex-1"><OptionContent>{opt}</OptionContent></span>
-                  {reveal && idx === q.correct && <CheckCircle2 className="h-6 w-6 flex-shrink-0 text-emerald-500" />}
-                </div>
-              ))}
+              {displayOptions(q).map((opt, idx) => {
+                const optExp = q.optionExplanations?.[idx];
+                return (
+                  <div key={idx}>
+                    <div className={optionClass(idx)}>
+                      <span
+                        className={`flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl border text-sm font-bold ${
+                          reveal && idx === q.correct
+                            ? "border-emerald-500 bg-emerald-500 text-white"
+                            : "border-slate-300 dark:border-slate-600"
+                        }`}
+                      >
+                        {isMatching ? `(${String.fromCharCode(97 + idx)})` : optionLabels[idx]}
+                      </span>
+                      <span className="flex-1"><OptionContent>{opt}</OptionContent></span>
+                      {reveal && idx === q.correct && <CheckCircle2 className="h-6 w-6 flex-shrink-0 text-emerald-500" />}
+                    </div>
+                    {/* Why this incorrect option is wrong (shown on reveal). */}
+                    {reveal && config.showExplanation && idx !== q.correct && optExp && optExp.trim() && (
+                      <p className="ml-3 mt-1 rounded-lg bg-slate-50 px-4 py-2 text-sm text-slate-500 dark:bg-slate-800/60 dark:text-slate-400">
+                        <MathText>{optExp}</MathText>
+                      </p>
+                    )}
+                  </div>
+                );
+              })}
             </div>
 
             {reveal && config.showExplanation && q.explanation && (
