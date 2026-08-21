@@ -41,6 +41,7 @@ const TopicSessions = lazy(() => import("./pages/quiz/TopicSessions"));
 const SessionQuizzes = lazy(() => import("./pages/quiz/SessionQuizzes"));
 const QuizPlay = lazy(() => import("./pages/quiz/QuizPlay"));
 const QuizResult = lazy(() => import("./pages/quiz/QuizResult"));
+const QuizSlideshow = lazy(() => import("./pages/quiz/QuizSlideshow"));
 
 const StudyHome = lazy(() => import("./pages/study/StudyHome"));
 const StudySubjects = lazy(() => import("./pages/study/StudySubjects"));
@@ -136,6 +137,9 @@ const router = createHashRouter([
       // logged-in students).
       { path: "/quiz/:subjectId/:topicId/:sessionId/:quizId", element: <StudentGate>{S(QuizPlay)}</StudentGate> },
       { path: "/quiz/:subjectId/:topicId/:sessionId/:quizId/result", element: S(QuizResult) },
+      // Slideshow / presentation mode — auto-advancing question → answer player
+      // meant for screen-recording (e.g. YouTube). Admin-only.
+      { path: "/quiz/:subjectId/:topicId/:sessionId/:quizId/slideshow", element: <ProtectedRoute role={["admin", "institute_admin"]}>{S(QuizSlideshow)}</ProtectedRoute> },
 
       { path: "/test-series", element: S(TestExams) },
       { path: "/test-series/:examId", element: S(ExamPosts) },
