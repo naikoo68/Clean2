@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Plus, Pencil, Trash2, Eye, X, Search, ChevronRight, Copy, Download, Clock, Upload, Sparkles, Globe, Library, Wand2, Loader2, RefreshCw, CheckCircle2 } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Plus, Pencil, Trash2, Eye, X, Search, ChevronRight, Copy, Download, Clock, Upload, Sparkles, Globe, Library, Wand2, Loader2, RefreshCw, CheckCircle2, ArrowRightLeft } from "lucide-react";
 import { Files } from "lucide-react";
 import { questionDateText, searchQuestions } from "../../lib/questions";
 import Badge from "../ui/Badge";
@@ -22,6 +22,7 @@ export default function ManageTestQuestions({
   onEditQuestion,
   onDeleteQuestion,
   onDeleteSelected,
+  onMoveSelected,
   onViewQuestion,
   onViewAll,
   onDuplicates,
@@ -47,6 +48,12 @@ export default function ManageTestQuestions({
   const [delProgress, setDelProgress] = useState(null); // { total, done, finished? } | null
 
   const toggleTqSelect = (id) => setSelectedTq((s) => (s.includes(id) ? s.filter((x) => x !== id) : [...s, id]));
+
+  // Drop any selected ids that no longer exist after the list reloads (e.g. once
+  // the selected questions have been moved to another quiz, or deleted).
+  useEffect(() => {
+    setSelectedTq((sel) => sel.filter((id) => tq.some((q) => q._id === id)));
+  }, [tq]);
 
   const hasSubjects = qTest.subjectPlan?.length > 0;
 
@@ -347,6 +354,9 @@ export default function ManageTestQuestions({
             ) : selectedTq.length > 0 && (
               <>
                 <span className="text-sm text-slate-500">{selectedTq.length} selected</span>
+                {onMoveSelected && (
+                  <button onClick={() => onMoveSelected(selectedTq)} className="btn-outline py-1.5"><ArrowRightLeft className="h-4 w-4" /> Move</button>
+                )}
                 <button onClick={handleDeleteSelected} className="btn-outline py-1.5 text-rose-600"><Trash2 className="h-4 w-4" /> Delete</button>
                 <button onClick={() => setSelectedTq([])} className="text-sm text-slate-500 hover:underline">Clear</button>
               </>
