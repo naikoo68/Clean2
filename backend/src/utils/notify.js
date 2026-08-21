@@ -50,6 +50,14 @@ export async function notifyNewContent(kind, doc) {
     const settings = await Settings.findOne({ key: "site" }).lean();
     if (!settings?.notifyOnNewContent) return;
 
+    // Per-channel choices. Admin email is the default (on unless explicitly
+    // turned off); emailing students and posting a public notice are OFF unless
+    // the admin explicitly ticked them. Using !== false / === true so that
+    // settings docs saved BEFORE these fields existed still default correctly.
+    const wantAdminEmail = settings.notifyEmailAdmin !== false;
+    const wantStudentEmail = settings.notifyEmailStudents === true;
+    const wantNoticeBoard = settings.notifyNoticeBoard === true;
+
     const siteName = settings.siteName || "My Study Guide";
     const label = kind === "test" ? "Test Series" : "Quiz";
     const { parts, link } = kind === "test" ? await buildTestPath(doc) : await buildQuizPath(doc);
@@ -57,21 +65,41 @@ export async function notifyNewContent(kind, doc) {
     const path = parts.length ? parts.join(" › ") : fallback;
 
     // 1) Notice board entry — full path + deep link to the quiz/test
-    await Notice.create({ text: `New ${label} added — ${path}`, link, active: true, order: 0 });
+    if (wantNoticeBoard) {
+      await Notice.create({ text: `New ${label} added — ${path}`, link, active: true, order: 0 });
+    }
 
-    // 2) Email all students — full path
-    const users = await User.find({ role: "student" }).select("email").lean();
-    const subject = `New ${label} added on ${siteName}`;
-    const html =
-      `<p>Hello,</p>` +
-      `<p>A new ${label.toLowerCase()} has just been added on ${siteName}:</p>` +
-      `<p style="font-size:15px;font-weight:700">${path}</p>` +
-      `<p>Log in to start practising. Good luck!</p>` +
-      `<p style="color:#64748b;font-size:12px">— ${siteName}</p>`;
-    const text = `New ${label} on ${siteName}: ${path}. Log in to start practising.`;
+    // 2) Email students and/or the admin — full path
+    if (wantStudentEmail || wantAdminEmail) {
+      const subject = `New ${label} added on ${siteName}`;
+      const html =
+        `<p>Hello,</p>` +
+        `<p>A new ${label.toLowerCase()} has just been added on ${siteName}:</p>` +
+        `<p style="font-size:15px;font-weight:700">${path}</p>` +
+        `<p>Log in to start practising. Good luck!</p>` +
+        `<p style="color:#64748b;font-size:12px">— ${siteName}</p>`;
+      const text = `New ${label} on ${siteName}: ${path}. Log in to start practising.`;
 
-    for (const u of users) {
-      if (u.email) sendMail({ to: u.email, subject, text, html }).catch(() => {});
+      // Collect recipients, de-duplicated so the admin isn't emailed twice when
+      // they are also (somehow) in the student list.
+      const recipients = new Set();
+
+      if (wantStudentEmail) {
+        const students = await User.find({ role: "student" }).select("email").lean();
+        for (const u of students) if (u.email) recipients.add(u.email);
+      }
+
+      if (wantAdminEmail) {
+        // Same source as new-user notifications: NOTIFY_EMAIL env, else the
+        // first admin account's email.
+        const adminUser = await User.findOne({ role: "admin" }).select("email").lean();
+        const adminTo = process.env.NOTIFY_EMAIL || adminUser?.email;
+        if (adminTo) recipients.add(adminTo);
+      }
+
+      for (const to of recipients) {
+        sendMail({ to, subject, text, html }).catch(() => {});
+      }
     }
   } catch (err) {
     console.error("notifyNewContent error:", err.message);

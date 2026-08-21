@@ -136,7 +136,14 @@ const settingsSchema = new mongoose.Schema(
     statsAuto: { type: Boolean, default: true }, // true = live counts, false = manual aboutStats values
     guardHoldMs: { type: Number, default: 1500 }, // how long the screen-guard cover stays after a screenshot key (ms)
     // Email + notice-board announcement when a new quiz/test is added.
+    // Master switch: turns the whole "new content" notification on/off.
     notifyOnNewContent: { type: Boolean, default: false },
+    // Per-channel choices applied when notifyOnNewContent is ON. By default we
+    // ONLY email the admin — students are not emailed and no public notice is
+    // posted unless the admin explicitly ticks those channels.
+    notifyEmailAdmin: { type: Boolean, default: true },   // email the site admin
+    notifyEmailStudents: { type: Boolean, default: false }, // email every student
+    notifyNoticeBoard: { type: Boolean, default: false },  // post to the notice board
     // Welcome popup shown to clients each time they open their workspace.
     clientAnnouncement: {
       type: clientAnnouncementSchema,

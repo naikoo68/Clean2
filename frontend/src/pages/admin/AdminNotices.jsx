@@ -16,6 +16,9 @@ export default function AdminNotices() {
   const [saving, setSaving] = useState(false);
   const [notify, setNotify] = useState(false);
   const [notifySaving, setNotifySaving] = useState(false);
+  // Which channels fire when new content is added. Default: admin only.
+  const [channels, setChannels] = useState({ admin: true, students: false, board: false });
+  const [channelSaving, setChannelSaving] = useState("");
 
   const load = () => {
     setLoading(true);
@@ -24,6 +27,13 @@ export default function AdminNotices() {
   };
   useEffect(load, []);
   useEffect(() => { setNotify(settings?.notifyOnNewContent === true); }, [settings?.notifyOnNewContent]);
+  useEffect(() => {
+    setChannels({
+      admin: settings?.notifyEmailAdmin !== false,   // default ON
+      students: settings?.notifyEmailStudents === true, // default OFF
+      board: settings?.notifyNoticeBoard === true,      // default OFF
+    });
+  }, [settings?.notifyEmailAdmin, settings?.notifyEmailStudents, settings?.notifyNoticeBoard]);
 
   const toggleNotify = async () => {
     const next = !notify;
@@ -36,6 +46,22 @@ export default function AdminNotices() {
       setNotify(!next);
     } finally {
       setNotifySaving(false);
+    }
+  };
+
+  // Map a channel key to its settings field + current value.
+  const CHANNEL_FIELDS = { admin: "notifyEmailAdmin", students: "notifyEmailStudents", board: "notifyNoticeBoard" };
+  const toggleChannel = async (key) => {
+    const next = !channels[key];
+    setChannels((c) => ({ ...c, [key]: next }));
+    setChannelSaving(key);
+    try {
+      await saveSettings({ [CHANNEL_FIELDS[key]]: next });
+    } catch (e2) {
+      setError(e2.message);
+      setChannels((c) => ({ ...c, [key]: !next }));
+    } finally {
+      setChannelSaving("");
     }
   };
 
@@ -102,8 +128,8 @@ export default function AdminNotices() {
         <div className="flex items-start gap-3">
           <BellRing className="mt-0.5 h-5 w-5 flex-shrink-0 text-accent-500" />
           <div>
-            <p className="font-semibold">Notify students about new content</p>
-            <p className="text-sm text-slate-500 dark:text-slate-400">When on, adding a new quiz or test series automatically posts a notice here and emails every registered student.</p>
+            <p className="font-semibold">Notify about new content</p>
+            <p className="text-sm text-slate-500 dark:text-slate-400">When on, adding a new quiz or test series sends a notification. By default only the admin is emailed — tick the boxes below to also email students or post a public notice.</p>
           </div>
         </div>
         <button
@@ -115,6 +141,46 @@ export default function AdminNotices() {
         >
           <span className={`absolute top-1 h-5 w-5 rounded-full bg-white transition-all ${notify ? "left-6" : "left-1"}`} />
         </button>
+
+        {/* Per-channel choices — only relevant while the master toggle is on. */}
+        {notify && (
+          <div className="mt-1 w-full border-t border-slate-100 pt-4 pl-8 dark:border-slate-800">
+            <p className="mb-2 text-sm font-semibold">When new content is added, also:</p>
+            <div className="space-y-2">
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  className="h-4 w-4 accent-brand-600"
+                  checked={channels.admin}
+                  disabled={channelSaving === "admin"}
+                  onChange={() => toggleChannel("admin")}
+                />
+                Email the admin
+                <span className="text-xs text-slate-400">(default)</span>
+              </label>
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  className="h-4 w-4 accent-brand-600"
+                  checked={channels.students}
+                  disabled={channelSaving === "students"}
+                  onChange={() => toggleChannel("students")}
+                />
+                Email all registered students
+              </label>
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  className="h-4 w-4 accent-brand-600"
+                  checked={channels.board}
+                  disabled={channelSaving === "board"}
+                  onChange={() => toggleChannel("board")}
+                />
+                Post an announcement on the notice board
+              </label>
+            </div>
+          </div>
+        )}
       </div>
 
       {loading ? (

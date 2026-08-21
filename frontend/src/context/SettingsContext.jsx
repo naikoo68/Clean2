@@ -48,6 +48,9 @@ const DEFAULTS = {
   guardHoldMs: 1500,
   statsAuto: true,
   notifyOnNewContent: false,
+  notifyEmailAdmin: true,
+  notifyEmailStudents: false,
+  notifyNoticeBoard: false,
   googleClientId: "",
   homeSections: [
     { key: "hero", visible: true },
