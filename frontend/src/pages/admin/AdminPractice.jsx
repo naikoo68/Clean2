@@ -1194,6 +1194,7 @@ export default function AdminPractice({ clientMode = false, fixedKind = "" }) {
                 await reloadTq();
                 load("items");
               }}
+              onMoveSelected={kind === "quiz" ? (ids) => openMove(ids) : undefined}
               onViewQuestion={setViewQ}
               onViewAll={() => { setTypeFilter([]); setStatusFilter("all"); setSubjectFilter(""); setViewAll(true); }}
               onDuplicates={() => { setDupScope({ params: { testSeries: qItem._id }, name: qItem.name }); setDupOpen(true); }}
