@@ -23,6 +23,7 @@ import {
   BarChart3,
   Share2,
   Trash2,
+  Film,
 } from "lucide-react";
 import { authService, practiceService, searchService, testService } from "../../services";
 import { loadNav, saveNav } from "../../lib/navState";
@@ -509,6 +510,15 @@ export default function ClientDashboard({ onBuild, onUpgrade }) {
                           >
                             <Play className="h-3.5 w-3.5" /> {empty ? "No questions" : cta}
                           </button>
+                          {item.kind === "quiz" && !empty && (
+                            <button
+                              onClick={() => navigate(`/practice/quiz/slideshow/${item._id}`)}
+                              title="Slideshow — auto-play for recording a video tutorial"
+                              className="rounded-lg border border-slate-200 p-2 text-slate-500 hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800"
+                            >
+                              <Film className="h-3.5 w-3.5" />
+                            </button>
+                          )}
                           {!empty && <PaperExport compact title={item.name} load={paperLoad(item)} />}
                         </div>
                       </div>
@@ -586,6 +596,15 @@ export default function ClientDashboard({ onBuild, onUpgrade }) {
                     >
                       <Play className="h-3.5 w-3.5" /> {empty ? "No questions" : cta}
                     </button>
+                    {kind === "quiz" && !empty && (
+                      <button
+                        onClick={() => navigate(`/practice/quiz/slideshow/${item._id}`)}
+                        title="Slideshow — auto-play for recording a video tutorial"
+                        className="rounded-lg border border-slate-200 p-2 text-slate-500 hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800"
+                      >
+                        <Film className="h-3.5 w-3.5" />
+                      </button>
+                    )}
                     {item.sharedByOther ? (
                       <button
                         onClick={() => removeShared("item", item._id, item.name)}
