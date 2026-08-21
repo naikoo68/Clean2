@@ -5,6 +5,7 @@ import { ArrowRight, ChevronLeft, Clock, HelpCircle, Play, Lock, Unlock, Eye, Fi
 import { practiceService } from "../../services";
 import { useAuth } from "../../context/AuthContext";
 import { Loading, ErrorState, EmptyState } from "../../components/ui/AsyncState";
+import { subjectIconName } from "../../lib/subjectIcon";
 
 const KIND_LABEL = { quiz: "My Quiz", test: "My Test", paper: "Previous Papers" };
 
@@ -130,14 +131,18 @@ export default function PracticeBrowse() {
       ) : (
         <div className="mt-10 grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {rows.map((s, i) => {
-            const Icon = Icons[s.icon] || (level === "streams" ? Icons.GraduationCap : level === "topics" ? Icons.Layers : Icons.BookOpen);
+            // Subjects: use the custom uploaded logo if any; else the subject's
+            // explicit icon; else auto-pick a relevant icon from its name.
+            const autoName = level === "subjects" ? subjectIconName(s.name) : null;
+            const iconName = s.icon && s.icon !== "BookOpen" ? s.icon : autoName || s.icon;
+            const Icon = Icons[iconName] || (level === "streams" ? Icons.GraduationCap : level === "topics" ? Icons.Layers : Icons.BookOpen);
             const to = level === "streams" ? `/practice/${kind}/${s._id}`
               : level === "subjects" ? `/practice/${kind}/${streamId}/${s._id}`
               : `/practice/${kind}/${streamId}/${subjectId}/${s._id}`;
             return (
               <Link key={s._id} to={to} style={{ animationDelay: `${i * 40}ms` }} className="card-hover group animate-fade-in-up p-6 opacity-0">
-                <div className={`flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br ${s.color || "from-violet-500 to-fuchsia-600"} text-white shadow-soft`}>
-                  <Icon className="h-7 w-7" />
+                <div className={`flex h-14 w-14 items-center justify-center overflow-hidden rounded-2xl shadow-soft ${s.image ? "border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-800" : `bg-gradient-to-br ${s.color || "from-violet-500 to-fuchsia-600"} text-white`}`}>
+                  {s.image ? <img src={s.image} alt="" className="h-full w-full object-cover" /> : <Icon className="h-7 w-7" />}
                 </div>
                 <h3 className="mt-4 text-lg font-bold">{s.name}</h3>
                 {s.description && <p className="mt-1 line-clamp-2 text-sm text-slate-500 dark:text-slate-400">{s.description}</p>}
