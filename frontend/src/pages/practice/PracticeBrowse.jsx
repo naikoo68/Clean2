@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useParams, useNavigate } from "react-router-dom";
 import * as Icons from "lucide-react";
-import { ArrowRight, ChevronLeft, Clock, HelpCircle, Play, Lock, Unlock, Eye } from "lucide-react";
+import { ArrowRight, ChevronLeft, Clock, HelpCircle, Play, Lock, Unlock, Eye, Film } from "lucide-react";
 import { practiceService } from "../../services";
 import { useAuth } from "../../context/AuthContext";
 import { Loading, ErrorState, EmptyState } from "../../components/ui/AsyncState";
@@ -16,6 +16,8 @@ export default function PracticeBrowse() {
   const { kind, streamId, subjectId, topicId } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
+  // Owners (admin/client) get a "Slideshow" button for recording video tutorials.
+  const canRecord = user?.role === "admin" || user?.role === "institute_admin" || user?.role === "client";
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -111,6 +113,15 @@ export default function PracticeBrowse() {
                 <button onClick={() => openItem(it)} className={`mt-4 w-full ${isLocked && !paperNeedsLogin ? "btn-outline" : "btn-primary"}`}>
                   {isLocked ? <Lock className="h-4 w-4" /> : <Play className="h-4 w-4" />} {btnLabel}
                 </button>
+                {canRecord && kind === "quiz" && (it.questionCount ?? 0) > 0 && (
+                  <button
+                    onClick={() => navigate(`/practice/quiz/slideshow/${it._id}`)}
+                    className="btn-outline mt-2 w-full"
+                    title="Auto-play slideshow — for screen-recording a video tutorial"
+                  >
+                    <Film className="h-4 w-4" /> Slideshow
+                  </button>
+                )}
               </div>
             );
           })}
