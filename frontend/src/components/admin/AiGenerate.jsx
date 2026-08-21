@@ -4,6 +4,7 @@ import { aiService } from "../../services";
 import { useAuth } from "../../context/AuthContext";
 import GraphView from "../ui/GraphView";
 import VizView from "../ui/VizView";
+import LanguageSelect from "./LanguageSelect";
 
 const TYPE_OPTIONS = [
   { id: "mcq", label: "MCQ" },
@@ -68,6 +69,7 @@ export default function AiGenerate({ open, onClose, onUpload, title = "Generate 
   // matrix[typeId] = { Easy, Medium, Hard } counts. Default: 5 medium MCQs.
   const [matrix, setMatrix] = useState({ mcq: { Easy: 0, Medium: 5, Hard: 0 } });
   const [notes, setNotes] = useState("");
+  const [language, setLanguage] = useState(""); // output language for generated questions ("" = English/default)
   const [preview, setPreview] = useState([]);
   const [busy, setBusy] = useState(false);
   const [stopping, setStopping] = useState(false); // user asked to stop the current generation
@@ -404,6 +406,7 @@ export default function AiGenerate({ open, onClose, onUpload, title = "Generate 
           url: url.trim() || undefined,
           plan: wavePlan,
           notes: notes.trim(),
+          language: language || undefined, // write questions in this language (blank = English/default)
           numerical: numerical || undefined, // include calculation-based numerical questions only when ticked
           model: model || undefined,
           avoid: avoidLocal, // don't repeat anything from earlier waves/batches
@@ -1023,6 +1026,8 @@ export default function AiGenerate({ open, onClose, onUpload, title = "Generate 
               Set a count in any cell — e.g. 3 Easy MCQs + 2 Medium Matching. Leave cells at 0 to skip.
               Up to {maxPerBatch} per batch (generated in the background in smaller groups). After a batch, use <b>Generate more</b> to add another set with no repeats.
             </p>
+
+            <LanguageSelect className="mt-3" value={language} onChange={setLanguage} />
 
             <label className="mb-1 mt-3 block text-sm font-semibold">Instructions (optional — followed strictly)</label>
             {/* English/language instruction presets — always available. Tap to
