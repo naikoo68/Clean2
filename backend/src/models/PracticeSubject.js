@@ -10,6 +10,9 @@ const practiceSubjectSchema = new mongoose.Schema(
     slug: { type: String, default: "" },
     icon: { type: String, default: "BookOpen" },
     color: { type: String, default: "from-violet-500 to-fuchsia-600" },
+    // Optional custom logo (image URL or small base64 data URI). When set it is
+    // shown instead of the lucide `icon`. Blank = auto-pick an icon from the name.
+    image: { type: String, default: "" },
     description: { type: String },
     order: { type: Number, default: 0 },
     isActive: { type: Boolean, default: true },

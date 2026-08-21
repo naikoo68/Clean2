@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef, Fragment } from "react";
 import { useSearchParams } from "react-router-dom";
-import { Plus, Pencil, Trash2, X, ChevronRight, GraduationCap, FolderOpen, ListChecks, FileStack, HelpCircle, Users, Search, Share2, ClipboardList, ArrowRightLeft, Send, Copy as CopyIcon } from "lucide-react";
+import { Plus, Pencil, Trash2, X, ChevronRight, GraduationCap, FolderOpen, ListChecks, FileStack, HelpCircle, Users, Search, Share2, ClipboardList, ArrowRightLeft, Send, Copy as CopyIcon, Upload, BookOpen } from "lucide-react";
 import { practiceService, testService, contentService, aiService } from "../../services";
 import { loadNav, saveNav } from "../../lib/navState";
 import Badge from "../../components/ui/Badge";
@@ -1779,8 +1779,33 @@ function EntityForm({ type, data, kind, saving, onClose, onSave }) {
   const [form, setForm] = useState(() =>
     type === "item"
       ? { name: data.name || "", duration: data.duration || 15, marks: data.marks || 0, difficulty: data.difficulty || "Medium" }
-      : { name: data.name || "", description: data.description || "" }
+      : { name: data.name || "", description: data.description || "", image: data.image || "" }
   );
+
+  // Upload a custom subject logo: downscale to a 128×128 PNG data URI so it
+  // stays tiny in the database, then keep it on the form as `image`.
+  const onPickImage = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const img = new Image();
+      img.onload = () => {
+        const size = 128;
+        const canvas = document.createElement("canvas");
+        canvas.width = size;
+        canvas.height = size;
+        const ctx = canvas.getContext("2d");
+        const scale = Math.max(size / img.width, size / img.height); // cover-fit
+        const w = img.width * scale;
+        const h = img.height * scale;
+        ctx.drawImage(img, (size - w) / 2, (size - h) / 2, w, h);
+        setForm((f) => ({ ...f, image: canvas.toDataURL("image/png") }));
+      };
+      img.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+  };
   // Manual subject blueprint for TEST items (subject name + planned count).
   const [composition, setComposition] = useState(() =>
     (data.subjectPlan || []).map((r) => ({ subject: r.subject || "", count: r.count ?? 0 }))
@@ -1813,7 +1838,22 @@ function EntityForm({ type, data, kind, saving, onClose, onSave }) {
         <div className="space-y-4">
           <div><label className="mb-1.5 block text-sm font-medium">Name</label><input required className="input" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></div>
           {type !== "item" ? (
-            <div><label className="mb-1.5 block text-sm font-medium">Description (optional)</label><input className="input" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} /></div>
+            <>
+              <div><label className="mb-1.5 block text-sm font-medium">Description (optional)</label><input className="input" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} /></div>
+              {type === "subject" && (
+                <div>
+                  <label className="mb-1.5 block text-sm font-medium">Subject logo (optional)</label>
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-14 w-14 flex-shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-800">
+                      {form.image ? <img src={form.image} alt="" className="h-full w-full object-cover" /> : <BookOpen className="h-6 w-6 text-slate-400" />}
+                    </div>
+                    <label className="btn-outline cursor-pointer"><Upload className="h-4 w-4" /> Upload<input type="file" accept="image/*" className="hidden" onChange={onPickImage} /></label>
+                    {form.image && <button type="button" onClick={() => setForm((f) => ({ ...f, image: "" }))} className="text-sm font-medium text-rose-600 hover:underline">Remove</button>}
+                  </div>
+                  <p className="mt-1 text-xs text-slate-400">Leave empty to auto-pick an icon from the subject name.</p>
+                </div>
+              )}
+            </>
           ) : (
             <div className="grid grid-cols-3 gap-3">
               <div><label className="mb-1.5 block text-sm font-medium">Duration (min)</label><input type="number" className="input" value={form.duration} onChange={(e) => setForm({ ...form, duration: Number(e.target.value) })} /></div>
