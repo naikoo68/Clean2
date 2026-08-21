@@ -526,7 +526,7 @@ async function outlineSubtopics({ endpoints, model, topic, notes, source, want, 
   return [];
 }
 
-function buildUserPrompt({ topic, count, difficulty, types, notes, plan, avoid, source, focus, numerical = false, reshape = false, subject = "" }) {
+function buildUserPrompt({ topic, count, difficulty, types, notes, plan, avoid, source, focus, numerical = false, reshape = false, subject = "", outLang = "" }) {
   const lines = [];
   const language = isLanguageSubject(subject, topic, notes);
   if (source) {
@@ -605,6 +605,14 @@ function buildUserPrompt({ topic, count, difficulty, types, notes, plan, avoid, 
   // so they are followed reliably.
   if (notes) lines.push(`REMINDER — apply the MANDATORY USER INSTRUCTIONS above to EVERY question: ${notes}`);
   lines.push(`Before finalising EACH question, VERIFY it: for a numerical question solve it with the correct formula step by step and mark ONLY the option equal to your computed result (show that working, each step on its own line, in the explanation); for matching/pair/statement questions check each item individually and make the answer reflect the true count/combination. The marked correct option must match your own working — never leave a wrong calculation or a mismatched answer.`);
+  // OUTPUT LANGUAGE — user-chosen language for the generated content. Kept as a
+  // strong, late instruction (recency) so it is reliably obeyed.
+  if (outLang && String(outLang).trim()) {
+    const L = String(outLang).trim();
+    lines.push(
+      `OUTPUT LANGUAGE (STRICT): Write EVERY question's "text", ALL of its "options", the "explanation" and any "optionExplanations" entirely in ${L}. Use natural, grammatically-correct ${L} as an examiner would write it — do NOT mix in English sentences and do NOT translate word-for-word. Keep the JSON keys and the "type"/"difficulty" values in English; keep numerals, LaTeX math wrapped in $...$ and standard scientific/chemical symbols unchanged; widely-known proper nouns and technical terms may remain in their standard form. If ${L} uses a non-Latin script, write the ${L} portions in that script.`
+    );
+  }
   lines.push(`Return ONLY the JSON object {"questions":[...]}.`);
   return lines.join("\n");
 }
@@ -1262,7 +1270,7 @@ function planGaps(planArr, collected, reserved) {
 }
 
 async function runGenerationJob(id, ctx) {
-  const { workers, fallbackWorkers = [], model, topic, notes, subject = "", plan, count, difficulty, types, target, avoid, owner = null, source = "", userSubtopics = [], numerical = false, reshape = false } = ctx;
+  const { workers, fallbackWorkers = [], model, topic, notes, subject = "", plan, count, difficulty, types, target, avoid, owner = null, source = "", userSubtopics = [], numerical = false, reshape = false, outLang = "" } = ctx;
   const job = genJobs.get(id);
   const deadline = Date.now() + 8 * 60 * 1000; // overall time budget
   if (!job.keyStats) job.keyStats = {}; // live per-key activity for THIS run
@@ -1402,8 +1410,8 @@ async function runGenerationJob(id, ctx) {
       const res = reserveChunk();
       if (!res) break; // nothing left to generate
       const prompt = plan
-        ? buildUserPrompt({ topic, notes, subject, plan: res.chunk, avoid: avoidNow(), source, focus: res.focus, numerical, reshape })
-        : buildUserPrompt({ topic, notes, subject, count: res.n, difficulty, types, avoid: avoidNow(), source, focus: res.focus, numerical, reshape });
+        ? buildUserPrompt({ topic, notes, subject, plan: res.chunk, avoid: avoidNow(), source, focus: res.focus, numerical, reshape, outLang })
+        : buildUserPrompt({ topic, notes, subject, count: res.n, difficulty, types, avoid: avoidNow(), source, focus: res.focus, numerical, reshape, outLang });
       const maxTokens = Math.min(16000, 1800 + res.n * 1000);
       attempts += 1;
       // Live per-key activity for this run (surfaced via jobStatus.keyStats).
@@ -1639,6 +1647,9 @@ export async function generateQuestions(req, res) {
   const notes = String(req.body?.notes || "").trim();
   // Subject/section name (e.g. "English") so generation can be language-aware.
   const subject = String(req.body?.subject || "").trim();
+  // OUTPUT LANGUAGE the questions should be WRITTEN in (user-chosen, optional).
+  // "" = default (model's default / English). Capped to a short label.
+  const outLang = String(req.body?.language || "").trim().slice(0, 40);
 
   // Optional explicit subtopics the user wants questions spread across. Accepts
   // a newline/comma/semicolon-separated string OR an array. When provided we use
@@ -1723,7 +1734,7 @@ export async function generateQuestions(req, res) {
     : []; // may include EVERY existing question in the whole topic (across its quizzes) so new questions don't duplicate them
 
   // Fire-and-forget — the client polls /api/ai/job/:id for progress.
-  guardJob(id, runGenerationJob(id, { workers, fallbackWorkers, model, topic, notes, subject, plan, count, difficulty, types, target, avoid, owner: jobOwner, source, userSubtopics, numerical: !!req.body?.numerical, reshape: !!req.body?.reshape }));
+  guardJob(id, runGenerationJob(id, { workers, fallbackWorkers, model, topic, notes, subject, plan, count, difficulty, types, target, avoid, owner: jobOwner, source, userSubtopics, numerical: !!req.body?.numerical, reshape: !!req.body?.reshape, outLang }));
 
   res.json({ jobId: id, requested: target, model });
 }
