@@ -9,8 +9,9 @@ import { useAuth } from "../../context/AuthContext";
 export default function SessionQuizzes() {
   const { subjectId, topicId, sessionId } = useParams();
   const { user } = useAuth();
-  // Slideshow (recording) mode is an admin tool for producing video tutorials.
-  const isAdmin = user?.role === "admin" || user?.role === "institute_admin";
+  // Slideshow (recording) mode is a platform-admin-only tool for producing
+  // video tutorials — hidden from institute admins, clients and students.
+  const isAdmin = user?.role === "admin";
   const [session, setSession] = useState(null);
   const [quizzes, setQuizzes] = useState([]);
   const [loading, setLoading] = useState(true);
