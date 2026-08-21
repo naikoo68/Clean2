@@ -1,12 +1,16 @@
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { ChevronLeft, Play, HelpCircle, ListChecks } from "lucide-react";
+import { ChevronLeft, Play, HelpCircle, ListChecks, Film } from "lucide-react";
 import { contentService } from "../../services";
 import Badge from "../../components/ui/Badge";
 import { Loading, ErrorState, EmptyState } from "../../components/ui/AsyncState";
+import { useAuth } from "../../context/AuthContext";
 
 export default function SessionQuizzes() {
   const { subjectId, topicId, sessionId } = useParams();
+  const { user } = useAuth();
+  // Slideshow (recording) mode is an admin tool for producing video tutorials.
+  const isAdmin = user?.role === "admin" || user?.role === "institute_admin";
   const [session, setSession] = useState(null);
   const [quizzes, setQuizzes] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -47,26 +51,38 @@ export default function SessionQuizzes() {
       ) : (
         <div className="mt-5 grid gap-5 md:grid-cols-2 lg:grid-cols-3">
           {quizzes.map((q, i) => (
-            <Link
+            <div
               key={q._id}
-              to={`/quiz/${subjectId}/${topicId}/${sessionId}/${q._id}`}
               style={{ animationDelay: `${i * 50}ms` }}
               className="card-hover animate-fade-in-up flex flex-col p-6 opacity-0"
             >
-              <div className="flex items-start justify-between">
-                <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-accent-100 text-accent-600 dark:bg-accent-900/40 dark:text-accent-300">
-                  <ListChecks className="h-5 w-5" />
-                </span>
-                <Badge variant={q.difficulty}>{q.difficulty}</Badge>
+              <Link to={`/quiz/${subjectId}/${topicId}/${sessionId}/${q._id}`} className="flex flex-1 flex-col">
+                <div className="flex items-start justify-between">
+                  <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-accent-100 text-accent-600 dark:bg-accent-900/40 dark:text-accent-300">
+                    <ListChecks className="h-5 w-5" />
+                  </span>
+                  <Badge variant={q.difficulty}>{q.difficulty}</Badge>
+                </div>
+                <h3 className="mt-3 text-lg font-bold">{q.title}</h3>
+                <p className="mt-1 flex items-center gap-1.5 text-sm text-slate-500 dark:text-slate-400">
+                  <HelpCircle className="h-4 w-4" /> {q.questions} questions
+                </p>
+              </Link>
+              <div className="mt-4 flex flex-col gap-2">
+                <Link to={`/quiz/${subjectId}/${topicId}/${sessionId}/${q._id}`} className="btn-primary w-full">
+                  <Play className="h-4 w-4" /> Start Quiz
+                </Link>
+                {isAdmin && (
+                  <Link
+                    to={`/quiz/${subjectId}/${topicId}/${sessionId}/${q._id}/slideshow`}
+                    className="btn-outline w-full"
+                    title="Auto-playing question → answer slideshow for screen-recording a video tutorial"
+                  >
+                    <Film className="h-4 w-4" /> Slideshow
+                  </Link>
+                )}
               </div>
-              <h3 className="mt-3 text-lg font-bold">{q.title}</h3>
-              <p className="mt-1 flex items-center gap-1.5 text-sm text-slate-500 dark:text-slate-400">
-                <HelpCircle className="h-4 w-4" /> {q.questions} questions
-              </p>
-              <span className="btn-primary mt-auto w-full">
-                <Play className="h-4 w-4" /> Start Quiz
-              </span>
-            </Link>
+            </div>
           ))}
         </div>
       )}
