@@ -36,6 +36,7 @@ const StreamSubjects = lazy(() => import("./pages/quiz/StreamSubjects"));
 const PracticeHome = lazy(() => import("./pages/practice/PracticeHome"));
 const PracticeBrowse = lazy(() => import("./pages/practice/PracticeBrowse"));
 const PracticeQuizPlay = lazy(() => import("./pages/practice/PracticeQuizPlay"));
+const PracticeSlideshow = lazy(() => import("./pages/practice/PracticeSlideshow"));
 const SubjectTopics = lazy(() => import("./pages/quiz/SubjectTopics"));
 const TopicSessions = lazy(() => import("./pages/quiz/TopicSessions"));
 const SessionQuizzes = lazy(() => import("./pages/quiz/SessionQuizzes"));
@@ -151,6 +152,9 @@ const router = createHashRouter([
       { path: "/practice/:kind/:streamId/:subjectId", element: S(PracticeBrowse) },
       { path: "/practice/:kind/:streamId/:subjectId/:topicId", element: S(PracticeBrowse) },
       { path: "/practice/quiz/play/:itemId", element: <ProtectedRoute><StudentGate>{S(PracticeQuizPlay)}</StudentGate></ProtectedRoute> },
+      // Slideshow / presentation mode for a "My Practice" quiz — for screen-
+      // recording a video tutorial. Restricted to content owners (admin/client).
+      { path: "/practice/quiz/slideshow/:itemId", element: <ProtectedRoute role={["admin", "institute_admin", "client"]}>{S(PracticeSlideshow)}</ProtectedRoute> },
 
       { path: "/study", element: S(StudyHome) },
       { path: "/study/:institutionId", element: S(StudySubjects) },
