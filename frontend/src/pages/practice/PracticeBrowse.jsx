@@ -16,8 +16,9 @@ export default function PracticeBrowse() {
   const { kind, streamId, subjectId, topicId } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
-  // Owners (admin/client) get a "Slideshow" button for recording video tutorials.
-  const canRecord = user?.role === "admin" || user?.role === "institute_admin" || user?.role === "client";
+  // Slideshow (recording) is a platform-admin-only tool — hidden from institute
+  // admins, clients and students.
+  const canRecord = user?.role === "admin";
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
