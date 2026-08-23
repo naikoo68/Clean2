@@ -31,6 +31,7 @@ const Account = lazy(() => import("./pages/Account"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 const PublicNode = lazy(() => import("./pages/PublicNode"));
 
+const ChooseMode = lazy(() => import("./pages/ChooseMode"));
 const QuizHome = lazy(() => import("./pages/quiz/QuizHome"));
 const StreamSubjects = lazy(() => import("./pages/quiz/StreamSubjects"));
 const PracticeHome = lazy(() => import("./pages/practice/PracticeHome"));
@@ -127,6 +128,7 @@ const router = createHashRouter([
       { path: "/refund", element: S(Refund) },
       { path: "/review", element: S(WriteReview) },
 
+      { path: "/choose/:mode", element: S(ChooseMode) },
       { path: "/quiz", element: S(QuizHome) },
       { path: "/quiz/stream/:streamId", element: S(StreamSubjects) },
       { path: "/quiz/:subjectId", element: S(SubjectTopics) },
