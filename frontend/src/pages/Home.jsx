@@ -15,6 +15,7 @@ import {
   Star,
   FileStack,
   HelpCircle,
+  Globe,
 } from "lucide-react";
 import { useSettings } from "../context/SettingsContext";
 import { useAuth } from "../context/AuthContext";
@@ -75,6 +76,9 @@ export default function Home() {
   // and whenever the tab regains focus — so the numbers update automatically
   // as clients add/delete questions, without a manual page reload.
   const [realStats, setRealStats] = useState(null);
+  // Which hero choice-menu is open ("practice" | "test" | null) — lets the user
+  // pick My Practice vs Public, and My Tests vs Test Series.
+  const [heroMenu, setHeroMenu] = useState(null);
   useEffect(() => {
     let active = true;
     const load = () =>
@@ -200,13 +204,58 @@ export default function Home() {
 
           <div className="mt-10 grid grid-cols-2 items-center gap-4 sm:gap-8 md:gap-12">
             <div className="animate-fade-in-up text-center">
-            <div className="mt-8 flex flex-wrap justify-center gap-3">
-              <Link to="/quiz" className="btn-primary text-base">
-                <Play className="h-5 w-5" /> Start Practicing
-              </Link>
-              <Link to="/test-series" className="btn-outline text-base">
-                Explore Test Series <ArrowRight className="h-4 w-4" />
-              </Link>
+            <div className="relative mt-8 flex flex-wrap justify-center gap-3">
+              {/* Backdrop: tap anywhere else to close an open choice menu */}
+              {heroMenu && <div className="fixed inset-0 z-20" onClick={() => setHeroMenu(null)} aria-hidden="true" />}
+
+              {/* Start Practicing → choose My Practice or Public quizzes */}
+              <div className="relative z-30">
+                <button
+                  type="button"
+                  onClick={() => setHeroMenu((m) => (m === "practice" ? null : "practice"))}
+                  aria-expanded={heroMenu === "practice"}
+                  className="btn-primary text-base"
+                >
+                  <Play className="h-5 w-5" /> Start Practicing
+                </button>
+                {heroMenu === "practice" && (
+                  <div className="absolute left-1/2 top-full z-30 mt-2 w-60 -translate-x-1/2 animate-fade-in overflow-hidden rounded-2xl border border-slate-200 bg-white text-left shadow-xl dark:border-slate-700 dark:bg-slate-900">
+                    <Link to="/practice" onClick={() => setHeroMenu(null)} className="flex items-center gap-3 px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-800">
+                      <ListChecks className="h-5 w-5 flex-shrink-0 text-brand-600" />
+                      <span><span className="block text-sm font-bold">My Practice</span><span className="block text-xs text-slate-500 dark:text-slate-400">Your own quizzes &amp; tests</span></span>
+                    </Link>
+                    <Link to="/quiz" onClick={() => setHeroMenu(null)} className="flex items-center gap-3 border-t border-slate-100 px-4 py-3 hover:bg-slate-50 dark:border-slate-800 dark:hover:bg-slate-800">
+                      <Globe className="h-5 w-5 flex-shrink-0 text-emerald-600" />
+                      <span><span className="block text-sm font-bold">Public quizzes</span><span className="block text-xs text-slate-500 dark:text-slate-400">Everyone's subject quizzes</span></span>
+                    </Link>
+                  </div>
+                )}
+              </div>
+
+              {/* Explore Test Series → choose My Tests or public Test Series */}
+              <div className="relative z-30">
+                <button
+                  type="button"
+                  onClick={() => setHeroMenu((m) => (m === "test" ? null : "test"))}
+                  aria-expanded={heroMenu === "test"}
+                  className="btn-outline text-base"
+                >
+                  Explore Test Series <ArrowRight className="h-4 w-4" />
+                </button>
+                {heroMenu === "test" && (
+                  <div className="absolute left-1/2 top-full z-30 mt-2 w-60 -translate-x-1/2 animate-fade-in overflow-hidden rounded-2xl border border-slate-200 bg-white text-left shadow-xl dark:border-slate-700 dark:bg-slate-900">
+                    <Link to="/practice/test" onClick={() => setHeroMenu(null)} className="flex items-center gap-3 px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-800">
+                      <FileStack className="h-5 w-5 flex-shrink-0 text-brand-600" />
+                      <span><span className="block text-sm font-bold">My Tests</span><span className="block text-xs text-slate-500 dark:text-slate-400">Your own test series</span></span>
+                    </Link>
+                    <Link to="/test-series" onClick={() => setHeroMenu(null)} className="flex items-center gap-3 border-t border-slate-100 px-4 py-3 hover:bg-slate-50 dark:border-slate-800 dark:hover:bg-slate-800">
+                      <Trophy className="h-5 w-5 flex-shrink-0 text-amber-500" />
+                      <span><span className="block text-sm font-bold">Test Series</span><span className="block text-xs text-slate-500 dark:text-slate-400">Public full-length &amp; sectional mocks</span></span>
+                    </Link>
+                  </div>
+                )}
+              </div>
+
               <Link to="/practice/paper" className="btn-outline text-base">
                 <FileText className="h-5 w-5" /> Previous Papers
               </Link>
