@@ -1,7 +1,25 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { Sparkles, Globe, CheckCircle2, Download, Send, ChevronLeft, Puzzle, Loader2 } from "lucide-react";
+import { Sparkles, Globe, CheckCircle2, Download, Send, ChevronLeft, Puzzle, Loader2, History, ListChecks, FileText, Layers, Lightbulb, Play } from "lucide-react";
 import { companionService } from "../services";
+
+const TYPE_META = {
+  quiz: { Icon: ListChecks, label: "Quiz" },
+  questions: { Icon: ListChecks, label: "Questions" },
+  summary: { Icon: FileText, label: "Summary" },
+  flashcards: { Icon: Layers, label: "Flashcards" },
+  explain: { Icon: Lightbulb, label: "Explanation" },
+};
+
+function timeAgo(d) {
+  const t = new Date(d).getTime();
+  if (!t) return "";
+  const s = Math.floor((Date.now() - t) / 1000);
+  if (s < 60) return "just now";
+  if (s < 3600) return `${Math.floor(s / 60)}m ago`;
+  if (s < 86400) return `${Math.floor(s / 3600)}h ago`;
+  return new Date(d).toLocaleDateString();
+}
 
 // Connections — the in-app home for the "My Study Guide Companion" browser
 // extension. The extension turns permitted study content on other learning
@@ -17,8 +35,11 @@ export default function Connections() {
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState("");
 
+  const [history, setHistory] = useState(null);
+
   useEffect(() => {
     companionService.status().then(setStatus).catch(() => setStatus(null)).finally(() => setLoading(false));
+    companionService.history().then((r) => setHistory(r.items || [])).catch(() => setHistory([]));
   }, []);
 
   const submitRequest = async (e) => {
@@ -118,6 +139,31 @@ export default function Connections() {
           ))}
         </div>
       </div>
+
+      {/* Companion history */}
+      {history && history.length > 0 && (
+        <div className="card mt-5 p-6">
+          <h3 className="flex items-center gap-2 font-bold"><History className="h-5 w-5 text-brand-600" /> Companion history</h3>
+          <div className="mt-4 space-y-2">
+            {history.map((h) => {
+              const M = TYPE_META[h.type] || TYPE_META.summary;
+              return (
+                <div key={h._id} className="flex items-center gap-3 rounded-lg border border-slate-200 px-3 py-2 dark:border-slate-700">
+                  <M.Icon className="h-4 w-4 flex-shrink-0 text-slate-400" />
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium">{h.title || M.label}</p>
+                    <p className="text-xs text-slate-400">{[M.label, h.platform, h.count ? `${h.count} item(s)` : ""].filter(Boolean).join(" · ")}</p>
+                  </div>
+                  <span className="flex-shrink-0 text-xs text-slate-400">{timeAgo(h.createdAt)}</span>
+                  {h.type === "quiz" && h.itemId && (
+                    <Link to={`/practice/quiz/play/${h.itemId}`} title="Open quiz" className="flex-shrink-0 text-brand-600 hover:text-brand-700"><Play className="h-4 w-4" /></Link>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Request a platform */}
       <div className="card mt-5 p-6">

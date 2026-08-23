@@ -551,5 +551,7 @@ export const companionService = {
   summarize: (data) => api.post("/companion/summarize", data),
   explain: (data) => api.post("/companion/explain", data),
   flashcards: (data) => api.post("/companion/flashcards", data),
+  saveQuiz: (data) => api.post("/companion/save-quiz", data), // → { itemId, playPath }
+  history: () => api.get("/companion/history"),
   platformRequest: (data) => api.post("/companion/platform-request", data),
 };

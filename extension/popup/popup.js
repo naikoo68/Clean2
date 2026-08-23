@@ -81,10 +81,24 @@ async function runQuestions() {
     if (!qs.length) return setResult('<p class="msg">No questions were generated. Try a larger selection.</p>');
     setResult(
       `<p><b>${qs.length}</b> questions created.</p>` +
-      qs.map((q, i) => `<div class="card"><b>Q${i + 1}.</b> ${esc(q.text)}<br>${(q.options || []).map((o, x) => `${String.fromCharCode(65 + x)}. ${esc(o)}${x === q.correct ? " ✓" : ""}`).join("<br>")}${q.explanation ? `<div class="muted">${esc(q.explanation)}</div>` : ""}</div>`).join("") +
-      `<button class="linkbtn" id="copy">Copy all (JSON)</button>`
+      `<div class="row" style="margin-bottom:8px"><button class="btn primary" id="save-quiz">Save as quiz</button><button class="linkbtn" id="copy">Copy (JSON)</button></div>` +
+      qs.map((q, i) => `<div class="card"><b>Q${i + 1}.</b> ${esc(q.text)}<br>${(q.options || []).map((o, x) => `${String.fromCharCode(65 + x)}. ${esc(o)}${x === q.correct ? " ✓" : ""}`).join("<br>")}${q.explanation ? `<div class="muted">${esc(q.explanation)}</div>` : ""}</div>`).join("")
     );
     $("copy").onclick = () => navigator.clipboard.writeText(JSON.stringify(qs, null, 2));
+    $("save-quiz").onclick = async () => {
+      const btn = $("save-quiz");
+      btn.disabled = true;
+      btn.textContent = "Saving…";
+      try {
+        const r = await api.post("/companion/save-quiz", { title: current.title, questions: qs, meta: current.meta });
+        const site = await getSite();
+        btn.outerHTML = `<a class="btn primary" style="text-decoration:none" href="${site}${r.playPath}" target="_blank" rel="noreferrer">✓ Saved (${r.inserted}) · Open quiz ↗</a>`;
+      } catch (e) {
+        btn.disabled = false;
+        btn.textContent = "Save as quiz";
+        setResult(`<p class="msg">${esc(e.message)}</p>` + $("result").innerHTML);
+      }
+    };
   } catch (e) {
     progress("");
     setResult(`<p class="msg">${esc(e.message)}</p>`);
