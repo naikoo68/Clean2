@@ -8,8 +8,8 @@ const columns = [
   {
     title: "Product",
     links: [
-      { label: "Quizzes", to: "/quiz" },
-      { label: "Test Series", to: "/test-series" },
+      { label: "Quizzes", to: "/choose/practice" },
+      { label: "Test Series", to: "/choose/tests" },
       { label: "Study Material", to: "/study" },
       { label: "Dashboard", to: "/dashboard" },
       { label: "Leaderboard", to: "/dashboard" },
