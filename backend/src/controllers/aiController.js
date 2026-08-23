@@ -41,7 +41,7 @@ const SYSTEM_SCOPE = { owner: null, includeEnv: true, mode: "inbuilt", access: t
 // anonymous callers always use the platform pool. A client uses the pool that
 // matches their chosen mode — but only within what the admin allows. A client
 // with no AI access (or with both pools disabled) is denied.
-function resolveScope(user, requestedMode) {
+export function resolveScope(user, requestedMode) {
   if (!user || user.role !== "client") return { ...SYSTEM_SCOPE };
   if (!user.aiAccess) return { owner: null, includeEnv: false, access: false, denied: true };
   const allowInbuilt = user.aiAllowInbuilt !== false;
@@ -106,7 +106,7 @@ async function modelRegistry(scope = SYSTEM_SCOPE) {
 // keys run out of quota, generation/extraction rolls over to the other active
 // keys (on their own model) instead of stopping while healthy keys sit idle.
 // Each endpoint carries the exact model it should be called with.
-async function resolveModel(requested, scope = SYSTEM_SCOPE) {
+export async function resolveModel(requested, scope = SYSTEM_SCOPE) {
   const provs = await providers(scope);
   if (!provs.length) return null;
   const defModel = provs[0].models[0];
@@ -127,7 +127,7 @@ async function resolveModel(requested, scope = SYSTEM_SCOPE) {
 // (429/401/403). Each endpoint uses the model it supports (ep.model), so keys on
 // a different model still work as fallbacks. Other errors aren't retried on
 // another key.
-async function callWithFallback({ endpoints, model, userPrompt, maxTokens, owner = null, systemPrompt, failOnEmpty = false, cooldown = null }) {
+export async function callWithFallback({ endpoints, model, userPrompt, maxTokens, owner = null, systemPrompt, failOnEmpty = false, cooldown = null }) {
   let last = { ok: false, status: 0, detail: "No AI key is configured." };
   let sawQuota = false; // at least one key failed with a recoverable rate-limit
   let considered = 0;   // keys we actually tried (not skipped for cooldown)
@@ -1043,13 +1043,13 @@ const CHUNK_SIZE = 12; // questions generated per provider call — smaller so t
 // { at, count } events, pruned on read. A restart resets windows — acceptable
 // for a soft business quota.
 const aiUsageByUser = new Map();
-function aiRecentUsage(key, windowMs) {
+export function aiRecentUsage(key, windowMs) {
   const now = Date.now();
   const arr = (aiUsageByUser.get(key) || []).filter((e) => now - e.at < windowMs);
   aiUsageByUser.set(key, arr);
   return arr.reduce((s, e) => s + (e.count || 0), 0);
 }
-function aiRecordUsage(key, count) {
+export function aiRecordUsage(key, count) {
   const arr = aiUsageByUser.get(key) || [];
   arr.push({ at: Date.now(), count });
   aiUsageByUser.set(key, arr);
@@ -1059,7 +1059,7 @@ function aiRecordUsage(key, count) {
 // rate limit. A client's limits come from the subscription plan they PURCHASED
 // (user.subscriptionPlan) — capped by the global ceiling — falling back to the
 // cheapest paid plan, then the first plan.
-async function effectiveAiLimits(user) {
+export async function effectiveAiLimits(user) {
   let s = null;
   try { s = await Settings.findOne({ key: "site" }).select("aiMaxPerBatch clientPlans").lean(); } catch { /* ignore */ }
   const globalMax = Math.max(1, s?.aiMaxPerBatch || MAX_TOTAL);

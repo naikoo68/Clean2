@@ -28,6 +28,7 @@ const Refund = lazy(() => import("./pages/Refund"));
 const WriteReview = lazy(() => import("./pages/WriteReview"));
 const Dashboard = lazy(() => import("./pages/Dashboard"));
 const Account = lazy(() => import("./pages/Account"));
+const Connections = lazy(() => import("./pages/Connections"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 const PublicNode = lazy(() => import("./pages/PublicNode"));
 
@@ -177,6 +178,10 @@ const router = createHashRouter([
       {
         path: "/account",
         element: <ProtectedRoute>{S(Account)}</ProtectedRoute>,
+      },
+      {
+        path: "/connections",
+        element: <ProtectedRoute>{S(Connections)}</ProtectedRoute>,
       },
       {
         // Student self-serve subscribe / renew page (reachable any time; also

@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { AlarmClock, ShieldCheck, Clock, Gift, Copy, LayoutDashboard } from "lucide-react";
+import { AlarmClock, ShieldCheck, Clock, Gift, Copy, LayoutDashboard, Sparkles, ArrowRight } from "lucide-react";
 import { useState } from "react";
 import { useAuth } from "../context/AuthContext";
 import Badge from "../components/ui/Badge";
@@ -84,6 +84,18 @@ export default function Account() {
             </div>
           )}
         </div>
+
+        {/* Connections — My Study Guide Companion browser extension */}
+        <Link to="/connections" className="card-hover group sm:col-span-3 flex items-center gap-4 p-5">
+          <span className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-brand-600 to-accent-500 text-white">
+            <Sparkles className="h-5 w-5" />
+          </span>
+          <div className="min-w-0 flex-1">
+            <h2 className="font-bold">Connections · My Study Guide Companion</h2>
+            <p className="text-sm text-slate-500 dark:text-slate-400">Turn study content on YouTube and other platforms into questions, quizzes, summaries and flashcards.</p>
+          </div>
+          <ArrowRight className="h-5 w-5 flex-shrink-0 text-slate-400 transition group-hover:translate-x-0.5" />
+        </Link>
 
         {/* Profile photo */}
         <ProfilePhotoCard className="sm:col-span-3" />

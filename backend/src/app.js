@@ -53,6 +53,7 @@ import documentRoutes from "./routes/documentRoutes.js";
 import practiceRoutes from "./routes/practiceRoutes.js";
 import searchRoutes from "./routes/searchRoutes.js";
 import aiRoutes from "./routes/aiRoutes.js";
+import companionRoutes from "./routes/companionRoutes.js";
 import couponRoutes from "./routes/couponRoutes.js";
 import paymentRoutes from "./routes/paymentRoutes.js";
 import subscriptionRoutes from "./routes/subscriptionRoutes.js";
@@ -194,6 +195,7 @@ app.use("/api/documents", documentRoutes); // standalone text documents (PDF tex
 app.use("/api/practice", practiceRoutes); // "Practice Quizzes" section (My Quiz / My Test Series)
 app.use("/api", searchRoutes); // global metadata search (streams/subjects/topics/quizzes/tests)
 app.use("/api/ai", aiRoutes); // AI question generator (admin)
+app.use("/api/companion", companionRoutes); // My Study Guide Companion (browser extension bridge)
 app.use("/api/coupons", couponRoutes); // discount coupons (admin manage; used at client checkout)
 app.use("/api/payments", paymentRoutes); // Razorpay: create orders + config for client checkout
 app.use("/api/subscriptions", subscriptionRoutes); // client self-serve upgrade/renew (works when expired)
