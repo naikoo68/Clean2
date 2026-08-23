@@ -26,7 +26,7 @@ function timeAgo(d) {
 // platforms into practice material using the EXISTING AI system. This page does
 // NOT do any AI itself — it explains the Companion, shows connection status,
 // lists supported platforms, and lets users request a new platform.
-export default function Connections() {
+export default function Connections({ embedded = false }) {
   const [status, setStatus] = useState(null);
   const [loading, setLoading] = useState(true);
   const [showInstall, setShowInstall] = useState(false);
@@ -68,10 +68,12 @@ export default function Connections() {
   ];
 
   return (
-    <div className="container-page py-10">
-      <Link to="/account" className="btn-ghost -ml-2 mb-6 w-fit">
-        <ChevronLeft className="h-4 w-4" /> Back to account
-      </Link>
+    <div className={embedded ? "" : "container-page py-10"}>
+      {!embedded && (
+        <Link to="/account" className="btn-ghost -ml-2 mb-6 w-fit">
+          <ChevronLeft className="h-4 w-4" /> Back to account
+        </Link>
+      )}
 
       <div className="mb-6">
         <h1 className="text-2xl font-extrabold">Connections</h1>
