@@ -73,6 +73,7 @@ const nav = [
   { to: "/admin/ai-generator", label: "AI Generator", icon: Sparkles, feature: "aiGenerator" },
   { to: "/admin/visualize", label: "Visualization Studio", icon: LayoutGrid, feature: "visualize" },
   { to: "/admin/ai-keys", label: "AI Keys (APIs)", icon: KeyRound, feature: "aiKeys" }, // institute admins manage their OWN keys (tenant-scoped); super-admin manages platform keys
+  { to: "/connections", label: "Companion", icon: Sparkles },
   { to: "/admin/customization", label: "Customization", icon: Palette },
   { to: "/admin/manual", label: "User Manual", icon: BookOpen },
 ];
