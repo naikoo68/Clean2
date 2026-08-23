@@ -7,6 +7,8 @@ import {
   companionExplain,
   companionFlashcards,
   companionPlatformRequest,
+  companionSaveQuiz,
+  companionHistory,
 } from "../controllers/companionController.js";
 
 const router = Router();
@@ -21,6 +23,8 @@ router.post("/questions", ...ai, companionQuestions); // → { jobId }; poll GET
 router.post("/summarize", ...ai, companionSummarize);
 router.post("/explain", ...ai, companionExplain);
 router.post("/flashcards", ...ai, companionFlashcards);
+router.post("/save-quiz", ...ai, companionSaveQuiz); // save generated questions as a playable practice quiz
+router.get("/history", protect, companionHistory);
 router.post("/platform-request", protect, companionPlatformRequest);
 
 export default router;

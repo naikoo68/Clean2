@@ -12,9 +12,32 @@ import {
   generateQuestions,
 } from "./aiController.js";
 import Message from "../models/Message.js";
+import PracticeStream from "../models/PracticeStream.js";
+import PracticeSubject from "../models/PracticeSubject.js";
+import PracticeTopic from "../models/PracticeTopic.js";
+import TestSeries from "../models/TestSeries.js";
+import Question from "../models/Question.js";
+import CompanionItem from "../models/CompanionItem.js";
+import { ownerValue, ownerFilter } from "../utils/ownership.js";
 
 const MAX_SOURCE = 24000; // same cap the AI generator uses per call
 const DIFFS = ["Easy", "Medium", "Hard"];
+const slugify = (s) => String(s || "").toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+
+// Record one Companion action for the user's history (best-effort).
+async function recordHistory(req, { type, title, platform, url, count, itemId }) {
+  try {
+    await CompanionItem.create({
+      user: req.user._id,
+      type,
+      title: String(title || "").slice(0, 200),
+      platform: String(platform || "").slice(0, 60),
+      url: String(url || "").slice(0, 500),
+      count: count || 0,
+      itemId: itemId || null,
+    });
+  } catch { /* history is a nice-to-have */ }
+}
 
 // Platforms the extension ships adapters for. Kept here so the Connections page
 // and the extension can show a single, consistent list.
@@ -151,7 +174,9 @@ export async function companionSummarize(req, res) {
   const r = await callWithFallback({ endpoints: g.chosen.endpoints, model: g.chosen.model, systemPrompt: SUMMARY_SYSTEM, userPrompt, maxTokens: 3000, owner: g.scope.owner });
   if (!r.ok) return res.status(502).json({ message: "The AI provider is busy. Please try again in a moment." });
   aiRecordUsage(String(req.user._id), 1);
-  res.json({ summary: r.content, model: g.chosen.model, source: sourceMeta(req.body?.meta) });
+  const smeta = sourceMeta(req.body?.meta);
+  await recordHistory(req, { type: "summary", title: smeta.lecture || smeta.course || "Summary", platform: smeta.platform, url: smeta.url, count: 0 });
+  res.json({ summary: r.content, model: g.chosen.model, source: smeta });
 }
 
 const EXPLAIN_SYSTEM =
@@ -168,7 +193,9 @@ export async function companionExplain(req, res) {
   const r = await callWithFallback({ endpoints: g.chosen.endpoints, model: g.chosen.model, systemPrompt: EXPLAIN_SYSTEM, userPrompt, maxTokens: 1500, owner: g.scope.owner });
   if (!r.ok) return res.status(502).json({ message: "The AI provider is busy. Please try again in a moment." });
   aiRecordUsage(String(req.user._id), 1);
-  res.json({ explanation: r.content, model: g.chosen.model, source: sourceMeta(req.body?.meta) });
+  const emeta = sourceMeta(req.body?.meta);
+  await recordHistory(req, { type: "explain", title: emeta.lecture || emeta.course || "Explanation", platform: emeta.platform, url: emeta.url, count: 0 });
+  res.json({ explanation: r.content, model: g.chosen.model, source: emeta });
 }
 
 const FLASHCARDS_SYSTEM =
@@ -198,7 +225,93 @@ export async function companionFlashcards(req, res) {
     .slice(0, count);
   if (!cards.length) return res.status(502).json({ message: "Couldn't build flashcards from this content. Try a larger selection." });
   aiRecordUsage(String(req.user._id), Math.ceil(cards.length / 5));
-  res.json({ cards, model: g.chosen.model, source: sourceMeta(req.body?.meta) });
+  const fmeta = sourceMeta(req.body?.meta);
+  await recordHistory(req, { type: "flashcards", title: fmeta.lecture || fmeta.course || "Flashcards", platform: fmeta.platform, url: fmeta.url, count: cards.length });
+  res.json({ cards, model: g.chosen.model, source: fmeta });
+}
+
+/* ------------------------- save quiz + history ------------------------- */
+
+// Find-or-create the per-owner "My Study Guide Companion" practice container
+// (Stream → Subject[platform] → Topic) so saved quizzes have a home. Idempotent.
+async function ensureContainer(req, platform) {
+  const owner = ownerValue(req);
+  const of = ownerFilter(req);
+  const stream = await PracticeStream.findOneAndUpdate(
+    { name: "My Study Guide Companion", kind: "quiz", ...of },
+    { $setOnInsert: { name: "My Study Guide Companion", kind: "quiz", owner, slug: "my-study-guide-companion", icon: "Sparkles" } },
+    { new: true, upsert: true, setDefaultsOnInsert: true }
+  );
+  const subjName = (platform && String(platform).trim()) || "Companion";
+  const subject = await PracticeSubject.findOneAndUpdate(
+    { stream: stream._id, name: subjName, ...of },
+    { $setOnInsert: { stream: stream._id, name: subjName, owner, slug: slugify(subjName) } },
+    { new: true, upsert: true, setDefaultsOnInsert: true }
+  );
+  const topic = await PracticeTopic.findOneAndUpdate(
+    { subject: subject._id, name: "Saved from Companion", ...of },
+    { $setOnInsert: { subject: subject._id, name: "Saved from Companion", owner } },
+    { new: true, upsert: true, setDefaultsOnInsert: true }
+  );
+  return { stream, subject, topic };
+}
+
+// POST /api/companion/save-quiz — save generated questions as a playable
+// practice quiz in the user's account (reuses the practice/question models).
+// Body: { title, questions:[...], meta }
+export async function companionSaveQuiz(req, res) {
+  const questions = Array.isArray(req.body?.questions) ? req.body.questions : [];
+  if (!questions.length) return res.status(400).json({ message: "No questions to save." });
+  const meta = sourceMeta(req.body?.meta);
+  const title = (String(req.body?.title || "").trim() || meta.lecture || meta.course || "Companion quiz").slice(0, 120);
+  const owner = ownerValue(req);
+
+  const { stream, subject, topic } = await ensureContainer(req, meta.platform);
+  const item = await TestSeries.create({
+    name: title,
+    owner,
+    practice: true,
+    practiceKind: "quiz",
+    practiceStream: stream._id,
+    practiceSubject: subject._id,
+    practiceTopic: topic._id,
+    category: "Full-Length",
+    duration: 15,
+    marks: 0,
+    difficulty: "Medium",
+    status: "published",
+    visibleToAll: false,
+    aiTopic: title,
+  });
+
+  // Validate + insert the questions, linked to this practice item (owner-scoped).
+  const good = [];
+  for (const q of questions) {
+    const { _id, tenantId, owner: _o, ...rest } = q || {}; // strip client-supplied ids/owner
+    const doc = new Question({ status: "published", ...rest, testSeries: item._id, owner });
+    if (!doc.validateSync()) good.push(doc);
+  }
+  let created = [];
+  if (good.length) {
+    try { created = await Question.insertMany(good, { ordered: false }); }
+    catch (e) { created = Array.isArray(e?.insertedDocs) ? e.insertedDocs : []; }
+  }
+  if (created.length) {
+    await TestSeries.findByIdAndUpdate(item._id, { $push: { questions: { $each: created.map((c) => c._id) } } });
+  }
+  if (!created.length) {
+    // Nothing valid saved — remove the empty item so it doesn't clutter.
+    await TestSeries.findByIdAndDelete(item._id).catch(() => {});
+    return res.status(422).json({ message: "None of the questions could be saved (format issue)." });
+  }
+  await recordHistory(req, { type: "quiz", title, platform: meta.platform, url: meta.url, count: created.length, itemId: item._id });
+  res.status(201).json({ itemId: item._id, inserted: created.length, playPath: `/#/practice/quiz/play/${item._id}` });
+}
+
+// GET /api/companion/history — the user's recent Companion activity.
+export async function companionHistory(req, res) {
+  const items = await CompanionItem.find({ user: req.user._id }).sort("-createdAt").limit(30).lean();
+  res.json({ items });
 }
 
 // POST /api/companion/platform-request — "Request a platform" → admin inbox.
