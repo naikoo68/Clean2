@@ -540,3 +540,16 @@ export const recycleService = {
   remove: (type, id) => api.del(`/recycle-bin/${type}/${id}`), // permanent delete (cascades)
   empty: () => api.del("/recycle-bin"), // permanently empty the whole bin
 };
+
+
+// My Study Guide Companion (browser extension bridge). Generation reuses the
+// existing AI pipeline server-side; `questions` returns a { jobId } you poll via
+// aiService.job(id).
+export const companionService = {
+  status: () => api.get("/companion/status"),
+  questions: (data) => api.post("/companion/questions", data),
+  summarize: (data) => api.post("/companion/summarize", data),
+  explain: (data) => api.post("/companion/explain", data),
+  flashcards: (data) => api.post("/companion/flashcards", data),
+  platformRequest: (data) => api.post("/companion/platform-request", data),
+};
