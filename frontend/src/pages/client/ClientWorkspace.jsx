@@ -14,6 +14,7 @@ import ClientAccount from "./ClientAccount";
 import ClientUserManual from "./ClientUserManual";
 import ClientUpgrade from "./ClientUpgrade";
 import ClientAiSettings from "./ClientAiSettings";
+import Connections from "../Connections";
 import AdminDocuments from "../admin/AdminDocuments";
 import AdminNotes from "../admin/AdminNotes";
 import AdminAiStudio from "../admin/AdminAiStudio";
@@ -78,6 +79,7 @@ export default function ClientWorkspace() {
     ...(user?.featPapers !== false ? [{ key: "papers", label: "Previous Papers", Icon: Files }] : []),
     ...(user?.featChecker !== false ? [{ key: "checker", label: "Question Checker", Icon: SearchCheck }] : []),
     ...(user?.aiAccess ? [{ key: "ai", label: "AI", Icon: Sparkles }] : []),
+    ...(user?.aiAccess ? [{ key: "connections", label: "Connections", Icon: Sparkles }] : []),
     ...(user?.featAiGenerator ? [{ key: "aigen", label: "AI Generator", Icon: Sparkles }] : []),
     ...(user?.featDocuments !== false ? [{ key: "documents", label: "Documents", Icon: FileText }] : []),
     ...(user?.featNotes !== false ? [{ key: "notes", label: "Notes", Icon: Feather }] : []),
@@ -198,6 +200,8 @@ export default function ClientWorkspace() {
           <AdminMigration clientMode />
         ) : tab === "ai" ? (
           <ClientAiSettings />
+        ) : tab === "connections" ? (
+          <Connections embedded />
         ) : tab === "aigen" ? (
           <AdminAiStudio clientMode />
         ) : tab === "documents" ? (
