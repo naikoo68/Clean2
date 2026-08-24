@@ -4507,3 +4507,615 @@ export function CoastalFeatures({ showLabels = true }) {
     </g>
   );
 }
+
+
+// ---- Thermoregulation (negative feedback) ----------------------------------
+export function Thermoregulation({ showLabels = true }) {
+  const cx = W / 2, cy = 130;
+  return (
+    <g>
+      {/* set-point box */}
+      <rect x={cx - 110} y={cy - 34} width="220" height="56" rx="10" fill="#fef9c3" stroke="#ca8a04" strokeWidth="2" />
+      {/* hot branch (right) */}
+      <path d={`M ${cx + 110} ${cy - 6} Q ${cx + 230} ${cy - 6} ${cx + 230} ${cy + 120}`} fill="none" stroke="#dc2626" strokeWidth="2.5" markerEnd="url(#il-arrow)" />
+      <rect x={cx + 150} y={cy + 130} width="170" height="86" rx="10" fill="#fee2e2" stroke="#dc2626" strokeWidth="2" />
+      {/* cold branch (left) */}
+      <path d={`M ${cx - 110} ${cy - 6} Q ${cx - 230} ${cy - 6} ${cx - 230} ${cy + 120}`} fill="none" stroke="#2563eb" strokeWidth="2.5" markerEnd="url(#il-arrow)" />
+      <rect x={cx - 320} y={cy + 130} width="170" height="86" rx="10" fill="#dbeafe" stroke="#2563eb" strokeWidth="2" />
+      {/* return arrows to set point */}
+      <path d={`M ${cx + 235} ${cy + 216} Q ${cx + 235} ${cy + 320} ${cx + 20} ${cy + 30}`} fill="none" stroke="#94a3b8" strokeWidth="2" strokeDasharray="5 4" markerEnd="url(#il-arrow)" />
+      <path d={`M ${cx - 235} ${cy + 216} Q ${cx - 235} ${cy + 320} ${cx - 20} ${cy + 30}`} fill="none" stroke="#94a3b8" strokeWidth="2" strokeDasharray="5 4" markerEnd="url(#il-arrow)" />
+      {showLabels && (
+        <g fill="#334155">
+          <text x={cx} y={cy - 8} fontSize="13" fontWeight="700" textAnchor="middle">Normal body temp (37°C)</text>
+          <text x={cx} y={cy + 12} fontSize="10.5" textAnchor="middle" fill="#a16207">hypothalamus monitors blood</text>
+          <text x={cx + 235} y={cy + 158} fontSize="12" fontWeight="700" textAnchor="middle" fill="#dc2626">Too hot</text>
+          <text x={cx + 235} y={cy + 178} fontSize="10" textAnchor="middle">vasodilation</text>
+          <text x={cx + 235} y={cy + 194} fontSize="10" textAnchor="middle">sweating</text>
+          <text x={cx + 235} y={cy + 210} fontSize="10" textAnchor="middle">hairs lie flat</text>
+          <text x={cx - 235} y={cy + 158} fontSize="12" fontWeight="700" textAnchor="middle" fill="#2563eb">Too cold</text>
+          <text x={cx - 235} y={cy + 178} fontSize="10" textAnchor="middle">vasoconstriction</text>
+          <text x={cx - 235} y={cy + 194} fontSize="10" textAnchor="middle">shivering</text>
+          <text x={cx - 235} y={cy + 210} fontSize="10" textAnchor="middle">hairs stand up</text>
+          <text x={W / 2} y={40} fontSize="14" fontWeight="800" textAnchor="middle">Thermoregulation — negative feedback</text>
+          <text x={cx} y={H - 24} fontSize="10.5" textAnchor="middle" fill="#64748b">corrective response returns temperature to set point</text>
+        </g>
+      )}
+    </g>
+  );
+}
+
+// ---- Natural selection (peppered moth) -------------------------------------
+export function NaturalSelection({ showLabels = true }) {
+  const trunk = (x, bark, moths) => (
+    <g>
+      <rect x={x} y={120} width="160" height="240" rx="8" fill={bark} stroke="#57534e" strokeWidth="2" />
+      {moths.map((m, i) => (
+        <ellipse key={i} cx={x + m.x} cy={m.y} rx="16" ry="9" fill={m.c} stroke="#1f2937" strokeWidth="1" opacity={m.faint ? 0.35 : 1} />
+      ))}
+    </g>
+  );
+  return (
+    <g>
+      {trunk(80, "#e7e5e4", [
+        { x: 40, y: 170, c: "#f5f5f4" },
+        { x: 110, y: 250, c: "#f5f5f4" },
+        { x: 60, y: 320, c: "#292524", faint: true },
+      ])}
+      {trunk(W - 240, "#44403c", [
+        { x: 50, y: 180, c: "#f5f5f4", faint: true },
+        { x: 100, y: 260, c: "#1c1917" },
+        { x: 55, y: 330, c: "#1c1917" },
+      ])}
+      {showLabels && (
+        <g fill="#334155">
+          <text x={160} y={100} fontSize="12" fontWeight="700" textAnchor="middle">Clean woodland</text>
+          <text x={160} y={385} fontSize="10.5" textAnchor="middle">light moths camouflaged → survive</text>
+          <text x={W - 160} y={100} fontSize="12" fontWeight="700" textAnchor="middle">Polluted (sooty) woodland</text>
+          <text x={W - 160} y={385} fontSize="10.5" textAnchor="middle">dark moths camouflaged → survive</text>
+          <text x={W / 2} y={40} fontSize="14" fontWeight="800" textAnchor="middle">Natural selection — peppered moth</text>
+          <text x={W / 2} y={H - 40} fontSize="10.5" textAnchor="middle" fill="#64748b">better-camouflaged moths avoid predators, reproduce, pass on alleles</text>
+          <text x={W / 2} y={H - 22} fontSize="10.5" textAnchor="middle" fill="#64748b">allele frequency in the population shifts over generations</text>
+        </g>
+      )}
+    </g>
+  );
+}
+
+// ---- Five kingdoms classification ------------------------------------------
+export function FiveKingdoms({ showLabels = true }) {
+  const cx = W / 2, topY = 90;
+  const kingdoms = [
+    { name: "Prokaryotae", ex: "bacteria", c: "#fca5a5" },
+    { name: "Protista", ex: "amoeba, algae", c: "#fdba74" },
+    { name: "Fungi", ex: "mushrooms, yeast", c: "#fde68a" },
+    { name: "Plantae", ex: "mosses, trees", c: "#86efac" },
+    { name: "Animalia", ex: "insects, mammals", c: "#93c5fd" },
+  ];
+  const boxW = 128, gap = 12, totalW = kingdoms.length * boxW + (kingdoms.length - 1) * gap;
+  const x0 = cx - totalW / 2, boxY = 250;
+  return (
+    <g>
+      <rect x={cx - 70} y={topY} width="140" height="46" rx="10" fill="#e2e8f0" stroke="#475569" strokeWidth="2" />
+      {kingdoms.map((k, i) => {
+        const bx = x0 + i * (boxW + gap);
+        return (
+          <g key={k.name}>
+            <path d={`M ${cx} ${topY + 46} L ${bx + boxW / 2} ${boxY}`} stroke="#94a3b8" strokeWidth="1.6" />
+            <rect x={bx} y={boxY} width={boxW} height="88" rx="9" fill={k.c} stroke="#475569" strokeWidth="1.6" />
+            {showLabels && (
+              <g>
+                <text x={bx + boxW / 2} y={boxY + 34} fontSize="12.5" fontWeight="700" textAnchor="middle" fill="#1f2937">{k.name}</text>
+                <text x={bx + boxW / 2} y={boxY + 60} fontSize="10" textAnchor="middle" fill="#334155">{k.ex}</text>
+              </g>
+            )}
+          </g>
+        );
+      })}
+      {showLabels && (
+        <g fill="#334155">
+          <text x={cx} y={topY + 28} fontSize="13" fontWeight="700" textAnchor="middle">Living things</text>
+          <text x={W / 2} y={40} fontSize="14" fontWeight="800" textAnchor="middle">The five kingdoms</text>
+        </g>
+      )}
+    </g>
+  );
+}
+
+// ---- Sarcomere (sliding filament) ------------------------------------------
+export function Sarcomere({ showLabels = true }) {
+  const row = (y, zGap, label) => {
+    const zL = W / 2 - zGap, zR = W / 2 + zGap;
+    return (
+      <g>
+        {/* Z-lines */}
+        <line x1={zL} y1={y - 44} x2={zL} y2={y + 44} stroke="#1f2937" strokeWidth="4" />
+        <line x1={zR} y1={y - 44} x2={zR} y2={y + 44} stroke="#1f2937" strokeWidth="4" />
+        {/* thin actin filaments from each Z-line */}
+        {[-30, -14, 14, 30].map((o, i) => (
+          <g key={i}>
+            <line x1={zL} y1={y + o} x2={zL + zGap * 0.9} y2={y + o} stroke="#f59e0b" strokeWidth="3" />
+            <line x1={zR} y1={y + o} x2={zR - zGap * 0.9} y2={y + o} stroke="#f59e0b" strokeWidth="3" />
+          </g>
+        ))}
+        {/* thick myosin filaments (centre) */}
+        {[-22, 0, 22].map((o, i) => (
+          <line key={i} x1={W / 2 - 60} y1={y + o} x2={W / 2 + 60} y2={y + o} stroke="#7c3aed" strokeWidth="6" strokeLinecap="round" />
+        ))}
+        {showLabels && <text x={90} y={y + 4} fontSize="12" fontWeight="700" fill="#334155">{label}</text>}
+      </g>
+    );
+  };
+  return (
+    <g>
+      {row(160, 150, "Relaxed")}
+      {row(340, 96, "Contracted")}
+      {showLabels && (
+        <g fill="#334155">
+          <text x={W / 2} y={40} fontSize="14" fontWeight="800" textAnchor="middle">Sarcomere — sliding filament theory</text>
+          <text x={W / 2 - 150} y={120} fontSize="10" textAnchor="middle" fill="#1f2937">Z-line</text>
+          <text x={W / 2 + 90} y={200} fontSize="10" fill="#7c3aed">myosin (thick)</text>
+          <text x={W / 2 - 130} y={210} fontSize="10" fill="#f59e0b">actin (thin)</text>
+          <text x={W / 2} y={H - 60} fontSize="11" textAnchor="middle">Myosin heads pull actin inward → Z-lines move closer</text>
+          <text x={W / 2} y={H - 40} fontSize="11" textAnchor="middle">sarcomere shortens (filament lengths unchanged)</text>
+        </g>
+      )}
+    </g>
+  );
+}
+
+// ---- Eutrophication --------------------------------------------------------
+export function Eutrophication({ showLabels = true }) {
+  const steps = [
+    "Fertiliser / sewage runoff enters water",
+    "Nitrates & phosphates enrich the water",
+    "Algal bloom covers the surface",
+    "Light is blocked → water plants die",
+    "Bacteria decompose dead matter",
+    "Bacteria use up dissolved O₂",
+    "Fish & aquatic animals suffocate",
+  ];
+  const x = 120, y0 = 90, dy = 52;
+  return (
+    <g>
+      {steps.map((s, i) => {
+        const y = y0 + i * dy;
+        const col = i < 2 ? "#86efac" : i < 4 ? "#6ee7b7" : i < 6 ? "#fbbf24" : "#f87171";
+        return (
+          <g key={i}>
+            <rect x={x} y={y} width={W - 2 * x} height="38" rx="8" fill={col} fillOpacity="0.6" stroke="#475569" strokeWidth="1.4" />
+            {i < steps.length - 1 && <line x1={W / 2} y1={y + 38} x2={W / 2} y2={y + dy} stroke="#64748b" strokeWidth="2" markerEnd="url(#il-arrow)" />}
+            {showLabels && <text x={W / 2} y={y + 24} fontSize="11.5" fontWeight="600" textAnchor="middle" fill="#1f2937">{s}</text>}
+          </g>
+        );
+      })}
+      {showLabels && <text x={W / 2} y={40} fontSize="14" fontWeight="800" textAnchor="middle" fill="#334155">Eutrophication</text>}
+    </g>
+  );
+}
+
+// ---- Vaccination / immune memory -------------------------------------------
+export function Vaccination({ showLabels = true }) {
+  return (
+    <g>
+      {/* vaccine syringe */}
+      <rect x={70} y={130} width="90" height="24" rx="4" fill="#e2e8f0" stroke="#475569" strokeWidth="1.6" />
+      <line x1={160} y1={142} x2={200} y2={142} stroke="#475569" strokeWidth="3" markerEnd="url(#il-arrow)" />
+      <circle cx={120} cy={142} r="7" fill="#a78bfa" />
+      {/* B cell */}
+      <circle cx={300} cy={200} r="46" fill="#bfdbfe" stroke="#2563eb" strokeWidth="2" />
+      <circle cx={300} cy={200} r="18" fill="#60a5fa" />
+      <line x1={200} y1={142} x2={262} y2={185} stroke="#94a3b8" strokeWidth="2" markerEnd="url(#il-arrow)" />
+      {/* memory cells + antibodies */}
+      <circle cx={520} cy={130} r="34" fill="#ddd6fe" stroke="#7c3aed" strokeWidth="2" />
+      <circle cx={560} cy={280} r="30" fill="#fde68a" stroke="#ca8a04" strokeWidth="2" />
+      <line x1={346} y1={190} x2={488} y2={140} stroke="#94a3b8" strokeWidth="2" markerEnd="url(#il-arrow)" />
+      <line x1={346} y1={215} x2={532} y2={270} stroke="#94a3b8" strokeWidth="2" markerEnd="url(#il-arrow)" />
+      {/* Y antibodies */}
+      {[[620, 320], [660, 350], [600, 370]].map(([ax, ay], i) => (
+        <text key={i} x={ax} y={ay} fontSize="20" fontWeight="800" fill="#ca8a04">Y</text>
+      ))}
+      {showLabels && (
+        <g fill="#334155">
+          <text x={115} y={122} fontSize="11" textAnchor="middle">vaccine (dead/weakened antigen)</text>
+          <text x={300} y={262} fontSize="11" fontWeight="700" textAnchor="middle" fill="#2563eb">B-lymphocyte</text>
+          <text x={520} y={90} fontSize="11" fontWeight="700" textAnchor="middle" fill="#7c3aed">memory cells</text>
+          <text x={560} y={324} fontSize="11" fontWeight="700" textAnchor="middle" fill="#ca8a04">antibodies</text>
+          <text x={W / 2} y={40} fontSize="14" fontWeight="800" textAnchor="middle">Vaccination & immune memory</text>
+          <text x={W / 2} y={H - 30} fontSize="10.5" textAnchor="middle" fill="#64748b">on re-infection memory cells produce antibodies faster & in greater numbers</text>
+        </g>
+      )}
+    </g>
+  );
+}
+
+// ---- Collision theory ------------------------------------------------------
+export function CollisionTheory({ showLabels = true }) {
+  const gx = 120, gy0 = 360, gx1 = W - 90, gy1 = 110;
+  return (
+    <g>
+      {/* successful vs unsuccessful collision (top) */}
+      <g>
+        <circle cx={180} cy={130} r="18" fill="#60a5fa" /><circle cx={230} cy={130} r="18" fill="#f59e0b" />
+        <line x1={198} y1={130} x2={212} y2={130} stroke="#16a34a" strokeWidth="3" markerEnd="url(#il-arrow)" />
+        <circle cx={430} cy={130} r="18" fill="#60a5fa" /><circle cx={480} cy={130} r="18" fill="#f59e0b" />
+        <path d="M 448 130 q 7 0 14 0" fill="none" stroke="#dc2626" strokeWidth="3" />
+      </g>
+      {/* energy profile graph */}
+      <line x1={gx} y1={gy0} x2={gx1} y2={gy0} stroke="currentColor" strokeWidth="1.5" markerEnd="url(#il-arrow)" />
+      <line x1={gx} y1={gy0} x2={gx} y2={gy1} stroke="currentColor" strokeWidth="1.5" markerEnd="url(#il-arrow)" />
+      <path d={`M ${gx + 20} ${gy0 - 40} L ${gx + 180} ${gy0 - 40} Q ${gx + 260} ${gy0 - 40} ${gx + 280} ${gy1 + 30} Q ${gx + 300} ${gy0 - 40} ${gx + 380} ${gy0 - 90} L ${gx1 - 20} ${gy0 - 90}`} fill="none" stroke="#dc2626" strokeWidth="3" />
+      <line x1={gx} y1={gy1 + 30} x2={gx + 280} y2={gy1 + 30} stroke="#7c3aed" strokeWidth="1" strokeDasharray="4 3" />
+      {showLabels && (
+        <g fill="#334155">
+          <text x={205} y={100} fontSize="10.5" fontWeight="700" textAnchor="middle" fill="#16a34a">successful (enough energy + correct orientation)</text>
+          <text x={455} y={100} fontSize="10.5" fontWeight="700" textAnchor="middle" fill="#dc2626">unsuccessful (too little energy)</text>
+          <text x={gx + 280} y={gy1 + 20} fontSize="10.5" textAnchor="middle" fill="#7c3aed">activation energy (Eₐ)</text>
+          <text x={(gx + gx1) / 2} y={gy0 + 24} fontSize="11" textAnchor="middle">progress of reaction</text>
+          <text x={gx - 14} y={(gy0 + gy1) / 2} fontSize="11" textAnchor="middle" transform={`rotate(-90 ${gx - 14} ${(gy0 + gy1) / 2})`}>energy</text>
+          <text x={W / 2} y={40} fontSize="14" fontWeight="800" textAnchor="middle">Collision theory</text>
+        </g>
+      )}
+    </g>
+  );
+}
+
+// ---- Dynamic equilibrium / Le Chatelier ------------------------------------
+export function Equilibrium({ showLabels = true }) {
+  const cx = W / 2, cy = 200;
+  return (
+    <g>
+      <rect x={cx - 130} y={cy - 44} width="120" height="70" rx="10" fill="#bfdbfe" stroke="#2563eb" strokeWidth="2" />
+      <rect x={cx + 10} y={cy - 44} width="120" height="70" rx="10" fill="#fde68a" stroke="#ca8a04" strokeWidth="2" />
+      {/* forward + reverse arrows */}
+      <line x1={cx - 6} y1={cy - 24} x2={cx + 6} y2={cy - 24} stroke="#16a34a" strokeWidth="3" markerEnd="url(#il-arrow)" />
+      <line x1={cx + 6} y1={cy + 6} x2={cx - 6} y2={cy + 6} stroke="#dc2626" strokeWidth="3" markerEnd="url(#il-arrow)" />
+      {/* rate vs time graph */}
+      <line x1={140} y1={H - 70} x2={W - 100} y2={H - 70} stroke="currentColor" strokeWidth="1.5" markerEnd="url(#il-arrow)" />
+      <line x1={140} y1={H - 70} x2={140} y2={H - 190} stroke="currentColor" strokeWidth="1.5" markerEnd="url(#il-arrow)" />
+      <path d={`M 140 ${H - 100} Q 260 ${H - 140} 460 ${H - 140} L ${W - 110} ${H - 140}`} fill="none" stroke="#16a34a" strokeWidth="2.5" />
+      <path d={`M 140 ${H - 180} Q 260 ${H - 140} 460 ${H - 140} L ${W - 110} ${H - 140}`} fill="none" stroke="#dc2626" strokeWidth="2.5" />
+      {showLabels && (
+        <g fill="#334155">
+          <text x={cx - 70} y={cy - 4} fontSize="14" fontWeight="700" textAnchor="middle" fill="#2563eb">reactants</text>
+          <text x={cx + 70} y={cy - 4} fontSize="14" fontWeight="700" textAnchor="middle" fill="#ca8a04">products</text>
+          <text x={cx} y={cy + 52} fontSize="11" textAnchor="middle">rate forward = rate reverse (closed system)</text>
+          <text x={460} y={H - 148} fontSize="10.5" textAnchor="middle">equilibrium reached</text>
+          <text x={(140 + W - 100) / 2} y={H - 48} fontSize="11" textAnchor="middle">time</text>
+          <text x={126} y={H - 130} fontSize="11" textAnchor="middle" transform={`rotate(-90 126 ${H - 130})`}>rate</text>
+          <text x={W / 2} y={40} fontSize="14" fontWeight="800" textAnchor="middle">Dynamic equilibrium</text>
+        </g>
+      )}
+    </g>
+  );
+}
+
+// ---- Alloys vs pure metals -------------------------------------------------
+export function Alloys({ showLabels = true }) {
+  const grid = (x0, y0, extra) => {
+    const rows = 5, cols = 6, gap = 26, r = 11;
+    const dots = [];
+    for (let ri = 0; ri < rows; ri++) {
+      for (let ci = 0; ci < cols; ci++) {
+        const big = extra && (ri + ci) % 4 === 0;
+        dots.push(
+          <circle key={`${ri}-${ci}`} cx={x0 + ci * gap} cy={y0 + ri * gap} r={big ? r + 5 : r} fill={big ? "#f59e0b" : "#94a3b8"} stroke="#475569" strokeWidth="1.2" />
+        );
+      }
+    }
+    return <g>{dots}</g>;
+  };
+  return (
+    <g>
+      <rect x={90} y={110} width="200" height="180" rx="8" fill="#f8fafc" stroke="#475569" strokeWidth="1.5" />
+      {grid(120, 140, false)}
+      <rect x={W - 290} y={110} width="200" height="180" rx="8" fill="#f8fafc" stroke="#475569" strokeWidth="1.5" />
+      {grid(W - 260, 140, true)}
+      {/* slip arrows */}
+      <line x1={130} y1={310} x2={250} y2={310} stroke="#16a34a" strokeWidth="3" markerEnd="url(#il-arrow)" />
+      <line x1={W - 250} y1={310} x2={W - 210} y2={310} stroke="#dc2626" strokeWidth="3" markerEnd="url(#il-arrow)" />
+      {showLabels && (
+        <g fill="#334155">
+          <text x={190} y={100} fontSize="12" fontWeight="700" textAnchor="middle">Pure metal</text>
+          <text x={190} y={338} fontSize="10.5" textAnchor="middle" fill="#16a34a">uniform atoms → layers slide easily (soft)</text>
+          <text x={W - 190} y={100} fontSize="12" fontWeight="700" textAnchor="middle">Alloy</text>
+          <text x={W - 190} y={338} fontSize="10.5" textAnchor="middle" fill="#dc2626">different-size atoms distort layers → harder</text>
+          <text x={W / 2} y={40} fontSize="14" fontWeight="800" textAnchor="middle">Alloys vs pure metals</text>
+        </g>
+      )}
+    </g>
+  );
+}
+
+// ---- Displacement reaction -------------------------------------------------
+export function DisplacementReaction({ showLabels = true }) {
+  const beaker = (x, sol, strip, stripC, deposit) => (
+    <g>
+      <path d={`M ${x} 150 L ${x} 330 Q ${x} 350 ${x + 20} 350 L ${x + 120} 350 Q ${x + 140} 350 ${x + 140} 330 L ${x + 140} 150`} fill="none" stroke="#475569" strokeWidth="2.5" />
+      <path d={`M ${x + 4} 200 L ${x + 4} 328 Q ${x + 4} 346 ${x + 22} 346 L ${x + 118} 346 Q ${x + 136} 346 ${x + 136} 328 L ${x + 136} 200 Z`} fill={sol} fillOpacity="0.55" />
+      <rect x={x + 62} y={170} width="16" height="150" fill={stripC} stroke="#334155" strokeWidth="1.2" />
+      {deposit && <rect x={x + 58} y={200} width="24" height="120" fill="#f97316" opacity="0.7" />}
+    </g>
+  );
+  return (
+    <g>
+      {beaker(120, "#93c5fd", true, "#cbd5e1", false)}
+      <line x1={300} y1={250} x2={W - 300} y2={250} stroke="#334155" strokeWidth="3" markerEnd="url(#il-arrow)" />
+      {beaker(W - 260, "#e5e7eb", true, "#cbd5e1", true)}
+      {showLabels && (
+        <g fill="#334155">
+          <text x={190} y={140} fontSize="11.5" fontWeight="700" textAnchor="middle">zinc in copper(II) sulfate</text>
+          <text x={190} y={372} fontSize="10.5" textAnchor="middle" fill="#2563eb">blue solution</text>
+          <text x={W - 190} y={140} fontSize="11.5" fontWeight="700" textAnchor="middle">after reaction</text>
+          <text x={W - 190} y={372} fontSize="10.5" textAnchor="middle" fill="#f97316">copper coats zinc; solution fades</text>
+          <text x={W / 2} y={230} fontSize="10.5" textAnchor="middle">Zn + CuSO₄ →</text>
+          <text x={W / 2} y={246} fontSize="10.5" textAnchor="middle">ZnSO₄ + Cu</text>
+          <text x={W / 2} y={40} fontSize="14" fontWeight="800" textAnchor="middle">Displacement reaction</text>
+          <text x={W / 2} y={H - 26} fontSize="10.5" textAnchor="middle" fill="#64748b">a more reactive metal displaces a less reactive one from solution</text>
+        </g>
+      )}
+    </g>
+  );
+}
+
+
+// ---- Stopping distance -----------------------------------------------------
+export function StoppingDistance({ showLabels = true }) {
+  const rows = [
+    { speed: "30 mph", think: 60, brake: 45 },
+    { speed: "50 mph", think: 100, brake: 125 },
+    { speed: "70 mph", think: 140, brake: 245 },
+  ];
+  const x0 = 150, y0 = 130, dy = 90, scale = 0.9;
+  return (
+    <g>
+      {rows.map((r, i) => {
+        const y = y0 + i * dy;
+        const tw = r.think * scale, bw = r.brake * scale;
+        return (
+          <g key={i}>
+            <rect x={x0} y={y} width={tw} height="34" fill="#60a5fa" stroke="#1e3a8a" strokeWidth="1" />
+            <rect x={x0 + tw} y={y} width={bw} height="34" fill="#f87171" stroke="#7f1d1d" strokeWidth="1" />
+            {showLabels && (
+              <g fill="#334155">
+                <text x={x0 - 12} y={y + 22} fontSize="12" fontWeight="700" textAnchor="end">{r.speed}</text>
+                <text x={x0 + tw + bw + 8} y={y + 22} fontSize="10.5">{r.think + r.brake} ft total</text>
+              </g>
+            )}
+          </g>
+        );
+      })}
+      {showLabels && (
+        <g fill="#334155">
+          <rect x={x0} y={H - 70} width="16" height="16" fill="#60a5fa" /><text x={x0 + 22} y={H - 57} fontSize="11">thinking distance (∝ speed)</text>
+          <rect x={x0 + 220} y={H - 70} width="16" height="16" fill="#f87171" /><text x={x0 + 242} y={H - 57} fontSize="11">braking distance (∝ speed²)</text>
+          <text x={W / 2} y={40} fontSize="14" fontWeight="800" textAnchor="middle">Stopping distance vs speed</text>
+        </g>
+      )}
+    </g>
+  );
+}
+
+// ---- Diffraction -----------------------------------------------------------
+export function Diffraction({ showLabels = true }) {
+  const cx = W / 2, gapY = H / 2, gap = 40;
+  return (
+    <g>
+      {/* barrier with a gap */}
+      <rect x={cx - 8} y={70} width="16" height={gapY - gap - 70} fill="#475569" />
+      <rect x={cx - 8} y={gapY + gap} width="16" height={H - 90 - (gapY + gap)} fill="#475569" />
+      {/* plane wavefronts approaching (left) */}
+      {[0, 1, 2, 3, 4].map((i) => (
+        <line key={`p${i}`} x1={120 + i * 40} y1={90} x2={120 + i * 40} y2={H - 90} stroke="#0ea5e9" strokeWidth="2.5" opacity="0.8" />
+      ))}
+      {/* circular wavefronts spreading after the gap (right) */}
+      {[1, 2, 3, 4, 5].map((i) => (
+        <path key={`c${i}`} d={`M ${cx + 8} ${gapY - i * 34} A ${i * 34} ${i * 34} 0 0 1 ${cx + 8} ${gapY + i * 34}`} fill="none" stroke="#16a34a" strokeWidth="2.5" opacity="0.8" />
+      ))}
+      <line x1={200} y1={H / 2} x2={cx - 30} y2={H / 2} stroke="#334155" strokeWidth="2" markerEnd="url(#il-arrow)" />
+      {showLabels && (
+        <g fill="#334155">
+          <text x={200} y={78} fontSize="11" textAnchor="middle" fill="#0ea5e9">straight wavefronts</text>
+          <text x={cx + 130} y={78} fontSize="11" textAnchor="middle" fill="#16a34a">waves spread out (diffract)</text>
+          <text x={cx + 60} y={gapY + 6} fontSize="10.5" fill="#64748b">gap ≈ wavelength → most spreading</text>
+          <text x={W / 2} y={40} fontSize="14" fontWeight="800" textAnchor="middle">Diffraction through a gap</text>
+        </g>
+      )}
+    </g>
+  );
+}
+
+// ---- Momentum / conservation -----------------------------------------------
+export function Momentum({ showLabels = true }) {
+  const yTop = 150, yBot = 340;
+  return (
+    <g>
+      {/* before */}
+      <line x1={80} y1={yTop + 40} x2={W - 80} y2={yTop + 40} stroke="#cbd5e1" strokeWidth="2" />
+      <circle cx={220} cy={yTop} r="30" fill="#60a5fa" stroke="#1e3a8a" strokeWidth="2" />
+      <circle cx={430} cy={yTop} r="22" fill="#f59e0b" stroke="#92400e" strokeWidth="2" />
+      <line x1={256} y1={yTop} x2={330} y2={yTop} stroke="#16a34a" strokeWidth="4" markerEnd="url(#il-arrow)" />
+      {/* after */}
+      <line x1={80} y1={yBot + 40} x2={W - 80} y2={yBot + 40} stroke="#cbd5e1" strokeWidth="2" />
+      <circle cx={340} cy={yBot} r="30" fill="#60a5fa" stroke="#1e3a8a" strokeWidth="2" />
+      <circle cx={520} cy={yBot} r="22" fill="#f59e0b" stroke="#92400e" strokeWidth="2" />
+      <line x1={382} y1={yBot} x2={430} y2={yBot} stroke="#16a34a" strokeWidth="3" markerEnd="url(#il-arrow)" />
+      <line x1={548} y1={yBot} x2={640} y2={yBot} stroke="#16a34a" strokeWidth="5" markerEnd="url(#il-arrow)" />
+      {showLabels && (
+        <g fill="#334155">
+          <text x={110} y={yTop + 6} fontSize="13" fontWeight="700">Before</text>
+          <text x={110} y={yBot + 6} fontSize="13" fontWeight="700">After</text>
+          <text x={290} y={yTop - 44} fontSize="10.5" textAnchor="middle" fill="#16a34a">moving</text>
+          <text x={430} y={yTop - 34} fontSize="10.5" textAnchor="middle">stationary</text>
+          <text x={W / 2} y={40} fontSize="14" fontWeight="800" textAnchor="middle">Conservation of momentum</text>
+          <text x={W / 2} y={H - 30} fontSize="11" textAnchor="middle" fill="#64748b">total momentum before = total momentum after (m₁u₁ + m₂u₂ = m₁v₁ + m₂v₂)</text>
+        </g>
+      )}
+    </g>
+  );
+}
+
+// ---- National grid ---------------------------------------------------------
+export function NationalGrid({ showLabels = true }) {
+  const y = 230;
+  const pylon = (x) => (
+    <g stroke="#57534e" strokeWidth="2.5" fill="none">
+      <path d={`M ${x - 22} ${y + 70} L ${x} ${y - 30} L ${x + 22} ${y + 70}`} />
+      <line x1={x - 16} y1={y + 40} x2={x + 16} y2={y + 40} />
+      <line x1={x - 20} y1={y + 6} x2={x + 20} y2={y + 6} />
+    </g>
+  );
+  return (
+    <g>
+      {/* power station */}
+      <rect x={70} y={y - 10} width="90" height="90" fill="#94a3b8" stroke="#334155" strokeWidth="2" />
+      <path d="M 100 210 q 10 -20 20 0" fill="none" stroke="#94a3b8" strokeWidth="6" />
+      {/* step-up transformer */}
+      <rect x={190} y={y + 10} width="54" height="54" rx="6" fill="#fca5a5" stroke="#b91c1c" strokeWidth="2" />
+      {/* pylons + cables */}
+      {pylon(340)}{pylon(470)}
+      <line x1={244} y1={y + 20} x2={340} y2={y + 6} stroke="#eab308" strokeWidth="2.5" />
+      <line x1={340} y1={y + 6} x2={470} y2={y + 6} stroke="#eab308" strokeWidth="2.5" />
+      <line x1={470} y1={y + 6} x2={560} y2={y + 20} stroke="#eab308" strokeWidth="2.5" />
+      {/* step-down transformer + houses */}
+      <rect x={560} y={y + 10} width="54" height="54" rx="6" fill="#93c5fd" stroke="#1d4ed8" strokeWidth="2" />
+      <path d={`M ${W - 120} ${y + 80} L ${W - 120} ${y + 30} L ${W - 90} ${y + 10} L ${W - 60} ${y + 30} L ${W - 60} ${y + 80} Z`} fill="#fde68a" stroke="#a16207" strokeWidth="2" />
+      <line x1={614} y1={y + 40} x2={W - 120} y2={y + 55} stroke="#eab308" strokeWidth="2" />
+      {showLabels && (
+        <g fill="#334155">
+          <text x={115} y={y - 20} fontSize="11" fontWeight="700" textAnchor="middle">power station</text>
+          <text x={217} y={y - 2} fontSize="10" textAnchor="middle" fill="#b91c1c">step-up</text>
+          <text x={405} y={y - 44} fontSize="10.5" textAnchor="middle">very high voltage → low current → less heat loss</text>
+          <text x={587} y={y - 2} fontSize="10" textAnchor="middle" fill="#1d4ed8">step-down</text>
+          <text x={W - 90} y={y - 8} fontSize="11" fontWeight="700" textAnchor="middle">homes</text>
+          <text x={W / 2} y={40} fontSize="14" fontWeight="800" textAnchor="middle">The National Grid</text>
+        </g>
+      )}
+    </g>
+  );
+}
+
+// ---- Radiation penetration -------------------------------------------------
+export function RadiationPenetration({ showLabels = true }) {
+  const src = 120;
+  const rows = [
+    { y: 150, c: "#dc2626", name: "alpha (α)", stopAt: 300, barrier: "paper" },
+    { y: 250, c: "#2563eb", name: "beta (β)", stopAt: 470, barrier: "aluminium" },
+    { y: 350, c: "#16a34a", name: "gamma (γ)", stopAt: W - 120, barrier: "thick lead" },
+  ];
+  const barriers = [{ x: 300, label: "paper" }, { x: 470, label: "aluminium" }, { x: W - 120, label: "lead" }];
+  return (
+    <g>
+      <circle cx={src} cy={250} r="22" fill="#fbbf24" stroke="#b45309" strokeWidth="2" />
+      {barriers.map((b, i) => (
+        <rect key={i} x={b.x} y={110} width={b.label === "lead" ? 22 : b.label === "aluminium" ? 12 : 5} height="290" fill={b.label === "lead" ? "#64748b" : b.label === "aluminium" ? "#cbd5e1" : "#fef3c7"} stroke="#334155" strokeWidth="1.4" />
+      ))}
+      {rows.map((r, i) => (
+        <g key={i}>
+          <line x1={src + 22} y1={r.y} x2={r.stopAt} y2={r.y} stroke={r.c} strokeWidth="3.5" markerEnd="url(#il-arrow)" />
+          {showLabels && <text x={src + 30} y={r.y - 8} fontSize="11" fontWeight="700" fill={r.c}>{r.name}</text>}
+        </g>
+      ))}
+      {showLabels && (
+        <g fill="#334155">
+          <text x={302} y={420} fontSize="10.5" textAnchor="middle">paper</text>
+          <text x={476} y={420} fontSize="10.5" textAnchor="middle">few mm aluminium</text>
+          <text x={W - 108} y={420} fontSize="10.5" textAnchor="middle">thick lead / concrete</text>
+          <text x={src} y={300} fontSize="10.5" textAnchor="middle">source</text>
+          <text x={W / 2} y={40} fontSize="14" fontWeight="800" textAnchor="middle">Penetrating power of radiation</text>
+        </g>
+      )}
+    </g>
+  );
+}
+
+// ---- Glacial features ------------------------------------------------------
+export function GlacialFeatures({ showLabels = true }) {
+  return (
+    <g>
+      {/* mountain massif */}
+      <path d={`M 60 ${H - 90} L 230 140 L 360 260 L 470 150 L ${W - 60} ${H - 90} Z`} fill="#a8a29e" stroke="#57534e" strokeWidth="2" />
+      {/* pyramidal peak snow */}
+      <path d="M 230 140 L 200 210 L 262 210 Z" fill="#f8fafc" stroke="#94a3b8" strokeWidth="1" />
+      {/* corrie (armchair hollow) with tarn */}
+      <path d="M 300 300 q 40 -60 100 -20 q -20 60 -100 40 Z" fill="#bae6fd" stroke="#0369a1" strokeWidth="1.5" opacity="0.8" />
+      {/* U-shaped valley (front cross-section) */}
+      <path d={`M 90 ${H - 90} Q 90 ${H - 40} 220 ${H - 40} L ${W - 220} ${H - 40} Q ${W - 90} ${H - 40} ${W - 90} ${H - 90}`} fill="#d9f99d" stroke="#4d7c0f" strokeWidth="2" />
+      {showLabels && (
+        <g fill="#334155">
+          <Leader x={230} y={150} tx={140} ty={110} text="Pyramidal peak" color="#57534e" side="left" />
+          <Leader x={360} y={255} tx={470} ty={150} text="Arête (knife ridge)" color="#57534e" side="right" />
+          <Leader x={350} y={310} tx={470} ty={300} text="Corrie & tarn" color="#0369a1" side="right" />
+          <text x={W / 2} y={H - 55} fontSize="11" fontWeight="700" textAnchor="middle" fill="#4d7c0f">U-shaped (glacial trough) valley</text>
+          <text x={W / 2} y={40} fontSize="14" fontWeight="800" textAnchor="middle">Glacial landforms</text>
+        </g>
+      )}
+    </g>
+  );
+}
+
+// ---- Waterfall & gorge -----------------------------------------------------
+export function Waterfall({ showLabels = true }) {
+  const topY = 150, lipX = 380;
+  return (
+    <g>
+      {/* hard rock cap (left, upper) */}
+      <rect x={120} y={topY} width={lipX - 120} height="40" fill="#78716c" stroke="#44403c" strokeWidth="2" />
+      {/* soft rock beneath (undercut) */}
+      <rect x={120} y={topY + 40} width={lipX - 150} height="120" fill="#d6d3d1" stroke="#a8a29e" strokeWidth="1.5" />
+      {/* river on top */}
+      <rect x={120} y={topY - 16} width={lipX - 120} height="16" fill="#38bdf8" />
+      {/* falling water */}
+      <path d={`M ${lipX} ${topY - 16} L ${lipX} ${topY + 200} L ${lipX - 34} ${topY + 200} L ${lipX - 34} ${topY}`} fill="#7dd3fc" opacity="0.85" />
+      {/* plunge pool */}
+      <ellipse cx={lipX + 30} cy={topY + 210} rx="90" ry="26" fill="#0ea5e9" opacity="0.7" />
+      {/* gorge downstream */}
+      <rect x={lipX + 30} y={topY + 200} width={W - 90 - (lipX + 30)} height="24" fill="#38bdf8" />
+      {showLabels && (
+        <g fill="#334155">
+          <Leader x={250} y={topY + 20} tx={180} ty={topY - 36} text="Hard rock (cap)" color="#44403c" side="left" />
+          <Leader x={240} y={topY + 100} tx={150} ty={topY + 130} text="Soft rock (undercut)" color="#a8a29e" side="left" />
+          <Leader x={lipX + 30} y={topY + 210} tx={lipX + 150} ty={topY + 250} text="Plunge pool" color="#0369a1" side="right" />
+          <text x={(lipX + 30 + W - 90) / 2} y={topY + 250} fontSize="10.5" textAnchor="middle" fill="#0369a1">gorge (retreats upstream)</text>
+          <text x={W / 2} y={40} fontSize="14" fontWeight="800" textAnchor="middle">Waterfall formation</text>
+        </g>
+      )}
+    </g>
+  );
+}
+
+// ---- Longshore drift -------------------------------------------------------
+export function LongshoreDrift({ showLabels = true }) {
+  const beachY = 300;
+  return (
+    <g>
+      {/* sea (top) + beach (bottom) */}
+      <rect x={40} y={90} width={W - 80} height={beachY - 90} fill="#bae6fd" opacity="0.55" />
+      <rect x={40} y={beachY} width={W - 80} height={H - beachY - 30} fill="#fde68a" opacity="0.6" />
+      <line x1={40} y1={beachY} x2={W - 40} y2={beachY} stroke="#ca8a04" strokeWidth="2" />
+      {/* prevailing wind arrow */}
+      <line x1={90} y1={130} x2={190} y2={170} stroke="#64748b" strokeWidth="2.5" markerEnd="url(#il-arrow)" />
+      {/* zigzag sediment path: angled swash up, straight backwash down */}
+      {[0, 1, 2, 3, 4].map((i) => {
+        const x = 120 + i * 120;
+        return (
+          <g key={i}>
+            <line x1={x} y1={beachY} x2={x + 70} y2={beachY - 46} stroke="#0284c7" strokeWidth="2.5" markerEnd="url(#il-arrow)" />
+            <line x1={x + 70} y1={beachY - 46} x2={x + 70} y2={beachY} stroke="#16a34a" strokeWidth="2.5" markerEnd="url(#il-arrow)" />
+          </g>
+        );
+      })}
+      {/* net drift arrow along beach */}
+      <line x1={110} y1={beachY + 60} x2={W - 110} y2={beachY + 60} stroke="#dc2626" strokeWidth="4" markerEnd="url(#il-arrow)" />
+      {showLabels && (
+        <g fill="#334155">
+          <text x={150} y={120} fontSize="11" fill="#64748b">prevailing wind</text>
+          <text x={200} y={beachY - 54} fontSize="10.5" fill="#0284c7">swash (angled)</text>
+          <text x={300} y={beachY - 12} fontSize="10.5" fill="#16a34a">backwash (straight down)</text>
+          <text x={W / 2} y={beachY + 84} fontSize="11" fontWeight="700" textAnchor="middle" fill="#dc2626">net movement of sediment along the coast</text>
+          <text x={W / 2} y={40} fontSize="14" fontWeight="800" textAnchor="middle">Longshore drift</text>
+        </g>
+      )}
+    </g>
+  );
+}
