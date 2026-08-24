@@ -3000,3 +3000,150 @@ export function ContinentalDrift({ showLabels = true }) {
     </g>
   );
 }
+
+
+// ---- Electric generator (dynamo) -------------------------------------------
+export function ElectricGenerator({ showLabels = true }) {
+  const cx = W / 2, cy = H / 2 - 20;
+  return (
+    <g>
+      <rect x={cx - 180} y={cy - 70} width="46" height="140" fill="#dc2626" /><text x={cx - 157} y={cy + 6} fontSize="22" fontWeight="800" fill="#fff" textAnchor="middle">N</text>
+      <rect x={cx + 134} y={cy - 70} width="46" height="140" fill="#2563eb" /><text x={cx + 157} y={cy + 6} fontSize="22" fontWeight="800" fill="#fff" textAnchor="middle">S</text>
+      {[-40, 0, 40].map((o, i) => <line key={i} x1={cx - 134} y1={cy + o} x2={cx + 134} y2={cy + o} stroke="#94a3b8" strokeWidth="1.5" markerEnd="url(#il-arrow)" />)}
+      <rect x={cx - 70} y={cy - 50} width="140" height="100" fill="none" stroke="#b45309" strokeWidth="4" rx="6" />
+      {/* mechanical rotation input */}
+      <path d={`M ${cx - 66} ${cy - 54} A 40 20 0 0 1 ${cx + 66} ${cy - 54}`} fill="none" stroke="#16a34a" strokeWidth="2.5" markerEnd="url(#il-arrow)" />
+      {/* slip rings (full rings) + brushes + bulb */}
+      <circle cx={cx - 8} cy={cy + 96} r="9" fill="none" stroke="#64748b" strokeWidth="3" />
+      <circle cx={cx + 8} cy={cy + 96} r="9" fill="none" stroke="#64748b" strokeWidth="3" />
+      <line x1={cx - 8} y1={cy + 50} x2={cx - 8} y2={cy + 87} stroke="#b45309" strokeWidth="3" />
+      <line x1={cx + 8} y1={cy + 50} x2={cx + 8} y2={cy + 87} stroke="#b45309" strokeWidth="3" />
+      <path d={`M ${cx - 8} ${cy + 105} L ${cx - 8} ${cy + 150} L ${cx - 40} ${cy + 150}`} fill="none" stroke="#334155" strokeWidth="2.5" />
+      <path d={`M ${cx + 8} ${cy + 105} L ${cx + 8} ${cy + 150} L ${cx + 40} ${cy + 150}`} fill="none" stroke="#334155" strokeWidth="2.5" />
+      {bulb(cx, cy + 150)}
+      {showLabels && (
+        <g>
+          <Leader x={cx} y={cy - 50} tx={cx} ty={70} text="Coil rotated (mechanical input)" color="#16a34a" side="right" />
+          <Leader x={cx} y={cy + 96} tx={70} ty={cy + 130} text="Slip rings + brushes" color="#64748b" side="left" />
+          <text x={cx} y={cy + 180} fontSize="11" fill="#334155" textAnchor="middle">rotating coil induces a current (electromagnetic induction)</text>
+        </g>
+      )}
+    </g>
+  );
+}
+
+// ---- Food tests ------------------------------------------------------------
+export function FoodTests({ showLabels = true }) {
+  const tubes = [
+    ["Starch", "iodine", "#1e3a8a", "blue-black"],
+    ["Glucose", "Benedict's + heat", "#dc2626", "brick-red"],
+    ["Protein", "Biuret", "#7c3aed", "purple/lilac"],
+    ["Fat", "ethanol emulsion", "#e2e8f0", "cloudy white"],
+  ];
+  const cw = W / 4, top = 130, bot = 360;
+  return (
+    <g>
+      {tubes.map(([food, reagent, color, result], i) => {
+        const x = cw / 2 + i * cw;
+        return (
+          <g key={i}>
+            <path d={`M ${x - 22} ${top} L ${x - 22} ${bot - 20} Q ${x - 22} ${bot} ${x} ${bot} Q ${x + 22} ${bot} ${x + 22} ${bot - 20} L ${x + 22} ${top}`} fill="none" stroke="#334155" strokeWidth="2.5" />
+            <path d={`M ${x - 22} ${top + 70} L ${x - 22} ${bot - 20} Q ${x - 22} ${bot} ${x} ${bot} Q ${x + 22} ${bot} ${x + 22} ${bot - 20} L ${x + 22} ${top + 70} Z`} fill={color} opacity="0.7" />
+            {showLabels && (
+              <g textAnchor="middle">
+                <text x={x} y={top - 26} fontSize="13" fontWeight="800" fill="#334155">{food}</text>
+                <text x={x} y={top - 8} fontSize="10" fill="#64748b">{reagent}</text>
+                <text x={x} y={bot + 24} fontSize="11" fontWeight="700" fill={color === "#e2e8f0" ? "#64748b" : color}>{result}</text>
+              </g>
+            )}
+          </g>
+        );
+      })}
+      {showLabels && <text x={W / 2} y={H - 24} fontSize="12" fill="#64748b" textAnchor="middle">positive-result colours for common food tests</text>}
+    </g>
+  );
+}
+
+// ---- Types of chemical reactions -------------------------------------------
+export function ReactionTypes({ showLabels = true }) {
+  const atom = (x, y, c, t) => <g><Sphere cx={x} cy={y} r={13} fill={c} /><text x={x} y={y + 4} fontSize="11" fontWeight="700" fill="#fff" textAnchor="middle">{t}</text></g>;
+  const rows = [
+    ["Combination", 110, "A + B → AB"], ["Decomposition", 220, "AB → A + B"],
+    ["Displacement", 330, "A + BC → AC + B"], ["Double displacement", 440, "AB + CD → AD + CB"],
+  ];
+  const red = "#dc2626", blue = "#2563eb", green = "#16a34a", amber = "#f59e0b";
+  return (
+    <g>
+      {rows.map(([name, y, eq], i) => (
+        <g key={i}>
+          {showLabels && <text x={70} y={y + 4} fontSize="12.5" fontWeight="700" fill="#334155">{name}</text>}
+          {i === 0 && <>{atom(300, y, red, "A")}<text x={332} y={y + 5} fontSize="16" textAnchor="middle">+</text>{atom(364, y, blue, "B")}<line x1={392} y1={y} x2={440} y2={y} stroke="#334155" strokeWidth="2" markerEnd="url(#il-arrow)" />{atom(474, y, red, "A")}{atom(500, y, blue, "B")}</>}
+          {i === 1 && <>{atom(300, y, red, "A")}{atom(326, y, blue, "B")}<line x1={356} y1={y} x2={404} y2={y} stroke="#334155" strokeWidth="2" markerEnd="url(#il-arrow)" />{atom(438, y, red, "A")}<text x={470} y={y + 5} fontSize="16" textAnchor="middle">+</text>{atom(502, y, blue, "B")}</>}
+          {i === 2 && <>{atom(300, y, green, "A")}<text x={332} y={y + 5} fontSize="16" textAnchor="middle">+</text>{atom(364, y, blue, "B")}{atom(390, y, amber, "C")}<line x1={420} y1={y} x2={460} y2={y} stroke="#334155" strokeWidth="2" markerEnd="url(#il-arrow)" />{atom(492, y, green, "A")}{atom(518, y, amber, "C")}<text x={548} y={y + 5} fontSize="16" textAnchor="middle">+</text>{atom(580, y, blue, "B")}</>}
+          {i === 3 && <>{atom(288, y, red, "A")}{atom(314, y, blue, "B")}<text x={344} y={y + 5} fontSize="16" textAnchor="middle">+</text>{atom(374, y, green, "C")}{atom(400, y, amber, "D")}<line x1={430} y1={y} x2={466} y2={y} stroke="#334155" strokeWidth="2" markerEnd="url(#il-arrow)" />{atom(498, y, red, "A")}{atom(524, y, amber, "D")}<text x={554} y={y + 5} fontSize="16" textAnchor="middle">+</text>{atom(586, y, green, "C")}{atom(612, y, blue, "B")}</>}
+        </g>
+      ))}
+    </g>
+  );
+}
+
+// ---- Nuclear fission -------------------------------------------------------
+export function NuclearFission({ showLabels = true }) {
+  const nx = W / 2 - 60, ny = H / 2;
+  return (
+    <g>
+      {/* incoming neutron */}
+      <line x1={70} y1={ny} x2={nx - 46} y2={ny} stroke="#334155" strokeWidth="2.5" markerEnd="url(#il-arrow)" />
+      <circle cx={90} cy={ny} r="8" fill="#64748b" />
+      {/* U-235 nucleus */}
+      <g filter="url(#viz-shadow)"><Sphere cx={nx} cy={ny} r={44} fill="#7c3aed" /></g>
+      {[...Array(10)].map((_, i) => { const a = i / 10 * 2 * Math.PI; return <circle key={i} cx={nx + 18 * Math.cos(a)} cy={ny + 18 * Math.sin(a)} r="6" fill={i % 2 ? "#c4b5fd" : "#a78bfa"} />; })}
+      {/* two daughter nuclei */}
+      <g filter="url(#viz-shadow)"><Sphere cx={W - 150} cy={ny - 70} r={26} fill="#16a34a" /></g>
+      <g filter="url(#viz-shadow)"><Sphere cx={W - 130} cy={ny + 80} r={30} fill="#0891b2" /></g>
+      <line x1={nx + 40} y1={ny - 10} x2={W - 180} y2={ny - 66} stroke="#334155" strokeWidth="2" markerEnd="url(#il-arrow)" />
+      <line x1={nx + 40} y1={ny + 10} x2={W - 162} y2={ny + 74} stroke="#334155" strokeWidth="2" markerEnd="url(#il-arrow)" />
+      {/* released neutrons + energy */}
+      {[[-30, "#64748b"], [10, "#64748b"], [40, "#64748b"]].map(([dy, c], i) => <g key={i}><line x1={nx + 44} y1={ny} x2={nx + 150} y2={ny + dy} stroke={c} strokeWidth="1.6" markerEnd="url(#il-arrow)" /><circle cx={nx + 150} cy={ny + dy} r="6" fill={c} /></g>)}
+      {showLabels && (
+        <g>
+          <text x={100} y={ny - 14} fontSize="11" fill="#334155">neutron</text>
+          <Leader x={nx} y={ny + 44} tx={nx} ty={H - 24} text="U-235 nucleus" color="#7c3aed" side="right" />
+          <text x={W - 150} y={ny - 100} fontSize="11" fill="#16a34a" textAnchor="middle">daughter nuclei</text>
+          <text x={nx + 156} y={ny + 60} fontSize="11" fill="#334155">+ neutrons + energy</text>
+          <text x={W / 2} y={40} fontSize="12" fontWeight="700" fill="#334155" textAnchor="middle">Nuclear fission (chain reaction)</text>
+        </g>
+      )}
+    </g>
+  );
+}
+
+// ---- Cloud types -----------------------------------------------------------
+export function CloudTypes({ showLabels = true }) {
+  const ground = H - 50;
+  const cloud = (cx, cy, s, fill = "#f1f5f9") => <g filter="url(#viz-shadow)">{[[-s, 0, s * 0.8], [0, -s * 0.4, s], [s, 0, s * 0.8]].map(([dx, dy, r], i) => <circle key={i} cx={cx + dx} cy={cy + dy} r={r} fill={fill} stroke="#cbd5e1" strokeWidth="1" />)}<rect x={cx - s * 1.6} y={cy} width={s * 3.2} height={s * 0.7} rx={s * 0.35} fill={fill} /></g>;
+  return (
+    <g>
+      {/* Cirrus (high, wispy) */}
+      {[0, 1, 2].map((i) => <path key={i} d={`M ${150 + i * 40} 90 q 40 -12 80 0`} fill="none" stroke="#cbd5e1" strokeWidth="4" strokeLinecap="round" />)}
+      {/* Altocumulus (mid) */}
+      {[0, 1, 2, 3].map((i) => <circle key={i} cx={480 + i * 34} cy={190} r="16" fill="#e2e8f0" stroke="#cbd5e1" strokeWidth="1" />)}
+      {/* Stratus (low layer) */}
+      <rect x={100} y={300} width={260} height={30} rx={15} fill="#cbd5e1" />
+      {/* Cumulonimbus (towering, dark base) */}
+      {cloud(560, 150, 30, "#f1f5f9")}
+      <rect x={520} y={150} width={80} height={180} fill="#94a3b8" opacity="0.8" />
+      {[...Array(5)].map((_, i) => <line key={i} x1={528 + i * 16} y1={330} x2={522 + i * 16} y2={360} stroke="#2563eb" strokeWidth="2" />)}
+      {/* Ground */}
+      <line x1={40} y1={ground} x2={W - 40} y2={ground} stroke="#16a34a" strokeWidth="4" />
+      {showLabels && (
+        <g fill="#334155">
+          <text x={210} y={70} fontSize="12" fontWeight="700">Cirrus (high)</text>
+          <text x={540} y={158} fontSize="12" fontWeight="700" textAnchor="middle">Altocumulus (mid)</text>
+          <text x={230} y={356} fontSize="12" fontWeight="700" textAnchor="middle">Stratus (low)</text>
+          <text x={560} y={130} fontSize="12" fontWeight="700" textAnchor="middle">Cumulonimbus</text>
+        </g>
+      )}
+    </g>
+  );
+}
