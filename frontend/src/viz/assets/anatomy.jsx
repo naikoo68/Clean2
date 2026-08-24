@@ -2166,3 +2166,136 @@ export function Synapse({ showLabels = true }) {
     </g>
   );
 }
+
+
+// ---- Endocrine system ------------------------------------------------------
+export function EndocrineSystem({ showLabels = true }) {
+  const cx = W / 2;
+  const glands = [
+    ["Pituitary", cx, 92, "#dc2626"], ["Thyroid", cx, 150, "#0891b2"], ["Thymus", cx, 186, "#7c3aed"],
+    ["Adrenal glands", cx - 34, 244, "#f59e0b"], ["Pancreas", cx + 30, 258, "#16a34a"], ["Gonads", cx, 320, "#ec4899"],
+  ];
+  return (
+    <g>
+      <g fill="#dbeafe" stroke="#3b82f6" strokeWidth="2" filter="url(#viz-shadow)">
+        <circle cx={cx} cy={92} r="30" />
+        <rect x={cx - 44} y={128} width="88" height="150" rx="22" />
+        <rect x={cx - 40} y={276} width="30" height="150" rx="14" /><rect x={cx + 10} y={276} width="30" height="150" rx="14" />
+      </g>
+      {glands.map(([name, x, y, color], i) => (
+        <g key={i}>
+          <Sphere cx={x} cy={y} r={8} fill={color} />
+          {showLabels && <Leader x={x} y={y} tx={i % 2 ? W - 70 : 70} ty={y} text={name} color={color} side={i % 2 ? "right" : "left"} />}
+        </g>
+      ))}
+    </g>
+  );
+}
+
+// ---- Antagonistic muscles (biceps / triceps) -------------------------------
+export function AntagonisticMuscles({ showLabels = true }) {
+  const sx = 180, sy = 140, ex = 300, ey = 340, wx = 520, wy = 300; // shoulder, elbow, wrist
+  const bone = "#e5e7eb", boneD = "#94a3b8";
+  return (
+    <g>
+      {/* Bones */}
+      <line x1={sx} y1={sy} x2={ex} y2={ey} stroke={bone} strokeWidth="18" strokeLinecap="round" />
+      <line x1={ex} y1={ey} x2={wx} y2={wy} stroke={bone} strokeWidth="16" strokeLinecap="round" />
+      <circle cx={ex} cy={ey} r="10" fill="#fca5a5" stroke={boneD} strokeWidth="1" />
+      {/* Biceps (contracted — short, bulging) on the inside of the joint */}
+      <path d={`M ${sx + 6} ${sy + 20} Q ${ex - 40} ${ey - 90} ${ex + 40} ${ey - 30}`} fill="none" stroke="#dc2626" strokeWidth="26" strokeLinecap="round" />
+      {/* Triceps (relaxed — long, thin) on the outside */}
+      <path d={`M ${sx - 8} ${sy + 26} Q ${ex - 70} ${ey - 10} ${ex + 30} ${ey + 26}`} fill="none" stroke="#2563eb" strokeWidth="14" strokeLinecap="round" />
+      {showLabels && (
+        <g>
+          <Leader x={ex - 20} y={ey - 66} tx={70} ty={140} text="Biceps (contracts)" color="#dc2626" side="left" />
+          <Leader x={ex - 40} y={ey + 10} tx={70} ty={ey + 60} text="Triceps (relaxes)" color="#2563eb" side="left" />
+          <Leader x={ex} y={ey} tx={W - 90} ty={ey + 20} text="Elbow joint" color="#b91c1c" side="right" />
+          <text x={W / 2} y={H - 26} fontSize="12" fill="#64748b" textAnchor="middle">antagonistic pair — one contracts while the other relaxes (flexion shown)</text>
+        </g>
+      )}
+    </g>
+  );
+}
+
+// ---- Titration curve -------------------------------------------------------
+export function TitrationCurve({ showLabels = true }) {
+  const x0 = 90, x1 = W - 70, y0 = H - 70, y1 = 60, plotW = x1 - x0, plotH = y0 - y1;
+  const pH = (v) => 1 + 13 / (1 + Math.exp(-(v - 25) / 3)); // sigmoid 0..50 mL
+  const pts = [];
+  for (let v = 0; v <= 50; v += 1) pts.push(`${(x0 + (v / 50) * plotW).toFixed(1)},${(y0 - (pH(v) / 14) * plotH).toFixed(1)}`);
+  const eqX = x0 + (25 / 50) * plotW, eqY = y0 - (7 / 14) * plotH;
+  return (
+    <g>
+      {/* axes */}
+      <line x1={x0} y1={y0} x2={x1} y2={y0} stroke="currentColor" strokeWidth="1.8" markerEnd="url(#il-arrow)" />
+      <line x1={x0} y1={y0} x2={x0} y2={y1} stroke="currentColor" strokeWidth="1.8" markerEnd="url(#il-arrow)" />
+      {[0, 7, 14].map((p, i) => <g key={i}><line x1={x0 - 5} y1={y0 - (p / 14) * plotH} x2={x0} y2={y0 - (p / 14) * plotH} stroke="currentColor" /><text x={x0 - 10} y={y0 - (p / 14) * plotH + 4} fontSize="11" fill="#64748b" textAnchor="end">{p}</text></g>)}
+      <polyline points={pts.join(" ")} fill="none" stroke="#7c3aed" strokeWidth="3" />
+      {/* equivalence point */}
+      <circle cx={eqX} cy={eqY} r="6" fill="#dc2626" />
+      <line x1={eqX} y1={eqY} x2={eqX} y2={y0} stroke="#dc2626" strokeWidth="1.2" strokeDasharray="4 4" />
+      {showLabels && (
+        <g>
+          <text x={eqX + 10} y={eqY - 6} fontSize="11.5" fontWeight="700" fill="#dc2626">equivalence point</text>
+          <text x={(x0 + x1) / 2} y={y0 + 34} fontSize="12" fill="#334155" textAnchor="middle">Volume of base added (mL)</text>
+          <text x={30} y={(y0 + y1) / 2} fontSize="12" fill="#334155" textAnchor="middle" transform={`rotate(-90 30 ${(y0 + y1) / 2})`}>pH</text>
+          <text x={x0 + 40} y={y0 - 30} fontSize="10.5" fill="#64748b">buffer region</text>
+        </g>
+      )}
+    </g>
+  );
+}
+
+// ---- Weather fronts (cross-section) ----------------------------------------
+export function WeatherFronts({ showLabels = true }) {
+  const ground = H - 80;
+  return (
+    <g>
+      {/* Warm air mass (right, rising over the cold wedge) */}
+      <path d={`M ${W / 2 - 60} ${ground} Q ${W / 2 + 60} ${ground - 200} ${W - 40} 120 L ${W - 40} ${ground} Z`} fill="#fecaca" opacity="0.55" />
+      {/* Cold air wedge (left, denser, pushing under) */}
+      <path d={`M 40 ${ground} L ${W / 2 + 40} ${ground} Q ${W / 2 - 40} ${ground - 120} 40 ${ground - 150} Z`} fill="#bfdbfe" opacity="0.7" />
+      {/* Front boundary + cold-front triangles */}
+      <path d={`M 40 ${ground - 150} Q ${W / 2 - 40} ${ground - 120} ${W / 2 + 40} ${ground}`} fill="none" stroke="#2563eb" strokeWidth="3" />
+      {/* Clouds + rain above the boundary */}
+      {[[W / 2 - 20, ground - 200], [W / 2 + 30, ground - 220], [W / 2 + 80, ground - 190]].map(([x, y], i) => <circle key={i} cx={x} cy={y} r="26" fill="#94a3b8" />)}
+      {[...Array(7)].map((_, i) => <line key={i} x1={W / 2 - 30 + i * 22} y1={ground - 180} x2={W / 2 - 36 + i * 22} y2={ground - 150} stroke="#2563eb" strokeWidth="2" />)}
+      <line x1={40} y1={ground} x2={W - 40} y2={ground} stroke="#a16207" strokeWidth="3" />
+      {showLabels && (
+        <g>
+          <text x={150} y={ground - 60} fontSize="13" fontWeight="700" fill="#2563eb" textAnchor="middle">Cold air (dense)</text>
+          <text x={W - 160} y={220} fontSize="13" fontWeight="700" fill="#dc2626" textAnchor="middle">Warm air (rises)</text>
+          <Leader x={W / 2} y={ground - 120} tx={W / 2} ty={ground + 30} text="Front (boundary)" color="#2563eb" side="right" />
+          <text x={W / 2 + 40} y={ground - 240} fontSize="11" fill="#334155">clouds & rain form</text>
+        </g>
+      )}
+    </g>
+  );
+}
+
+// ---- River course ----------------------------------------------------------
+export function RiverCourse({ showLabels = true }) {
+  return (
+    <g>
+      {/* Mountains (source) */}
+      <path d={`M 30 ${H - 120} L 110 90 L 190 ${H - 120} Z`} fill="#cbd5e1" stroke="#64748b" strokeWidth="2" />
+      <path d={`M 110 90 L 130 140 L 90 140 Z`} fill="#f8fafc" />
+      {/* Sea (mouth) */}
+      <path d={`M ${W - 150} 60 L ${W - 20} 60 L ${W - 20} ${H - 20} L ${W - 190} ${H - 20} Q ${W - 150} ${H / 2} ${W - 150} 60 Z`} fill="#bae6fd" stroke="#0284c7" strokeWidth="1.5" />
+      {/* River: straight upper -> meandering middle -> wide lower -> delta */}
+      <path d={`M 110 130 L 210 220 Q 300 270 240 320 Q 180 370 300 400 Q 420 430 ${W - 200} 430`} fill="none" stroke="#0ea5e9" strokeWidth="6" strokeLinecap="round" />
+      {/* Delta */}
+      {[-24, 0, 24].map((o, i) => <line key={i} x1={W - 210} y1={430} x2={W - 160} y2={430 + o} stroke="#0ea5e9" strokeWidth="3" />)}
+      {showLabels && (
+        <g>
+          <Leader x={130} y={150} tx={70} ty={200} text="Source (upper course)" color="#0284c7" side="left" />
+          <Leader x={260} y={300} tx={70} ty={340} text="Meanders (middle course)" color="#0284c7" side="left" />
+          <Leader x={420} y={420} tx={420} ty={H - 30} text="Floodplain (lower course)" color="#0284c7" side="right" />
+          <Leader x={W - 200} y={430} tx={W - 60} ty={H - 60} text="Delta / mouth" color="#0284c7" side="right" />
+          <text x={150} y={80} fontSize="11" fill="#64748b" textAnchor="middle">rapids / waterfalls</text>
+        </g>
+      )}
+    </g>
+  );
+}
