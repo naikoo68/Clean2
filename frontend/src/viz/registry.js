@@ -64,7 +64,7 @@ export const CATALOG = {
     "Population Pyramid", "Climate Graph", "Rainfall Graph", "River System", "Drainage Pattern",
     "Topographic Profile", "Contour Diagram", "Map", "Choropleth", "Flow Map", "Elevation",
     "DEM", "Terrain", "Wind Rose", "Water Cycle", "Rock Cycle", "Volcano",
-    "Layers of the Earth", "Layers of the Atmosphere", "Greenhouse Effect", "Plate Tectonics",
+    "Layers of the Earth", "Layers of the Atmosphere", "Greenhouse Effect", "Plate Tectonics", "Soil Horizons",
   ],
   biology: [
     "Cell Structure", "DNA", "RNA", "Mitosis", "Meiosis", "Food Chain", "Food Web", "Human Body",
@@ -75,14 +75,14 @@ export const CATALOG = {
     "Frog Life Cycle", "Plant Life Cycle", "Energy Pyramid", "Kidney (gross anatomy)",
     "Reflex Arc", "Food Chain (illustrated)", "Seed Structure", "Punnett Square",
     "Types of Joints", "Skin (cross-section)", "Protein Synthesis", "Oxygen Cycle",
-    "Ecosystem", "Classification Tree",
+    "Breathing Mechanism", "Synapse", "Ecosystem", "Classification Tree",
   ],
   chemistry: [
     "Bohr Model", "Atomic Structure", "Molecular Structure", "Reaction Diagram",
     "Reaction Mechanism", "Substitution Mechanism", "Addition Mechanism",
     "Elimination Mechanism", "Rearrangement Mechanism", "Combined Mechanisms",
     "Periodic Table", "Electron Configuration", "Energy Level", "Orbital Diagram",
-    "States of Matter", "pH Scale", "Ionic vs Covalent Bonding",
+    "States of Matter", "pH Scale", "Ionic vs Covalent Bonding", "Electrolysis", "Distillation",
   ],
   physics: [
     "Free Body Diagram", "Projectile Motion", "Wave", "Circuit Diagram", "Optics", "Ray Diagram",
@@ -426,6 +426,11 @@ Object.assign(MODULES, {
   reflectionrefraction: _il("reflectionrefraction", "Reflection & Refraction", "physics", { kind: "refraction" }),
   proteinsynthesis:  _il("proteinsynthesis", "Protein Synthesis", "biology", { kind: "proteinsynthesis" }),
   oxygencycle:       _il("oxygencycle", "Oxygen Cycle", "biology", { kind: "oxygencycle" }),
+  soilhorizons:      _il("soilhorizons", "Soil Horizons", "geography", { kind: "soilhorizons" }),
+  electrolysis:      _il("electrolysis", "Electrolysis", "chemistry", { kind: "electrolysis" }),
+  distillation:      _il("distillation", "Distillation", "chemistry", { kind: "distillation" }),
+  breathing:         _il("breathing", "Breathing Mechanism", "biology", { kind: "breathing" }),
+  synapse:           _il("synapse", "Synapse", "biology", { kind: "synapse" }),
 });
 
 // ---- Phase 10: fill remaining catalog (aliases + charts/graphs/tables/illustrations) ----
