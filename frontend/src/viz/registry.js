@@ -67,7 +67,7 @@ export const CATALOG = {
     "Layers of the Earth", "Layers of the Atmosphere", "Greenhouse Effect", "Plate Tectonics", "Soil Horizons",
     "Weather Fronts", "River Course", "Seasons (Earth's tilt)", "Tides (Spring & Neap)",
     "Renewable Energy Sources", "Latitude & Longitude", "Earthquake (seismic waves)",
-    "Day & Night", "Continental Drift",
+    "Day & Night", "Continental Drift", "Cloud Types",
   ],
   biology: [
     "Cell Structure", "DNA", "RNA", "Mitosis", "Meiosis", "Food Chain", "Food Web", "Human Body",
@@ -80,7 +80,8 @@ export const CATALOG = {
     "Types of Joints", "Skin (cross-section)", "Protein Synthesis", "Oxygen Cycle",
     "Breathing Mechanism", "Synapse", "Endocrine System", "Antagonistic Muscles", "Immune Response",
     "Blood Groups (ABO)", "Mosquito Life Cycle", "Aerobic vs Anaerobic Respiration",
-    "Enzyme Action (lock & key)", "Osmosis", "DNA Replication", "Ecosystem", "Classification Tree",
+    "Enzyme Action (lock & key)", "Osmosis", "DNA Replication", "Food Tests",
+    "Ecosystem", "Classification Tree",
   ],
   chemistry: [
     "Bohr Model", "Atomic Structure", "Molecular Structure", "Reaction Diagram",
@@ -89,6 +90,7 @@ export const CATALOG = {
     "Periodic Table", "Electron Configuration", "Energy Level", "Orbital Diagram",
     "States of Matter", "pH Scale", "Ionic vs Covalent Bonding", "Electrolysis", "Distillation",
     "Titration Curve", "Crude Oil Distillation", "Carbon Allotropes", "Neutralization", "Periodic Table Trends",
+    "Types of Chemical Reactions",
   ],
   physics: [
     "Free Body Diagram", "Projectile Motion", "Wave", "Circuit Diagram", "Optics", "Ray Diagram",
@@ -96,7 +98,7 @@ export const CATALOG = {
     "Electromagnetic Spectrum", "Series & Parallel Circuits", "Transverse & Longitudinal Waves",
     "Levers", "Solar & Lunar Eclipse", "Simple Machines", "Star Life Cycle", "Reflection & Refraction",
     "Prism Dispersion", "Simple Pendulum", "Electric Motor", "Transformer", "Mirror Image Formation",
-    "Convex Lens Image", "Radioactive Decay",
+    "Convex Lens Image", "Radioactive Decay", "Electric Generator", "Nuclear Fission",
   ],
   cs: [
     "Flowchart", "Algorithm Flow", "ER Diagram", "DFD", "UML", "Sequence Diagram",
@@ -469,6 +471,11 @@ Object.assign(MODULES, {
   radioactivedecay:  _il("radioactivedecay", "Radioactive Decay", "physics", { kind: "radioactive" }),
   periodictrends:    _il("periodictrends", "Periodic Table Trends", "chemistry", { kind: "periodictrends" }),
   continentaldrift:  _il("continentaldrift", "Continental Drift", "geography", { kind: "continentaldrift" }),
+  electricgenerator: _il("electricgenerator", "Electric Generator", "physics", { kind: "generator" }),
+  foodtests:         _il("foodtests", "Food Tests", "biology", { kind: "foodtests" }),
+  reactiontypes:     _il("reactiontypes", "Types of Chemical Reactions", "chemistry", { kind: "reactiontypes" }),
+  nuclearfission:    _il("nuclearfission", "Nuclear Fission", "physics", { kind: "fission" }),
+  cloudtypes:        _il("cloudtypes", "Cloud Types", "geography", { kind: "cloudtypes" }),
 });
 
 // ---- Phase 10: fill remaining catalog (aliases + charts/graphs/tables/illustrations) ----
