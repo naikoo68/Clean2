@@ -10,6 +10,7 @@ import { ownerValue, ownerFilter, isClient } from "../utils/ownership.js";
 import { duplicateQuestions } from "../utils/duplicateQuestions.js";
 import { byNatural } from "../utils/naturalSort.js";
 import { NOT_DELETED, softDeletePatch } from "../utils/softDelete.js";
+import { sanitizeBody } from "../utils/sanitizeBody.js";
 
 const slugify = (s) =>
   s.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
@@ -29,12 +30,12 @@ export async function listStreams(req, res) {
 
 export async function createStream(req, res) {
   const { name } = req.body;
-  const stream = await Stream.create({ ...req.body, slug: slugify(name) });
+  const stream = await Stream.create({ ...sanitizeBody(req.body), slug: slugify(name) });
   res.status(201).json(stream);
 }
 
 export async function updateStream(req, res) {
-  const data = { ...req.body };
+  const data = sanitizeBody(req.body);
   if (data.name) data.slug = slugify(data.name);
   const stream = await Stream.findByIdAndUpdate(req.params.id, data, { new: true });
   if (!stream) return res.status(404).json({ message: "Stream not found" });
@@ -80,12 +81,12 @@ export async function listSubjects(req, res) {
 
 export async function createSubject(req, res) {
   const { name } = req.body;
-  const subject = await Subject.create({ ...req.body, slug: slugify(name) });
+  const subject = await Subject.create({ ...sanitizeBody(req.body), slug: slugify(name) });
   res.status(201).json(subject);
 }
 
 export async function updateSubject(req, res) {
-  const data = { ...req.body };
+  const data = sanitizeBody(req.body);
   if (data.name) data.slug = slugify(data.name);
   const subject = await Subject.findByIdAndUpdate(req.params.id, data, { new: true });
   if (!subject) return res.status(404).json({ message: "Subject not found" });
@@ -112,12 +113,12 @@ export async function listTopics(req, res) {
 export async function createTopic(req, res) {
   // Append at the end: index = current number of topics in this subject.
   const index = req.body.index ?? (await Topic.countDocuments({ subject: req.body.subject }));
-  const topic = await Topic.create({ ...req.body, index });
+  const topic = await Topic.create({ ...sanitizeBody(req.body), index });
   res.status(201).json(topic);
 }
 
 export async function updateTopic(req, res) {
-  const topic = await Topic.findByIdAndUpdate(req.params.id, req.body, { new: true });
+  const topic = await Topic.findByIdAndUpdate(req.params.id, sanitizeBody(req.body), { new: true });
   if (!topic) return res.status(404).json({ message: "Topic not found" });
   res.json(topic);
 }
@@ -141,12 +142,12 @@ export async function listSessions(req, res) {
 
 export async function createSession(req, res) {
   const index = req.body.index ?? (await Session.countDocuments({ topic: req.body.topic }));
-  const session = await Session.create({ ...req.body, index });
+  const session = await Session.create({ ...sanitizeBody(req.body), index });
   res.status(201).json(session);
 }
 
 export async function updateSession(req, res) {
-  const session = await Session.findByIdAndUpdate(req.params.id, req.body, { new: true });
+  const session = await Session.findByIdAndUpdate(req.params.id, sanitizeBody(req.body), { new: true });
   res.json(session);
 }
 
@@ -172,13 +173,13 @@ export async function listQuizzes(req, res) {
 export async function createQuiz(req, res) {
   // Append at the end so Quiz 1 stays before Quiz 2, etc.
   const index = req.body.index ?? (await Quiz.countDocuments({ session: req.body.session }));
-  const quiz = await Quiz.create({ ...req.body, index });
+  const quiz = await Quiz.create({ ...sanitizeBody(req.body), index });
   notifyNewContent("quiz", quiz); // fire-and-forget (respects admin toggle)
   res.status(201).json(quiz);
 }
 
 export async function updateQuiz(req, res) {
-  const quiz = await Quiz.findByIdAndUpdate(req.params.id, req.body, { new: true });
+  const quiz = await Quiz.findByIdAndUpdate(req.params.id, sanitizeBody(req.body), { new: true });
   if (!quiz) return res.status(404).json({ message: "Quiz not found" });
   res.json(quiz);
 }
@@ -462,8 +463,7 @@ export async function bulkCreateQuestions(req, res) {
 }
 
 export async function updateQuestion(req, res) {
-  const patch = { ...req.body };
-  delete patch.owner;
+  const patch = sanitizeBody(req.body); // strips owner/tenantId/_id/etc.
   const question = await Question.findOneAndUpdate({ _id: req.params.id, ...ownerFilter(req) }, patch, { new: true });
   if (!question) return res.status(404).json({ message: "Question not found" });
   res.json(question);

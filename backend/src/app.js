@@ -81,20 +81,36 @@ const app = express();
 // In production, restrict CORS to the configured CLIENT_URL (and common Vercel
 // preview URLs). In development, allow any origin for convenience.
 app.use(helmet());
-const corsOrigin = process.env.NODE_ENV === "production"
-  ? (origin, callback) => {
-      const allowed = (process.env.CLIENT_URL || "").replace(/\/$/, "");
-      // Allow: the configured client URL, Vercel preview deployments, and
-      // requests with no Origin header (e.g. server-to-server, curl, mobile).
-      if (!origin || origin === allowed || /\.vercel\.app$/.test(origin)) {
-        callback(null, true);
-      } else {
-        callback(null, true); // log but don't block — stateless JWT auth means CORS is defence-in-depth only
-        console.warn(`[CORS] Request from unlisted origin: ${origin}`);
+// CORS. Authentication is a stateless JWT sent in the Authorization header
+// (never a cookie), so the browser's same-origin policy already stops another
+// site from reading a logged-in user's token or forging an authenticated
+// request. CORS here is defence-in-depth, and we NEVER enable credentialed
+// (cookie) CORS.
+//
+// Default = permissive (reflect the request origin). This is deliberate: in the
+// white-label model each institute serves the app from its OWN custom domain /
+// subdomain, which isn't known ahead of time, so a fixed allowlist would break
+// them. To lock the API down to a known set of origins, set the env var
+// CORS_ALLOWED_ORIGINS to a comma-separated list — requests from anything else
+// are then refused. (CLIENT_URL is always included; Vercel/Netlify preview URLs
+// are allowed; requests with no Origin — curl, mobile, server-to-server — pass.)
+const allowList = [process.env.CLIENT_URL, ...(process.env.CORS_ALLOWED_ORIGINS || "").split(",")]
+  .map((o) => String(o || "").trim().replace(/\/$/, ""))
+  .filter(Boolean);
+
+const corsOrigin =
+  allowList.length && process.env.CORS_ALLOWED_ORIGINS
+    ? (origin, callback) => {
+        if (!origin) return callback(null, true); // not a browser CORS request
+        const o = origin.replace(/\/$/, "");
+        if (allowList.includes(o) || /\.vercel\.app$/.test(o) || /\.netlify\.app$/.test(o)) {
+          return callback(null, true);
+        }
+        console.warn(`[CORS] blocked request from origin: ${origin}`);
+        return callback(new Error("Not allowed by CORS"));
       }
-    }
-  : true;
-app.use(cors({ origin: corsOrigin }));
+    : true; // permissive (see note above)
+app.use(cors({ origin: corsOrigin, credentials: false }));
 // Restore endpoints accept large backup files — they attach their own 60mb JSON
 // parser at the route level. Skip the global 10mb parser for them so it doesn't
 // reject a big backup before the route-level parser runs.
