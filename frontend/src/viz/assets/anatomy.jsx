@@ -12,7 +12,7 @@
 // figures (heart, neuron variants, flower, kidney, …) can be dropped in here
 // and wired through the registry without touching the engine.
 
-import { Sphere } from "../vizStyle";
+import { PALETTE, Sphere } from "../vizStyle";
 
 const W = 760, H = 520;
 
@@ -1849,6 +1849,165 @@ export function StarLifeCycle({ showLabels = true }) {
           <text x={410} y={360} fontSize="10.5" fill="#64748b">high-mass star →</text>
         </g>
       )}
+    </g>
+  );
+}
+
+
+// ---- Types of joints -------------------------------------------------------
+export function Joints({ showLabels = true }) {
+  const bone = "#e5e7eb", boneD = "#94a3b8", y = 220;
+  const cols = [175, 400, 620];
+  return (
+    <g stroke={boneD} strokeWidth="0.6">
+      {/* Hinge */}
+      <g>
+        <line x1={cols[0]} y1={y - 90} x2={cols[0]} y2={y} stroke={bone} strokeWidth="16" strokeLinecap="round" />
+        <line x1={cols[0]} y1={y} x2={cols[0] + 70} y2={y + 60} stroke={bone} strokeWidth="16" strokeLinecap="round" />
+        <circle cx={cols[0]} cy={y} r="10" fill="#fca5a5" />
+        <path d={`M ${cols[0] + 30} ${y + 26} A 40 40 0 0 0 ${cols[0] + 44} ${y - 10}`} fill="none" stroke="#dc2626" strokeWidth="2" markerEnd="url(#il-arrow)" />
+      </g>
+      {/* Ball & socket */}
+      <g>
+        <path d={`M ${cols[1] - 30} ${y - 40} A 40 40 0 1 0 ${cols[1] - 30} ${y + 40}`} fill="none" stroke={bone} strokeWidth="16" />
+        <line x1={cols[1] + 30} y1={y} x2={cols[1] + 90} y2={y + 60} stroke={bone} strokeWidth="16" strokeLinecap="round" />
+        <Sphere cx={cols[1]} cy={y} r={22} fill="#fca5a5" />
+        <path d={`M ${cols[1] + 34} ${y - 30} A 30 30 0 1 1 ${cols[1] + 30} ${y - 34}`} fill="none" stroke="#dc2626" strokeWidth="2" markerEnd="url(#il-arrow)" />
+      </g>
+      {/* Pivot */}
+      <g>
+        <line x1={cols[2] - 50} y1={y} x2={cols[2] + 50} y2={y} stroke={bone} strokeWidth="16" strokeLinecap="round" />
+        <circle cx={cols[2]} cy={y} r="16" fill="none" stroke={bone} strokeWidth="8" />
+        <line x1={cols[2]} y1={y - 70} x2={cols[2]} y2={y + 10} stroke="#cbd5e1" strokeWidth="10" strokeLinecap="round" />
+        <path d={`M ${cols[2] - 26} ${y - 40} A 26 26 0 0 1 ${cols[2] + 26} ${y - 40}`} fill="none" stroke="#dc2626" strokeWidth="2" markerEnd="url(#il-arrow)" />
+      </g>
+      {showLabels && (
+        <g stroke="none">
+          <text x={cols[0]} y={y + 96} fontSize="13" fontWeight="700" fill="#334155" textAnchor="middle">Hinge</text>
+          <text x={cols[0]} y={y + 112} fontSize="10" fill="#64748b" textAnchor="middle">elbow, knee</text>
+          <text x={cols[1]} y={y + 96} fontSize="13" fontWeight="700" fill="#334155" textAnchor="middle">Ball & socket</text>
+          <text x={cols[1]} y={y + 112} fontSize="10" fill="#64748b" textAnchor="middle">hip, shoulder</text>
+          <text x={cols[2]} y={y + 96} fontSize="13" fontWeight="700" fill="#334155" textAnchor="middle">Pivot</text>
+          <text x={cols[2]} y={y + 112} fontSize="10" fill="#64748b" textAnchor="middle">neck (atlas–axis)</text>
+        </g>
+      )}
+    </g>
+  );
+}
+
+// ---- Skin (cross-section) --------------------------------------------------
+export function SkinSection({ showLabels = true }) {
+  const x0 = 150, x1 = 590, top = 100;
+  const epiY = top, derY = top + 60, hypY = top + 200, bottom = top + 320;
+  return (
+    <g>
+      <rect x={x0} y={epiY} width={x1 - x0} height={derY - epiY} fill="#fcd9b6" stroke="#d97706" strokeWidth="1.5" />
+      <rect x={x0} y={derY} width={x1 - x0} height={hypY - derY} fill="#fecdd3" stroke="#e11d48" strokeWidth="1.5" />
+      <rect x={x0} y={hypY} width={x1 - x0} height={bottom - hypY} fill="#fef9c3" stroke="#ca8a04" strokeWidth="1.5" />
+      {[...Array(6)].map((_, i) => <circle key={i} cx={x0 + 50 + i * 80} cy={hypY + 55} r="26" fill="#fde68a" stroke="#ca8a04" strokeWidth="1" />)}
+      {/* Hair + follicle */}
+      <line x1={x0 + 130} y1={epiY} x2={x0 + 110} y2={epiY - 46} stroke="#78350f" strokeWidth="3" strokeLinecap="round" />
+      <path d={`M ${x0 + 130} ${epiY} L ${x0 + 150} ${hypY + 20}`} stroke="#78350f" strokeWidth="6" fill="none" />
+      <ellipse cx={x0 + 150} cy={hypY + 26} rx="10" ry="16" fill="#92400e" />
+      {/* Sweat gland (coiled) + duct */}
+      <path d={`M ${x0 + 300} ${epiY} L ${x0 + 310} ${hypY - 10}`} stroke="#0ea5e9" strokeWidth="3" fill="none" />
+      <circle cx={x0 + 312} cy={hypY - 2} r="16" fill="none" stroke="#0284c7" strokeWidth="3" />
+      {/* Blood vessel */}
+      <path d={`M ${x0 + 400} ${derY + 20} q 20 30 -6 60 q -26 30 6 60`} fill="none" stroke="#dc2626" strokeWidth="3" />
+      {showLabels && (
+        <g>
+          <Leader x={x1} y={(epiY + derY) / 2} tx={W - 60} ty={epiY + 6} text="Epidermis" color="#d97706" side="right" />
+          <Leader x={x1} y={(derY + hypY) / 2} tx={W - 60} ty={(derY + hypY) / 2} text="Dermis" color="#e11d48" side="right" />
+          <Leader x={x1} y={(hypY + bottom) / 2} tx={W - 60} ty={(hypY + bottom) / 2} text="Hypodermis (fat)" color="#ca8a04" side="right" />
+          <Leader x={x0 + 110} y={epiY - 40} tx={70} ty={top - 6} text="Hair" color="#78350f" side="left" />
+          <Leader x={x0 + 150} y={hypY + 26} tx={70} ty={hypY + 40} text="Hair follicle" color="#92400e" side="left" />
+          <Leader x={x0 + 312} y={hypY - 2} tx={70} ty={hypY - 20} text="Sweat gland" color="#0284c7" side="left" />
+          <Leader x={x0 + 400} y={derY + 60} tx={70} ty={derY + 80} text="Blood vessel" color="#dc2626" side="left" />
+        </g>
+      )}
+    </g>
+  );
+}
+
+// ---- Reflection & refraction of light --------------------------------------
+export function ReflectionRefraction({ showLabels = true }) {
+  return (
+    <g>
+      {/* Reflection (left) */}
+      <text x={200} y={70} fontSize="15" fontWeight="800" fill="#334155" textAnchor="middle">Reflection</text>
+      <line x1={70} y1={330} x2={330} y2={330} stroke="#334155" strokeWidth="4" />
+      {[...Array(9)].map((_, i) => <line key={i} x1={80 + i * 28} y1={330} x2={72 + i * 28} y2={344} stroke="#94a3b8" strokeWidth="1.5" />)}
+      <line x1={200} y1={330} x2={200} y2={140} stroke="#94a3b8" strokeWidth="1.5" strokeDasharray="5 4" />
+      <line x1={90} y1={170} x2={200} y2={330} stroke="#f59e0b" strokeWidth="3" markerEnd="url(#il-arrow)" />
+      <line x1={200} y1={330} x2={310} y2={170} stroke="#dc2626" strokeWidth="3" markerEnd="url(#il-arrow)" />
+      {showLabels && (
+        <g>
+          <text x={130} y={230} fontSize="10.5" fill="#f59e0b">incident</text>
+          <text x={270} y={230} fontSize="10.5" fill="#dc2626" textAnchor="end">reflected</text>
+          <text x={206} y={160} fontSize="10" fill="#64748b">normal</text>
+          <text x={200} y={362} fontSize="10.5" fill="#334155" textAnchor="middle">angle in = angle out</text>
+        </g>
+      )}
+      {/* Refraction (right) */}
+      <text x={560} y={70} fontSize="15" fontWeight="800" fill="#334155" textAnchor="middle">Refraction</text>
+      <rect x={430} y={250} width={260} height={130} fill="#bae6fd" opacity="0.6" />
+      <line x1={430} y1={250} x2={690} y2={250} stroke="#0284c7" strokeWidth="3" />
+      <line x1={560} y1={130} x2={560} y2={370} stroke="#94a3b8" strokeWidth="1.5" strokeDasharray="5 4" />
+      <line x1={450} y1={150} x2={560} y2={250} stroke="#f59e0b" strokeWidth="3" markerEnd="url(#il-arrow)" />
+      <line x1={560} y1={250} x2={620} y2={360} stroke="#f59e0b" strokeWidth="3" markerEnd="url(#il-arrow)" />
+      {showLabels && (
+        <g>
+          <text x={470} y={210} fontSize="10.5" fill="#f59e0b">incident (air)</text>
+          <text x={596} y={330} fontSize="10.5" fill="#f59e0b">refracted (water)</text>
+          <text x={636} y={244} fontSize="10.5" fill="#0284c7" textAnchor="end">bends toward normal</text>
+        </g>
+      )}
+    </g>
+  );
+}
+
+// ---- Protein synthesis (DNA → RNA → protein) -------------------------------
+export function ProteinSynthesis({ showLabels = true }) {
+  const y = H / 2 - 20;
+  const dnaPts = (yy, ph) => { const a = []; for (let i = 0; i <= 40; i++) { const x = 70 + i * 3; a.push(`${x},${(yy + 16 * Math.sin(i / 40 * 3 * Math.PI + ph)).toFixed(1)}`); } return a.join(" "); };
+  return (
+    <g>
+      {/* DNA */}
+      <polyline points={dnaPts(y, 0)} fill="none" stroke="#2563eb" strokeWidth="3.5" />
+      <polyline points={dnaPts(y, Math.PI)} fill="none" stroke="#7c3aed" strokeWidth="3.5" />
+      <text x={130} y={y + 60} fontSize="12" fontWeight="700" fill="#4338ca" textAnchor="middle">DNA</text>
+      {/* transcription arrow */}
+      <line x1={200} y1={y} x2={280} y2={y} stroke="#334155" strokeWidth="2.5" markerEnd="url(#il-arrow)" />
+      <text x={240} y={y - 10} fontSize="11" fontWeight="600" fill="#16a34a" textAnchor="middle">transcription</text>
+      {/* mRNA (single wavy strand) */}
+      <polyline points={Array.from({ length: 41 }, (_, i) => `${300 + i * 2.6},${(y + 14 * Math.sin((i / 40) * 3 * Math.PI)).toFixed(1)}`).join(" ")} fill="none" stroke="#f59e0b" strokeWidth="3.5" />
+      <text x={352} y={y + 60} fontSize="12" fontWeight="700" fill="#b45309" textAnchor="middle">mRNA</text>
+      {/* ribosome + translation */}
+      <line x1={430} y1={y} x2={510} y2={y} stroke="#334155" strokeWidth="2.5" markerEnd="url(#il-arrow)" />
+      <text x={470} y={y - 10} fontSize="11" fontWeight="600" fill="#16a34a" textAnchor="middle">translation</text>
+      <g filter="url(#viz-shadow)"><ellipse cx={545} cy={y} rx="30" ry="22" fill="#cbd5e1" stroke="#64748b" strokeWidth="1.5" /><ellipse cx={545} cy={y - 8} rx="30" ry="12" fill="#94a3b8" /></g>
+      <text x={545} y={y + 44} fontSize="11" fill="#475569" textAnchor="middle">ribosome</text>
+      {/* Protein chain */}
+      {[0, 1, 2, 3, 4].map((i) => <Sphere key={i} cx={610 + i * 26} cy={y - 30 + (i % 2) * 16} r={11} fill={PALETTE[i % PALETTE.length]} />)}
+      <text x={670} y={y + 30} fontSize="12" fontWeight="700" fill="#334155" textAnchor="middle">protein</text>
+    </g>
+  );
+}
+
+// ---- Oxygen cycle ----------------------------------------------------------
+export function OxygenCycle({ showLabels = true }) {
+  const cx = W / 2;
+  const atm = [cx, 74], plants = [180, 300], animals = [W - 180, 300], comb = [cx, 440];
+  return (
+    <g>
+      <CurveArrow a={[plants[0], plants[1] - 26]} b={[atm[0] - 60, atm[1] + 24]} label="photosynthesis (O₂ out)" color="#16a34a" k="o1" bow={-0.16} />
+      <CurveArrow a={[atm[0] + 60, atm[1] + 24]} b={[animals[0], animals[1] - 26]} label="respiration (O₂ in)" color="#dc2626" k="o2" bow={-0.16} />
+      <CurveArrow a={[animals[0] - 60, animals[1] + 20]} b={[plants[0] + 60, plants[1] + 20]} label="CO₂ to plants" color="#334155" k="o3" bow={0.14} />
+      <CurveArrow a={[comb[0], comb[1] - 26]} b={[atm[0], atm[1] + 26]} label="" color="#334155" k="o4" bow={0.32} />
+      <CycleBox x={atm[0]} y={atm[1]} color="#0ea5e9" text="Atmospheric O₂" w={170} />
+      <CycleBox x={plants[0]} y={plants[1]} color="#16a34a" text="Plants" w={130} />
+      <CycleBox x={animals[0]} y={animals[1]} color="#b45309" text="Animals" w={130} />
+      <CycleBox x={comb[0]} y={comb[1]} color="#334155" text="Combustion (uses O₂)" w={200} />
     </g>
   );
 }
