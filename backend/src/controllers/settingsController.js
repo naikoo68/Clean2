@@ -72,6 +72,7 @@ export async function updateSettings(req, res) {
     "fontFamily", "socialLinks", "contacts",
     "navHeight", "navBrandSize", "navFontSize", "navFontWeight", "navFontFamily", "navTextTransform", "defaultZoom",
     "watermarkEnabled", "watermarkText", "watermarkOpacity", "watermarkSize", "watermarkMode", "restrictCopy", "screenshotGuard", "guardHoldMs", "statsAuto", "notifyOnNewContent",
+    "publicClientEnabled", "publicInstituteEnabled",
     "homeSections",
     "clientAnnouncement",
     "onboardingCompleted",
