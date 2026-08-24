@@ -2449,3 +2449,135 @@ export function ImmuneResponse({ showLabels = true }) {
     </g>
   );
 }
+
+
+// ---- Electric motor --------------------------------------------------------
+export function ElectricMotor({ showLabels = true }) {
+  const cx = W / 2, cy = H / 2 - 20;
+  return (
+    <g>
+      {/* Magnet poles */}
+      <rect x={cx - 180} y={cy - 70} width="46" height="140" fill="#dc2626" /><text x={cx - 157} y={cy + 6} fontSize="22" fontWeight="800" fill="#fff" textAnchor="middle">N</text>
+      <rect x={cx + 134} y={cy - 70} width="46" height="140" fill="#2563eb" /><text x={cx + 157} y={cy + 6} fontSize="22" fontWeight="800" fill="#fff" textAnchor="middle">S</text>
+      {/* Field lines */}
+      {[-40, 0, 40].map((o, i) => <line key={i} x1={cx - 134} y1={cy + o} x2={cx + 134} y2={cy + o} stroke="#94a3b8" strokeWidth="1.5" markerEnd="url(#il-arrow)" />)}
+      {/* Coil (loop) */}
+      <rect x={cx - 70} y={cy - 50} width="140" height="100" fill="none" stroke="#b45309" strokeWidth="4" rx="6" />
+      <path d={`M ${cx + 66} ${cy - 46} A 40 20 0 0 1 ${cx + 66} ${cy + 46}`} fill="none" stroke="#dc2626" strokeWidth="2" markerEnd="url(#il-arrow)" />
+      {/* Commutator + brushes + battery */}
+      <circle cx={cx - 8} cy={cy + 96} r="10" fill="#e2e8f0" stroke="#64748b" strokeWidth="1.5" />
+      <circle cx={cx + 8} cy={cy + 96} r="10" fill="#e2e8f0" stroke="#64748b" strokeWidth="1.5" />
+      <line x1={cx - 8} y1={cy + 50} x2={cx - 8} y2={cy + 86} stroke="#b45309" strokeWidth="3" />
+      <line x1={cx + 8} y1={cy + 50} x2={cx + 8} y2={cy + 86} stroke="#b45309" strokeWidth="3" />
+      <line x1={cx - 8} y1={cy + 106} x2={cx - 8} y2={cy + 140} stroke="#334155" strokeWidth="3" />
+      <line x1={cx + 8} y1={cy + 106} x2={cx + 8} y2={cy + 140} stroke="#334155" strokeWidth="3" />
+      <line x1={cx - 20} y1={cy + 140} x2={cx - 8} y2={cy + 140} stroke="#334155" strokeWidth="3" /><line x1={cx + 8} y1={cy + 140} x2={cx + 20} y2={cy + 140} stroke="#334155" strokeWidth="3" />
+      <line x1={cx - 20} y1={cy + 128} x2={cx - 20} y2={cy + 152} stroke="#334155" strokeWidth="4" /><line x1={cx + 20} y1={cy + 134} x2={cx + 20} y2={cy + 146} stroke="#334155" strokeWidth="4" />
+      {showLabels && (
+        <g>
+          <Leader x={cx} y={cy - 50} tx={cx} ty={70} text="Current-carrying coil" color="#b45309" side="right" />
+          <Leader x={cx} y={cy + 96} tx={70} ty={cy + 150} text="Split-ring commutator" color="#64748b" side="left" />
+          <text x={cx} y={cy + 170} fontSize="11" fill="#334155" textAnchor="middle">battery — coil rotates in the magnetic field</text>
+        </g>
+      )}
+    </g>
+  );
+}
+
+// ---- Transformer -----------------------------------------------------------
+export function Transformer({ showLabels = true }) {
+  const cx = W / 2, cy = H / 2, cw = 90, ch = 200;
+  const coil = (x, turns, color) => Array.from({ length: turns }).map((_, i) => (
+    <path key={i} d={`M ${x} ${cy - ch / 2 + 20 + i * (ch - 40) / turns} a 16 ${(ch - 40) / turns / 2} 0 1 ${x < cx ? 0 : 1} 0 ${(ch - 40) / turns}`} fill="none" stroke={color} strokeWidth="3.5" />
+  ));
+  return (
+    <g>
+      {/* Laminated iron core */}
+      <rect x={cx - cw / 2} y={cy - ch / 2} width={cw} height={ch} fill="none" stroke="#64748b" strokeWidth="18" />
+      <rect x={cx - cw / 2} y={cy - ch / 2} width={cw} height={ch} fill="none" stroke="#94a3b8" strokeWidth="2" />
+      {/* Primary + secondary coils */}
+      {coil(cx - cw / 2, 8, "#dc2626")}
+      {coil(cx + cw / 2, 4, "#2563eb")}
+      {/* Leads */}
+      <line x1={cx - cw / 2 - 40} y1={cy - 60} x2={cx - cw / 2 - 16} y2={cy - 60} stroke="#dc2626" strokeWidth="3" />
+      <line x1={cx - cw / 2 - 40} y1={cy + 60} x2={cx - cw / 2 - 16} y2={cy + 60} stroke="#dc2626" strokeWidth="3" />
+      <line x1={cx + cw / 2 + 16} y1={cy - 60} x2={cx + cw / 2 + 40} y2={cy - 60} stroke="#2563eb" strokeWidth="3" />
+      <line x1={cx + cw / 2 + 16} y1={cy + 60} x2={cx + cw / 2 + 40} y2={cy + 60} stroke="#2563eb" strokeWidth="3" />
+      {showLabels && (
+        <g>
+          <text x={cx - cw / 2 - 44} y={cy - 66} fontSize="12" fontWeight="700" fill="#dc2626" textAnchor="end">Primary (Nₚ)</text>
+          <text x={cx + cw / 2 + 44} y={cy - 66} fontSize="12" fontWeight="700" fill="#2563eb">Secondary (Nₛ)</text>
+          <Leader x={cx} y={cy - ch / 2} tx={cx} ty={70} text="Laminated iron core" color="#64748b" side="right" />
+          <text x={cx} y={H - 30} fontSize="11" fill="#334155" textAnchor="middle">Vₛ / Vₚ = Nₛ / Nₚ</text>
+        </g>
+      )}
+    </g>
+  );
+}
+
+// ---- Blood groups (ABO) ----------------------------------------------------
+export function BloodGroups({ showLabels = true }) {
+  const groups = [["A", ["A"], "anti-B"], ["B", ["B"], "anti-A"], ["AB", ["A", "B"], "none"], ["O", [], "anti-A, anti-B"]];
+  const cw = 170, y = 170, x0 = (W - 4 * cw) / 2 + cw / 2;
+  const antigen = (x, cy2, t) => t === "A"
+    ? <rect x={x - 5} y={cy2 - 5} width="10" height="10" fill="#dc2626" />
+    : <path d={`M ${x} ${cy2 - 6} L ${x + 6} ${cy2 + 5} L ${x - 6} ${cy2 + 5} Z`} fill="#2563eb" />;
+  return (
+    <g>
+      {groups.map(([name, ags, ab], i) => {
+        const cx = x0 + i * cw;
+        return (
+          <g key={i}>
+            <text x={cx} y={y - 54} fontSize="20" fontWeight="800" fill="#b91c1c" textAnchor="middle">Group {name}</text>
+            <g filter="url(#viz-shadow)"><Sphere cx={cx} cy={y} r={40} fill="#fca5a5" /></g>
+            {ags.length === 0 && showLabels && <text x={cx} y={y + 4} fontSize="10" fill="#7f1d1d" textAnchor="middle">no antigen</text>}
+            {ags.map((t, k) => [0, 1, 2].map((m) => { const a = (k * 3 + m) / 6 * 2 * Math.PI; return <g key={`${k}-${m}`}>{antigen(cx + 40 * Math.cos(a), y + 40 * Math.sin(a), t)}</g>; }))}
+            {showLabels && <text x={cx} y={y + 74} fontSize="11" fill="#334155" textAnchor="middle">antibodies: {ab}</text>}
+          </g>
+        );
+      })}
+      {showLabels && (
+        <g>
+          <text x={W / 2} y={y + 130} fontSize="12" fill="#64748b" textAnchor="middle">□ = A antigen · △ = B antigen · plasma carries the opposite antibodies</text>
+          <text x={W / 2} y={y + 150} fontSize="11" fill="#64748b" textAnchor="middle">O = universal donor · AB = universal recipient</text>
+        </g>
+      )}
+    </g>
+  );
+}
+
+// ---- Mosquito life cycle ---------------------------------------------------
+function iEggRaft(x, y) { return <g>{[...Array(7)].map((_, i) => <ellipse key={i} cx={x - 18 + i * 6} cy={y + (i % 2 ? 2 : -2)} rx="4" ry="9" fill="#4b5563" stroke="#1e293b" strokeWidth="0.8" />)}</g>; }
+function iLarva(x, y) { return <g><path d={`M ${x - 26} ${y} q 14 -14 26 0 q 12 14 26 2`} fill="none" stroke="#65a30d" strokeWidth="7" strokeLinecap="round" /><circle cx={x - 26} cy={y} r="7" fill="#4d7c0f" /></g>; }
+function iPupa(x, y) { return <g><circle cx={x - 8} cy={y - 6} r="14" fill="#a16207" /><path d={`M ${x} ${y} q 20 6 24 24`} fill="none" stroke="#a16207" strokeWidth="6" strokeLinecap="round" /></g>; }
+function iMosquito(x, y) { return <g><ellipse cx={x} cy={y} rx="6" ry="16" fill="#334155" /><ellipse cx={x - 12} cy={y - 6} rx="14" ry="6" fill="#94a3b8" opacity="0.7" transform={`rotate(-20 ${x - 12} ${y - 6})`} /><ellipse cx={x + 12} cy={y - 6} rx="14" ry="6" fill="#94a3b8" opacity="0.7" transform={`rotate(20 ${x + 12} ${y - 6})`} /><line x1={x} y1={y - 16} x2={x - 8} y2={y - 28} stroke="#334155" strokeWidth="1.5" /><line x1={x} y1={y - 16} x2={x + 8} y2={y - 28} stroke="#334155" strokeWidth="1.5" /></g>; }
+export function MosquitoLifeCycle({ showLabels = true }) {
+  const stages = [
+    { draw: iEggRaft, label: "Egg raft" }, { draw: iLarva, label: "Larva (wriggler)" },
+    { draw: iPupa, label: "Pupa (tumbler)" }, { draw: iMosquito, label: "Adult mosquito" },
+  ];
+  return <LifeCycle stages={showLabels ? stages : stages.map((s) => ({ ...s, label: "" }))} R={150} />;
+}
+
+// ---- Tides (spring & neap) -------------------------------------------------
+export function Tides({ showLabels = true }) {
+  const bulge = (cx, cy, ang) => <ellipse cx={cx} cy={cy} rx="52" ry="40" fill="#3b82f6" opacity="0.35" transform={`rotate(${ang} ${cx} ${cy})`} />;
+  return (
+    <g>
+      {/* Spring tide (top): Sun, Earth, Moon aligned */}
+      <text x={W / 2} y={60} fontSize="14" fontWeight="800" fill="#334155" textAnchor="middle">Spring tide — Sun, Earth, Moon aligned</text>
+      {bulge(230, 150, 0)}
+      <g filter="url(#viz-shadow)"><Sphere cx={230} cy={150} r={30} fill="#2563eb" /></g>
+      <Sphere cx={360} cy={150} r={12} fill="#94a3b8" />
+      <g filter="url(#viz-shadow)"><Sphere cx={W - 70} cy={150} r={26} fill="#fbbf24" /></g>
+      {showLabels && <><text x={230} y={202} fontSize="10" fill="#2563eb" textAnchor="middle">Earth</text><text x={360} y={176} fontSize="10" fill="#64748b" textAnchor="middle">Moon</text><text x={W - 70} y={188} fontSize="10" fill="#f59e0b" textAnchor="middle">Sun</text><text x={150} y={120} fontSize="10" fill="#3b82f6">high tides ↕ (largest)</text></>}
+      {/* Neap tide (bottom): Sun & Moon at right angles */}
+      <text x={W / 2} y={330} fontSize="14" fontWeight="800" fill="#334155" textAnchor="middle">Neap tide — Sun & Moon at right angles</text>
+      {bulge(260, 420, 90)}
+      <g filter="url(#viz-shadow)"><Sphere cx={260} cy={420} r={30} fill="#2563eb" /></g>
+      <Sphere cx={390} cy={420} r={12} fill="#94a3b8" />
+      <g filter="url(#viz-shadow)"><Sphere cx={260} cy={510} r={20} fill="#fbbf24" /></g>
+      {showLabels && <><text x={390} y={446} fontSize="10" fill="#64748b" textAnchor="middle">Moon</text><text x={300} y={510} fontSize="10" fill="#f59e0b">Sun (90°)</text><text x={150} y={400} fontSize="10" fill="#3b82f6">smaller tidal range</text></>}
+    </g>
+  );
+}

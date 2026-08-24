@@ -14,7 +14,7 @@
 //   bmagnet   {}
 import { forwardRef, useImperativeHandle, useRef } from "react";
 import { PALETTE as P, VizDefs, Sphere } from "./vizStyle";
-import { AnimalCell, PlantCell, Neuron, Heart, Flower, DigestiveSystem, Respiratory, Eye, Nephron, Ear, LeafSection, Skeleton, Brain, WaterCycle, RockCycle, Circulation, SolarSystem, Volcano, Tooth, CarbonCycle, NitrogenCycle, MoonPhases, Photosynthesis, ButterflyLifeCycle, FrogLifeCycle, PlantLifeCycle, StatesOfMatter, PhScale, EMSpectrum, EnergyPyramid, Kidney, EarthLayers, AtmosphereLayers, Circuits, Waves, ReflexArc, FoodChain, Levers, Eclipse, GreenhouseEffect, SeedStructure, PunnettSquare, PlateTectonics, SimpleMachines, Bonding, StarLifeCycle, Joints, SkinSection, ReflectionRefraction, ProteinSynthesis, OxygenCycle, SoilHorizons, Electrolysis, Distillation, Breathing, Synapse, EndocrineSystem, AntagonisticMuscles, TitrationCurve, WeatherFronts, RiverCourse, PrismDispersion, Seasons, Pendulum, CrudeOil, ImmuneResponse } from "./assets/anatomy";
+import { AnimalCell, PlantCell, Neuron, Heart, Flower, DigestiveSystem, Respiratory, Eye, Nephron, Ear, LeafSection, Skeleton, Brain, WaterCycle, RockCycle, Circulation, SolarSystem, Volcano, Tooth, CarbonCycle, NitrogenCycle, MoonPhases, Photosynthesis, ButterflyLifeCycle, FrogLifeCycle, PlantLifeCycle, StatesOfMatter, PhScale, EMSpectrum, EnergyPyramid, Kidney, EarthLayers, AtmosphereLayers, Circuits, Waves, ReflexArc, FoodChain, Levers, Eclipse, GreenhouseEffect, SeedStructure, PunnettSquare, PlateTectonics, SimpleMachines, Bonding, StarLifeCycle, Joints, SkinSection, ReflectionRefraction, ProteinSynthesis, OxygenCycle, SoilHorizons, Electrolysis, Distillation, Breathing, Synapse, EndocrineSystem, AntagonisticMuscles, TitrationCurve, WeatherFronts, RiverCourse, PrismDispersion, Seasons, Pendulum, CrudeOil, ImmuneResponse, ElectricMotor, Transformer, BloodGroups, MosquitoLifeCycle, Tides } from "./assets/anatomy";
 
 const W = 760, H = 520;
 const num = (v, d = 0) => (Number.isFinite(Number(v)) ? Number(v) : d);
@@ -595,6 +595,9 @@ const KINDS = {
   prism: (p) => <PrismDispersion showLabels={p.s?.showLabels !== false} />, seasons: (p) => <Seasons showLabels={p.s?.showLabels !== false} />,
   pendulum: (p) => <Pendulum showLabels={p.s?.showLabels !== false} />, crudeoil: (p) => <CrudeOil showLabels={p.s?.showLabels !== false} />,
   immune: (p) => <ImmuneResponse showLabels={p.s?.showLabels !== false} />,
+  motor: (p) => <ElectricMotor showLabels={p.s?.showLabels !== false} />, transformer: (p) => <Transformer showLabels={p.s?.showLabels !== false} />,
+  bloodgroups: (p) => <BloodGroups showLabels={p.s?.showLabels !== false} />, mosquitolife: (p) => <MosquitoLifeCycle showLabels={p.s?.showLabels !== false} />,
+  tides: (p) => <Tides showLabels={p.s?.showLabels !== false} />,
   efield: (p) => <EField {...p} />, bmagnet: (p) => <BMagnet {...p} />,
   field: (p) => <Field {...p} />, table: (p) => <TableFig {...p} />, celldivision: (p) => <CellDivision {...p} />,
   humanbody: (p) => <HumanBody {...p} />, periodictable: (p) => <PeriodicTable {...p} />, fishbone: (p) => <Fishbone {...p} />,
