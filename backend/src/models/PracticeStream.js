@@ -15,6 +15,11 @@ const practiceStreamSchema = new mongoose.Schema(
     description: { type: String },
     order: { type: Number, default: 0 },
     isActive: { type: Boolean, default: true },
+    // Admin "disable" switch. When true the node (and everything under it) is
+    // hidden from students / public share links / client browse & play, but it
+    // stays visible in the admin manager so it can be re-enabled. Distinct from
+    // `isActive` (which hard-hides everywhere) and from soft delete.
+    disabled: { type: Boolean, default: false },
     // Public share link (mirrors TestSeries). When publicShare is on, ANYONE
     // with the publicToken URL can open a page listing every quiz/test under
     // this stream and take them — no account/login. Enabling cascades the same

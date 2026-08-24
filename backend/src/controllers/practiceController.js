@@ -222,8 +222,11 @@ export async function createItem(req, res) {
 export async function updateItem(req, res) {
   const item = await TestSeries.findOne({ _id: req.params.id, practice: true, ...ownerFilter(req) });
   if (!item) return res.status(404).json({ message: "Item not found" });
-  const { name, aiTopic, aiSubtopics, paperPdfUrl, answerKeyPdfUrl, answerKeys, additionalInfo } = req.body;
+  const { name, aiTopic, aiSubtopics, paperPdfUrl, answerKeyPdfUrl, answerKeys, additionalInfo, disabled } = req.body;
   if (typeof name === "string" && name.trim()) item.name = name.trim();
+  // Admin/owner "disable" toggle — hides the item from students but keeps it in
+  // the manager. (Kept separate from publish `status` and per-student access.)
+  if (typeof disabled === "boolean") item.disabled = disabled;
   if (typeof aiTopic === "string") item.aiTopic = aiTopic;
   if (typeof aiSubtopics === "string") item.aiSubtopics = aiSubtopics;
   // Previous Papers metadata — allow setting or clearing (empty string).
@@ -529,7 +532,7 @@ export async function splitTopic(req, res) {
 export async function isFreePreviewQuiz(item) {
   if (!item || item.practiceKind !== "quiz" || !item.practiceTopic) return false;
   const siblings = (await TestSeries.find({
-    practice: true, practiceKind: "quiz", status: "published",
+    practice: true, practiceKind: "quiz", status: "published", disabled: { $ne: true },
     practiceTopic: item.practiceTopic, owner: item.owner || null,
   }).select("_id name").lean()).sort(byNatural("name"));
   return siblings.length > 0 && String(siblings[0]._id) === String(item._id);
@@ -548,6 +551,22 @@ export async function playQuiz(req, res) {
   // uses the timed test-attempt flow.
   if (!item || !item.practice || (item.practiceKind !== "quiz" && item.practiceKind !== "paper")) {
     return res.status(404).json({ message: "Practice quiz not found" });
+  }
+  // Admin "disable": a disabled item — or one under a disabled stream/subject/
+  // topic — is hidden from students and can't be played. The owner/admin can
+  // still open it (to preview before re-enabling).
+  const isManager = req.user && (req.user.role === "admin" || owns(req, item));
+  if (!isManager) {
+    let blocked = item.disabled === true;
+    if (!blocked) {
+      const [strm, subj, top] = await Promise.all([
+        item.practiceStream ? PracticeStream.findById(item.practiceStream).select("disabled").lean() : null,
+        item.practiceSubject ? PracticeSubject.findById(item.practiceSubject).select("disabled").lean() : null,
+        item.practiceTopic ? PracticeTopic.findById(item.practiceTopic).select("disabled").lean() : null,
+      ]);
+      blocked = !!(strm?.disabled || subj?.disabled || top?.disabled);
+    }
+    if (blocked) return res.status(404).json({ message: "Practice quiz not found" });
   }
   if (item.practiceKind === "paper") {
     // Previous Papers: login is enough — no subscription needed.
@@ -595,14 +614,16 @@ export async function myItems(req, res) {
   // items carry the same Stream › Subject › Topic context, so the dashboard shows
   // them in the same hierarchy. Admins keep the ownerless space.
   const filter = req.user?.role === "client"
-    ? { practice: true, $or: [{ owner: req.user._id }, { sharedWith: req.user._id }] }
-    : { practice: true, ...ownerFilter(req) };
-  const items = await TestSeries.find(filter)
-    .populate("practiceStream", "name icon color")
-    .populate("practiceSubject", "name icon color")
-    .populate("practiceTopic", "name icon color")
+    ? { practice: true, disabled: { $ne: true }, $or: [{ owner: req.user._id }, { sharedWith: req.user._id }] }
+    : { practice: true, disabled: { $ne: true }, ...ownerFilter(req) };
+  const populated = await TestSeries.find(filter)
+    .populate("practiceStream", "name icon color disabled")
+    .populate("practiceSubject", "name icon color disabled")
+    .populate("practiceTopic", "name icon color disabled")
     .sort("createdAt")
     .lean();
+  // Also drop items whose parent stream/subject/topic is disabled.
+  const items = populated.filter((t) => !(t.practiceStream?.disabled || t.practiceSubject?.disabled || t.practiceTopic?.disabled));
   res.json(
     items.map((t) => ({
       _id: t._id,
@@ -1089,22 +1110,22 @@ export async function browseStreams(req, res) {
   const kind = req.params.kind;
   const freemium = true; // all practice kinds are publicly discoverable (freemium)
   const grantAll = kind === "test" ? req.user?.myTestAccess === true : req.user?.myQuizAccess === true;
-  const items = await TestSeries.find({ practice: true, practiceKind: kind, status: "published", owner: null })
+  const items = await TestSeries.find({ practice: true, practiceKind: kind, status: "published", disabled: { $ne: true }, owner: null })
     .select("practiceStream visibleToAll access")
     .lean();
   const ok = new Set(items.filter((t) => freemium || grantAll || isTestVisibleToUser(t, req.user?._id)).map((t) => String(t.practiceStream)));
-  const streams = await PracticeStream.find({ isActive: true, kind, owner: null }).sort("order name").lean();
+  const streams = await PracticeStream.find({ isActive: true, disabled: { $ne: true }, kind, owner: null }).sort("order name").lean();
   res.json(streams.filter((s) => ok.has(String(s._id))));
 }
 export async function browseSubjects(req, res) {
   const { kind, streamId } = req.params;
   const freemium = true; // all practice kinds are publicly discoverable (freemium)
   const grantAll = kind === "test" ? req.user?.myTestAccess === true : req.user?.myQuizAccess === true;
-  const items = await TestSeries.find({ practice: true, practiceKind: kind, status: "published", practiceStream: streamId, owner: null })
+  const items = await TestSeries.find({ practice: true, practiceKind: kind, status: "published", disabled: { $ne: true }, practiceStream: streamId, owner: null })
     .select("practiceSubject visibleToAll access")
     .lean();
   const ok = new Set(items.filter((t) => freemium || grantAll || isTestVisibleToUser(t, req.user?._id)).map((t) => String(t.practiceSubject)));
-  const subjects = await PracticeSubject.find({ stream: streamId, isActive: true, owner: null }).sort("order name").lean();
+  const subjects = await PracticeSubject.find({ stream: streamId, isActive: true, disabled: { $ne: true }, owner: null }).sort("order name").lean();
   res.json(subjects.filter((s) => ok.has(String(s._id))));
 }
 // My Test Series: items under a subject. PUBLIC list in natural order (Test 1,
@@ -1113,7 +1134,7 @@ export async function browseSubjects(req, res) {
 export async function browseItems(req, res) {
   const { kind, subjectId } = req.params;
   const grantAll = req.user?.role === "admin" || (kind === "quiz" ? req.user?.myQuizAccess === true : req.user?.myTestAccess === true);
-  const items = (await TestSeries.find({ practice: true, practiceKind: kind, status: "published", practiceSubject: subjectId, owner: null })
+  const items = (await TestSeries.find({ practice: true, practiceKind: kind, status: "published", disabled: { $ne: true }, practiceSubject: subjectId, owner: null })
     .lean()).sort(byNatural("name"));
   res.json(
     items.map((t, idx) => {
@@ -1133,11 +1154,11 @@ export async function browseItems(req, res) {
 // the first quiz in each is free, so every non-empty topic is discoverable).
 export async function browseTopics(req, res) {
   const { subjectId } = req.params;
-  const items = await TestSeries.find({ practice: true, practiceKind: "quiz", status: "published", practiceSubject: subjectId, owner: null })
+  const items = await TestSeries.find({ practice: true, practiceKind: "quiz", status: "published", disabled: { $ne: true }, practiceSubject: subjectId, owner: null })
     .select("practiceTopic")
     .lean();
   const has = new Set(items.map((t) => String(t.practiceTopic)));
-  const topics = await PracticeTopic.find({ subject: subjectId, isActive: true, owner: null }).sort("order name").lean();
+  const topics = await PracticeTopic.find({ subject: subjectId, isActive: true, disabled: { $ne: true }, owner: null }).sort("order name").lean();
   res.json(topics.filter((t) => has.has(String(t._id))));
 }
 // Previous Papers: items listed DIRECTLY under a stream (no subject drill-down).
@@ -1145,7 +1166,7 @@ export async function browseTopics(req, res) {
 // sees them as `locked` with `loginOnly` so the UI can prompt sign-in.
 export async function browseStreamItems(req, res) {
   const { kind, streamId } = req.params;
-  const items = (await TestSeries.find({ practice: true, practiceKind: kind, status: "published", practiceStream: streamId, owner: null }).lean()).sort(byNatural("name"));
+  const items = (await TestSeries.find({ practice: true, practiceKind: kind, status: "published", disabled: { $ne: true }, practiceStream: streamId, owner: null }).lean()).sort(byNatural("name"));
   if (kind === "paper") {
     return res.json(items.map((t) => ({ _id: t._id, name: t.name, duration: t.duration, marks: t.marks, difficulty: t.difficulty, questionCount: t.questions?.length || 0, views: t.views || 0, loginOnly: true, locked: !req.user })));
   }
@@ -1160,7 +1181,7 @@ export async function browseStreamItems(req, res) {
 // …). The FIRST quiz is a FREE preview anyone can attempt; the rest are
 // `locked` unless the user has access (login + subscription / share / owner).
 export async function browseTopicItems(req, res) {
-  const items = (await TestSeries.find({ practice: true, practiceKind: "quiz", status: "published", practiceTopic: req.params.topicId, owner: null })
+  const items = (await TestSeries.find({ practice: true, practiceKind: "quiz", status: "published", disabled: { $ne: true }, practiceTopic: req.params.topicId, owner: null })
     .lean()).sort(byNatural("name"));
   res.json(
     items.map((t, idx) => {
@@ -1216,7 +1237,7 @@ async function toggleNodeLink(Model, childField, req, res) {
   // page can actually open them via their own public links.
   const childFilter = { practice: true, [childField]: node._id, ...ownerFilter(req) };
   if (enable) {
-    const children = await TestSeries.find({ ...childFilter, status: "published" }).select("_id publicToken");
+    const children = await TestSeries.find({ ...childFilter, status: "published", disabled: { $ne: true } }).select("_id publicToken");
     const ops = children.map((c) => ({
       updateOne: {
         filter: { _id: c._id },
@@ -1248,10 +1269,10 @@ export async function toggleTopicPublicLink(req, res) { return toggleNodeLink(Pr
 export async function getPublicNode(req, res) {
   const token = req.params.token;
   let level = null;
-  let node = await PracticeStream.findOne({ publicToken: token, publicShare: true });
+  let node = await PracticeStream.findOne({ publicToken: token, publicShare: true, disabled: { $ne: true } });
   if (node) level = "stream";
-  if (!node) { node = await PracticeSubject.findOne({ publicToken: token, publicShare: true }); if (node) level = "subject"; }
-  if (!node) { node = await PracticeTopic.findOne({ publicToken: token, publicShare: true }); if (node) level = "topic"; }
+  if (!node) { node = await PracticeSubject.findOne({ publicToken: token, publicShare: true, disabled: { $ne: true } }); if (node) level = "subject"; }
+  if (!node) { node = await PracticeTopic.findOne({ publicToken: token, publicShare: true, disabled: { $ne: true } }); if (node) level = "topic"; }
   if (!node) return res.status(404).json({ message: "This link is invalid or public sharing was turned off." });
   if (nodePublicExpired(node)) return res.status(403).json({ message: "This public link has expired." });
 
@@ -1261,6 +1282,7 @@ export async function getPublicNode(req, res) {
     [field]: node._id,
     owner: node.owner || null,
     status: "published",
+    disabled: { $ne: true },
     publicShare: true,
     publicToken: { $ne: null },
   }).select("name practiceKind duration marks difficulty questions publicToken publicExpiresAt").lean())

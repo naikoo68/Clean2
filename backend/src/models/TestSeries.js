@@ -128,6 +128,10 @@ const testSeriesSchema = new mongoose.Schema(
     // student sees a test only if visibleToAll is turned on, or they have an
     // explicit access entry (visible:true, optionally time-limited).
     visibleToAll: { type: Boolean, default: false },
+    // Admin "disable" switch for a practice item (quiz/test/paper). When true the
+    // item is hidden from all student/public/client browse lists and cannot be
+    // played, but stays visible in the admin manager so it can be re-enabled.
+    disabled: { type: Boolean, default: false },
     access: [
       {
         user: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
