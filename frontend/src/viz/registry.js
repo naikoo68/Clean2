@@ -71,17 +71,20 @@ export const CATALOG = {
     "Respiratory System", "Eye (cross-section)", "Nephron", "Ear", "Leaf Cross-section",
     "Human Skeleton", "Brain Regions", "Circulatory System", "Tooth (cross-section)",
     "Carbon Cycle", "Nitrogen Cycle", "Photosynthesis", "Butterfly Life Cycle",
-    "Frog Life Cycle", "Plant Life Cycle", "Ecosystem", "Classification Tree",
+    "Frog Life Cycle", "Plant Life Cycle", "Energy Pyramid", "Kidney (gross anatomy)",
+    "Ecosystem", "Classification Tree",
   ],
   chemistry: [
     "Bohr Model", "Atomic Structure", "Molecular Structure", "Reaction Diagram",
     "Reaction Mechanism", "Substitution Mechanism", "Addition Mechanism",
     "Elimination Mechanism", "Rearrangement Mechanism", "Combined Mechanisms",
     "Periodic Table", "Electron Configuration", "Energy Level", "Orbital Diagram",
+    "States of Matter", "pH Scale",
   ],
   physics: [
     "Free Body Diagram", "Projectile Motion", "Wave", "Circuit Diagram", "Optics", "Ray Diagram",
     "Electric Field", "Magnetic Field", "Energy Diagram", "Solar System", "Phases of the Moon",
+    "Electromagnetic Spectrum",
   ],
   cs: [
     "Flowchart", "Algorithm Flow", "ER Diagram", "DFD", "UML", "Sequence Diagram",
@@ -394,6 +397,11 @@ Object.assign(MODULES, {
   butterflylifecycle: _il("butterflylifecycle", "Butterfly Life Cycle", "biology", { kind: "butterflylife" }),
   froglifecycle:     _il("froglifecycle", "Frog Life Cycle", "biology", { kind: "froglife" }),
   plantlifecycle:    _il("plantlifecycle", "Plant Life Cycle", "biology", { kind: "plantlife" }),
+  statesofmatter:    _il("statesofmatter", "States of Matter", "chemistry", { kind: "statesofmatter" }),
+  phscale:           _il("phscale", "pH Scale", "chemistry", { kind: "phscale" }),
+  emspectrum:        _il("emspectrum", "Electromagnetic Spectrum", "physics", { kind: "emspectrum" }),
+  energypyramid:     _il("energypyramid", "Energy Pyramid", "biology", { kind: "energypyramid" }),
+  kidneygross:       _il("kidneygross", "Kidney (gross anatomy)", "biology", { kind: "kidney" }),
 });
 
 // ---- Phase 10: fill remaining catalog (aliases + charts/graphs/tables/illustrations) ----
