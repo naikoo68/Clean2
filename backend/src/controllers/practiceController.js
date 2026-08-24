@@ -8,6 +8,7 @@ import User from "../models/User.js";
 import ContentShare from "../models/ContentShare.js";
 import { isTestVisibleToUser, isSharedWithUser, hasActiveSubscription } from "../utils/accessControl.js";
 import { ownerFilter, ownerValue } from "../utils/ownership.js";
+import { sanitizeBody } from "../utils/sanitizeBody.js";
 import { sendMail, isMailConfigured } from "../config/mailer.js";
 import { clientBaseFromReq } from "../config/clientUrl.js";
 import { duplicateQuestions } from "../utils/duplicateQuestions.js";
@@ -41,13 +42,12 @@ export async function listStreams(req, res) {
   res.json(streams.map((s) => ({ ...s, subjects: map[String(s._id)] || 0 })));
 }
 export async function createStream(req, res) {
-  const s = await PracticeStream.create({ ...req.body, slug: slugify(req.body.name), owner: ownerValue(req) });
+  const s = await PracticeStream.create({ ...sanitizeBody(req.body), slug: slugify(req.body.name), owner: ownerValue(req) });
   res.status(201).json(s);
 }
 export async function updateStream(req, res) {
-  const d = { ...req.body };
+  const d = sanitizeBody(req.body); // strips owner/tenantId/_id/etc. (never client-set)
   if (d.name) d.slug = slugify(d.name);
-  delete d.owner; // never reassign ownership from the client
   const s = await PracticeStream.findOneAndUpdate({ _id: req.params.id, ...ownerFilter(req) }, d, { new: true });
   if (!s) return res.status(404).json({ message: "Stream not found" });
   res.json(s);
@@ -81,7 +81,7 @@ export async function listSubjects(req, res) {
   res.json(subjects.map((s) => ({ ...s, items: map[String(s._id)] || 0 })));
 }
 export async function createSubject(req, res) {
-  const s = await PracticeSubject.create({ ...req.body, slug: slugify(req.body.name), owner: ownerValue(req) });
+  const s = await PracticeSubject.create({ ...sanitizeBody(req.body), slug: slugify(req.body.name), owner: ownerValue(req) });
   res.status(201).json(s);
 }
 // GET /api/practice/all-subjects — flat list of every practice subject (for the
@@ -101,9 +101,8 @@ export async function allSubjects(req, res) {
   );
 }
 export async function updateSubject(req, res) {
-  const d = { ...req.body };
+  const d = sanitizeBody(req.body); // strips owner/tenantId/_id/etc. (never client-set)
   if (d.name) d.slug = slugify(d.name);
-  delete d.owner;
   const s = await PracticeSubject.findOneAndUpdate({ _id: req.params.id, ...ownerFilter(req) }, d, { new: true });
   if (!s) return res.status(404).json({ message: "Subject not found" });
   res.json(s);
@@ -135,13 +134,12 @@ export async function listTopics(req, res) {
   res.json(topics.map((t) => ({ ...t, items: map[String(t._id)] || 0 })));
 }
 export async function createTopic(req, res) {
-  const t = await PracticeTopic.create({ ...req.body, slug: slugify(req.body.name), owner: ownerValue(req) });
+  const t = await PracticeTopic.create({ ...sanitizeBody(req.body), slug: slugify(req.body.name), owner: ownerValue(req) });
   res.status(201).json(t);
 }
 export async function updateTopic(req, res) {
-  const d = { ...req.body };
+  const d = sanitizeBody(req.body); // strips owner/tenantId/_id/etc. (never client-set)
   if (d.name) d.slug = slugify(d.name);
-  delete d.owner;
   const t = await PracticeTopic.findOneAndUpdate({ _id: req.params.id, ...ownerFilter(req) }, d, { new: true });
   if (!t) return res.status(404).json({ message: "Topic not found" });
   res.json(t);
