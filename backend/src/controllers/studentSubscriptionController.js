@@ -1,6 +1,8 @@
-import Coupon from "../models/Coupon.js";
+import { redeemCoupon } from "../models/Coupon.js";
+import User from "../models/User.js";
 import { computeOffer } from "./authController.js";
-import { razorpayConfigured, razorpayKeyId, createRazorpayOrder, verifyPaymentSignature } from "../config/razorpay.js";
+import { razorpayConfigured, razorpayKeyId, createRazorpayOrder, verifyPaymentSignature, verifyPaidOrder } from "../config/razorpay.js";
+import { runUnscoped } from "../utils/tenantContext.js";
 
 // Student self-serve subscription: buy / renew a STUDENT plan. Both routes run
 // behind attachUser + authorize("student") so a student whose plan has lapsed
@@ -96,6 +98,29 @@ export async function studentUpgradeActivate(req, res) {
     if (!verifyPaymentSignature({ orderId: razorpay_order_id, paymentId: razorpay_payment_id, signature: razorpay_signature })) {
       return res.status(400).json({ message: "Payment could not be verified. Please try again." });
     }
+    // Re-fetch the order and confirm it was paid in full for THIS student plan/
+    // price and belongs to THIS user — the signature alone doesn't prove that,
+    // so a cheap order can't be replayed to claim an expensive plan.
+    const match = await verifyPaidOrder({
+      orderId: razorpay_order_id,
+      expectedAmountRupees: offer.finalPrice,
+      expectedPlan: offer.plan.key,
+      expectedUserId: req.user._id,
+    });
+    if (!match.ok) {
+      console.error("[payment] student order verification failed", { order: razorpay_order_id, reason: match.reason });
+      return res.status(400).json({ message: "Payment could not be verified. Please try again." });
+    }
+    // Replay protection: a payment id may only be consumed once, across accounts.
+    const usedPayment = await runUnscoped(() =>
+      User.findOne({
+        _id: { $ne: req.user._id },
+        $or: [{ paymentId: razorpay_payment_id }, { studentPaymentId: razorpay_payment_id }],
+      }).select("_id")
+    );
+    if (usedPayment) {
+      return res.status(400).json({ message: "This payment has already been used." });
+    }
     req.user.studentPaymentId = razorpay_payment_id;
   }
 
@@ -110,7 +135,7 @@ export async function studentUpgradeActivate(req, res) {
   await req.user.save();
 
   if (offer.applied?.coupon && !offer.applied.coupon.invalid) {
-    Coupon.updateOne({ code: offer.applied.coupon.code }, { $inc: { usedCount: 1 } }).catch(() => {});
+    redeemCoupon(offer.applied.coupon.code).catch(() => {});
   }
 
   res.json({ ok: true, studentPlanExpiresAt: req.user.studentPlanExpiresAt, plan: offer.plan.key });
