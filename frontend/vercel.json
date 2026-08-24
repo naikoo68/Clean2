@@ -1,4 +1,12 @@
 {
+  "redirects": [
+    {
+      "source": "/:path*",
+      "has": [{ "type": "host", "value": "mystudyguideme.vercel.app" }],
+      "destination": "https://www.mystudyguide.in/:path*",
+      "permanent": false
+    }
+  ],
   "rewrites": [
     { "source": "/s/:token", "destination": "https://my-prep-mart-api-39nk.onrender.com/s/:token" },
     { "source": "/((?!.*\\.).*)", "destination": "/index.html" }
