@@ -3147,3 +3147,456 @@ export function CloudTypes({ showLabels = true }) {
     </g>
   );
 }
+
+
+// ---- Xylem & phloem --------------------------------------------------------
+export function XylemPhloem({ showLabels = true }) {
+  const cx = W / 2, top = 110, bot = H - 90;
+  return (
+    <g>
+      {/* xylem (left, water up) */}
+      <rect x={cx - 90} y={top} width="60" height={bot - top} fill="#fee2e2" stroke="#dc2626" strokeWidth="2.5" />
+      <line x1={cx - 60} y1={bot} x2={cx - 60} y2={top} stroke="#dc2626" strokeWidth="3" markerEnd="url(#il-arrow)" />
+      {/* phloem (right, sugars both ways) */}
+      <rect x={cx + 30} y={top} width="60" height={bot - top} fill="#dbeafe" stroke="#2563eb" strokeWidth="2.5" />
+      {[...Array(3)].map((_, i) => <circle key={i} cx={cx + 60} cy={top + 40 + i * 90} r="8" fill="none" stroke="#2563eb" strokeWidth="1.5" />)}
+      <line x1={cx + 60} y1={top + 20} x2={cx + 60} y2={bot - 20} stroke="#2563eb" strokeWidth="2" strokeDasharray="6 4" markerStart="url(#il-arrow)" markerEnd="url(#il-arrow)" />
+      {showLabels && (
+        <g>
+          <Leader x={cx - 60} y={top + 60} tx={70} ty={top + 40} text="Xylem — water & minerals ↑ (dead cells)" color="#dc2626" side="left" />
+          <Leader x={cx + 60} y={top + 60} tx={W - 70} ty={top + 40} text="Phloem — sugars ↕ (living cells)" color="#2563eb" side="right" />
+          <text x={cx} y={bot + 26} fontSize="12" fontWeight="700" fill="#334155" textAnchor="middle">Plant transport tissues</text>
+        </g>
+      )}
+    </g>
+  );
+}
+
+// ---- Transpiration / stomata -----------------------------------------------
+export function Transpiration({ showLabels = true }) {
+  const cx = W / 2, cy = H / 2;
+  return (
+    <g>
+      {/* leaf */}
+      <path d={`M ${cx - 200} ${cy} Q ${cx} ${cy - 120} ${cx + 200} ${cy} Q ${cx} ${cy + 120} ${cx - 200} ${cy} Z`} fill="#bbf7d0" stroke="#16a34a" strokeWidth="2.5" filter="url(#viz-shadow)" />
+      <line x1={cx - 190} y1={cy} x2={cx + 190} y2={cy} stroke="#16a34a" strokeWidth="2" />
+      {/* stoma (guard cells) at bottom */}
+      <path d={`M ${cx - 20} ${cy + 96} q -10 14 0 28`} fill="none" stroke="#15803d" strokeWidth="6" />
+      <path d={`M ${cx + 20} ${cy + 96} q 10 14 0 28`} fill="none" stroke="#15803d" strokeWidth="6" />
+      {/* water vapour out */}
+      {[-40, 0, 40].map((o, i) => <line key={i} x1={cx + o} y1={cy + 130} x2={cx + o} y2={cy + 180} stroke="#0ea5e9" strokeWidth="2.5" markerEnd="url(#il-arrow)" />)}
+      {/* water in via xylem */}
+      <line x1={cx - 120} y1={H - 30} x2={cx - 120} y2={cy + 20} stroke="#dc2626" strokeWidth="3" markerEnd="url(#il-arrow)" />
+      {showLabels && (
+        <g>
+          <Leader x={cx} y={cy + 110} tx={70} ty={cy + 140} text="Stoma & guard cells" color="#15803d" side="left" />
+          <text x={cx} y={cy + 176} fontSize="11" fill="#0ea5e9" textAnchor="middle">water vapour lost (transpiration)</text>
+          <text x={cx - 120} y={H - 12} fontSize="10.5" fill="#dc2626" textAnchor="middle">water in (xylem)</text>
+        </g>
+      )}
+    </g>
+  );
+}
+
+// ---- Types of teeth --------------------------------------------------------
+export function TypesOfTeeth({ showLabels = true }) {
+  const cx = W / 2, cy = H / 2 + 40, R = 240;
+  const teeth = [
+    ["Molar", -70], ["Premolar", -40], ["Canine", -18], ["Incisor", -4], ["Incisor", 4], ["Canine", 18], ["Premolar", 40], ["Molar", 70],
+  ];
+  const colors = { Incisor: "#2563eb", Canine: "#dc2626", Premolar: "#16a34a", Molar: "#f59e0b" };
+  return (
+    <g>
+      <path d={`M ${cx - R} ${cy - 60} A ${R} ${R} 0 0 1 ${cx + R} ${cy - 60}`} fill="none" stroke="#e2e8f0" strokeWidth="2" />
+      {teeth.map(([t, deg], i) => {
+        const a = (-90 + deg) * Math.PI / 180, x = cx + R * Math.cos(a), y = (cy - 60) + R * Math.sin(a);
+        return <g key={i}><rect x={x - 12} y={y - 14} width="24" height="28" rx="6" fill={colors[t]} stroke="#334155" strokeWidth="1" /></g>;
+      })}
+      {showLabels && (
+        <g>
+          <Leader x={cx} y={(cy - 60) - R + 14} tx={cx} ty={80} text="Incisor — cutting" color="#2563eb" side="right" />
+          <Leader x={cx + R * Math.cos((-90 + 18) * Math.PI / 180)} y={(cy - 60) + R * Math.sin((-90 + 18) * Math.PI / 180)} tx={W - 70} ty={cy - 120} text="Canine — tearing" color="#dc2626" side="right" />
+          <Leader x={cx + R * Math.cos((-90 + 40) * Math.PI / 180)} y={(cy - 60) + R * Math.sin((-90 + 40) * Math.PI / 180)} tx={W - 70} ty={cy} text="Premolar — crushing" color="#16a34a" side="right" />
+          <Leader x={cx - R * Math.cos((-90 + 70) * Math.PI / 180) * -1} y={(cy - 60) + R * Math.sin((-90 + 70) * Math.PI / 180)} tx={70} ty={cy} text="Molar — grinding" color="#f59e0b" side="left" />
+        </g>
+      )}
+    </g>
+  );
+}
+
+// ---- Active vs passive transport -------------------------------------------
+export function MembraneTransport({ showLabels = true }) {
+  const bilayer = (x0, x1, y) => <g>{[y, y + 30].map((yy, r) => <g key={r}>{Array.from({ length: Math.floor((x1 - x0) / 16) }).map((_, i) => <g key={i}><circle cx={x0 + 8 + i * 16} cy={yy} r="6" fill="#fbbf24" /><line x1={x0 + 8 + i * 16} y1={yy + (r ? 6 : -6)} x2={x0 + 8 + i * 16} y2={yy + (r ? 20 : -20)} stroke="#f59e0b" strokeWidth="1.5" /></g>)}</g>)}</g>;
+  const yMid = H / 2;
+  return (
+    <g>
+      {/* Passive (left) */}
+      {bilayer(60, W / 2 - 40, yMid)}
+      <line x1={150} y1={yMid - 60} x2={150} y2={yMid + 90} stroke="#16a34a" strokeWidth="2.5" markerEnd="url(#il-arrow)" />
+      {[...Array(5)].map((_, i) => <circle key={i} cx={110 + (i % 3) * 20} cy={yMid - 40 - (i > 2 ? 20 : 0)} r="6" fill="#16a34a" />)}
+      {/* Active (right) */}
+      {bilayer(W / 2 + 40, W - 60, yMid)}
+      <line x1={W - 150} y1={yMid + 90} x2={W - 150} y2={yMid - 60} stroke="#dc2626" strokeWidth="2.5" markerEnd="url(#il-arrow)" />
+      <rect x={W - 168} y={yMid - 4} width="36" height="38" rx="6" fill="#a78bfa" stroke="#7c3aed" strokeWidth="1.5" />
+      {showLabels && (
+        <g textAnchor="middle" fill="#334155">
+          <text x={W / 4} y={80} fontSize="14" fontWeight="800" fill="#16a34a">Passive (diffusion)</text>
+          <text x={W / 4} y={H - 40} fontSize="10.5" fill="#64748b">high → low · no energy</text>
+          <text x={3 * W / 4} y={80} fontSize="14" fontWeight="800" fill="#dc2626">Active transport</text>
+          <text x={3 * W / 4} y={H - 40} fontSize="10.5" fill="#64748b">low → high · needs ATP (pump)</text>
+        </g>
+      )}
+    </g>
+  );
+}
+
+// ---- Bacteria structure ----------------------------------------------------
+export function BacteriaStructure({ showLabels = true }) {
+  const cx = W / 2 - 20, cy = H / 2;
+  return (
+    <g>
+      <ellipse cx={cx} cy={cy} rx="200" ry="110" fill="#fef9c3" stroke="#ca8a04" strokeWidth="6" filter="url(#viz-shadow)" />
+      <ellipse cx={cx} cy={cy} rx="188" ry="98" fill="#fffbeb" stroke="#f59e0b" strokeWidth="2" />
+      {/* nucleoid (DNA loop) */}
+      <path d={`M ${cx - 40} ${cy} q 40 -40 80 0 q -40 40 -80 0 Z`} fill="none" stroke="#2563eb" strokeWidth="3" />
+      {/* plasmid */}
+      <circle cx={cx - 110} cy={cy - 30} r="14" fill="none" stroke="#7c3aed" strokeWidth="3" />
+      {/* ribosomes */}
+      {[...Array(10)].map((_, i) => <circle key={i} cx={cx - 100 + (i % 5) * 44} cy={cy + 40 + Math.floor(i / 5) * 20} r="3.5" fill="#dc2626" />)}
+      {/* flagellum */}
+      <path d={`M ${cx + 200} ${cy} q 40 -14 60 6 q 20 20 50 6`} fill="none" stroke="#334155" strokeWidth="3" />
+      {showLabels && (
+        <g>
+          <Leader x={cx} y={cy} tx={cx} ty={80} text="Nucleoid (DNA)" color="#2563eb" side="right" />
+          <Leader x={cx - 110} y={cy - 30} tx={70} ty={cy - 90} text="Plasmid" color="#7c3aed" side="left" />
+          <Leader x={cx - 100} y={cy + 40} tx={70} ty={cy + 90} text="Ribosomes" color="#dc2626" side="left" />
+          <Leader x={cx + 180} y={cy - 60} tx={W - 70} ty={cy - 90} text="Cell wall" color="#ca8a04" side="right" />
+          <Leader x={cx + 250} y={cy + 6} tx={W - 70} ty={cy + 90} text="Flagellum" color="#334155" side="right" />
+        </g>
+      )}
+    </g>
+  );
+}
+
+// ---- Virus structure (bacteriophage) ---------------------------------------
+export function VirusStructure({ showLabels = true }) {
+  const cx = W / 2, top = 100;
+  return (
+    <g>
+      {/* head (icosahedral capsid) */}
+      <polygon points={`${cx},${top} ${cx + 50},${top + 30} ${cx + 50},${top + 90} ${cx},${top + 120} ${cx - 50},${top + 90} ${cx - 50},${top + 30}`} fill="#c7d2fe" stroke="#4f46e5" strokeWidth="2.5" filter="url(#viz-shadow)" />
+      {/* genetic material inside */}
+      <path d={`M ${cx - 20} ${top + 30} q 20 20 0 40 q -20 20 0 40`} fill="none" stroke="#dc2626" strokeWidth="2.5" />
+      {/* collar + tail sheath */}
+      <rect x={cx - 10} y={top + 120} width="20" height="70" fill="#a5b4fc" stroke="#4f46e5" strokeWidth="2" />
+      {/* base plate + tail fibres */}
+      <rect x={cx - 30} y={top + 190} width="60" height="12" rx="4" fill="#4f46e5" />
+      {[-1, 1].map((d, i) => <path key={i} d={`M ${cx + d * 24} ${top + 202} q ${d * 20} 30 ${d * 6} 60`} fill="none" stroke="#4f46e5" strokeWidth="3" strokeLinecap="round" />)}
+      {showLabels && (
+        <g>
+          <Leader x={cx + 40} y={top + 30} tx={W - 70} ty={top + 20} text="Capsid (protein coat)" color="#4f46e5" side="right" />
+          <Leader x={cx - 12} y={top + 70} tx={70} ty={top + 40} text="Genetic material (DNA)" color="#dc2626" side="left" />
+          <Leader x={cx + 10} y={top + 155} tx={W - 70} ty={top + 150} text="Tail sheath" color="#4f46e5" side="right" />
+          <Leader x={cx + 30} y={top + 250} tx={W - 70} ty={top + 250} text="Tail fibres" color="#4f46e5" side="right" />
+        </g>
+      )}
+    </g>
+  );
+}
+
+// ---- Seed dispersal --------------------------------------------------------
+export function SeedDispersal({ showLabels = true }) {
+  const y = H / 2, xs = [140, 350, 560];
+  return (
+    <g>
+      {/* Wind (winged seed) */}
+      <ellipse cx={xs[0]} cy={y} rx="10" ry="14" fill="#a16207" />
+      <path d={`M ${xs[0] + 8} ${y - 6} q 40 -20 60 6 q -30 6 -60 -6`} fill="#bbf7d0" stroke="#16a34a" strokeWidth="1.5" />
+      {/* Water (floating) */}
+      <path d={`M ${xs[1] - 60} ${y + 30} q 30 -14 60 0 q 30 14 60 0`} fill="none" stroke="#0ea5e9" strokeWidth="3" />
+      <ellipse cx={xs[1]} cy={y + 10} rx="26" ry="18" fill="#ca8a04" stroke="#78350f" strokeWidth="1.5" />
+      {/* Animal (hooked burr) */}
+      <circle cx={xs[2]} cy={y} r="20" fill="#78350f" />
+      {[...Array(10)].map((_, i) => { const a = i / 10 * 2 * Math.PI; return <line key={i} x1={xs[2] + 20 * Math.cos(a)} y1={y + 20 * Math.sin(a)} x2={xs[2] + 30 * Math.cos(a)} y2={y + 30 * Math.sin(a)} stroke="#92400e" strokeWidth="2" />; })}
+      {showLabels && (
+        <g textAnchor="middle" fill="#334155">
+          <text x={xs[0]} y={y + 70} fontSize="13" fontWeight="700">Wind</text>
+          <text x={xs[0]} y={y + 86} fontSize="10" fill="#64748b">winged / parachute</text>
+          <text x={xs[1]} y={y + 70} fontSize="13" fontWeight="700">Water</text>
+          <text x={xs[1]} y={y + 86} fontSize="10" fill="#64748b">floats (buoyant)</text>
+          <text x={xs[2]} y={y + 70} fontSize="13" fontWeight="700">Animal</text>
+          <text x={xs[2]} y={y + 86} fontSize="10" fill="#64748b">hooks / eaten</text>
+        </g>
+      )}
+    </g>
+  );
+}
+
+// ---- Paper chromatography --------------------------------------------------
+export function Chromatography({ showLabels = true }) {
+  const cx = W / 2, top = 90, bot = H - 90;
+  return (
+    <g>
+      {/* beaker */}
+      <path d={`M ${cx - 120} ${top} L ${cx - 120} ${bot} Q ${cx - 120} ${bot + 26} ${cx - 94} ${bot + 26} L ${cx + 94} ${bot + 26} Q ${cx + 120} ${bot + 26} ${cx + 120} ${bot} L ${cx + 120} ${top}`} fill="none" stroke="#334155" strokeWidth="2.5" />
+      {/* solvent */}
+      <rect x={cx - 118} y={bot - 50} width="236" height="76" fill="#bae6fd" opacity="0.5" />
+      {/* paper strip */}
+      <rect x={cx - 24} y={top - 4} width="48" height={bot - top - 10} fill="#f8fafc" stroke="#cbd5e1" strokeWidth="1.5" />
+      {/* baseline + separated spots */}
+      <line x1={cx - 24} y1={bot - 40} x2={cx + 24} y2={bot - 40} stroke="#94a3b8" strokeWidth="1" strokeDasharray="3 3" />
+      {[["#dc2626", 90], ["#16a34a", 150], ["#2563eb", 210]].map(([c, up], i) => <circle key={i} cx={cx - 8 + i * 8} cy={bot - 40 - up} r="7" fill={c} />)}
+      <circle cx={cx} cy={bot - 40} r="6" fill="#334155" />
+      <line x1={cx - 40} y1={top + 40} x2={cx + 40} y2={top + 40} stroke="#7c3aed" strokeWidth="1.5" strokeDasharray="4 3" />
+      {showLabels && (
+        <g>
+          <Leader x={cx} y={bot - 40} tx={70} ty={bot - 20} text="baseline (sample spot)" color="#334155" side="left" />
+          <Leader x={cx + 20} y={top + 40} tx={W - 70} ty={top + 30} text="solvent front" color="#7c3aed" side="right" />
+          <text x={cx} y={bot + 44} fontSize="11" fill="#0284c7" textAnchor="middle">components separate by solubility (different Rf values)</text>
+        </g>
+      )}
+    </g>
+  );
+}
+
+// ---- Atomic structure ------------------------------------------------------
+export function AtomicStructure({ showLabels = true }) {
+  const cx = W / 2, cy = H / 2, shells = [2, 8, 3];
+  return (
+    <g>
+      {shells.map((count, si) => {
+        const r = 46 + (si + 1) * 46;
+        return (
+          <g key={si}>
+            <circle cx={cx} cy={cy} r={r} fill="none" stroke="#94a3b8" strokeWidth="1.2" strokeDasharray="2 4" />
+            {Array.from({ length: count }).map((_, e) => { const a = e / count * 2 * Math.PI - Math.PI / 2; return <Sphere key={e} cx={cx + r * Math.cos(a)} cy={cy + r * Math.sin(a)} r={7} fill="#2563eb" stroke="#fff" strokeWidth={1.2} />; })}
+          </g>
+        );
+      })}
+      <g filter="url(#viz-shadow)"><Sphere cx={cx} cy={cy} r={34} fill="#334155" /></g>
+      {[[-10, -6, "#dc2626"], [8, -8, "#3b82f6"], [-6, 8, "#dc2626"], [10, 6, "#3b82f6"], [0, 0, "#dc2626"]].map(([dx, dy, c], i) => <circle key={i} cx={cx + dx} cy={cy + dy} r="8" fill={c} />)}
+      {showLabels && (
+        <g>
+          <Leader x={cx} y={cy - 34} tx={70} ty={90} text="Nucleus (protons + neutrons)" color="#334155" side="left" />
+          <text x={cx - 10} y={cy - 2} fontSize="9" fill="#fff">p⁺</text>
+          <Leader x={cx + 138} y={cy} tx={W - 70} ty={cy} text="Electrons (in shells)" color="#2563eb" side="right" />
+        </g>
+      )}
+    </g>
+  );
+}
+
+
+// ---- Isotopes --------------------------------------------------------------
+export function Isotopes({ showLabels = true }) {
+  const nucleus = (cx, cy, p, n) => (
+    <g>
+      <g filter="url(#viz-shadow)"><Sphere cx={cx} cy={cy} r={44} fill="#334155" /></g>
+      {Array.from({ length: p + n }).map((_, i) => { const a = i / (p + n) * 2 * Math.PI; const r = 20 * Math.sqrt((i % 4 + 1) / 4); return <circle key={i} cx={cx + r * Math.cos(a)} cy={cy + r * Math.sin(a)} r="6" fill={i < p ? "#ef4444" : "#3b82f6"} />; })}
+      <circle cx={cx} cy={cy} r="70" fill="none" stroke="#94a3b8" strokeWidth="1" strokeDasharray="2 4" />
+      {[0, 1].map((k) => <circle key={k} cx={cx + 70 * Math.cos(k * Math.PI - Math.PI / 2)} cy={cy + 70 * Math.sin(k * Math.PI - Math.PI / 2)} r="6" fill="#2563eb" stroke="#fff" strokeWidth="1" />)}
+    </g>
+  );
+  return (
+    <g>
+      {nucleus(W / 2 - 170, H / 2, 6, 6)}
+      {nucleus(W / 2 + 170, H / 2, 6, 8)}
+      {showLabels && (
+        <g textAnchor="middle" fill="#334155">
+          <text x={W / 2 - 170} y={H / 2 - 100} fontSize="16" fontWeight="800">Carbon-12</text>
+          <text x={W / 2 - 170} y={H / 2 + 118} fontSize="11" fill="#64748b">6 protons, 6 neutrons</text>
+          <text x={W / 2 + 170} y={H / 2 - 100} fontSize="16" fontWeight="800">Carbon-14</text>
+          <text x={W / 2 + 170} y={H / 2 + 118} fontSize="11" fill="#64748b">6 protons, 8 neutrons</text>
+          <text x={W / 2} y={H - 30} fontSize="12" fill="#334155">isotopes: same protons (red), different neutrons (blue)</text>
+        </g>
+      )}
+    </g>
+  );
+}
+
+// ---- Water treatment -------------------------------------------------------
+export function WaterTreatment({ showLabels = true }) {
+  const y = H / 2, stages = [["Screening", "#94a3b8"], ["Sedimentation", "#a16207"], ["Filtration", "#16a34a"], ["Chlorination", "#0891b2"], ["Clean water", "#38bdf8"]];
+  const w = 118, gap = 22, x0 = (W - (stages.length * w + (stages.length - 1) * gap)) / 2;
+  return (
+    <g>
+      {stages.map(([name, color], i) => {
+        const x = x0 + i * (w + gap);
+        return (
+          <g key={i}>
+            <rect x={x} y={y - 50} width={w} height="100" rx="10" fill="#f1f5f9" stroke={color} strokeWidth="2.5" filter="url(#viz-shadow)" />
+            <rect x={x + 6} y={y} width={w - 12} height="44" fill={color} opacity="0.5" />
+            {i < stages.length - 1 && <line x1={x + w} y1={y} x2={x + w + gap} y2={y} stroke="#334155" strokeWidth="2.5" markerEnd="url(#il-arrow)" />}
+            {showLabels && <text x={x + w / 2} y={y + 76} fontSize="11" fontWeight="700" fill={color} textAnchor="middle">{name}</text>}
+          </g>
+        );
+      })}
+      {showLabels && <text x={W / 2} y={80} fontSize="13" fontWeight="700" fill="#334155" textAnchor="middle">Water treatment stages</text>}
+    </g>
+  );
+}
+
+// ---- Gears -----------------------------------------------------------------
+export function Gears({ showLabels = true }) {
+  const gear = (cx, cy, r, teeth, color, rot) => (
+    <g>
+      {Array.from({ length: teeth }).map((_, i) => { const a = i / teeth * 2 * Math.PI; return <rect key={i} x={cx - 5} y={cy - r - 10} width="10" height="14" fill={color} transform={`rotate(${a * 180 / Math.PI} ${cx} ${cy})`} />; })}
+      <circle cx={cx} cy={cy} r={r} fill={color} stroke="#334155" strokeWidth="2" />
+      <circle cx={cx} cy={cy} r={r * 0.3} fill="#f8fafc" stroke="#334155" strokeWidth="1.5" />
+      <path d={`M ${cx - r * 0.6} ${cy - r * 0.6} A ${r * 0.85} ${r * 0.85} 0 0 ${rot > 0 ? 1 : 0} ${cx + r * 0.6} ${cy - r * 0.6}`} fill="none" stroke="#f8fafc" strokeWidth="2" markerEnd="url(#il-arrow)" />
+    </g>
+  );
+  return (
+    <g>
+      {gear(W / 2 - 90, H / 2, 80, 16, "#64748b", 1)}
+      {gear(W / 2 + 90, H / 2 - 30, 50, 10, "#0891b2", -1)}
+      {showLabels && (
+        <g textAnchor="middle" fill="#334155">
+          <text x={W / 2 - 90} y={H / 2 + 130} fontSize="12" fontWeight="700">Driver gear (large)</text>
+          <text x={W / 2 + 90} y={H / 2 - 100} fontSize="12" fontWeight="700">Driven gear (small)</text>
+          <text x={W / 2} y={H - 30} fontSize="11" fill="#64748b">meshing gears turn in opposite directions; small gear spins faster</text>
+        </g>
+      )}
+    </g>
+  );
+}
+
+// ---- Ohm's law -------------------------------------------------------------
+export function OhmsLaw({ showLabels = true }) {
+  const cx = W / 2, cy = H / 2, s = 150;
+  return (
+    <g>
+      <path d={`M ${cx} ${cy - s} L ${cx - s} ${cy + s * 0.7} L ${cx + s} ${cy + s * 0.7} Z`} fill="#e0f2fe" stroke="#0284c7" strokeWidth="3" filter="url(#viz-shadow)" />
+      <line x1={cx - s * 0.72} y1={cy + s * 0.06} x2={cx + s * 0.72} y2={cy + s * 0.06} stroke="#0284c7" strokeWidth="2.5" />
+      <text x={cx} y={cy - s * 0.3} fontSize="40" fontWeight="800" fill="#dc2626" textAnchor="middle">V</text>
+      <text x={cx - s * 0.4} y={cy + s * 0.56} fontSize="34" fontWeight="800" fill="#16a34a" textAnchor="middle">I</text>
+      <text x={cx + s * 0.4} y={cy + s * 0.56} fontSize="34" fontWeight="800" fill="#7c3aed" textAnchor="middle">R</text>
+      {showLabels && (
+        <g fill="#334155" textAnchor="middle">
+          <text x={cx} y={cy + s + 40} fontSize="15" fontWeight="700">V = I × R</text>
+          <text x={cx} y={cy + s + 62} fontSize="11" fill="#64748b">V = voltage · I = current · R = resistance</text>
+        </g>
+      )}
+    </g>
+  );
+}
+
+// ---- Total internal reflection / optical fibre -----------------------------
+export function TotalInternalReflection({ showLabels = true }) {
+  const y = H / 2;
+  return (
+    <g>
+      {/* optical fibre core */}
+      <rect x={80} y={y - 40} width={W - 160} height="80" rx="40" fill="#dbeafe" stroke="#0284c7" strokeWidth="2.5" />
+      {/* bouncing ray */}
+      <polyline points={`110,${y + 30} 220,${y - 30} 330,${y + 30} 440,${y - 30} 550,${y + 30} ${W - 100},${y - 30}`} fill="none" stroke="#f59e0b" strokeWidth="3" />
+      {[220, 440].map((x, i) => <line key={i} x1={x} y1={y - 40} x2={x} y2={y - 60} stroke="#94a3b8" strokeWidth="1.2" strokeDasharray="4 3" />)}
+      {showLabels && (
+        <g fill="#334155" textAnchor="middle">
+          <text x={W / 2} y={80} fontSize="14" fontWeight="800">Total internal reflection (optical fibre)</text>
+          <text x={220} y={y - 66} fontSize="10" fill="#64748b">angle &gt; critical angle → reflects</text>
+          <text x={W / 2} y={H - 40} fontSize="11" fill="#f59e0b">light stays trapped, bouncing along the core</text>
+        </g>
+      )}
+    </g>
+  );
+}
+
+// ---- Nuclear fusion --------------------------------------------------------
+export function NuclearFusion({ showLabels = true }) {
+  const cx = W / 2, cy = H / 2;
+  const smallNuc = (x, y, label, c) => <g><g filter="url(#viz-shadow)"><Sphere cx={x} cy={y} r={26} fill={c} /></g>{showLabels && <text x={x} y={y + 46} fontSize="11" fill="#334155" textAnchor="middle">{label}</text>}</g>;
+  return (
+    <g>
+      {smallNuc(150, cy - 60, "Deuterium (²H)", "#2563eb")}
+      {smallNuc(150, cy + 60, "Tritium (³H)", "#16a34a")}
+      <line x1={186} y1={cy - 50} x2={cx - 40} y2={cy - 10} stroke="#334155" strokeWidth="2.5" markerEnd="url(#il-arrow)" />
+      <line x1={186} y1={cy + 50} x2={cx - 40} y2={cy + 10} stroke="#334155" strokeWidth="2.5" markerEnd="url(#il-arrow)" />
+      <g filter="url(#viz-shadow)"><Sphere cx={cx + 40} cy={cy} r={38} fill="#7c3aed" /></g>
+      <line x1={cx + 80} y1={cy - 20} x2={W - 110} y2={cy - 60} stroke="#64748b" strokeWidth="2" markerEnd="url(#il-arrow)" />
+      <circle cx={W - 110} cy={cy - 60} r="8" fill="#64748b" />
+      {showLabels && (
+        <g fill="#334155">
+          <text x={cx + 40} y={cy + 60} fontSize="11" textAnchor="middle">Helium (⁴He)</text>
+          <text x={W - 130} y={cy - 74} fontSize="11">neutron</text>
+          <text x={cx + 120} y={cy + 30} fontSize="11" fill="#dc2626">+ huge energy</text>
+          <text x={W / 2} y={70} fontSize="14" fontWeight="800" textAnchor="middle">Nuclear fusion (powers the Sun)</text>
+        </g>
+      )}
+    </g>
+  );
+}
+
+// ---- Circuit symbols legend ------------------------------------------------
+export function CircuitSymbols({ showLabels = true }) {
+  const items = [
+    ["Cell", (x, y) => <g stroke="#334155" strokeWidth="2.5"><line x1={x - 6} y1={y - 12} x2={x - 6} y2={y + 12} /><line x1={x + 6} y1={y - 7} x2={x + 6} y2={y + 7} /></g>],
+    ["Battery", (x, y) => <g stroke="#334155" strokeWidth="2.5"><line x1={x - 12} y1={y - 12} x2={x - 12} y2={y + 12} /><line x1={x - 2} y1={y - 7} x2={x - 2} y2={y + 7} /><line x1={x + 6} y1={y - 12} x2={x + 6} y2={y + 12} /><line x1={x + 14} y1={y - 7} x2={x + 14} y2={y + 7} /></g>],
+    ["Bulb", (x, y) => <g stroke="#334155" strokeWidth="2.5" fill="none"><circle cx={x} cy={y} r="14" /><line x1={x - 10} y1={y - 10} x2={x + 10} y2={y + 10} /><line x1={x - 10} y1={y + 10} x2={x + 10} y2={y - 10} /></g>],
+    ["Resistor", (x, y) => <rect x={x - 20} y={y - 8} width="40" height="16" fill="none" stroke="#334155" strokeWidth="2.5" />],
+    ["Switch", (x, y) => <g stroke="#334155" strokeWidth="2.5"><circle cx={x - 16} cy={y} r="3" fill="#334155" /><line x1={x - 16} y1={y} x2={x + 14} y2={y - 14} /><circle cx={x + 16} cy={y} r="3" fill="#334155" /></g>],
+    ["Ammeter", (x, y) => <g stroke="#334155" strokeWidth="2.5" fill="none"><circle cx={x} cy={y} r="14" /><text x={x} y={y + 5} fontSize="14" fontWeight="700" fill="#334155" textAnchor="middle" stroke="none">A</text></g>],
+    ["Voltmeter", (x, y) => <g stroke="#334155" strokeWidth="2.5" fill="none"><circle cx={x} cy={y} r="14" /><text x={x} y={y + 5} fontSize="14" fontWeight="700" fill="#334155" textAnchor="middle" stroke="none">V</text></g>],
+    ["Fuse", (x, y) => <g stroke="#334155" strokeWidth="2.5" fill="none"><rect x={x - 20} y={y - 8} width="40" height="16" /><line x1={x - 20} y1={y} x2={x + 20} y2={y} /></g>],
+  ];
+  const cols = 4, cw = W / cols, rh = 150, y0 = 130;
+  return (
+    <g>
+      {items.map(([name, draw], i) => {
+        const x = (i % cols) * cw + cw / 2, y = y0 + Math.floor(i / cols) * rh;
+        return <g key={i}>{draw(x, y)}{showLabels && <text x={x} y={y + 40} fontSize="12" fontWeight="700" fill="#334155" textAnchor="middle">{name}</text>}</g>;
+      })}
+      {showLabels && <text x={W / 2} y={70} fontSize="14" fontWeight="800" fill="#334155" textAnchor="middle">Circuit symbols</text>}
+    </g>
+  );
+}
+
+// ---- Ozone layer -----------------------------------------------------------
+export function OzoneLayer({ showLabels = true }) {
+  const ground = H - 50, ozY = 190;
+  return (
+    <g>
+      <rect x={40} y={60} width={W - 80} height={ground - 60} fill="#dbeafe" opacity="0.4" />
+      {/* ozone band */}
+      <rect x={40} y={ozY - 24} width={W - 80} height="48" rx="20" fill="#a5b4fc" opacity="0.7" stroke="#6366f1" strokeWidth="1.5" />
+      {/* sun + UV */}
+      <g filter="url(#viz-shadow)"><Sphere cx={110} cy={100} r={28} fill="#fbbf24" /></g>
+      {[0, 1, 2].map((i) => <line key={i} x1={140 + i * 30} y1={120} x2={220 + i * 30} y2={ozY - 26} stroke="#7c3aed" strokeWidth="2.5" markerEnd="url(#il-arrow)" />)}
+      {/* most UV reflected/absorbed; little passes */}
+      <line x1={300} y1={ozY + 24} x2={330} y2={ground - 10} stroke="#7c3aed" strokeWidth="2" strokeDasharray="4 3" markerEnd="url(#il-arrow)" />
+      {/* ground */}
+      <path d={`M 40 ${ground} Q ${W / 2} ${ground - 20} ${W - 40} ${ground} L ${W - 40} ${H - 20} L 40 ${H - 20} Z`} fill="#16a34a" stroke="#15803d" strokeWidth="2" />
+      {showLabels && (
+        <g fill="#334155">
+          <Leader x={W - 120} y={ozY} tx={W - 60} ty={ozY} text="Ozone layer (stratosphere)" color="#6366f1" side="right" />
+          <text x={200} y={150} fontSize="11" fill="#7c3aed">UV radiation</text>
+          <text x={W / 2} y={ground + 22} fontSize="11" fill="#64748b" textAnchor="middle">ozone absorbs most harmful UV</text>
+        </g>
+      )}
+    </g>
+  );
+}
+
+// ---- Volcano types ---------------------------------------------------------
+export function VolcanoTypes({ showLabels = true }) {
+  const ground = H - 90;
+  return (
+    <g>
+      {/* Shield volcano (broad, gentle) */}
+      <path d={`M 60 ${ground} Q 210 ${ground - 90} 360 ${ground} Z`} fill="#a16207" stroke="#7c2d12" strokeWidth="2.5" filter="url(#viz-shadow)" />
+      <path d={`M 210 ${ground - 84} l -8 -20 l 16 0 z`} fill="#ef4444" />
+      {/* Composite / stratovolcano (steep, layered) */}
+      <path d={`M 440 ${ground} L 560 ${ground - 190} L 680 ${ground} Z`} fill="#78716c" stroke="#44403c" strokeWidth="2.5" filter="url(#viz-shadow)" />
+      {[0.3, 0.55, 0.8].map((t, i) => <path key={i} d={`M ${440 + t * 60} ${ground - t * 190} L ${680 - t * 60} ${ground - t * 190}`} stroke="#57534e" strokeWidth="1.5" opacity="0.6" />)}
+      {[[560, ground - 200, 26]].map(([x, y, r], i) => <circle key={i} cx={x} cy={y} r={r} fill="#9ca3af" />)}
+      {showLabels && (
+        <g textAnchor="middle" fill="#334155">
+          <text x={210} y={ground + 30} fontSize="13" fontWeight="700">Shield volcano</text>
+          <text x={210} y={ground + 46} fontSize="10" fill="#64748b">broad, gentle · runny lava</text>
+          <text x={560} y={ground + 30} fontSize="13" fontWeight="700">Composite (strato)</text>
+          <text x={560} y={ground + 46} fontSize="10" fill="#64748b">steep, layered · explosive</text>
+        </g>
+      )}
+    </g>
+  );
+}

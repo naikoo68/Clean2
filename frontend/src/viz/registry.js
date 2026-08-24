@@ -67,7 +67,7 @@ export const CATALOG = {
     "Layers of the Earth", "Layers of the Atmosphere", "Greenhouse Effect", "Plate Tectonics", "Soil Horizons",
     "Weather Fronts", "River Course", "Seasons (Earth's tilt)", "Tides (Spring & Neap)",
     "Renewable Energy Sources", "Latitude & Longitude", "Earthquake (seismic waves)",
-    "Day & Night", "Continental Drift", "Cloud Types",
+    "Day & Night", "Continental Drift", "Cloud Types", "Ozone Layer", "Volcano Types",
   ],
   biology: [
     "Cell Structure", "DNA", "RNA", "Mitosis", "Meiosis", "Food Chain", "Food Web", "Human Body",
@@ -81,6 +81,8 @@ export const CATALOG = {
     "Breathing Mechanism", "Synapse", "Endocrine System", "Antagonistic Muscles", "Immune Response",
     "Blood Groups (ABO)", "Mosquito Life Cycle", "Aerobic vs Anaerobic Respiration",
     "Enzyme Action (lock & key)", "Osmosis", "DNA Replication", "Food Tests",
+    "Xylem & Phloem", "Transpiration & Stomata", "Types of Teeth", "Active vs Passive Transport",
+    "Bacteria Structure", "Virus Structure", "Seed Dispersal",
     "Ecosystem", "Classification Tree",
   ],
   chemistry: [
@@ -90,7 +92,7 @@ export const CATALOG = {
     "Periodic Table", "Electron Configuration", "Energy Level", "Orbital Diagram",
     "States of Matter", "pH Scale", "Ionic vs Covalent Bonding", "Electrolysis", "Distillation",
     "Titration Curve", "Crude Oil Distillation", "Carbon Allotropes", "Neutralization", "Periodic Table Trends",
-    "Types of Chemical Reactions",
+    "Types of Chemical Reactions", "Paper Chromatography", "Atomic Structure", "Isotopes", "Water Treatment",
   ],
   physics: [
     "Free Body Diagram", "Projectile Motion", "Wave", "Circuit Diagram", "Optics", "Ray Diagram",
@@ -99,6 +101,7 @@ export const CATALOG = {
     "Levers", "Solar & Lunar Eclipse", "Simple Machines", "Star Life Cycle", "Reflection & Refraction",
     "Prism Dispersion", "Simple Pendulum", "Electric Motor", "Transformer", "Mirror Image Formation",
     "Convex Lens Image", "Radioactive Decay", "Electric Generator", "Nuclear Fission",
+    "Gears", "Ohm's Law", "Total Internal Reflection", "Nuclear Fusion", "Circuit Symbols",
   ],
   cs: [
     "Flowchart", "Algorithm Flow", "ER Diagram", "DFD", "UML", "Sequence Diagram",
@@ -476,6 +479,24 @@ Object.assign(MODULES, {
   reactiontypes:     _il("reactiontypes", "Types of Chemical Reactions", "chemistry", { kind: "reactiontypes" }),
   nuclearfission:    _il("nuclearfission", "Nuclear Fission", "physics", { kind: "fission" }),
   cloudtypes:        _il("cloudtypes", "Cloud Types", "geography", { kind: "cloudtypes" }),
+  xylemphloem:       _il("xylemphloem", "Xylem & Phloem", "biology", { kind: "xylemphloem" }),
+  transpiration:     _il("transpiration", "Transpiration & Stomata", "biology", { kind: "transpiration" }),
+  typesofteeth:      _il("typesofteeth", "Types of Teeth", "biology", { kind: "teeth" }),
+  membranetransport: _il("membranetransport", "Active vs Passive Transport", "biology", { kind: "transport" }),
+  bacteriastructure: _il("bacteriastructure", "Bacteria Structure", "biology", { kind: "bacteria" }),
+  virusstructure:    _il("virusstructure", "Virus Structure", "biology", { kind: "virus" }),
+  seeddispersal:     _il("seeddispersal", "Seed Dispersal", "biology", { kind: "seeddispersal" }),
+  chromatography:    _il("chromatography", "Paper Chromatography", "chemistry", { kind: "chromatography" }),
+  atomicstructure:   _il("atomicstructure", "Atomic Structure", "chemistry", { kind: "atom" }),
+  isotopes:          _il("isotopes", "Isotopes", "chemistry", { kind: "isotopes" }),
+  watertreatment:    _il("watertreatment", "Water Treatment", "chemistry", { kind: "watertreatment" }),
+  gears:             _il("gears", "Gears", "physics", { kind: "gears" }),
+  ohmslaw:           _il("ohmslaw", "Ohm's Law", "physics", { kind: "ohmslaw" }),
+  totalinternalreflection: _il("totalinternalreflection", "Total Internal Reflection", "physics", { kind: "tir" }),
+  nuclearfusion:     _il("nuclearfusion", "Nuclear Fusion", "physics", { kind: "fusion" }),
+  circuitsymbols:    _il("circuitsymbols", "Circuit Symbols", "physics", { kind: "circuitsymbols" }),
+  ozonelayer:        _il("ozonelayer", "Ozone Layer", "geography", { kind: "ozone" }),
+  volcanotypes:      _il("volcanotypes", "Volcano Types", "geography", { kind: "volcanotypes" }),
 });
 
 // ---- Phase 10: fill remaining catalog (aliases + charts/graphs/tables/illustrations) ----
