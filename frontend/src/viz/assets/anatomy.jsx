@@ -2731,3 +2731,140 @@ export function LatLong({ showLabels = true }) {
     </g>
   );
 }
+
+
+// ---- Enzyme action (lock & key) --------------------------------------------
+export function EnzymeAction({ showLabels = true }) {
+  const y = H / 2;
+  const enzyme = (x, notch) => <path d={`M ${x - 50} ${y - 40} h 100 v 30 ${notch ? `q -18 0 -18 ${18} q 0 18 18 18` : "q -18 0 -18 18 q 0 18 18 18"} v 22 h -100 z`} fill="#c7d2fe" stroke="#4f46e5" strokeWidth="2" />;
+  const sub = (x) => <path d={`M ${x} ${y - 10} q 18 0 18 18 q 0 18 -18 18 h -26 v -36 z`} fill="#f59e0b" stroke="#b45309" strokeWidth="2" />;
+  const ax1 = 130, ax2 = W / 2, ax3 = W - 140;
+  return (
+    <g>
+      {/* Stage 1: enzyme + substrate */}
+      {enzyme(ax1)}<g transform={`translate(${ax1 - 96} 0)`}>{sub(ax1)}</g>
+      {/* Stage 2: complex */}
+      {enzyme(ax2)}{sub(ax2 + 32)}
+      {/* Stage 3: products released */}
+      {enzyme(ax3)}
+      <path d={`M ${ax3 + 40} ${y - 6} q 14 0 14 14 q 0 14 -14 14 z`} fill="#f97316" stroke="#b45309" strokeWidth="1.5" />
+      <path d={`M ${ax3 + 40} ${y + 26} q 14 0 14 -12 z`} fill="#fbbf24" stroke="#b45309" strokeWidth="1.5" />
+      {/* arrows */}
+      <line x1={ax1 + 70} y1={y} x2={ax2 - 70} y2={y} stroke="#334155" strokeWidth="2.5" markerEnd="url(#il-arrow)" />
+      <line x1={ax2 + 70} y1={y} x2={ax3 - 70} y2={y} stroke="#334155" strokeWidth="2.5" markerEnd="url(#il-arrow)" />
+      {showLabels && (
+        <g textAnchor="middle" fill="#334155">
+          <text x={ax1} y={y + 66} fontSize="11.5" fontWeight="700">Enzyme + substrate</text>
+          <text x={ax1 - 70} y={y - 24} fontSize="10" fill="#b45309">substrate</text>
+          <text x={ax1 + 44} y={y + 4} fontSize="9.5" fill="#4f46e5">active site</text>
+          <text x={ax2} y={y + 66} fontSize="11.5" fontWeight="700">Enzyme–substrate complex</text>
+          <text x={ax3} y={y + 66} fontSize="11.5" fontWeight="700">Products + enzyme (reused)</text>
+        </g>
+      )}
+    </g>
+  );
+}
+
+// ---- Osmosis ---------------------------------------------------------------
+export function Osmosis({ showLabels = true }) {
+  const x0 = 120, x1 = W - 120, top = 130, bot = H - 90, mid = (x0 + x1) / 2;
+  return (
+    <g>
+      <rect x={x0} y={top} width={x1 - x0} height={bot - top} fill="none" stroke="#334155" strokeWidth="2.5" />
+      <rect x={x0} y={top} width={mid - x0} height={bot - top} fill="#dbeafe" opacity="0.5" />
+      <rect x={mid} y={top} width={x1 - mid} height={bot - top} fill="#bfdbfe" opacity="0.7" />
+      {/* semipermeable membrane */}
+      <line x1={mid} y1={top} x2={mid} y2={bot} stroke="#7c3aed" strokeWidth="3" strokeDasharray="6 5" />
+      {/* solute dots: few left, many right */}
+      {[...Array(4)].map((_, i) => <circle key={`l${i}`} cx={x0 + 50 + (i % 2) * 60} cy={top + 60 + i * 50} r="9" fill="#f59e0b" />)}
+      {[...Array(9)].map((_, i) => <circle key={`r${i}`} cx={mid + 40 + (i % 3) * 60} cy={top + 50 + Math.floor(i / 3) * 70} r="9" fill="#f59e0b" />)}
+      {/* water movement arrows through membrane (left -> right) */}
+      {[0, 1, 2].map((i) => <line key={i} x1={mid - 40} y1={top + 60 + i * 90} x2={mid + 40} y2={top + 60 + i * 90} stroke="#0ea5e9" strokeWidth="3" markerEnd="url(#il-arrow)" />)}
+      {showLabels && (
+        <g>
+          <text x={(x0 + mid) / 2} y={top - 10} fontSize="12" fontWeight="700" fill="#0284c7" textAnchor="middle">dilute (more water)</text>
+          <text x={(mid + x1) / 2} y={top - 10} fontSize="12" fontWeight="700" fill="#1d4ed8" textAnchor="middle">concentrated (more solute)</text>
+          <Leader x={mid} y={bot - 20} tx={mid} ty={H - 24} text="semipermeable membrane" color="#7c3aed" side="right" />
+          <text x={mid} y={top + 40} fontSize="10.5" fill="#0ea5e9" textAnchor="middle">water moves →</text>
+        </g>
+      )}
+    </g>
+  );
+}
+
+// ---- Convex lens image formation -------------------------------------------
+export function ConvexLens({ showLabels = true }) {
+  const cx = W / 2, ay = H / 2, f = 90, objX = cx - 220, objTop = ay - 70;
+  const diX = cx + 150, imgBot = ay + 48;
+  return (
+    <g>
+      <line x1={80} y1={ay} x2={W - 80} y2={ay} stroke="#94a3b8" strokeWidth="1.5" />
+      {/* lens */}
+      <ellipse cx={cx} cy={ay} rx="18" ry="120" fill="#bae6fd" fillOpacity="0.6" stroke="#0284c7" strokeWidth="2.5" />
+      {[-2, -1, 1, 2].map((k, i) => <g key={i}><circle cx={cx + k * f} cy={ay} r="3" fill="#64748b" /><text x={cx + k * f} y={ay + 16} fontSize="10" fill="#64748b" textAnchor="middle">{Math.abs(k) === 2 ? "2F" : "F"}</text></g>)}
+      {/* object */}
+      <line x1={objX} y1={ay} x2={objX} y2={objTop} stroke="#16a34a" strokeWidth="3" markerEnd="url(#il-arrow)" />
+      {/* rays: parallel then through F; through centre */}
+      <polyline points={`${objX},${objTop} ${cx},${objTop} ${diX},${imgBot}`} fill="none" stroke="#f59e0b" strokeWidth="1.8" />
+      <polyline points={`${objX},${objTop} ${diX},${imgBot}`} fill="none" stroke="#dc2626" strokeWidth="1.8" />
+      {/* image */}
+      <line x1={diX} y1={ay} x2={diX} y2={imgBot} stroke="#7c3aed" strokeWidth="3" markerEnd="url(#il-arrow)" />
+      {showLabels && (
+        <g>
+          <text x={objX} y={objTop - 8} fontSize="11" fill="#16a34a" textAnchor="middle">object (beyond 2F)</text>
+          <text x={diX} y={imgBot + 16} fontSize="11" fill="#7c3aed" textAnchor="middle">real, inverted image</text>
+          <text x={cx} y={ay - 126} fontSize="11" fill="#0284c7" textAnchor="middle">convex lens</text>
+        </g>
+      )}
+    </g>
+  );
+}
+
+// ---- Neutralization --------------------------------------------------------
+export function Neutralization({ showLabels = true }) {
+  const beaker = (x, fill, label, sub) => (
+    <g>
+      <path d={`M ${x - 40} 150 L ${x - 40} 300 Q ${x - 40} 320 ${x - 20} 320 L ${x + 20} 320 Q ${x + 40} 320 ${x + 40} 300 L ${x + 40} 150`} fill="none" stroke="#334155" strokeWidth="2.5" />
+      <path d={`M ${x - 40} 230 L ${x - 40} 300 Q ${x - 40} 320 ${x - 20} 320 L ${x + 20} 320 Q ${x + 40} 320 ${x + 40} 300 L ${x + 40} 230 Z`} fill={fill} opacity="0.6" />
+      {showLabels && <><text x={x} y={352} fontSize="13" fontWeight="700" fill="#334155" textAnchor="middle">{label}</text><text x={x} y={370} fontSize="11" fill="#64748b" textAnchor="middle">{sub}</text></>}
+    </g>
+  );
+  return (
+    <g>
+      {beaker(150, "#fca5a5", "Acid", "HCl (low pH)")}
+      <text x={290} y={250} fontSize="30" fill="#334155" textAnchor="middle">+</text>
+      {beaker(420, "#93c5fd", "Base", "NaOH (high pH)")}
+      <line x1={480} y1={250} x2={560} y2={250} stroke="#334155" strokeWidth="3" markerEnd="url(#il-arrow)" />
+      {beaker(660, "#d1fae5", "Salt + water", "NaCl (neutral)")}
+      {showLabels && <text x={W / 2} y={H - 30} fontSize="14" fontWeight="700" fill="#334155" textAnchor="middle">HCl + NaOH → NaCl + H₂O</text>}
+    </g>
+  );
+}
+
+// ---- Earthquake (focus, epicentre, seismic waves) --------------------------
+export function Earthquake({ showLabels = true }) {
+  const ground = 180, fx = W / 2 - 30, fy = 360;
+  return (
+    <g>
+      {/* Ground + underground */}
+      <rect x={40} y={ground} width={W - 80} height={H - ground - 20} fill="#a16207" opacity="0.25" />
+      <line x1={40} y1={ground} x2={W - 40} y2={ground} stroke="#15803d" strokeWidth="4" />
+      {/* Fault line */}
+      <line x1={fx - 60} y1={H - 30} x2={fx + 60} y2={ground - 10} stroke="#334155" strokeWidth="2.5" strokeDasharray="8 5" />
+      {/* Focus + seismic waves */}
+      {[40, 90, 140, 190].map((r, i) => <circle key={i} cx={fx} cy={fy} r={r} fill="none" stroke="#dc2626" strokeWidth="1.6" opacity={1 - i * 0.2} />)}
+      <Sphere cx={fx} cy={fy} r={10} fill="#dc2626" />
+      {/* Epicentre (surface above focus) */}
+      <Sphere cx={fx} cy={ground} r={8} fill="#f59e0b" />
+      <line x1={fx} y1={ground} x2={fx} y2={fy} stroke="#334155" strokeWidth="1.2" strokeDasharray="4 4" />
+      {showLabels && (
+        <g>
+          <Leader x={fx} y={fy} tx={70} ty={fy} text="Focus (hypocentre)" color="#dc2626" side="left" />
+          <Leader x={fx} y={ground} tx={W - 70} ty={ground - 30} text="Epicentre" color="#f59e0b" side="right" />
+          <text x={fx + 150} y={fy - 60} fontSize="11" fill="#dc2626">seismic waves</text>
+          <text x={fx + 70} y={H - 40} fontSize="11" fill="#334155">fault</text>
+        </g>
+      )}
+    </g>
+  );
+}

@@ -66,7 +66,7 @@ export const CATALOG = {
     "DEM", "Terrain", "Wind Rose", "Water Cycle", "Rock Cycle", "Volcano",
     "Layers of the Earth", "Layers of the Atmosphere", "Greenhouse Effect", "Plate Tectonics", "Soil Horizons",
     "Weather Fronts", "River Course", "Seasons (Earth's tilt)", "Tides (Spring & Neap)",
-    "Renewable Energy Sources", "Latitude & Longitude",
+    "Renewable Energy Sources", "Latitude & Longitude", "Earthquake (seismic waves)",
   ],
   biology: [
     "Cell Structure", "DNA", "RNA", "Mitosis", "Meiosis", "Food Chain", "Food Web", "Human Body",
@@ -79,7 +79,7 @@ export const CATALOG = {
     "Types of Joints", "Skin (cross-section)", "Protein Synthesis", "Oxygen Cycle",
     "Breathing Mechanism", "Synapse", "Endocrine System", "Antagonistic Muscles", "Immune Response",
     "Blood Groups (ABO)", "Mosquito Life Cycle", "Aerobic vs Anaerobic Respiration",
-    "Ecosystem", "Classification Tree",
+    "Enzyme Action (lock & key)", "Osmosis", "Ecosystem", "Classification Tree",
   ],
   chemistry: [
     "Bohr Model", "Atomic Structure", "Molecular Structure", "Reaction Diagram",
@@ -87,7 +87,7 @@ export const CATALOG = {
     "Elimination Mechanism", "Rearrangement Mechanism", "Combined Mechanisms",
     "Periodic Table", "Electron Configuration", "Energy Level", "Orbital Diagram",
     "States of Matter", "pH Scale", "Ionic vs Covalent Bonding", "Electrolysis", "Distillation",
-    "Titration Curve", "Crude Oil Distillation", "Carbon Allotropes",
+    "Titration Curve", "Crude Oil Distillation", "Carbon Allotropes", "Neutralization",
   ],
   physics: [
     "Free Body Diagram", "Projectile Motion", "Wave", "Circuit Diagram", "Optics", "Ray Diagram",
@@ -95,6 +95,7 @@ export const CATALOG = {
     "Electromagnetic Spectrum", "Series & Parallel Circuits", "Transverse & Longitudinal Waves",
     "Levers", "Solar & Lunar Eclipse", "Simple Machines", "Star Life Cycle", "Reflection & Refraction",
     "Prism Dispersion", "Simple Pendulum", "Electric Motor", "Transformer", "Mirror Image Formation",
+    "Convex Lens Image",
   ],
   cs: [
     "Flowchart", "Algorithm Flow", "ER Diagram", "DFD", "UML", "Sequence Diagram",
@@ -457,6 +458,11 @@ Object.assign(MODULES, {
   respirationtypes:  _il("respirationtypes", "Aerobic vs Anaerobic Respiration", "biology", { kind: "respiration" }),
   renewableenergy:   _il("renewableenergy", "Renewable Energy Sources", "geography", { kind: "renewables" }),
   latlong:           _il("latlong", "Latitude & Longitude", "geography", { kind: "latlong" }),
+  enzymeaction:      _il("enzymeaction", "Enzyme Action (lock & key)", "biology", { kind: "enzyme" }),
+  osmosis:           _il("osmosis", "Osmosis", "biology", { kind: "osmosis" }),
+  convexlens:        _il("convexlens", "Convex Lens Image", "physics", { kind: "convexlens" }),
+  neutralization:    _il("neutralization", "Neutralization", "chemistry", { kind: "neutralization" }),
+  earthquake:        _il("earthquake", "Earthquake (seismic waves)", "geography", { kind: "earthquake" }),
 });
 
 // ---- Phase 10: fill remaining catalog (aliases + charts/graphs/tables/illustrations) ----
