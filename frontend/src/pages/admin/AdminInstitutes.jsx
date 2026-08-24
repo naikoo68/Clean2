@@ -108,7 +108,7 @@ export default function AdminInstitutes() {
     try {
       await tenantService.setStatus(t.id, next);
       setTenants((list) => list.map((x) => (x.id === t.id ? { ...x, status: next } : x)));
-      flash(`Institute ${next === "active" ? "activated" : "suspended"}.`);
+      flash(next === "active" ? "Institute activated — its users can sign in again." : "Institute suspended — its admins & members can no longer sign in.");
     } catch (err) {
       flash(err.message);
     }
@@ -297,7 +297,7 @@ export default function AdminInstitutes() {
 
               <div className="mt-4 flex gap-2">
                 <button onClick={() => { setAdminFor(t); setAdminForm(blankAdmin); setError(""); }} className="btn-outline flex-1 py-2 text-xs"><UserPlus className="h-3.5 w-3.5" /> Add admin</button>
-                <button onClick={() => toggleStatus(t)} disabled={t.isDefault} title={t.isDefault ? "The default institute can't be suspended" : ""} className={`flex-1 rounded-xl py-2 text-xs font-semibold ${t.status === "active" ? "bg-amber-50 text-amber-700 hover:bg-amber-100 dark:bg-amber-900/30 dark:text-amber-300" : "bg-emerald-50 text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-900/30 dark:text-emerald-300"} disabled:opacity-40`}>
+                <button onClick={() => toggleStatus(t)} disabled={t.isDefault} title={t.isDefault ? "The default institute can't be suspended" : t.status === "active" ? "Suspend — block this institute's admins & members from signing in" : "Activate — let this institute's users sign in again"} className={`flex-1 rounded-xl py-2 text-xs font-semibold ${t.status === "active" ? "bg-amber-50 text-amber-700 hover:bg-amber-100 dark:bg-amber-900/30 dark:text-amber-300" : "bg-emerald-50 text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-900/30 dark:text-emerald-300"} disabled:opacity-40`}>
                   {t.status === "active" ? <><Ban className="mr-1 inline h-3.5 w-3.5" />Suspend</> : <><CheckCircle2 className="mr-1 inline h-3.5 w-3.5" />Activate</>}
                 </button>
                 <button onClick={() => openDelete(t)} disabled={t.isDefault} title={t.isDefault ? "The default institute can't be deleted" : "Delete this institute permanently"} className="rounded-xl bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700 hover:bg-rose-100 disabled:opacity-40 dark:bg-rose-900/30 dark:text-rose-300">
