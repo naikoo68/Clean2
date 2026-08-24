@@ -7,9 +7,9 @@
 //   numberline { min, max, step, points:[{ x, label }], intervals:[{ from,to,closedLeft,closedRight }] }
 //   coordinate { min, max, points:[{ x, y, label }], lines:[{ label, points:[{x,y}] }] }
 import { forwardRef, useImperativeHandle, useRef } from "react";
+import { PALETTE, VizDefs, Sphere } from "./vizStyle";
 
 const W = 760, H = 520;
-const PALETTE = ["#2563eb", "#ef4444", "#10b981", "#f59e0b", "#8b5cf6", "#06b6d4", "#ec4899", "#84cc16"];
 const num = (v, d = 0) => (Number.isFinite(Number(v)) ? Number(v) : d);
 
 // ---- Bohr / atomic model ---------------------------------------------------
@@ -29,12 +29,12 @@ function Bohr({ s }) {
             <circle cx={cx} cy={cy} r={r} fill="none" stroke="#94a3b8" strokeWidth="1.2" strokeDasharray="2 4" />
             {Array.from({ length: count }).map((_, e) => {
               const a = (e / count) * 2 * Math.PI - Math.PI / 2;
-              return <circle key={e} cx={cx + r * Math.cos(a)} cy={cy + r * Math.sin(a)} r="6.5" fill={PALETTE[si % PALETTE.length]} stroke="#fff" strokeWidth="1.5" />;
+              return <Sphere key={e} cx={cx + r * Math.cos(a)} cy={cy + r * Math.sin(a)} r={6.5} fill={PALETTE[si % PALETTE.length]} stroke="#fff" strokeWidth={1.5} />;
             })}
           </g>
         );
       })}
-      <circle cx={cx} cy={cy} r={nucleusR} fill="#1e293b" />
+      <g filter="url(#viz-shadow)"><Sphere cx={cx} cy={cy} r={nucleusR} fill="#1e293b" /></g>
       {s.symbol && <text x={cx} y={cy - 4} fontSize="18" fontWeight="800" fill="#fff" textAnchor="middle">{s.symbol}</text>}
       <text x={cx} y={cy + (s.symbol ? 15 : 5)} fontSize="11" fill="#e2e8f0" textAnchor="middle">{protons}p · {neutrons}n</text>
     </g>
@@ -51,7 +51,7 @@ function FreeBody({ s }) {
   const maxMag = Math.max(...forces.map((f) => Math.abs(num(f.magnitude, 1))), 1);
   return (
     <g>
-      <rect x={cx - 42} y={cy - 42} width="84" height="84" rx="8" fill="#1e293b" />
+      <rect x={cx - 42} y={cy - 42} width="84" height="84" rx="8" fill="#1e293b" filter="url(#viz-shadow)" />
       {s.label && <text x={cx} y={cy + 5} fontSize="13" fontWeight="700" fill="#fff" textAnchor="middle">{s.label}</text>}
       {forces.map((f, i) => {
         const rad = (num(f.angle) * Math.PI) / 180;
@@ -124,7 +124,7 @@ function NumberLine({ s }) {
       ))}
       {(s.points || []).map((p, i) => (
         <g key={`p${i}`}>
-          <circle cx={xFor(num(p.x))} cy={y} r="7" fill={PALETTE[i % PALETTE.length]} stroke="#fff" strokeWidth="1.5" />
+          <Sphere cx={xFor(num(p.x))} cy={y} r={7} fill={PALETTE[i % PALETTE.length]} stroke="#fff" strokeWidth={1.5} />
           {p.label && <text x={xFor(num(p.x))} y={y - 16} fontSize="12" fontWeight="700" fill={PALETTE[i % PALETTE.length]} textAnchor="middle">{p.label}</text>}
         </g>
       ))}
@@ -163,7 +163,7 @@ function Coordinate({ s }) {
       })}
       {(s.points || []).map((p, i) => (
         <g key={`pt${i}`}>
-          <circle cx={px(num(p.x))} cy={py(num(p.y))} r="5.5" fill={PALETTE[i % PALETTE.length]} stroke="#fff" strokeWidth="1.5" />
+          <Sphere cx={px(num(p.x))} cy={py(num(p.y))} r={5.5} fill={PALETTE[i % PALETTE.length]} stroke="#fff" strokeWidth={1.5} />
           {p.label && <text x={px(num(p.x)) + 8} y={py(num(p.y)) - 8} fontSize="11" fontWeight="600" fill={PALETTE[i % PALETTE.length]}>{p.label}</text>}
         </g>
       ))}
@@ -187,6 +187,7 @@ const SciRenderer = forwardRef(function SciRenderer({ spec }, ref) {
           <marker id="sci-arrow" markerWidth="10" markerHeight="10" refX="7" refY="3" orient="auto">
             <path d="M0,0 L7,3 L0,6 Z" fill="currentColor" />
           </marker>
+          <VizDefs />
         </defs>
         {spec?.title && <text x={W / 2} y="26" fontSize="15" fontWeight="700" fill="currentColor" textAnchor="middle">{spec.title}</text>}
         <Body s={sci} />
