@@ -68,7 +68,7 @@ export const CATALOG = {
     "Weather Fronts", "River Course", "Seasons (Earth's tilt)", "Tides (Spring & Neap)",
     "Renewable Energy Sources", "Latitude & Longitude", "Earthquake (seismic waves)",
     "Day & Night", "Continental Drift", "Cloud Types", "Ozone Layer", "Volcano Types",
-    "Types of Rainfall", "Weathering",
+    "Types of Rainfall", "Weathering", "Meander & Oxbow Lake", "Coastal Features",
   ],
   biology: [
     "Cell Structure", "DNA", "RNA", "Mitosis", "Meiosis", "Food Chain", "Food Web", "Human Body",
@@ -85,7 +85,8 @@ export const CATALOG = {
     "Xylem & Phloem", "Transpiration & Stomata", "Types of Teeth", "Active vs Passive Transport",
     "Bacteria Structure", "Virus Structure", "Seed Dispersal",
     "Alveoli (gas exchange)", "Villi (absorption)", "Specialized Cells", "Types of Muscle", "Blood Vessels",
-    "Ecosystem", "Classification Tree",
+    "Ecosystem", "Classification Tree", "Menstrual Cycle", "Pedigree Chart", "Pyramid of Numbers",
+    "Nervous System (CNS/PNS)", "Leaf External Structure", "Guard Cells & Stomata",
   ],
   chemistry: [
     "Bohr Model", "Atomic Structure", "Molecular Structure", "Reaction Diagram",
@@ -96,6 +97,7 @@ export const CATALOG = {
     "Titration Curve", "Crude Oil Distillation", "Carbon Allotropes", "Neutralization", "Periodic Table Trends",
     "Types of Chemical Reactions", "Paper Chromatography", "Atomic Structure", "Isotopes", "Water Treatment",
     "Reactivity Series", "Rusting", "Separating Mixtures", "Endothermic vs Exothermic",
+    "Blast Furnace (Iron Extraction)", "Haber Process", "Metallic Bonding", "Giant Ionic Lattice (NaCl)",
   ],
   physics: [
     "Free Body Diagram", "Projectile Motion", "Wave", "Circuit Diagram", "Optics", "Ray Diagram",
@@ -106,7 +108,8 @@ export const CATALOG = {
     "Convex Lens Image", "Radioactive Decay", "Electric Generator", "Nuclear Fission",
     "Gears", "Ohm's Law", "Total Internal Reflection", "Nuclear Fusion", "Circuit Symbols",
     "Heat Transfer", "Newton's Cradle", "Density & Floating", "Sankey Energy Diagram", "Radioactive Half-life",
-    "Electromagnet", "Comet Structure",
+    "Electromagnet", "Comet Structure", "Newton's Three Laws", "Moments & Balancing",
+    "Pressure in Liquids", "Hooke's Law", "Motor Effect (Fleming's LHR)", "Concave (Diverging) Lens",
   ],
   cs: [
     "Flowchart", "Algorithm Flow", "ER Diagram", "DFD", "UML", "Sequence Diagram",
@@ -520,6 +523,24 @@ Object.assign(MODULES, {
   rainfalltypes:     _il("rainfalltypes", "Types of Rainfall", "geography", { kind: "rainfall" }),
   weathering:        _il("weathering", "Weathering", "geography", { kind: "weathering" }),
   cometstructure:    _il("cometstructure", "Comet Structure", "physics", { kind: "comet" }),
+  menstrualcycle:    _il("menstrualcycle", "Menstrual Cycle", "biology", { kind: "menstrual" }),
+  pedigree:          _il("pedigree", "Pedigree Chart", "biology", { kind: "pedigree" }),
+  pyramidofnumbers:  _il("pyramidofnumbers", "Pyramid of Numbers", "biology", { kind: "pyramidnumbers" }),
+  nervoussystem:     _il("nervoussystem", "Nervous System (CNS/PNS)", "biology", { kind: "nervous" }),
+  leafstructure:     _il("leafstructure", "Leaf External Structure", "biology", { kind: "leafexternal" }),
+  guardcells:        _il("guardcells", "Guard Cells & Stomata", "biology", { kind: "guardcells" }),
+  blastfurnace:      _il("blastfurnace", "Blast Furnace (Iron Extraction)", "chemistry", { kind: "blastfurnace" }),
+  haberprocess:      _il("haberprocess", "Haber Process", "chemistry", { kind: "haber" }),
+  metallicbonding:   _il("metallicbonding", "Metallic Bonding", "chemistry", { kind: "metallic" }),
+  ioniclattice:      _il("ioniclattice", "Giant Ionic Lattice (NaCl)", "chemistry", { kind: "ioniclattice" }),
+  newtonslaws:       _il("newtonslaws", "Newton's Three Laws", "physics", { kind: "newtonslaws" }),
+  moments:           _il("moments", "Moments & Balancing", "physics", { kind: "moments" }),
+  liquidpressure:    _il("liquidpressure", "Pressure in Liquids", "physics", { kind: "liquidpressure" }),
+  hookeslaw:         _il("hookeslaw", "Hooke's Law", "physics", { kind: "hookeslaw" }),
+  motoreffect:       _il("motoreffect", "Motor Effect (Fleming's LHR)", "physics", { kind: "motoreffect" }),
+  concavelens:       _il("concavelens", "Concave (Diverging) Lens", "physics", { kind: "concavelens" }),
+  meander:           _il("meander", "Meander & Oxbow Lake", "geography", { kind: "meander" }),
+  coastalfeatures:   _il("coastalfeatures", "Coastal Features", "geography", { kind: "coastal" }),
 });
 
 // ---- Phase 10: fill remaining catalog (aliases + charts/graphs/tables/illustrations) ----
