@@ -14,7 +14,7 @@
 //   bmagnet   {}
 import { forwardRef, useImperativeHandle, useRef } from "react";
 import { PALETTE as P, VizDefs, Sphere } from "./vizStyle";
-import { AnimalCell, PlantCell, Neuron, Heart, Flower, DigestiveSystem, Respiratory, Eye, Nephron, Ear, LeafSection } from "./assets/anatomy";
+import { AnimalCell, PlantCell, Neuron, Heart, Flower, DigestiveSystem, Respiratory, Eye, Nephron, Ear, LeafSection, Skeleton, Brain, WaterCycle, RockCycle, Circulation } from "./assets/anatomy";
 
 const W = 760, H = 520;
 const num = (v, d = 0) => (Number.isFinite(Number(v)) ? Number(v) : d);
@@ -562,6 +562,9 @@ const KINDS = {
   respiratory: (p) => <Respiratory showLabels={p.s?.showLabels !== false} />, eye: (p) => <Eye showLabels={p.s?.showLabels !== false} />,
   nephron: (p) => <Nephron showLabels={p.s?.showLabels !== false} />, ear: (p) => <Ear showLabels={p.s?.showLabels !== false} />,
   leaf: (p) => <LeafSection showLabels={p.s?.showLabels !== false} />,
+  skeleton: (p) => <Skeleton showLabels={p.s?.showLabels !== false} />, brain: (p) => <Brain showLabels={p.s?.showLabels !== false} />,
+  circulation: (p) => <Circulation showLabels={p.s?.showLabels !== false} />,
+  watercycle: (p) => <WaterCycle showLabels={p.s?.showLabels !== false} />, rockcycle: (p) => <RockCycle showLabels={p.s?.showLabels !== false} />,
   efield: (p) => <EField {...p} />, bmagnet: (p) => <BMagnet {...p} />,
   field: (p) => <Field {...p} />, table: (p) => <TableFig {...p} />, celldivision: (p) => <CellDivision {...p} />,
   humanbody: (p) => <HumanBody {...p} />, periodictable: (p) => <PeriodicTable {...p} />, fishbone: (p) => <Fishbone {...p} />,

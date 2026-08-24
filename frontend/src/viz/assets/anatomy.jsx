@@ -685,3 +685,201 @@ export function LeafSection({ showLabels = true }) {
     </g>
   );
 }
+
+
+// ---- Human skeleton (overview) ---------------------------------------------
+export function Skeleton({ showLabels = true }) {
+  const cx = W / 2, bone = "#e5e7eb", boneD = "#94a3b8";
+  const B = (x1, y1, x2, y2, w = 11, k) => (
+    <line key={k} x1={x1} y1={y1} x2={x2} y2={y2} stroke={bone} strokeWidth={w} strokeLinecap="round" />
+  );
+  const ribs = [];
+  for (let i = 0; i < 6; i++) {
+    const y = 168 + i * 17, r = 34 + i * 6;
+    ribs.push(<path key={`rl${i}`} d={`M ${cx - 6} ${y} Q ${cx - r} ${y + 6} ${cx - r + 6} ${y + 24}`} fill="none" stroke={bone} strokeWidth="5" strokeLinecap="round" />);
+    ribs.push(<path key={`rr${i}`} d={`M ${cx + 6} ${y} Q ${cx + r} ${y + 6} ${cx + r - 6} ${y + 24}`} fill="none" stroke={bone} strokeWidth="5" strokeLinecap="round" />);
+  }
+  return (
+    <g stroke={boneD} strokeWidth="0.6">
+      {/* Skull + jaw */}
+      <ellipse cx={cx} cy={80} rx="30" ry="34" fill={bone} />
+      <path d={`M ${cx - 20} 96 Q ${cx} 124 ${cx + 20} 96`} fill={bone} stroke={boneD} strokeWidth="1" />
+      {/* Spine */}
+      {Array.from({ length: 12 }).map((_, i) => <circle key={i} cx={cx} cy={122 + i * 15} r="6" fill={bone} />)}
+      {/* Clavicles + shoulders */}
+      {B(cx, 140, cx - 66, 150, 7, "cl")}{B(cx, 140, cx + 66, 150, 7, "cr")}
+      {/* Ribcage */}
+      {ribs}
+      {/* Arms: humerus + forearm */}
+      {B(cx - 66, 150, cx - 96, 244, 10, "hl")}{B(cx - 96, 244, cx - 104, 330, 8, "fl")}
+      {B(cx + 66, 150, cx + 96, 244, 10, "hr")}{B(cx + 96, 244, cx + 104, 330, 8, "fr")}
+      {[[-108, 350], [108, 350]].map(([dx, dy], i) => <ellipse key={i} cx={cx + dx} cy={dy} rx="9" ry="13" fill={bone} />)}
+      {/* Pelvis */}
+      <path d={`M ${cx - 40} 300 Q ${cx} 328 ${cx + 40} 300 Q ${cx + 34} 344 ${cx} 336 Q ${cx - 34} 344 ${cx - 40} 300 Z`} fill={bone} stroke={boneD} strokeWidth="1" />
+      {/* Legs: femur + shin */}
+      {B(cx - 24, 330, cx - 34, 424, 12, "fel")}{B(cx - 34, 424, cx - 40, 496, 9, "til")}
+      {B(cx + 24, 330, cx + 34, 424, 12, "fer")}{B(cx + 34, 424, cx + 40, 496, 9, "tir")}
+      {[[-46, 508], [46, 508]].map(([dx, dy], i) => <path key={i} d={`M ${cx + dx} ${dy - 6} q ${dx < 0 ? -18 : 18} 10 ${dx < 0 ? -2 : 2} 14`} fill="none" stroke={bone} strokeWidth="7" strokeLinecap="round" />)}
+      {showLabels && (
+        <g stroke="none">
+          <Leader x={cx + 26} y={80} tx={W - 90} ty={70} text="Skull" color={boneD} side="right" />
+          <Leader x={cx + 40} y={150} tx={W - 90} ty={140} text="Clavicle" color={boneD} side="right" />
+          <Leader x={cx + 48} y={210} tx={W - 90} ty={210} text="Ribs" color={boneD} side="right" />
+          <Leader x={cx} y={230} tx={70} ty={210} text="Vertebral column" color={boneD} side="left" />
+          <Leader x={cx - 96} y={210} tx={70} ty={150} text="Humerus" color={boneD} side="left" />
+          <Leader x={cx - 100} y={300} tx={70} ty={300} text="Radius & ulna" color={boneD} side="left" />
+          <Leader x={cx + 30} y={318} tx={W - 90} ty={300} text="Pelvis" color={boneD} side="right" />
+          <Leader x={cx - 30} y={390} tx={70} ty={400} text="Femur" color={boneD} side="left" />
+          <Leader x={cx + 38} y={470} tx={W - 90} ty={470} text="Tibia & fibula" color={boneD} side="right" />
+        </g>
+      )}
+    </g>
+  );
+}
+
+// ---- Brain regions (lateral view, facing left) -----------------------------
+export function Brain({ showLabels = true }) {
+  const cx = W / 2 - 10, cy = 250;
+  const outline = `M ${cx - 210} ${cy} C ${cx - 210} ${cy - 120} ${cx - 60} ${cy - 150} ${cx + 30} ${cy - 140}
+    C ${cx + 150} ${cy - 128} ${cx + 210} ${cy - 70} ${cx + 200} ${cy - 10}
+    C ${cx + 196} ${cy + 30} ${cx + 150} ${cy + 44} ${cx + 96} ${cy + 40}
+    C ${cx + 40} ${cy + 60} ${cx - 120} ${cy + 60} ${cx - 210} ${cy} Z`;
+  return (
+    <g>
+      <path d={outline} fill="#fecdd3" stroke="#be185d" strokeWidth="2.5" filter="url(#viz-shadow)" />
+      <path d={outline} fill="url(#viz-gloss)" opacity="0.5" />
+      {/* Gyri (surface folds) */}
+      {[[-150, -70], [-90, -96], [-10, -104], [70, -92], [140, -54], [-60, -30], [40, -26]].map(([dx, dy], i) => (
+        <path key={i} d={`M ${cx + dx} ${cy + dy} q 20 -14 40 0 q 20 14 40 0`} fill="none" stroke="#be185d" strokeWidth="1.6" opacity="0.55" />
+      ))}
+      {/* Central + lateral sulcus dividers */}
+      <path d={`M ${cx + 10} ${cy - 138} Q ${cx - 6} ${cy - 40} ${cx - 40} ${cy + 20}`} stroke="#9d174d" strokeWidth="2.2" fill="none" strokeDasharray="5 4" />
+      <path d={`M ${cx - 150} ${cy + 6} Q ${cx - 20} ${cy + 30} ${cx + 120} ${cy + 6}`} stroke="#9d174d" strokeWidth="2.2" fill="none" strokeDasharray="5 4" />
+      {/* Cerebellum (ridged blob, back-bottom) */}
+      <path d={`M ${cx + 120} ${cy + 20} q 70 -6 78 44 q -4 40 -70 30 q -30 -6 -8 -74 Z`} fill="#fbcfe8" stroke="#be185d" strokeWidth="2" />
+      {[0, 1, 2, 3].map((i) => <path key={i} d={`M ${cx + 132} ${cy + 32 + i * 12} q 40 6 58 -2`} fill="none" stroke="#be185d" strokeWidth="1.2" opacity="0.6" />)}
+      {/* Brainstem */}
+      <path d={`M ${cx + 120} ${cy + 56} q -6 60 -20 96`} stroke="#a21caf" strokeWidth="16" fill="none" strokeLinecap="round" />
+      {showLabels && (
+        <g>
+          <Leader x={cx - 150} y={cy - 70} tx={70} ty={cy - 130} text="Frontal lobe" color="#be185d" side="left" />
+          <Leader x={cx + 10} y={cy - 120} tx={cx + 10} ty={70} text="Parietal lobe" color="#be185d" side="right" />
+          <Leader x={cx - 90} y={cy + 20} tx={70} ty={cy + 90} text="Temporal lobe" color="#be185d" side="left" />
+          <Leader x={cx + 150} y={cy - 40} tx={W - 80} ty={cy - 90} text="Occipital lobe" color="#be185d" side="right" />
+          <Leader x={cx + 170} y={cy + 56} tx={W - 80} ty={cy + 60} text="Cerebellum" color="#be185d" side="right" />
+          <Leader x={cx + 104} y={cy + 130} tx={cx + 104} ty={H - 20} text="Brainstem" color="#a21caf" side="right" />
+        </g>
+      )}
+    </g>
+  );
+}
+
+// ---- Water cycle -----------------------------------------------------------
+export function WaterCycle({ showLabels = true }) {
+  const blue = "#0ea5e9", green = "#16a34a", gray = "#64748b";
+  return (
+    <g>
+      {/* Sun */}
+      <Sphere cx={80} cy={70} r={30} fill="#fbbf24" />
+      {Array.from({ length: 8 }).map((_, i) => { const a = (i / 8) * 2 * Math.PI; return <line key={i} x1={80 + 36 * Math.cos(a)} y1={70 + 36 * Math.sin(a)} x2={80 + 48 * Math.cos(a)} y2={70 + 48 * Math.sin(a)} stroke="#f59e0b" strokeWidth="3" strokeLinecap="round" />; })}
+      {/* Ocean */}
+      <path d={`M 380 ${H - 90} Q 520 ${H - 110} ${W} ${H - 96} L ${W} ${H} L 380 ${H} Z`} fill="#bae6fd" stroke={blue} strokeWidth="2" />
+      {/* Mountains */}
+      <path d={`M 40 ${H - 60} L 170 300 L 300 ${H - 60} Z`} fill="#cbd5e1" stroke={gray} strokeWidth="2" />
+      <path d={`M 150 ${H - 60} L 260 340 L 380 ${H - 60} Z`} fill="#e2e8f0" stroke={gray} strokeWidth="2" />
+      {/* Cloud */}
+      <g filter="url(#viz-shadow)">
+        {[[300, 120, 34], [340, 108, 40], [388, 118, 34], [430, 128, 28]].map(([x, y, r], i) => <circle key={i} cx={x} cy={y} r={r} fill="#f1f5f9" stroke="#cbd5e1" strokeWidth="1.5" />)}
+        <rect x={296} y={126} width={150} height={26} rx={13} fill="#f1f5f9" />
+      </g>
+      {/* Trees */}
+      {[[90, H - 70], [130, H - 66]].map(([x, y], i) => <g key={i}><rect x={x - 3} y={y - 6} width="6" height="18" fill="#92400e" /><circle cx={x} cy={y - 12} r="12" fill={green} /></g>)}
+      {/* Arrows: evaporation, transpiration, precipitation, runoff */}
+      <path d={`M 560 ${H - 96} C 540 300 470 220 430 170`} stroke={blue} strokeWidth="4" fill="none" markerEnd="url(#il-arrow)" strokeDasharray="7 5" />
+      <path d={`M 110 ${H - 84} C 150 320 220 220 300 160`} stroke={green} strokeWidth="3.5" fill="none" markerEnd="url(#il-arrow)" strokeDasharray="6 5" />
+      {[330, 360, 392, 420].map((x, i) => <line key={i} x1={x} y1={168} x2={x - 26} y2={250} stroke={blue} strokeWidth="3" markerEnd="url(#il-arrow)" />)}
+      <path d={`M 250 360 C 300 420 340 430 380 ${H - 92}`} stroke={blue} strokeWidth="5" fill="none" markerEnd="url(#il-arrow)" />
+      {showLabels && (
+        <g>
+          <Leader x={520} y={300} tx={W - 70} ty={300} text="Evaporation" color={blue} side="right" />
+          <Leader x={160} y={330} tx={70} ty={360} text="Transpiration" color={green} side="left" />
+          <Leader x={360} y={210} tx={360} ty={70} text="Condensation → Precipitation" color={blue} side="right" />
+          <Leader x={320} y={410} tx={70} ty={H - 40} text="Collection / Runoff" color={blue} side="left" />
+        </g>
+      )}
+    </g>
+  );
+}
+
+// ---- Rock cycle ------------------------------------------------------------
+export function RockCycle({ showLabels = true }) {
+  const nodes = {
+    igneous: [W / 2, 110, "#ef4444", "Igneous"],
+    sedimentary: [W - 180, 400, "#f59e0b", "Sedimentary"],
+    metamorphic: [180, 400, "#8b5cf6", "Metamorphic"],
+    magma: [W / 2, 300, "#dc2626", "Magma"],
+  };
+  const box = (x, y, color, text, k) => (
+    <g key={k} filter="url(#viz-shadow)">
+      <rect x={x - 76} y={y - 26} width="152" height="52" rx="12" fill="#fff" stroke={color} strokeWidth="2.5" />
+      <text x={x} y={y + 5} fontSize="14" fontWeight="700" fill={color} textAnchor="middle">{text}</text>
+    </g>
+  );
+  const arrow = (a, b, k) => {
+    const [ax, ay] = a, [bx, by] = b;
+    const mx = (ax + bx) / 2 + (ay - by) * 0.12, my = (ay + by) / 2 + (bx - ax) * 0.12;
+    return <path key={k} d={`M ${ax} ${ay} Q ${mx} ${my} ${bx} ${by}`} fill="none" stroke="#334155" strokeWidth="2.5" markerEnd="url(#il-arrow)" />;
+  };
+  const I = nodes.igneous, S = nodes.sedimentary, M = nodes.metamorphic;
+  return (
+    <g>
+      {arrow([I[0] + 40, I[1] + 26], [S[0], S[1] - 30], "is")}
+      {arrow([S[0] - 40, S[1] - 10], [M[0] + 76, M[1]], "sm")}
+      {arrow([M[0], M[1] - 30], [I[0] - 40, I[1] + 26], "mi")}
+      {box(...nodes.igneous, "b1")}
+      {box(...nodes.sedimentary, "b2")}
+      {box(...nodes.metamorphic, "b3")}
+      {showLabels && (
+        <g>
+          <text x={W / 2 + 150} y={250} fontSize="12" fontWeight="600" fill="#334155" textAnchor="middle">weathering,{"\u00A0"}erosion,{"\u00A0"}deposition</text>
+          <text x={W / 2} y={H - 28} fontSize="12" fontWeight="600" fill="#334155" textAnchor="middle">heat & pressure →</text>
+          <text x={W / 2 - 150} y={250} fontSize="12" fontWeight="600" fill="#334155" textAnchor="middle">melting → cooling</text>
+        </g>
+      )}
+    </g>
+  );
+}
+
+// ---- Circulatory loop (double circulation) ---------------------------------
+export function Circulation({ showLabels = true }) {
+  const cx = W / 2, red = "#dc2626", blue = "#2563eb";
+  return (
+    <g>
+      {/* Lungs (top) */}
+      {[-1, 1].map((d, i) => <path key={i} d={`M ${cx + d * 40} 70 C ${cx + d * 150} 66 ${cx + d * 150} 170 ${cx + d * 60} 168 C ${cx + d * 34} 140 ${cx + d * 34} 100 ${cx + d * 40} 70 Z`} fill="#fecdd3" stroke="#e11d48" strokeWidth="2" filter="url(#viz-shadow)" />)}
+      <text x={cx} y={120} fontSize="14" fontWeight="700" fill="#e11d48" textAnchor="middle">Lungs</text>
+      {/* Heart (centre) */}
+      <g filter="url(#viz-shadow)">
+        <path d={`M ${cx} ${H / 2 - 34} C ${cx - 40} ${H / 2 - 64} ${cx - 74} ${H / 2 - 20} ${cx} ${H / 2 + 40} C ${cx + 74} ${H / 2 - 20} ${cx + 40} ${H / 2 - 64} ${cx} ${H / 2 - 34} Z`} fill="#fca5a5" stroke="#9f1239" strokeWidth="2.5" />
+      </g>
+      <text x={cx} y={H / 2 + 4} fontSize="13" fontWeight="700" fill="#9f1239" textAnchor="middle">Heart</text>
+      {/* Body tissues (bottom) */}
+      <rect x={cx - 90} y={H - 120} width="180" height="70" rx="14" fill="#e2e8f0" stroke="#64748b" strokeWidth="2" filter="url(#viz-shadow)" />
+      <text x={cx} y={H - 80} fontSize="14" fontWeight="700" fill="#475569" textAnchor="middle">Body tissues</text>
+      {/* Pulmonary circuit (heart ↔ lungs) */}
+      <path d={`M ${cx - 20} ${H / 2 - 40} C ${cx - 120} 220 ${cx - 120} 150 ${cx - 60} 150`} stroke={blue} strokeWidth="6" fill="none" markerEnd="url(#il-arrow)" />
+      <path d={`M ${cx + 60} 150 C ${cx + 120} 150 ${cx + 120} 220 ${cx + 20} ${H / 2 - 40}`} stroke={red} strokeWidth="6" fill="none" markerEnd="url(#il-arrow)" />
+      {/* Systemic circuit (heart ↔ body) */}
+      <path d={`M ${cx + 22} ${H / 2 + 30} C ${cx + 120} ${H / 2 + 90} ${cx + 120} ${H - 90} ${cx + 60} ${H - 90}`} stroke={red} strokeWidth="6" fill="none" markerEnd="url(#il-arrow)" />
+      <path d={`M ${cx - 60} ${H - 90} C ${cx - 120} ${H - 90} ${cx - 120} ${H / 2 + 90} ${cx - 22} ${H / 2 + 30}`} stroke={blue} strokeWidth="6" fill="none" markerEnd="url(#il-arrow)" />
+      {showLabels && (
+        <g>
+          <Leader x={cx - 118} y={200} tx={70} ty={170} text="Pulmonary circulation" color={blue} side="left" />
+          <Leader x={cx + 118} y={H / 2 + 120} tx={W - 70} ty={H / 2 + 150} text="Systemic circulation" color={red} side="right" />
+          <text x={cx - 128} y={300} fontSize="10.5" fill={blue} textAnchor="middle">deoxygenated</text>
+          <text x={cx + 128} y={300} fontSize="10.5" fill={red} textAnchor="middle">oxygenated</text>
+        </g>
+      )}
+    </g>
+  );
+}
