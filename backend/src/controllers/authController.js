@@ -10,6 +10,7 @@ import { notifyNewUser } from "../utils/notify.js";
 import { getClientPlans, getPlansFor, getStudentPlans as loadStudentPlans } from "../utils/plans.js";
 import { runUnscoped } from "../utils/tenantContext.js";
 import { getSiteName } from "../utils/siteInfo.js";
+import { tenantSuspended, SUSPENDED_INSTITUTE_MESSAGE } from "../middleware/auth.js";
 
 // Normalise emails so case/whitespace never causes a login mismatch
 // (phone keyboards often auto-capitalise the first letter).
@@ -375,6 +376,9 @@ export async function login(req, res) {
   }
   if (user.expiresAt && user.expiresAt.getTime() < Date.now()) {
     return res.status(403).json({ message: "This temporary account has expired. Please contact the administrator." });
+  }
+  if (await tenantSuspended(user)) {
+    return res.status(403).json({ message: SUSPENDED_INSTITUTE_MESSAGE });
   }
   if (!user.isEmailVerified) {
     return res.status(403).json({

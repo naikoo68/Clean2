@@ -1,6 +1,21 @@
 import jwt from "jsonwebtoken";
 import User from "../models/User.js";
+import Tenant from "../models/Tenant.js";
 import { runUnscoped, setCurrentTenantId, setUnscoped } from "../utils/tenantContext.js";
+
+// Message shown to any user whose institute the super-admin has suspended.
+export const SUSPENDED_INSTITUTE_MESSAGE =
+  "This institute has been suspended. Please contact your administrator.";
+
+// True when a NON-super-admin user's institute (Tenant) has been suspended by
+// the platform super-admin. Super-admins are never tenant-locked, and users
+// with no tenant always pass. Looked up unscoped (the flag lives on the tenant,
+// not the user) with a lean, status-only projection to stay cheap.
+export async function tenantSuspended(user) {
+  if (!user || user.role === "admin" || !user.tenantId) return false;
+  const t = await runUnscoped(() => Tenant.findById(user.tenantId).select("status").lean());
+  return t?.status === "suspended";
+}
 
 // Bind the request's tenant scope based on the authenticated user:
 //   - super-admin ("admin"): operates ACROSS institutes (unscoped). May focus
@@ -40,6 +55,9 @@ export async function protect(req, res, next) {
     if (user.expiresAt && user.expiresAt.getTime() < Date.now()) {
       return res.status(403).json({ message: "This temporary account has expired" });
     }
+    if (await tenantSuspended(user)) {
+      return res.status(403).json({ message: SUSPENDED_INSTITUTE_MESSAGE });
+    }
     applyUserTenantScope(req, user); // super-admin cross-tenant; others locked to own tenant
     req.user = user;
     next();
@@ -62,6 +80,7 @@ export async function attachUser(req, res, next) {
     if (!user) return res.status(401).json({ message: "User no longer exists" });
     if (user.status === "blocked") return res.status(403).json({ message: "Your account has been blocked" });
     if (user.deleted) return res.status(403).json({ message: "This account has been deleted" });
+    if (await tenantSuspended(user)) return res.status(403).json({ message: SUSPENDED_INSTITUTE_MESSAGE });
     applyUserTenantScope(req, user);
     req.user = user;
     next();
@@ -129,7 +148,8 @@ export async function optionalAuth(req, res, next) {
       const decoded = jwt.verify(header.split(" ")[1], process.env.JWT_SECRET);
       const user = await runUnscoped(() => User.findById(decoded.id));
       const expired = user?.expiresAt && user.expiresAt.getTime() < Date.now();
-      if (user && user.status !== "blocked" && !user.deleted && !expired) {
+      const suspended = await tenantSuspended(user);
+      if (user && user.status !== "blocked" && !user.deleted && !expired && !suspended) {
         req.user = user;
         applyUserTenantScope(req, user);
       }
