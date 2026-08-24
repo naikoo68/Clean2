@@ -14,7 +14,7 @@
 //   bmagnet   {}
 import { forwardRef, useImperativeHandle, useRef } from "react";
 import { PALETTE as P, VizDefs, Sphere } from "./vizStyle";
-import { AnimalCell, PlantCell, Neuron, Heart, Flower, DigestiveSystem, Respiratory, Eye, Nephron, Ear, LeafSection, Skeleton, Brain, WaterCycle, RockCycle, Circulation, SolarSystem, Volcano, Tooth, CarbonCycle, NitrogenCycle, MoonPhases, Photosynthesis, ButterflyLifeCycle, FrogLifeCycle, PlantLifeCycle, StatesOfMatter, PhScale, EMSpectrum, EnergyPyramid, Kidney, EarthLayers, AtmosphereLayers, Circuits, Waves, ReflexArc, FoodChain, Levers, Eclipse, GreenhouseEffect, SeedStructure, PunnettSquare, PlateTectonics, SimpleMachines, Bonding, StarLifeCycle, Joints, SkinSection, ReflectionRefraction, ProteinSynthesis, OxygenCycle, SoilHorizons, Electrolysis, Distillation, Breathing, Synapse, EndocrineSystem, AntagonisticMuscles, TitrationCurve, WeatherFronts, RiverCourse, PrismDispersion, Seasons, Pendulum, CrudeOil, ImmuneResponse, ElectricMotor, Transformer, BloodGroups, MosquitoLifeCycle, Tides, MirrorImage, CarbonAllotropes, RespirationTypes, RenewableEnergy, LatLong } from "./assets/anatomy";
+import { AnimalCell, PlantCell, Neuron, Heart, Flower, DigestiveSystem, Respiratory, Eye, Nephron, Ear, LeafSection, Skeleton, Brain, WaterCycle, RockCycle, Circulation, SolarSystem, Volcano, Tooth, CarbonCycle, NitrogenCycle, MoonPhases, Photosynthesis, ButterflyLifeCycle, FrogLifeCycle, PlantLifeCycle, StatesOfMatter, PhScale, EMSpectrum, EnergyPyramid, Kidney, EarthLayers, AtmosphereLayers, Circuits, Waves, ReflexArc, FoodChain, Levers, Eclipse, GreenhouseEffect, SeedStructure, PunnettSquare, PlateTectonics, SimpleMachines, Bonding, StarLifeCycle, Joints, SkinSection, ReflectionRefraction, ProteinSynthesis, OxygenCycle, SoilHorizons, Electrolysis, Distillation, Breathing, Synapse, EndocrineSystem, AntagonisticMuscles, TitrationCurve, WeatherFronts, RiverCourse, PrismDispersion, Seasons, Pendulum, CrudeOil, ImmuneResponse, ElectricMotor, Transformer, BloodGroups, MosquitoLifeCycle, Tides, MirrorImage, CarbonAllotropes, RespirationTypes, RenewableEnergy, LatLong, EnzymeAction, Osmosis, ConvexLens, Neutralization, Earthquake } from "./assets/anatomy";
 
 const W = 760, H = 520;
 const num = (v, d = 0) => (Number.isFinite(Number(v)) ? Number(v) : d);
@@ -601,6 +601,9 @@ const KINDS = {
   mirror: (p) => <MirrorImage showLabels={p.s?.showLabels !== false} />, allotropes: (p) => <CarbonAllotropes showLabels={p.s?.showLabels !== false} />,
   respiration: (p) => <RespirationTypes showLabels={p.s?.showLabels !== false} />, renewables: (p) => <RenewableEnergy showLabels={p.s?.showLabels !== false} />,
   latlong: (p) => <LatLong showLabels={p.s?.showLabels !== false} />,
+  enzyme: (p) => <EnzymeAction showLabels={p.s?.showLabels !== false} />, osmosis: (p) => <Osmosis showLabels={p.s?.showLabels !== false} />,
+  convexlens: (p) => <ConvexLens showLabels={p.s?.showLabels !== false} />, neutralization: (p) => <Neutralization showLabels={p.s?.showLabels !== false} />,
+  earthquake: (p) => <Earthquake showLabels={p.s?.showLabels !== false} />,
   efield: (p) => <EField {...p} />, bmagnet: (p) => <BMagnet {...p} />,
   field: (p) => <Field {...p} />, table: (p) => <TableFig {...p} />, celldivision: (p) => <CellDivision {...p} />,
   humanbody: (p) => <HumanBody {...p} />, periodictable: (p) => <PeriodicTable {...p} />, fishbone: (p) => <Fishbone {...p} />,
