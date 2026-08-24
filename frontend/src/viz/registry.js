@@ -64,6 +64,7 @@ export const CATALOG = {
     "Population Pyramid", "Climate Graph", "Rainfall Graph", "River System", "Drainage Pattern",
     "Topographic Profile", "Contour Diagram", "Map", "Choropleth", "Flow Map", "Elevation",
     "DEM", "Terrain", "Wind Rose", "Water Cycle", "Rock Cycle", "Volcano",
+    "Layers of the Earth", "Layers of the Atmosphere",
   ],
   biology: [
     "Cell Structure", "DNA", "RNA", "Mitosis", "Meiosis", "Food Chain", "Food Web", "Human Body",
@@ -72,7 +73,7 @@ export const CATALOG = {
     "Human Skeleton", "Brain Regions", "Circulatory System", "Tooth (cross-section)",
     "Carbon Cycle", "Nitrogen Cycle", "Photosynthesis", "Butterfly Life Cycle",
     "Frog Life Cycle", "Plant Life Cycle", "Energy Pyramid", "Kidney (gross anatomy)",
-    "Ecosystem", "Classification Tree",
+    "Reflex Arc", "Ecosystem", "Classification Tree",
   ],
   chemistry: [
     "Bohr Model", "Atomic Structure", "Molecular Structure", "Reaction Diagram",
@@ -84,7 +85,7 @@ export const CATALOG = {
   physics: [
     "Free Body Diagram", "Projectile Motion", "Wave", "Circuit Diagram", "Optics", "Ray Diagram",
     "Electric Field", "Magnetic Field", "Energy Diagram", "Solar System", "Phases of the Moon",
-    "Electromagnetic Spectrum",
+    "Electromagnetic Spectrum", "Series & Parallel Circuits", "Transverse & Longitudinal Waves",
   ],
   cs: [
     "Flowchart", "Algorithm Flow", "ER Diagram", "DFD", "UML", "Sequence Diagram",
@@ -402,6 +403,11 @@ Object.assign(MODULES, {
   emspectrum:        _il("emspectrum", "Electromagnetic Spectrum", "physics", { kind: "emspectrum" }),
   energypyramid:     _il("energypyramid", "Energy Pyramid", "biology", { kind: "energypyramid" }),
   kidneygross:       _il("kidneygross", "Kidney (gross anatomy)", "biology", { kind: "kidney" }),
+  earthlayers:       _il("earthlayers", "Layers of the Earth", "geography", { kind: "earthlayers" }),
+  atmospherelayers:  _il("atmospherelayers", "Layers of the Atmosphere", "geography", { kind: "atmosphere" }),
+  circuits:          _il("circuits", "Series & Parallel Circuits", "physics", { kind: "circuits" }),
+  waves:             _il("waves", "Transverse & Longitudinal Waves", "physics", { kind: "waves" }),
+  reflexarc:         _il("reflexarc", "Reflex Arc", "biology", { kind: "reflexarc" }),
 });
 
 // ---- Phase 10: fill remaining catalog (aliases + charts/graphs/tables/illustrations) ----

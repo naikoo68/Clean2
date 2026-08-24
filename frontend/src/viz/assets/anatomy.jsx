@@ -1345,3 +1345,159 @@ export function Kidney({ showLabels = true }) {
     </g>
   );
 }
+
+
+// ---- Layers of the Earth ---------------------------------------------------
+export function EarthLayers({ showLabels = true }) {
+  const cx = W / 2 - 30, cy = H / 2;
+  return (
+    <g>
+      <g filter="url(#viz-shadow)"><circle cx={cx} cy={cy} r={200} fill="#78350f" /></g>
+      <circle cx={cx} cy={cy} r={192} fill="#d97706" />
+      <circle cx={cx} cy={cy} r={112} fill="#ef4444" />
+      <circle cx={cx} cy={cy} r={56} fill="#fbbf24" />
+      <circle cx={cx} cy={cy} r={200} fill="url(#viz-gloss)" opacity="0.4" />
+      {showLabels && (
+        <g>
+          <Leader x={cx + 141} y={cy - 141} tx={W - 70} ty={80} text="Crust" color="#78350f" side="right" />
+          <Leader x={cx + 150} y={cy - 60} tx={W - 70} ty={cy - 70} text="Mantle" color="#d97706" side="right" />
+          <Leader x={cx + 84} y={cy + 40} tx={W - 70} ty={cy + 60} text="Outer core (liquid)" color="#ef4444" side="right" />
+          <Leader x={cx} y={cy} tx={70} ty={cy + 150} text="Inner core (solid)" color="#b45309" side="left" />
+        </g>
+      )}
+    </g>
+  );
+}
+
+// ---- Layers of the atmosphere ----------------------------------------------
+export function AtmosphereLayers({ showLabels = true }) {
+  const bands = [
+    ["Troposphere", "#bae6fd", "0–12 km"], ["Stratosphere", "#7dd3fc", "12–50 km"],
+    ["Mesosphere", "#3b82f6", "50–85 km"], ["Thermosphere", "#1e3a8a", "85–600 km"],
+    ["Exosphere", "#0f172a", "600+ km"],
+  ];
+  const top = 40, bottom = H - 46, h = (bottom - top) / bands.length, x0 = 90, x1 = W - 90;
+  return (
+    <g>
+      {bands.map(([name, color, alt], i) => {
+        const y = bottom - (i + 1) * h;
+        return (
+          <g key={i}>
+            <rect x={x0} y={y} width={x1 - x0} height={h} fill={color} />
+            <text x={x0 + 16} y={y + h / 2 + 2} fontSize="13" fontWeight="700" fill={i >= 2 ? "#f8fafc" : "#0c4a6e"}>{name}</text>
+            {showLabels && <text x={x1 - 12} y={y + h / 2 + 2} fontSize="11" fill={i >= 2 ? "#cbd5e1" : "#334155"} textAnchor="end">{alt}</text>}
+          </g>
+        );
+      })}
+      {/* Ground */}
+      <path d={`M ${x0} ${bottom} Q ${(x0 + x1) / 2} ${bottom - 24} ${x1} ${bottom} L ${x1} ${H - 20} L ${x0} ${H - 20} Z`} fill="#16a34a" stroke="#15803d" strokeWidth="2" />
+      {/* A few markers */}
+      <circle cx={x0 + 120} cy={bottom - h * 0.5} r="12" fill="#f1f5f9" /><circle cx={x0 + 138} cy={bottom - h * 0.5} r="14" fill="#f1f5f9" />
+      <rect x={x0} y={top} width={x1 - x0} height={bottom - top} fill="none" stroke="#334155" strokeWidth="1.5" />
+    </g>
+  );
+}
+
+// ---- Series & parallel circuits --------------------------------------------
+function bulb(x, y, color = "#f59e0b") {
+  return <g stroke={color} strokeWidth="2.5" fill="none"><circle cx={x} cy={y} r="13" /><line x1={x - 9} y1={y - 9} x2={x + 9} y2={y + 9} /><line x1={x - 9} y1={y + 9} x2={x + 9} y2={y - 9} /></g>;
+}
+function battery(x, y) {
+  return <g stroke="#334155" strokeWidth="3"><line x1={x} y1={y - 14} x2={x} y2={y + 14} /><line x1={x + 8} y1={y - 8} x2={x + 8} y2={y + 8} /></g>;
+}
+export function Circuits({ showLabels = true }) {
+  const wire = "#334155";
+  return (
+    <g fill="none">
+      {/* Series (left) */}
+      <text x={175} y={90} fontSize="15" fontWeight="800" fill={wire} textAnchor="middle">Series</text>
+      <rect x={70} y={130} width={210} height={230} rx="6" stroke={wire} strokeWidth="2.5" />
+      <battery x={70} y={245} />
+      {bulb(140, 130)}{bulb(210, 130)}
+      {/* Parallel (right) */}
+      <text x={575} y={90} fontSize="15" fontWeight="800" fill={wire} textAnchor="middle">Parallel</text>
+      <path d="M 480 130 H 690 M 480 360 H 690 M 480 130 V 360 M 690 130 V 360" stroke={wire} strokeWidth="2.5" />
+      <path d="M 555 130 V 360 M 620 130 V 360" stroke={wire} strokeWidth="2.5" />
+      <battery x={480} y={245} />
+      {bulb(555, 245)}{bulb(620, 245)}
+      {showLabels && (
+        <g fill={wire}>
+          <text x={175} y={390} fontSize="11" textAnchor="middle" stroke="none">one path — bulbs share the current</text>
+          <text x={575} y={390} fontSize="11" textAnchor="middle" stroke="none">branches — each bulb its own path</text>
+        </g>
+      )}
+    </g>
+  );
+}
+
+// ---- Transverse & longitudinal waves ---------------------------------------
+export function Waves({ showLabels = true }) {
+  const left = 80, right = W - 80, midT = 150, amp = 60;
+  const pts = [];
+  for (let i = 0; i <= 200; i++) { const x = left + (i / 200) * (right - left); pts.push(`${x.toFixed(1)},${(midT - amp * Math.sin((i / 200) * 4 * Math.PI)).toFixed(1)}`); }
+  const baseL = 360;
+  const lines = [];
+  for (let i = 0; i < 46; i++) {
+    const t = i / 46; const dense = 0.5 + 0.5 * Math.cos(t * 4 * Math.PI);
+    const x = left + t * (right - left) + 10 * Math.sin(t * 4 * Math.PI);
+    lines.push(<line key={i} x1={x} y1={baseL - 34} x2={x} y2={baseL + 34} stroke="#0891b2" strokeWidth={1.6 + dense} />);
+  }
+  return (
+    <g>
+      {/* Transverse */}
+      <text x={W / 2} y={64} fontSize="15" fontWeight="800" fill="#334155" textAnchor="middle">Transverse wave</text>
+      <line x1={left - 10} y1={midT} x2={right + 10} y2={midT} stroke="#94a3b8" strokeWidth="1" strokeDasharray="4 4" />
+      <polyline points={pts.join(" ")} fill="none" stroke="#2563eb" strokeWidth="3" />
+      {showLabels && (
+        <g>
+          <line x1={left + 25} y1={midT} x2={left + 25} y2={midT - amp} stroke="#ef4444" strokeWidth="2" markerEnd="url(#il-arrow)" />
+          <text x={left + 32} y={midT - amp / 2} fontSize="11" fill="#ef4444">amplitude</text>
+          <line x1={left + 50} y1={midT - amp - 18} x2={left + 150} y2={midT - amp - 18} stroke="#16a34a" strokeWidth="2" markerStart="url(#il-arrow)" markerEnd="url(#il-arrow)" />
+          <text x={left + 100} y={midT - amp - 24} fontSize="11" fill="#16a34a" textAnchor="middle">wavelength</text>
+          <text x={W / 2} y={midT + amp + 30} fontSize="10.5" fill="#64748b" textAnchor="middle">particles move ⟂ to wave direction (crests & troughs)</text>
+        </g>
+      )}
+      {/* Longitudinal */}
+      <text x={W / 2} y={baseL - 70} fontSize="15" fontWeight="800" fill="#334155" textAnchor="middle">Longitudinal wave</text>
+      {lines}
+      {showLabels && (
+        <g>
+          <text x={left + 60} y={baseL + 58} fontSize="11" fill="#0891b2" textAnchor="middle">compression</text>
+          <text x={left + 150} y={baseL + 58} fontSize="11" fill="#64748b" textAnchor="middle">rarefaction</text>
+          <line x1={right - 150} y1={baseL + 56} x2={right - 30} y2={baseL + 56} stroke="#334155" strokeWidth="2" markerEnd="url(#il-arrow)" />
+          <text x={right - 90} y={baseL + 50} fontSize="10.5" fill="#334155" textAnchor="middle">wave direction</text>
+        </g>
+      )}
+    </g>
+  );
+}
+
+// ---- Reflex arc ------------------------------------------------------------
+export function ReflexArc({ showLabels = true }) {
+  const cordX = W / 2, cordY = 120;
+  return (
+    <g>
+      {/* Spinal cord (cross-section) */}
+      <ellipse cx={cordX} cy={cordY} rx="70" ry="46" fill="#e0e7ff" stroke="#4f46e5" strokeWidth="2.5" filter="url(#viz-shadow)" />
+      <path d={`M ${cordX} ${cordY - 26} Q ${cordX - 20} ${cordY} ${cordX} ${cordY + 26} Q ${cordX + 20} ${cordY} ${cordX} ${cordY - 26} Z`} fill="#a5b4fc" />
+      {/* Stimulus + receptor (left, hand near flame) */}
+      <path d="M 90 430 q 10 -30 30 -20 q -6 -22 16 -18 q 6 -20 22 -6 q 18 -6 10 20 q 20 10 -4 24 Z" fill="#f97316" stroke="#c2410c" strokeWidth="1.5" />
+      <ellipse cx={150} cy={400} rx="26" ry="16" fill="#fecaca" stroke="#b91c1c" strokeWidth="1.5" />
+      {/* Effector (right, muscle) */}
+      <ellipse cx={W - 150} cy={400} rx="40" ry="20" fill="#fca5a5" stroke="#dc2626" strokeWidth="1.5" />
+      {/* Sensory neuron: receptor -> cord */}
+      <path d={`M 168 392 C 260 340 ${cordX - 60} 220 ${cordX - 26} ${cordY + 34}`} fill="none" stroke="#16a34a" strokeWidth="3.5" markerEnd="url(#il-arrow)" />
+      {/* Motor neuron: cord -> effector */}
+      <path d={`M ${cordX + 26} ${cordY + 34} C ${cordX + 90} 240 ${W - 240} 340 ${W - 178} 392`} fill="none" stroke="#dc2626" strokeWidth="3.5" markerEnd="url(#il-arrow)" />
+      {showLabels && (
+        <g>
+          <Leader x={cordX} y={cordY - 44} tx={cordX} ty={44} text="Spinal cord (relay/interneuron)" color="#4f46e5" side="right" />
+          <text x={150} y={452} fontSize="12" fontWeight="700" fill="#c2410c" textAnchor="middle">Stimulus + receptor</text>
+          <text x={W - 150} y={452} fontSize="12" fontWeight="700" fill="#dc2626" textAnchor="middle">Effector (muscle)</text>
+          <text x={240} y={300} fontSize="11" fontWeight="600" fill="#16a34a" textAnchor="middle" transform="rotate(-42 240 300)">sensory neuron</text>
+          <text x={W - 240} y={300} fontSize="11" fontWeight="600" fill="#dc2626" textAnchor="middle" transform={`rotate(42 ${W - 240} 300)`}>motor neuron</text>
+        </g>
+      )}
+    </g>
+  );
+}
