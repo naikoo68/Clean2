@@ -1501,3 +1501,170 @@ export function ReflexArc({ showLabels = true }) {
     </g>
   );
 }
+
+
+// ---- Food chain (illustrated) ----------------------------------------------
+export function FoodChain({ showLabels = true }) {
+  const y = H / 2, xs = [110, 260, 405, 545, 675];
+  const grass = (x) => <g stroke="#16a34a" strokeWidth="3" fill="none" strokeLinecap="round">{[-10, -3, 4, 11].map((o, i) => <path key={i} d={`M ${x + o} ${y + 20} q ${o < 0 ? -6 : 6} -22 ${o < 0 ? -2 : 2} -34`} />)}</g>;
+  const hopper = (x) => <g><ellipse cx={x} cy={y} rx="20" ry="9" fill="#84cc16" stroke="#4d7c0f" strokeWidth="1.4" /><circle cx={x + 16} cy={y - 3} r="6" fill="#65a30d" /><line x1={x - 6} y1={y + 6} x2={x - 14} y2={y + 20} stroke="#4d7c0f" strokeWidth="2" /><line x1={x + 2} y1={y + 6} x2={x - 2} y2={y + 22} stroke="#4d7c0f" strokeWidth="2" /></g>;
+  const snake = (x) => <g fill="none" stroke="#22c55e" strokeWidth="7" strokeLinecap="round"><path d={`M ${x - 24} ${y + 10} q 12 -20 24 0 q 12 20 24 0`} /><circle cx={x + 26} cy={y + 6} r="4" fill="#15803d" /></g>;
+  const eagle = (x) => <g><ellipse cx={x} cy={y} rx="7" ry="16" fill="#78350f" /><path d={`M ${x} ${y - 6} Q ${x - 30} ${y - 26} ${x - 40} ${y - 8}`} fill="none" stroke="#92400e" strokeWidth="5" strokeLinecap="round" /><path d={`M ${x} ${y - 6} Q ${x + 30} ${y - 26} ${x + 40} ${y - 8}`} fill="none" stroke="#92400e" strokeWidth="5" strokeLinecap="round" /><circle cx={x} cy={y - 16} r="6" fill="#a16207" /></g>;
+  const items = [
+    [grass, "Grass", "Producer", "#16a34a"], [hopper, "Grasshopper", "Primary consumer", "#65a30d"],
+    [(x) => iFrog(x, y), "Frog", "Secondary consumer", "#16a34a"], [snake, "Snake", "Tertiary consumer", "#22c55e"],
+    [eagle, "Eagle", "Apex predator", "#78350f"],
+  ];
+  return (
+    <g>
+      <g filter="url(#viz-shadow)"><Sphere cx={70} cy={70} r={26} fill="#fbbf24" /></g>
+      <text x={70} y={112} fontSize="10.5" fill="#f59e0b" textAnchor="middle">Sun</text>
+      <line x1={70} y1={98} x2={xs[0]} y2={y - 40} stroke="#f59e0b" strokeWidth="2.5" strokeDasharray="4 4" markerEnd="url(#il-arrow)" />
+      {items.map(([draw, name, role, color], i) => (
+        <g key={i}>
+          {draw(xs[i])}
+          {showLabels && <><text x={xs[i]} y={y + 46} fontSize="12.5" fontWeight="700" fill={color} textAnchor="middle">{name}</text>
+            <text x={xs[i]} y={y + 62} fontSize="10" fill="#64748b" textAnchor="middle">{role}</text></>}
+          {i < items.length - 1 && <line x1={xs[i] + 44} y1={y} x2={xs[i + 1] - 44} y2={y} stroke="#334155" strokeWidth="2.5" markerEnd="url(#il-arrow)" />}
+        </g>
+      ))}
+      {showLabels && <text x={W / 2} y={H - 26} fontSize="11" fill="#64748b" textAnchor="middle">arrows point in the direction energy flows (eaten by →)</text>}
+    </g>
+  );
+}
+
+// ---- Levers (three classes) ------------------------------------------------
+export function Levers({ showLabels = true }) {
+  const rows = [
+    ["Class 1", "fulcrum in the middle (see-saw, scissors)", 0.5, "F centre"],
+    ["Class 2", "load in the middle (wheelbarrow)", 0.15, "load centre"],
+    ["Class 3", "effort in the middle (tweezers, forearm)", 0.85, "effort centre"],
+  ];
+  const left = 150, right = W - 120, ys = [120, 270, 420];
+  return (
+    <g>
+      {rows.map(([cls, desc, fpos], r) => {
+        const y = ys[r], fx = left + fpos * (right - left);
+        const load = r === 1 ? fx : left, effort = r === 2 ? fx : right;
+        return (
+          <g key={r}>
+            <line x1={left} y1={y} x2={right} y2={y} stroke="#a16207" strokeWidth="8" strokeLinecap="round" />
+            <path d={`M ${fx - 16} ${y + 30} L ${fx} ${y + 6} L ${fx + 16} ${y + 30} Z`} fill="#334155" />
+            {/* load block */}
+            <rect x={load - 18} y={y - 34} width="36" height="26" rx="4" fill="#2563eb" />
+            <text x={load} y={y - 16} fontSize="10" fontWeight="700" fill="#fff" textAnchor="middle">L</text>
+            {/* effort arrow */}
+            <line x1={effort} y1={y - 44} x2={effort} y2={y - 8} stroke="#dc2626" strokeWidth="3" markerEnd="url(#il-arrow)" />
+            {showLabels && (
+              <g>
+                <text x={left - 12} y={y + 4} fontSize="13" fontWeight="800" fill="#334155" textAnchor="end">{cls}</text>
+                <text x={fx} y={y + 46} fontSize="10" fill="#334155" textAnchor="middle">fulcrum</text>
+                <text x={right + 6} y={y + 4} fontSize="10.5" fill="#64748b">{desc}</text>
+              </g>
+            )}
+          </g>
+        );
+      })}
+      {showLabels && <text x={W / 2} y={30} fontSize="13" fontWeight="700" fill="#334155" textAnchor="middle">Classes of levers — L = load · red arrow = effort</text>}
+    </g>
+  );
+}
+
+// ---- Solar & lunar eclipse -------------------------------------------------
+export function Eclipse({ showLabels = true }) {
+  const sun = (cx, cy, r) => <g filter="url(#viz-shadow)"><Sphere cx={cx} cy={cy} r={r} fill="#fbbf24" /></g>;
+  return (
+    <g>
+      {/* Solar eclipse (top): Sun - Moon - Earth */}
+      {sun(80, 150, 40)}
+      <circle cx={380} cy={150} r={14} fill="#94a3b8" stroke="#475569" strokeWidth="1.5" />
+      <g filter="url(#viz-shadow)"><Sphere cx={560} cy={150} r={40} fill="#2563eb" /></g>
+      <path d={`M 380 138 L 548 128 L 548 172 L 380 162 Z`} fill="#334155" opacity="0.28" />
+      {showLabels && (
+        <g>
+          <text x={80} y={206} fontSize="11" fontWeight="700" fill="#f59e0b" textAnchor="middle">Sun</text>
+          <text x={380} y={186} fontSize="11" fontWeight="700" fill="#475569" textAnchor="middle">Moon</text>
+          <text x={560} y={206} fontSize="11" fontWeight="700" fill="#2563eb" textAnchor="middle">Earth</text>
+          <text x={W / 2} y={64} fontSize="13" fontWeight="800" fill="#334155" textAnchor="middle">Solar eclipse — Moon between Sun & Earth</text>
+        </g>
+      )}
+      {/* Lunar eclipse (bottom): Sun - Earth - Moon */}
+      {sun(80, 390, 40)}
+      <g filter="url(#viz-shadow)"><Sphere cx={400} cy={390} r={34} fill="#2563eb" /></g>
+      <circle cx={640} cy={390} r={16} fill="#7f1d1d" stroke="#450a0a" strokeWidth="1.5" />
+      <path d={`M 400 366 L 660 356 L 660 424 L 400 414 Z`} fill="#334155" opacity="0.28" />
+      {showLabels && (
+        <g>
+          <text x={80} y={446} fontSize="11" fontWeight="700" fill="#f59e0b" textAnchor="middle">Sun</text>
+          <text x={400} y={442} fontSize="11" fontWeight="700" fill="#2563eb" textAnchor="middle">Earth</text>
+          <text x={640} y={430} fontSize="11" fontWeight="700" fill="#7f1d1d" textAnchor="middle">Moon</text>
+          <text x={W / 2} y={310} fontSize="13" fontWeight="800" fill="#334155" textAnchor="middle">Lunar eclipse — Earth between Sun & Moon</text>
+        </g>
+      )}
+    </g>
+  );
+}
+
+// ---- Greenhouse effect -----------------------------------------------------
+export function GreenhouseEffect({ showLabels = true }) {
+  const ground = H - 70, ghgY = 200;
+  return (
+    <g>
+      {/* Space + sun */}
+      <g filter="url(#viz-shadow)"><Sphere cx={90} cy={70} r={30} fill="#fbbf24" /></g>
+      {/* Greenhouse-gas layer */}
+      <rect x={40} y={ghgY - 22} width={W - 80} height="44" rx="18" fill="#bfdbfe" opacity="0.6" stroke="#60a5fa" strokeWidth="1.5" strokeDasharray="6 5" />
+      {/* Ground */}
+      <path d={`M 40 ${ground} Q ${W / 2} ${ground - 22} ${W - 40} ${ground} L ${W - 40} ${H - 20} L 40 ${H - 20} Z`} fill="#16a34a" stroke="#15803d" strokeWidth="2" />
+      {/* Incoming solar (yellow) */}
+      <line x1={120} y1={100} x2={300} y2={ground - 10} stroke="#f59e0b" strokeWidth="3.5" markerEnd="url(#il-arrow)" />
+      {/* Reflected out (yellow, escapes) */}
+      <line x1={330} y1={ground - 10} x2={470} y2={70} stroke="#f59e0b" strokeWidth="3" markerEnd="url(#il-arrow)" strokeDasharray="5 4" />
+      {/* Re-emitted heat (red) up to GHG then trapped back down */}
+      <line x1={430} y1={ground - 10} x2={470} y2={ghgY + 12} stroke="#dc2626" strokeWidth="3.5" markerEnd="url(#il-arrow)" />
+      <line x1={500} y1={ghgY + 12} x2={560} y2={ground - 10} stroke="#dc2626" strokeWidth="3.5" markerEnd="url(#il-arrow)" />
+      {showLabels && (
+        <g>
+          <text x={150} y={140} fontSize="11" fontWeight="600" fill="#f59e0b">incoming solar</text>
+          <text x={470} y={60} fontSize="11" fontWeight="600" fill="#f59e0b" textAnchor="middle">reflected</text>
+          <text x={W - 60} y={ghgY - 28} fontSize="12" fontWeight="700" fill="#2563eb" textAnchor="end">Greenhouse gases</text>
+          <text x={560} y={ground - 30} fontSize="11" fontWeight="600" fill="#dc2626">trapped heat</text>
+          <text x={W / 2} y={H - 26} fontSize="11" fill="#64748b" textAnchor="middle">greenhouse gases re-radiate heat back to the surface, warming the Earth</text>
+        </g>
+      )}
+    </g>
+  );
+}
+
+// ---- Seed structure (bean, longitudinal) -----------------------------------
+export function SeedStructure({ showLabels = true }) {
+  const cx = W / 2 - 20, cy = H / 2;
+  const bean = `M ${cx + 150} ${cy - 120} C ${cx + 230} ${cy - 80} ${cx + 230} ${cy + 80} ${cx + 150} ${cy + 120}
+    C ${cx + 40} ${cy + 150} ${cx - 120} ${cy + 90} ${cx - 120} ${cy + 30}
+    Q ${cx - 150} ${cy} ${cx - 120} ${cy - 30}
+    C ${cx - 120} ${cy - 90} ${cx + 40} ${cy - 150} ${cx + 150} ${cy - 120} Z`;
+  return (
+    <g>
+      {/* Testa (seed coat) */}
+      <path d={bean} fill="#fbbf24" stroke="#b45309" strokeWidth="3" filter="url(#viz-shadow)" />
+      <path d={bean} fill="url(#viz-gloss)" opacity="0.4" />
+      {/* Cotyledon (food store) */}
+      <path d={`M ${cx + 140} ${cy - 96} C ${cx + 200} ${cy - 60} ${cx + 200} ${cy + 60} ${cx + 140} ${cy + 96} C ${cx + 40} ${cy + 120} ${cx - 80} ${cy + 60} ${cx - 80} ${cy} C ${cx - 80} ${cy - 60} ${cx + 40} ${cy - 120} ${cx + 140} ${cy - 96} Z`} fill="#fde68a" stroke="#ca8a04" strokeWidth="1.5" />
+      {/* Embryo: radicle (root) + plumule (shoot) near the hilum side */}
+      <path d={`M ${cx - 78} ${cy} q -30 -6 -50 -22`} fill="none" stroke="#16a34a" strokeWidth="6" strokeLinecap="round" />
+      <path d={`M ${cx - 78} ${cy + 6} q -34 6 -54 26`} fill="none" stroke="#65a30d" strokeWidth="5" strokeLinecap="round" />
+      {[-4, 0, 4].map((o, i) => <path key={i} d={`M ${cx - 120} ${cy - 20 + o} q -14 -6 -22 ${o}`} fill="none" stroke="#16a34a" strokeWidth="2" />)}
+      {/* Hilum */}
+      <ellipse cx={cx - 128} cy={cy} rx="6" ry="12" fill="#78350f" />
+      {showLabels && (
+        <g>
+          <Leader x={cx + 170} y={cy - 90} tx={W - 70} ty={cy - 130} text="Testa (seed coat)" color="#b45309" side="right" />
+          <Leader x={cx + 60} y={cy - 40} tx={W - 70} ty={cy - 20} text="Cotyledon (food store)" color="#ca8a04" side="right" />
+          <Leader x={cx - 140} y={cy - 24} tx={70} ty={cy - 90} text="Plumule (shoot)" color="#16a34a" side="left" />
+          <Leader x={cx - 140} y={cy + 24} tx={70} ty={cy + 60} text="Radicle (root)" color="#65a30d" side="left" />
+          <Leader x={cx - 128} y={cy} tx={70} ty={cy - 20} text="Hilum" color="#78350f" side="left" />
+        </g>
+      )}
+    </g>
+  );
+}
