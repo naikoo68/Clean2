@@ -65,6 +65,7 @@ export const CATALOG = {
     "Topographic Profile", "Contour Diagram", "Map", "Choropleth", "Flow Map", "Elevation",
     "DEM", "Terrain", "Wind Rose", "Water Cycle", "Rock Cycle", "Volcano",
     "Layers of the Earth", "Layers of the Atmosphere", "Greenhouse Effect", "Plate Tectonics", "Soil Horizons",
+    "Weather Fronts", "River Course",
   ],
   biology: [
     "Cell Structure", "DNA", "RNA", "Mitosis", "Meiosis", "Food Chain", "Food Web", "Human Body",
@@ -75,7 +76,8 @@ export const CATALOG = {
     "Frog Life Cycle", "Plant Life Cycle", "Energy Pyramid", "Kidney (gross anatomy)",
     "Reflex Arc", "Food Chain (illustrated)", "Seed Structure", "Punnett Square",
     "Types of Joints", "Skin (cross-section)", "Protein Synthesis", "Oxygen Cycle",
-    "Breathing Mechanism", "Synapse", "Ecosystem", "Classification Tree",
+    "Breathing Mechanism", "Synapse", "Endocrine System", "Antagonistic Muscles",
+    "Ecosystem", "Classification Tree",
   ],
   chemistry: [
     "Bohr Model", "Atomic Structure", "Molecular Structure", "Reaction Diagram",
@@ -83,6 +85,7 @@ export const CATALOG = {
     "Elimination Mechanism", "Rearrangement Mechanism", "Combined Mechanisms",
     "Periodic Table", "Electron Configuration", "Energy Level", "Orbital Diagram",
     "States of Matter", "pH Scale", "Ionic vs Covalent Bonding", "Electrolysis", "Distillation",
+    "Titration Curve",
   ],
   physics: [
     "Free Body Diagram", "Projectile Motion", "Wave", "Circuit Diagram", "Optics", "Ray Diagram",
@@ -431,6 +434,11 @@ Object.assign(MODULES, {
   distillation:      _il("distillation", "Distillation", "chemistry", { kind: "distillation" }),
   breathing:         _il("breathing", "Breathing Mechanism", "biology", { kind: "breathing" }),
   synapse:           _il("synapse", "Synapse", "biology", { kind: "synapse" }),
+  endocrinesystem:   _il("endocrinesystem", "Endocrine System", "biology", { kind: "endocrine" }),
+  antagonisticmuscles: _il("antagonisticmuscles", "Antagonistic Muscles", "biology", { kind: "muscles" }),
+  titrationcurve:    _il("titrationcurve", "Titration Curve", "chemistry", { kind: "titration" }),
+  weatherfronts:     _il("weatherfronts", "Weather Fronts", "geography", { kind: "weatherfronts" }),
+  rivercourse:       _il("rivercourse", "River Course", "geography", { kind: "rivercourse" }),
 });
 
 // ---- Phase 10: fill remaining catalog (aliases + charts/graphs/tables/illustrations) ----
