@@ -64,7 +64,7 @@ export const CATALOG = {
     "Population Pyramid", "Climate Graph", "Rainfall Graph", "River System", "Drainage Pattern",
     "Topographic Profile", "Contour Diagram", "Map", "Choropleth", "Flow Map", "Elevation",
     "DEM", "Terrain", "Wind Rose", "Water Cycle", "Rock Cycle", "Volcano",
-    "Layers of the Earth", "Layers of the Atmosphere",
+    "Layers of the Earth", "Layers of the Atmosphere", "Greenhouse Effect",
   ],
   biology: [
     "Cell Structure", "DNA", "RNA", "Mitosis", "Meiosis", "Food Chain", "Food Web", "Human Body",
@@ -73,7 +73,7 @@ export const CATALOG = {
     "Human Skeleton", "Brain Regions", "Circulatory System", "Tooth (cross-section)",
     "Carbon Cycle", "Nitrogen Cycle", "Photosynthesis", "Butterfly Life Cycle",
     "Frog Life Cycle", "Plant Life Cycle", "Energy Pyramid", "Kidney (gross anatomy)",
-    "Reflex Arc", "Ecosystem", "Classification Tree",
+    "Reflex Arc", "Food Chain (illustrated)", "Seed Structure", "Ecosystem", "Classification Tree",
   ],
   chemistry: [
     "Bohr Model", "Atomic Structure", "Molecular Structure", "Reaction Diagram",
@@ -86,6 +86,7 @@ export const CATALOG = {
     "Free Body Diagram", "Projectile Motion", "Wave", "Circuit Diagram", "Optics", "Ray Diagram",
     "Electric Field", "Magnetic Field", "Energy Diagram", "Solar System", "Phases of the Moon",
     "Electromagnetic Spectrum", "Series & Parallel Circuits", "Transverse & Longitudinal Waves",
+    "Levers", "Solar & Lunar Eclipse",
   ],
   cs: [
     "Flowchart", "Algorithm Flow", "ER Diagram", "DFD", "UML", "Sequence Diagram",
@@ -408,6 +409,11 @@ Object.assign(MODULES, {
   circuits:          _il("circuits", "Series & Parallel Circuits", "physics", { kind: "circuits" }),
   waves:             _il("waves", "Transverse & Longitudinal Waves", "physics", { kind: "waves" }),
   reflexarc:         _il("reflexarc", "Reflex Arc", "biology", { kind: "reflexarc" }),
+  foodchainillustrated: _il("foodchainillustrated", "Food Chain (illustrated)", "biology", { kind: "foodchain" }),
+  levers:            _il("levers", "Levers", "physics", { kind: "levers" }),
+  eclipse:           _il("eclipse", "Solar & Lunar Eclipse", "physics", { kind: "eclipse" }),
+  greenhouseeffect:  _il("greenhouseeffect", "Greenhouse Effect", "geography", { kind: "greenhouse" }),
+  seedstructure:     _il("seedstructure", "Seed Structure", "biology", { kind: "seed" }),
 });
 
 // ---- Phase 10: fill remaining catalog (aliases + charts/graphs/tables/illustrations) ----
