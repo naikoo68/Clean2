@@ -157,6 +157,7 @@ export async function updateSettings(req, res) {
           label,
           cycle: String(p?.cycle || "").trim().slice(0, 30),
           months: Math.max(0, Math.min(120, parseInt(p?.months, 10) || 0)),
+          days: Math.max(0, Math.min(3650, parseInt(p?.days, 10) || 0)),
           price: Math.max(0, Math.min(10000000, parseInt(p?.price, 10) || 0)),
           trial: !!p?.trial,
           maxPerBatch: Math.max(1, Math.min(5000, parseInt(p?.maxPerBatch, 10) || 1)),
@@ -185,6 +186,7 @@ export async function updateSettings(req, res) {
           label,
           cycle: String(p?.cycle || "").trim().slice(0, 30),
           months: Math.max(0, Math.min(120, parseInt(p?.months, 10) || 0)),
+          days: Math.max(0, Math.min(3650, parseInt(p?.days, 10) || 0)),
           price: Math.max(0, Math.min(10000000, parseInt(p?.price, 10) || 0)),
           trial: !!p?.trial,
         };
