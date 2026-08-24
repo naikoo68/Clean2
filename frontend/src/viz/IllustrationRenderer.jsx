@@ -13,9 +13,9 @@
 //   efield    { charges:[{ x, q }] }
 //   bmagnet   {}
 import { forwardRef, useImperativeHandle, useRef } from "react";
+import { PALETTE as P, VizDefs, Sphere } from "./vizStyle";
 
 const W = 760, H = 520;
-const P = ["#2563eb", "#ef4444", "#10b981", "#f59e0b", "#8b5cf6", "#06b6d4", "#ec4899", "#84cc16"];
 const num = (v, d = 0) => (Number.isFinite(Number(v)) ? Number(v) : d);
 const ATOM_COLOR = { H: "#e2e8f0", O: "#ef4444", C: "#334155", N: "#2563eb", S: "#f59e0b", Cl: "#10b981", Na: "#8b5cf6", P: "#f97316" };
 const BASE_COLOR = { A: "#2563eb", T: "#ef4444", G: "#10b981", C: "#f59e0b", U: "#ec4899" };
@@ -60,7 +60,7 @@ function Projectile({ s }) {
     <g>
       <line x1={40} y1={ground} x2={W - 40} y2={ground} stroke="#334155" strokeWidth="2" />
       <polyline points={pts.join(" ")} fill="none" stroke={P[0]} strokeWidth="2.5" strokeDasharray="6 5" />
-      <circle cx={left} cy={ground} r="8" fill={P[1]} />
+      <Sphere cx={left} cy={ground} r={8} fill={P[1]} />
       <line x1={left} y1={ground} x2={left + vlen * Math.cos(rad)} y2={ground - vlen * Math.sin(rad)} stroke={P[3]} strokeWidth="3" markerEnd="url(#il-arrow)" />
       <text x={left + vlen * Math.cos(rad) + 6} y={ground - vlen * Math.sin(rad) - 6} fontSize="12" fill={P[3]}>v₀ ({angle}°)</text>
       <line x1={left} y1={ground} x2={left + vlen * Math.cos(rad)} y2={ground} stroke="#94a3b8" strokeWidth="1.5" strokeDasharray="3 3" />
@@ -172,7 +172,7 @@ function Molecule({ s }) {
       })}
       {atoms.map((a, i) => (
         <g key={i}>
-          <circle cx={px(num(a.x))} cy={py(num(a.y))} r="18" fill={ATOM_COLOR[a.el] || "#94a3b8"} stroke="#1e293b" strokeWidth="1.5" />
+          <Sphere cx={px(num(a.x))} cy={py(num(a.y))} r={18} fill={ATOM_COLOR[a.el] || "#94a3b8"} stroke="#1e293b" strokeWidth={1.5} />
           <text x={px(num(a.x))} y={py(num(a.y)) + 5} fontSize="14" fontWeight="800" fill={["H", "Cl"].includes(a.el) ? "#1e293b" : "#fff"} textAnchor="middle">{a.el}</text>
         </g>
       ))}
@@ -256,9 +256,9 @@ function Dna({ s, single }) {
         return (
           <g key={i}>
             {!single && <line x1={x1} y1={y} x2={x2} y2={y} stroke={BASE_COLOR[base] || "#94a3b8"} strokeWidth="3" />}
-            <circle cx={x1} cy={y} r="7" fill={BASE_COLOR[base] || "#94a3b8"} />
+            <Sphere cx={x1} cy={y} r={7} fill={BASE_COLOR[base] || "#94a3b8"} />
             <text x={x1} y={y + 3.5} fontSize="9" fontWeight="700" fill="#fff" textAnchor="middle">{base}</text>
-            {!single && <circle cx={x2} cy={y} r="7" fill={BASE_COLOR[comp[base]] || "#94a3b8"} />}
+            {!single && <Sphere cx={x2} cy={y} r={7} fill={BASE_COLOR[comp[base]] || "#94a3b8"} />}
             {!single && <text x={x2} y={y + 3.5} fontSize="9" fontWeight="700" fill="#fff" textAnchor="middle">{comp[base]}</text>}
           </g>
         );
@@ -276,10 +276,10 @@ function Cell({ s }) {
   return (
     <g>
       {plant && <rect x={cx - 220} y={cy - 150} width="440" height="300" rx="14" fill="#dcfce7" stroke="#16a34a" strokeWidth="6" />}
-      <ellipse cx={cx} cy={cy} rx={plant ? 200 : 210} ry={plant ? 135 : 140} fill={plant ? "#f0fdf4" : "#eff6ff"} stroke={plant ? "#65a30d" : "#3b82f6"} strokeWidth="2.5" />
+      <ellipse cx={cx} cy={cy} rx={plant ? 200 : 210} ry={plant ? 135 : 140} fill={plant ? "#f0fdf4" : "#eff6ff"} stroke={plant ? "#65a30d" : "#3b82f6"} strokeWidth="2.5" filter="url(#viz-shadow)" />
       {plant && <ellipse cx={cx + 40} cy={cy} rx="120" ry="80" fill="#bfdbfe66" stroke="#60a5fa" strokeWidth="1.5" />}
-      <circle cx={cx - 70} cy={cy - 20} r="46" fill="#c7d2fe" stroke="#4f46e5" strokeWidth="2" />
-      <circle cx={cx - 70} cy={cy - 20} r="16" fill="#4f46e5" />
+      <Sphere cx={cx - 70} cy={cy - 20} r={46} fill="#c7d2fe" stroke="#4f46e5" strokeWidth={2} />
+      <Sphere cx={cx - 70} cy={cy - 20} r={16} fill="#4f46e5" />
       {[[cx + 70, cy - 60], [cx + 100, cy + 40], [cx - 20, cy + 70]].map(([mx, my], i) => (
         <g key={i}><ellipse cx={mx} cy={my} rx="30" ry="15" fill="#fecaca" stroke="#ef4444" strokeWidth="1.5" /><path d={`M${mx - 22} ${my} q11 -8 22 0 q11 8 22 0`} fill="none" stroke="#ef4444" strokeWidth="1.2" /></g>
       ))}
@@ -312,7 +312,7 @@ function EField({ s }) {
       })}
       {charges.map((c, i) => {
         const pos = num(c.q) >= 0, x = px(num(c.x));
-        return <g key={i}><circle cx={x} cy={cy} r="22" fill={pos ? P[1] : P[0]} /><text x={x} y={cy + 8} fontSize="24" fontWeight="800" fill="#fff" textAnchor="middle">{pos ? "+" : "−"}</text></g>;
+        return <g key={i}><Sphere cx={x} cy={cy} r={22} fill={pos ? P[1] : P[0]} /><text x={x} y={cy + 8} fontSize="24" fontWeight="800" fill="#fff" textAnchor="middle">{pos ? "+" : "−"}</text></g>;
       })}
     </g>
   );
@@ -427,7 +427,7 @@ function HumanBody({ s }) {
   ];
   return (
     <g>
-      <g fill="#dbeafe" stroke="#3b82f6" strokeWidth="2">
+      <g fill="#dbeafe" stroke="#3b82f6" strokeWidth="2" filter="url(#viz-shadow)">
         <circle cx={cx} cy={90} r="34" />
         <rect x={cx - 45} y={128} width="90" height="150" rx="22" />
         <rect x={cx - 72} y={135} width="24" height="120" rx="12" /><rect x={cx + 48} y={135} width="24" height="120" rx="12" />
@@ -437,7 +437,7 @@ function HumanBody({ s }) {
         const right = i % 2 === 1, ox = cx + (o.t === "Lungs" ? 14 : o.t === "Heart" ? -12 : 0);
         return (
           <g key={i}>
-            <circle cx={ox} cy={o.y} r="7" fill={o.c} stroke="#fff" strokeWidth="1.5" />
+            <Sphere cx={ox} cy={o.y} r={7} fill={o.c} stroke="#fff" strokeWidth={1.5} />
             <line x1={ox} y1={o.y} x2={right ? cx + 130 : cx - 130} y2={o.y} stroke="#94a3b8" strokeWidth="1" />
             <text x={right ? cx + 134 : cx - 134} y={o.y + 3} fontSize="11" fill="currentColor" textAnchor={right ? "start" : "end"}>{o.t}</text>
           </g>
@@ -493,7 +493,7 @@ function Fishbone({ s }) {
   return (
     <g>
       <line x1={x0} y1={spineY} x2={x1} y2={spineY} stroke="#334155" strokeWidth="3" markerEnd="url(#il-arrow)" />
-      <rect x={x1 + 6} y={spineY - 26} width="158" height="52" rx="8" fill="#1e293b" />
+      <rect x={x1 + 6} y={spineY - 26} width="158" height="52" rx="8" fill="#1e293b" filter="url(#viz-shadow)" />
       <text x={x1 + 85} y={spineY + 5} fontSize="13" fontWeight="700" fill="#fff" textAnchor="middle">{tr(effect, 18)}</text>
       {causes.map((c, i) => {
         const top = i % 2 === 0, frac = (Math.floor(i / 2) + 1) / (half + 1);
@@ -522,7 +522,7 @@ function Flashcards({ s }) {
         const x = x0 + i * (cw + gap);
         return (
           <g key={i}>
-            <rect x={x} y={y} width={cw} height={ch} rx="12" fill="#eff6ff" stroke={P[0]} strokeWidth="2" />
+            <rect x={x} y={y} width={cw} height={ch} rx="12" fill="#eff6ff" stroke={P[0]} strokeWidth="2" filter="url(#viz-shadow)" />
             <text x={x + cw / 2} y={y + ch * 0.38} fontSize="13" fontWeight="700" fill="currentColor" textAnchor="middle">{tr(c.front, 22)}</text>
             <line x1={x + 16} y1={y + ch * 0.55} x2={x + cw - 16} y2={y + ch * 0.55} stroke="#cbd5e1" strokeWidth="1" strokeDasharray="3 3" />
             <text x={x + cw / 2} y={y + ch * 0.74} fontSize="12" fill={P[2]} textAnchor="middle">{tr(c.back, 22)}</text>
@@ -549,7 +549,7 @@ function Mechanism({ s }) {
           <g key={i}>
             <rect x={x - boxW / 2} y={cy - boxH / 2} width={boxW} height={boxH} rx="10"
               fill={intermediate ? "#fef9c3" : "#eff6ff"} stroke={intermediate ? "#ca8a04" : "#3b82f6"}
-              strokeWidth="2" strokeDasharray={intermediate ? "5 4" : undefined} />
+              strokeWidth="2" strokeDasharray={intermediate ? "5 4" : undefined} filter="url(#viz-shadow)" />
             <text x={x} y={cy + 5} fontSize="13" fontWeight="700" fill="currentColor" textAnchor="middle">{tr(sp, Math.max(8, Math.floor(boxW / 8)))}</text>
             {i < n - 1 && (() => {
               const x1 = x + boxW / 2 + 4, x2 = cxOf(i + 1) - boxW / 2 - 4, mx = (x1 + x2) / 2;
@@ -591,6 +591,7 @@ const IllustrationRenderer = forwardRef(function IllustrationRenderer({ spec }, 
           <marker id="il-arrow" markerWidth="10" markerHeight="10" refX="7" refY="3" orient="auto">
             <path d="M0,0 L7,3 L0,6 Z" fill="currentColor" />
           </marker>
+          <VizDefs />
         </defs>
         {spec?.title && <text x={W / 2} y="28" fontSize="15" fontWeight="700" fill="currentColor" textAnchor="middle">{spec.title}</text>}
         {Body({ s: il })}
