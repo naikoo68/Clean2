@@ -312,7 +312,9 @@ export default function Home() {
 
     // Combined totals across ALL clients (their "My Practice" content),
     // computed live on every visit — updates automatically as clients build.
-    clientStats: realStats ? (
+    // Hidden when the super-admin has turned the Client feature off for the
+    // public (so we don't advertise "Total Clients" a visitor can't become).
+    clientStats: realStats && settings?.publicClientEnabled !== false ? (
       <section className="container-page pt-6">
         <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
           <p className="mb-5 text-center text-sm font-semibold uppercase tracking-wide text-slate-400">
