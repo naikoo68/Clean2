@@ -1668,3 +1668,187 @@ export function SeedStructure({ showLabels = true }) {
     </g>
   );
 }
+
+
+// ---- Punnett square (monohybrid cross) -------------------------------------
+export function PunnettSquare({ showLabels = true }) {
+  const top = ["B", "b"], side = ["B", "b"], cell = 116, cx = W / 2;
+  const gx = cx - cell, gy = 168;
+  const geno = (a, b) => (a === "B" || b === "B" ? (a === "B" && b === "B" ? "BB" : "Bb") : "bb");
+  return (
+    <g>
+      {top.map((t, c) => <text key={`t${c}`} x={gx + c * cell + cell / 2} y={gy - 14} fontSize="22" fontWeight="800" fill="#2563eb" textAnchor="middle">{t}</text>)}
+      {side.map((s, r) => <text key={`s${r}`} x={gx - 20} y={gy + r * cell + cell / 2 + 8} fontSize="22" fontWeight="800" fill="#dc2626" textAnchor="middle">{s}</text>)}
+      {side.map((s, r) => top.map((t, c) => {
+        const g = geno(t, s), dom = g.includes("B");
+        return (
+          <g key={`${r}-${c}`}>
+            <rect x={gx + c * cell} y={gy + r * cell} width={cell} height={cell} fill={dom ? "#bbf7d0" : "#fde68a"} stroke="#334155" strokeWidth="2" />
+            <text x={gx + c * cell + cell / 2} y={gy + r * cell + cell / 2 + 8} fontSize="26" fontWeight="800" fill={dom ? "#15803d" : "#a16207"} textAnchor="middle">{g}</text>
+          </g>
+        );
+      }))}
+      {showLabels && (
+        <g>
+          <text x={cx} y={104} fontSize="14" fontWeight="700" fill="#2563eb" textAnchor="middle">Parent 1 gametes (Bb)</text>
+          <text x={54} y={gy + cell} fontSize="14" fontWeight="700" fill="#dc2626" textAnchor="middle" transform={`rotate(-90 54 ${gy + cell})`}>Parent 2 gametes (Bb)</text>
+          <text x={cx} y={gy + 2 * cell + 40} fontSize="14" fontWeight="700" fill="#334155" textAnchor="middle">Offspring ratio — 3 dominant : 1 recessive (genotype 1 BB : 2 Bb : 1 bb)</text>
+        </g>
+      )}
+    </g>
+  );
+}
+
+// ---- Plate tectonics (boundary types) --------------------------------------
+export function PlateTectonics({ showLabels = true }) {
+  const rows = [["Divergent", 110], ["Convergent", 270], ["Transform", 430]];
+  const brown = "#a16207", brownD = "#78350f", cx = W / 2;
+  return (
+    <g>
+      {rows.map(([type, y], i) => (
+        <g key={i}>
+          <text x={70} y={y} fontSize="13" fontWeight="800" fill="#334155">{type}</text>
+          {type === "Divergent" && (
+            <g>
+              <rect x={200} y={y - 24} width="150" height="48" fill={brown} stroke={brownD} strokeWidth="1.5" />
+              <rect x={cx + 60} y={y - 24} width="150" height="48" fill={brown} stroke={brownD} strokeWidth="1.5" />
+              <path d={`M ${cx} ${y + 40} L ${cx - 18} ${y - 6} L ${cx + 18} ${y - 6} Z`} fill="#ef4444" />
+              <line x1={190} y1={y} x2={130} y2={y} stroke="#334155" strokeWidth="2.5" markerEnd="url(#il-arrow)" />
+              <line x1={cx + 220} y1={y} x2={W - 70} y2={y} stroke="#334155" strokeWidth="2.5" markerEnd="url(#il-arrow)" />
+              {showLabels && <text x={cx} y={y + 56} fontSize="10" fill="#dc2626" textAnchor="middle">magma rises (mid-ocean ridge)</text>}
+            </g>
+          )}
+          {type === "Convergent" && (
+            <g>
+              <rect x={180} y={y - 24} width="200" height="48" fill={brown} stroke={brownD} strokeWidth="1.5" />
+              <path d={`M ${cx + 30} ${y - 24} L ${W - 120} ${y - 24} L ${W - 120} ${y + 24} L ${cx + 70} ${y + 24} Z`} fill={brown} stroke={brownD} strokeWidth="1.5" transform={`rotate(12 ${cx + 60} ${y})`} />
+              <path d={`M ${cx - 40} ${y - 24} L ${cx - 20} ${y - 46} L ${cx} ${y - 24} Z`} fill="#92400e" />
+              <line x1={cx - 90} y1={y} x2={cx - 30} y2={y} stroke="#334155" strokeWidth="2.5" markerEnd="url(#il-arrow)" />
+              <line x1={W - 80} y1={y} x2={cx + 90} y2={y} stroke="#334155" strokeWidth="2.5" markerEnd="url(#il-arrow)" />
+              {showLabels && <text x={cx - 20} y={y - 52} fontSize="10" fill="#92400e" textAnchor="middle">mountains / subduction</text>}
+            </g>
+          )}
+          {type === "Transform" && (
+            <g>
+              <rect x={180} y={y - 26} width={cx - 180} height="24" fill={brown} stroke={brownD} strokeWidth="1.5" />
+              <rect x={cx} y={y + 2} width={W - 120 - cx} height="24" fill={brown} stroke={brownD} strokeWidth="1.5" />
+              <line x1={220} y1={y - 38} x2={cx - 40} y2={y - 38} stroke="#334155" strokeWidth="2.5" markerEnd="url(#il-arrow)" />
+              <line x1={W - 120} y1={y + 40} x2={cx + 40} y2={y + 40} stroke="#334155" strokeWidth="2.5" markerEnd="url(#il-arrow)" />
+              {showLabels && <text x={cx} y={y + 56} fontSize="10" fill="#334155" textAnchor="middle">plates slide past each other (fault)</text>}
+            </g>
+          )}
+        </g>
+      ))}
+    </g>
+  );
+}
+
+// ---- Simple machines: pulley & inclined plane ------------------------------
+export function SimpleMachines({ showLabels = true }) {
+  return (
+    <g>
+      {/* Fixed pulley (left) */}
+      <text x={200} y={80} fontSize="15" fontWeight="800" fill="#334155" textAnchor="middle">Fixed pulley</text>
+      <line x1={120} y1={110} x2={280} y2={110} stroke="#334155" strokeWidth="5" />
+      <g filter="url(#viz-shadow)"><Sphere cx={200} cy={150} r={34} fill="#94a3b8" /></g>
+      <circle cx={200} cy={150} r={6} fill="#475569" />
+      <path d="M 168 150 V 300" stroke="#334155" strokeWidth="3" fill="none" />
+      <path d="M 232 150 V 260" stroke="#dc2626" strokeWidth="3" fill="none" />
+      <rect x={148} y={300} width="44" height="40" rx="4" fill="#2563eb" /><text x={170} y={325} fontSize="12" fontWeight="700" fill="#fff" textAnchor="middle">L</text>
+      <line x1={232} y1={264} x2={232} y2={300} stroke="#dc2626" strokeWidth="3" markerEnd="url(#il-arrow)" />
+      {/* Inclined plane (right) */}
+      <text x={560} y={80} fontSize="15" fontWeight="800" fill="#334155" textAnchor="middle">Inclined plane</text>
+      <path d="M 440 360 L 700 360 L 440 180 Z" fill="#e2e8f0" stroke="#64748b" strokeWidth="2" filter="url(#viz-shadow)" />
+      <rect x={520} y={252} width="46" height="40" rx="4" fill="#2563eb" transform="rotate(-35 543 272)" /><text x={543} y={276} fontSize="12" fontWeight="700" fill="#fff" textAnchor="middle" transform="rotate(-35 543 272)">L</text>
+      <line x1={600} y1={300} x2={470} y2={210} stroke="#dc2626" strokeWidth="3" markerEnd="url(#il-arrow)" />
+      {showLabels && (
+        <g>
+          <text x={170} y={332} fontSize="10" fill="#fff" textAnchor="middle" />
+          <text x={250} y={264} fontSize="11" fill="#dc2626">effort</text>
+          <text x={150} y={356} fontSize="11" fill="#2563eb" textAnchor="middle">load</text>
+          <text x={560} y={340} fontSize="11" fill="#dc2626">effort ↑ ramp</text>
+          <text x={438} y={270} fontSize="11" fill="#64748b" textAnchor="end">height</text>
+        </g>
+      )}
+    </g>
+  );
+}
+
+// ---- Ionic vs covalent bonding ---------------------------------------------
+function shellAtom(x, y, sym, electrons, color) {
+  return (
+    <g>
+      <circle cx={x} cy={y} r="44" fill="none" stroke="#94a3b8" strokeWidth="1.2" strokeDasharray="3 3" />
+      <g filter="url(#viz-shadow)"><Sphere cx={x} cy={y} r={22} fill={color} /></g>
+      <text x={x} y={y + 5} fontSize="15" fontWeight="800" fill="#fff" textAnchor="middle">{sym}</text>
+      {Array.from({ length: electrons }).map((_, i) => { const a = -Math.PI / 2 + (i / electrons) * 2 * Math.PI; return <circle key={i} cx={x + 44 * Math.cos(a)} cy={y + 44 * Math.sin(a)} r="4.5" fill="#1e293b" />; })}
+    </g>
+  );
+}
+export function Bonding({ showLabels = true }) {
+  const y = H / 2;
+  return (
+    <g>
+      {/* Ionic (left) */}
+      <text x={210} y={90} fontSize="15" fontWeight="800" fill="#334155" textAnchor="middle">Ionic (electron transfer)</text>
+      {shellAtom(130, y, "Na", 1, "#8b5cf6")}
+      {shellAtom(300, y, "Cl", 7, "#10b981")}
+      <line x1={176} y1={y - 30} x2={258} y2={y - 30} stroke="#dc2626" strokeWidth="2.5" markerEnd="url(#il-arrow)" />
+      {showLabels && (
+        <g>
+          <text x={216} y={y - 40} fontSize="10.5" fill="#dc2626" textAnchor="middle">e⁻ transfer</text>
+          <text x={130} y={y + 78} fontSize="13" fontWeight="700" fill="#8b5cf6" textAnchor="middle">Na⁺</text>
+          <text x={300} y={y + 78} fontSize="13" fontWeight="700" fill="#10b981" textAnchor="middle">Cl⁻</text>
+        </g>
+      )}
+      {/* Covalent (right) */}
+      <text x={560} y={90} fontSize="15" fontWeight="800" fill="#334155" textAnchor="middle">Covalent (shared pair)</text>
+      {shellAtom(500, y, "Cl", 6, "#10b981")}
+      {shellAtom(620, y, "Cl", 6, "#10b981")}
+      <circle cx={560} cy={y - 6} r="4.5" fill="#dc2626" /><circle cx={560} cy={y + 6} r="4.5" fill="#dc2626" />
+      {showLabels && <text x={560} y={y + 78} fontSize="12" fontWeight="700" fill="#dc2626" textAnchor="middle">shared pair (Cl₂)</text>}
+    </g>
+  );
+}
+
+// ---- Star life cycle -------------------------------------------------------
+export function StarLifeCycle({ showLabels = true }) {
+  const arrow = (x1, y1, x2, y2, k) => <line key={k} x1={x1} y1={y1} x2={x2} y2={y2} stroke="#334155" strokeWidth="2.5" markerEnd="url(#il-arrow)" />;
+  const node = (x, y, r, fill, label, sub) => (
+    <g>
+      <g filter="url(#viz-shadow)"><Sphere cx={x} cy={y} r={r} fill={fill} /></g>
+      {showLabels && <text x={x} y={y + r + 16} fontSize="11" fontWeight="700" fill="currentColor" textAnchor="middle">{label}</text>}
+      {showLabels && sub && <text x={x} y={y + r + 30} fontSize="9.5" fill="#64748b" textAnchor="middle">{sub}</text>}
+    </g>
+  );
+  const midY = 170;
+  return (
+    <g>
+      {/* Start: nebula -> protostar -> main-sequence star */}
+      <text x={100} y={midY - 44} fontSize="12" fontWeight="700" fill="#334155" textAnchor="middle">Nebula</text>
+      {[[-14, -8], [8, -12], [18, 6], [-6, 10], [0, 0]].map(([dx, dy], i) => <circle key={i} cx={100 + dx * 2.2} cy={midY + dy * 2.2} r="16" fill="#a78bfa" opacity="0.6" />)}
+      {arrow(150, midY, 190, midY, "a1")}
+      {node(230, midY, 16, "#f59e0b", "Protostar")}
+      {arrow(262, midY, 300, midY, "a2")}
+      {node(345, midY, 22, "#fbbf24", "Main-sequence star", "(e.g. Sun)")}
+      {/* Branch up: low mass */}
+      {arrow(378, midY - 10, 430, 90, "a3")}
+      {node(480, 90, 30, "#f97316", "Red giant")}
+      {arrow(516, 90, 560, 90, "a4")}
+      {node(600, 90, 12, "#f8fafc", "White dwarf")}
+      {/* Branch down: high mass */}
+      {arrow(378, midY + 10, 430, 300, "a5")}
+      {node(485, 300, 36, "#ef4444", "Red supergiant")}
+      {arrow(525, 300, 565, 300, "a6")}
+      {node(600, 300, 20, "#fde68a", "Supernova")}
+      {arrow(624, 300, 664, 300, "a7")}
+      {node(700, 300, 12, "#0f172a", "Black hole / neutron star")}
+      {showLabels && (
+        <g>
+          <text x={410} y={60} fontSize="10.5" fill="#64748b">low-mass star →</text>
+          <text x={410} y={360} fontSize="10.5" fill="#64748b">high-mass star →</text>
+        </g>
+      )}
+    </g>
+  );
+}
