@@ -70,7 +70,8 @@ export const CATALOG = {
     "Plant Cell", "Animal Cell", "Neuron", "Human Heart", "Flower (parts)", "Digestive System",
     "Respiratory System", "Eye (cross-section)", "Nephron", "Ear", "Leaf Cross-section",
     "Human Skeleton", "Brain Regions", "Circulatory System", "Tooth (cross-section)",
-    "Carbon Cycle", "Nitrogen Cycle", "Ecosystem", "Classification Tree",
+    "Carbon Cycle", "Nitrogen Cycle", "Photosynthesis", "Butterfly Life Cycle",
+    "Frog Life Cycle", "Plant Life Cycle", "Ecosystem", "Classification Tree",
   ],
   chemistry: [
     "Bohr Model", "Atomic Structure", "Molecular Structure", "Reaction Diagram",
@@ -80,7 +81,7 @@ export const CATALOG = {
   ],
   physics: [
     "Free Body Diagram", "Projectile Motion", "Wave", "Circuit Diagram", "Optics", "Ray Diagram",
-    "Electric Field", "Magnetic Field", "Energy Diagram", "Solar System",
+    "Electric Field", "Magnetic Field", "Energy Diagram", "Solar System", "Phases of the Moon",
   ],
   cs: [
     "Flowchart", "Algorithm Flow", "ER Diagram", "DFD", "UML", "Sequence Diagram",
@@ -388,6 +389,11 @@ Object.assign(MODULES, {
   tooth:             _il("tooth", "Tooth (cross-section)", "biology", { kind: "tooth" }),
   carboncycle:       _il("carboncycle", "Carbon Cycle", "biology", { kind: "carboncycle" }),
   nitrogencycle:     _il("nitrogencycle", "Nitrogen Cycle", "biology", { kind: "nitrogencycle" }),
+  moonphases:        _il("moonphases", "Phases of the Moon", "physics", { kind: "moonphases" }),
+  photosynthesis:    _il("photosynthesis", "Photosynthesis", "biology", { kind: "photosynthesis" }),
+  butterflylifecycle: _il("butterflylifecycle", "Butterfly Life Cycle", "biology", { kind: "butterflylife" }),
+  froglifecycle:     _il("froglifecycle", "Frog Life Cycle", "biology", { kind: "froglife" }),
+  plantlifecycle:    _il("plantlifecycle", "Plant Life Cycle", "biology", { kind: "plantlife" }),
 });
 
 // ---- Phase 10: fill remaining catalog (aliases + charts/graphs/tables/illustrations) ----
