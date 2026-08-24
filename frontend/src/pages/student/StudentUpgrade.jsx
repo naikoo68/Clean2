@@ -9,7 +9,7 @@ import PlanPicker from "../../components/client/PlanPicker";
 // Prices mirror the backend student catalog — used only until the live
 // /auth/student-plans response arrives, so the form never renders empty.
 const FALLBACK_PLANS = [
-  { key: "trial", label: "1-Day Free Trial", cycle: "Trial", months: 0, price: 0, trial: true },
+  { key: "trial", label: "1-Day Free Trial", cycle: "Trial", months: 0, days: 1, price: 0, trial: true },
   { key: "1m", label: "1 Month", cycle: "Monthly", months: 1, price: 149 },
   { key: "3m", label: "3 Months", cycle: "Quarterly", months: 3, price: 399 },
   { key: "6m", label: "6 Months", cycle: "Semi-Annually", months: 6, price: 699 },
@@ -158,9 +158,10 @@ export default function StudentUpgrade({ onClose }) {
     }
   };
 
+  const trialLen = Number(selectedPlan?.days) || 1; // free-trial length in days
   const cta = () => {
     if (busy) return "Processing…";
-    if (planKey === "trial") return "Start 1-day free trial";
+    if (planKey === "trial") return `Start ${trialLen}-day free trial`;
     return `Subscribe · ₹${total}`;
   };
 
@@ -295,7 +296,7 @@ export default function StudentUpgrade({ onClose }) {
         </button>
         <p className="mt-2 flex items-center justify-center gap-1 text-center text-xs text-slate-400">
           <ShieldCheck className="h-3.5 w-3.5" />
-          {planKey === "trial" ? "Free 1-day trial — no payment needed." : "Secure payment via Razorpay · activates instantly"}
+          {planKey === "trial" ? `Free ${trialLen}-day trial — no payment needed.` : "Secure payment via Razorpay · activates instantly"}
         </p>
       </div>
     </div>

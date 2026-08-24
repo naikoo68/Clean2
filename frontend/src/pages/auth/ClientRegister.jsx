@@ -24,7 +24,7 @@ function loadRazorpay() {
 // Prices mirror the backend (single source of truth) — used only until the
 // live /auth/plans response arrives, so the form never renders empty.
 const FALLBACK_PLANS = [
-  { key: "trial", label: "1-Day Free Trial", months: 0, price: 0, trial: true },
+  { key: "trial", label: "1-Day Free Trial", months: 0, days: 1, price: 0, trial: true },
   { key: "1m", label: "1 Month", months: 1, price: 299 },
   { key: "2m", label: "2 Months", months: 2, price: 499 },
   { key: "6m", label: "6 Months", months: 6, price: 699 },
@@ -72,6 +72,7 @@ export default function ClientRegister() {
   const selectedPlan = plans.find((p) => p.key === planKey) || plans[0];
   // The free trial has no price, so coupon/referral don't apply — hide them.
   const isFreePlan = !!selectedPlan?.trial || (selectedPlan?.price ?? 0) <= 0;
+  const trialLen = Number(selectedPlan?.days) || 1; // free-trial length in days
   const basePrice = offer?.basePrice ?? selectedPlan?.price ?? 0;
   const discount = offer?.discount ?? 0;
   const total = offer?.finalPrice ?? selectedPlan?.price ?? 0;
@@ -328,14 +329,14 @@ export default function ClientRegister() {
           {busy
             ? "Processing..."
             : planKey === "trial"
-            ? "Start 1-day free trial"
+            ? `Start ${trialLen}-day free trial`
             : payEnabled && total > 0
             ? `Pay ₹${total} & Create account`
             : `Create account · ₹${total}`}
         </button>
         <p className="text-center text-xs text-slate-400">
           {planKey === "trial"
-            ? "Free 1-day trial — no payment needed. You can upgrade to a paid plan anytime."
+            ? `Free ${trialLen}-day trial — no payment needed. You can upgrade to a paid plan anytime.`
             : payEnabled && total > 0
             ? "You'll pay securely via Razorpay, then your account activates instantly for the selected duration."
             : "After verifying your email, your account is active for the selected duration."}

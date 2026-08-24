@@ -5,7 +5,7 @@ import Settings from "../models/Settings.js";
 // generation limits (maxPerBatch + perWindow per windowMinutes). Prices match
 // the original hard-coded plans so nothing reprices on first deploy.
 export const DEFAULT_CLIENT_PLANS = [
-  { key: "trial", label: "1-Day Free Trial", cycle: "Trial", months: 0, price: 0, trial: true, maxPerBatch: 50, perWindow: 50, windowMinutes: 5 },
+  { key: "trial", label: "1-Day Free Trial", cycle: "Trial", months: 0, days: 1, price: 0, trial: true, maxPerBatch: 50, perWindow: 50, windowMinutes: 5 },
   { key: "1m", label: "1 Month", cycle: "Monthly", months: 1, price: 299, maxPerBatch: 50, perWindow: 100, windowMinutes: 5 },
   { key: "2m", label: "2 Months", cycle: "Monthly", months: 2, price: 499, maxPerBatch: 100, perWindow: 200, windowMinutes: 5 },
   { key: "6m", label: "6 Months", cycle: "Semi-Annually", months: 6, price: 699, maxPerBatch: 200, perWindow: 400, windowMinutes: 5 },
@@ -16,7 +16,7 @@ export const DEFAULT_CLIENT_PLANS = [
 // panel). Students don't get the AI generator, so these carry ONLY pricing
 // (label/months/price) — no AI limits. Prices per the product spec.
 export const DEFAULT_STUDENT_PLANS = [
-  { key: "trial", label: "1-Day Free Trial", cycle: "Trial", months: 0, price: 0, trial: true },
+  { key: "trial", label: "1-Day Free Trial", cycle: "Trial", months: 0, days: 1, price: 0, trial: true },
   { key: "1m", label: "1 Month", cycle: "Monthly", months: 1, price: 149 },
   { key: "3m", label: "3 Months", cycle: "Quarterly", months: 3, price: 399 },
   { key: "6m", label: "6 Months", cycle: "Semi-Annually", months: 6, price: 699 },
@@ -28,7 +28,7 @@ export const DEFAULT_STUDENT_PLANS = [
 // TRIAL_TENANT_DAYS of access (see instituteSignupController). Placeholder
 // prices — the super-admin edits them in Admin → Plans → Institute Plans.
 export const DEFAULT_TENANT_PLANS = [
-  { key: "trial", label: "14-Day Free Trial", cycle: "Trial", months: 0, price: 0, trial: true },
+  { key: "trial", label: "14-Day Free Trial", cycle: "Trial", months: 0, days: 14, price: 0, trial: true },
   { key: "1m", label: "1 Month", cycle: "Monthly", months: 1, price: 1499 },
   { key: "6m", label: "6 Months", cycle: "Semi-Annually", months: 6, price: 6999 },
   { key: "1y", label: "1 Year", cycle: "Yearly", months: 12, price: 11999 },
@@ -78,4 +78,12 @@ export async function getPlansFor(audience) {
 
 export function findPlan(plans, key) {
   return (plans || []).find((p) => p.key === key) || null;
+}
+
+// Free-trial length (in whole days) for a plan. Uses the admin-configured
+// `days` when it's a positive number, otherwise the supplied fallback (the
+// historical hard-coded default for that audience). Guards against bad input.
+export function trialDays(plan, fallback = 1) {
+  const n = Number(plan?.days);
+  return Number.isFinite(n) && n > 0 ? Math.floor(n) : fallback;
 }

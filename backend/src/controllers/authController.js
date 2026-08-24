@@ -7,7 +7,7 @@ import { razorpayConfigured, verifyPaymentSignature, verifyPaidOrder } from "../
 import { sendMail } from "../config/mailer.js";
 import { clientBaseFromReq } from "../config/clientUrl.js";
 import { notifyNewUser } from "../utils/notify.js";
-import { getClientPlans, getPlansFor, getStudentPlans as loadStudentPlans } from "../utils/plans.js";
+import { getClientPlans, getPlansFor, getStudentPlans as loadStudentPlans, trialDays } from "../utils/plans.js";
 import { runUnscoped } from "../utils/tenantContext.js";
 import { getSiteName } from "../utils/siteInfo.js";
 import { tenantSuspended, SUSPENDED_INSTITUTE_MESSAGE } from "../middleware/auth.js";
@@ -336,8 +336,13 @@ export async function verifyOtp(req, res) {
     // Start a client's subscription clock now that the account is active.
     if (user.role === "client" && user.subscriptionPlan && !user.expiresAt) {
       const exp = new Date();
-      if (user.subscriptionPlan === "trial") exp.setDate(exp.getDate() + 1); // 1-day free trial
-      else exp.setMonth(exp.getMonth() + (user.subscriptionMonths || 0));
+      if (user.subscriptionPlan === "trial") {
+        // Free trial → the admin-configured number of days (default 1).
+        const trialPlan = (await getClientPlans()).find((p) => p.key === "trial");
+        exp.setDate(exp.getDate() + trialDays(trialPlan, 1));
+      } else {
+        exp.setMonth(exp.getMonth() + (user.subscriptionMonths || 0));
+      }
       user.expiresAt = exp;
     }
     await user.save();
