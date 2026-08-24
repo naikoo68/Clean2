@@ -66,6 +66,7 @@ export const CATALOG = {
     "DEM", "Terrain", "Wind Rose", "Water Cycle", "Rock Cycle", "Volcano",
     "Layers of the Earth", "Layers of the Atmosphere", "Greenhouse Effect", "Plate Tectonics", "Soil Horizons",
     "Weather Fronts", "River Course", "Seasons (Earth's tilt)", "Tides (Spring & Neap)",
+    "Renewable Energy Sources", "Latitude & Longitude",
   ],
   biology: [
     "Cell Structure", "DNA", "RNA", "Mitosis", "Meiosis", "Food Chain", "Food Web", "Human Body",
@@ -77,7 +78,8 @@ export const CATALOG = {
     "Reflex Arc", "Food Chain (illustrated)", "Seed Structure", "Punnett Square",
     "Types of Joints", "Skin (cross-section)", "Protein Synthesis", "Oxygen Cycle",
     "Breathing Mechanism", "Synapse", "Endocrine System", "Antagonistic Muscles", "Immune Response",
-    "Blood Groups (ABO)", "Mosquito Life Cycle", "Ecosystem", "Classification Tree",
+    "Blood Groups (ABO)", "Mosquito Life Cycle", "Aerobic vs Anaerobic Respiration",
+    "Ecosystem", "Classification Tree",
   ],
   chemistry: [
     "Bohr Model", "Atomic Structure", "Molecular Structure", "Reaction Diagram",
@@ -85,14 +87,14 @@ export const CATALOG = {
     "Elimination Mechanism", "Rearrangement Mechanism", "Combined Mechanisms",
     "Periodic Table", "Electron Configuration", "Energy Level", "Orbital Diagram",
     "States of Matter", "pH Scale", "Ionic vs Covalent Bonding", "Electrolysis", "Distillation",
-    "Titration Curve", "Crude Oil Distillation",
+    "Titration Curve", "Crude Oil Distillation", "Carbon Allotropes",
   ],
   physics: [
     "Free Body Diagram", "Projectile Motion", "Wave", "Circuit Diagram", "Optics", "Ray Diagram",
     "Electric Field", "Magnetic Field", "Energy Diagram", "Solar System", "Phases of the Moon",
     "Electromagnetic Spectrum", "Series & Parallel Circuits", "Transverse & Longitudinal Waves",
     "Levers", "Solar & Lunar Eclipse", "Simple Machines", "Star Life Cycle", "Reflection & Refraction",
-    "Prism Dispersion", "Simple Pendulum", "Electric Motor", "Transformer",
+    "Prism Dispersion", "Simple Pendulum", "Electric Motor", "Transformer", "Mirror Image Formation",
   ],
   cs: [
     "Flowchart", "Algorithm Flow", "ER Diagram", "DFD", "UML", "Sequence Diagram",
@@ -450,6 +452,11 @@ Object.assign(MODULES, {
   bloodgroups:       _il("bloodgroups", "Blood Groups (ABO)", "biology", { kind: "bloodgroups" }),
   mosquitolifecycle: _il("mosquitolifecycle", "Mosquito Life Cycle", "biology", { kind: "mosquitolife" }),
   tides:             _il("tides", "Tides (Spring & Neap)", "geography", { kind: "tides" }),
+  mirrorimage:       _il("mirrorimage", "Mirror Image Formation", "physics", { kind: "mirror" }),
+  carbonallotropes:  _il("carbonallotropes", "Carbon Allotropes", "chemistry", { kind: "allotropes" }),
+  respirationtypes:  _il("respirationtypes", "Aerobic vs Anaerobic Respiration", "biology", { kind: "respiration" }),
+  renewableenergy:   _il("renewableenergy", "Renewable Energy Sources", "geography", { kind: "renewables" }),
+  latlong:           _il("latlong", "Latitude & Longitude", "geography", { kind: "latlong" }),
 });
 
 // ---- Phase 10: fill remaining catalog (aliases + charts/graphs/tables/illustrations) ----
