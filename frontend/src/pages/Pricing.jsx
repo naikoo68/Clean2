@@ -99,10 +99,14 @@ export default function Pricing() {
     return { to: "/client/register" };
   };
 
+  // Client / Institute audiences are hidden platform-wide when the super-admin
+  // turns off publicClientEnabled / publicInstituteEnabled.
+  const showClient = settings?.publicClientEnabled !== false;
+  const showInstitute = settings?.publicInstituteEnabled !== false;
   const tabs = [
     { key: "student", label: "For Students", Icon: GraduationCap },
-    { key: "client", label: "For Creators", Icon: Store },
-    { key: "institute", label: "For Institutes", Icon: School },
+    ...(showClient ? [{ key: "client", label: "For Creators", Icon: Store }] : []),
+    ...(showInstitute ? [{ key: "institute", label: "For Institutes", Icon: School }] : []),
   ];
 
   const heroText = {
