@@ -65,7 +65,7 @@ export const CATALOG = {
     "Topographic Profile", "Contour Diagram", "Map", "Choropleth", "Flow Map", "Elevation",
     "DEM", "Terrain", "Wind Rose", "Water Cycle", "Rock Cycle", "Volcano",
     "Layers of the Earth", "Layers of the Atmosphere", "Greenhouse Effect", "Plate Tectonics", "Soil Horizons",
-    "Weather Fronts", "River Course", "Seasons (Earth's tilt)",
+    "Weather Fronts", "River Course", "Seasons (Earth's tilt)", "Tides (Spring & Neap)",
   ],
   biology: [
     "Cell Structure", "DNA", "RNA", "Mitosis", "Meiosis", "Food Chain", "Food Web", "Human Body",
@@ -77,7 +77,7 @@ export const CATALOG = {
     "Reflex Arc", "Food Chain (illustrated)", "Seed Structure", "Punnett Square",
     "Types of Joints", "Skin (cross-section)", "Protein Synthesis", "Oxygen Cycle",
     "Breathing Mechanism", "Synapse", "Endocrine System", "Antagonistic Muscles", "Immune Response",
-    "Ecosystem", "Classification Tree",
+    "Blood Groups (ABO)", "Mosquito Life Cycle", "Ecosystem", "Classification Tree",
   ],
   chemistry: [
     "Bohr Model", "Atomic Structure", "Molecular Structure", "Reaction Diagram",
@@ -92,7 +92,7 @@ export const CATALOG = {
     "Electric Field", "Magnetic Field", "Energy Diagram", "Solar System", "Phases of the Moon",
     "Electromagnetic Spectrum", "Series & Parallel Circuits", "Transverse & Longitudinal Waves",
     "Levers", "Solar & Lunar Eclipse", "Simple Machines", "Star Life Cycle", "Reflection & Refraction",
-    "Prism Dispersion", "Simple Pendulum",
+    "Prism Dispersion", "Simple Pendulum", "Electric Motor", "Transformer",
   ],
   cs: [
     "Flowchart", "Algorithm Flow", "ER Diagram", "DFD", "UML", "Sequence Diagram",
@@ -445,6 +445,11 @@ Object.assign(MODULES, {
   pendulum:          _il("pendulum", "Simple Pendulum", "physics", { kind: "pendulum" }),
   crudeoildistillation: _il("crudeoildistillation", "Crude Oil Distillation", "chemistry", { kind: "crudeoil" }),
   immuneresponse:    _il("immuneresponse", "Immune Response", "biology", { kind: "immune" }),
+  electricmotor:     _il("electricmotor", "Electric Motor", "physics", { kind: "motor" }),
+  transformer:       _il("transformer", "Transformer", "physics", { kind: "transformer" }),
+  bloodgroups:       _il("bloodgroups", "Blood Groups (ABO)", "biology", { kind: "bloodgroups" }),
+  mosquitolifecycle: _il("mosquitolifecycle", "Mosquito Life Cycle", "biology", { kind: "mosquitolife" }),
+  tides:             _il("tides", "Tides (Spring & Neap)", "geography", { kind: "tides" }),
 });
 
 // ---- Phase 10: fill remaining catalog (aliases + charts/graphs/tables/illustrations) ----
