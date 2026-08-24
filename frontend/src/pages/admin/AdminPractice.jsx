@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef, Fragment } from "react";
 import { useSearchParams } from "react-router-dom";
-import { Plus, Pencil, Trash2, X, ChevronRight, GraduationCap, FolderOpen, ListChecks, FileStack, HelpCircle, Users, Search, Share2, ClipboardList, ArrowRightLeft, Send, Copy as CopyIcon, Upload, BookOpen } from "lucide-react";
+import { Plus, Pencil, Trash2, X, ChevronRight, GraduationCap, FolderOpen, ListChecks, FileStack, HelpCircle, Users, Search, Share2, ClipboardList, ArrowRightLeft, Send, Copy as CopyIcon, Upload, BookOpen, Eye, EyeOff } from "lucide-react";
 import { practiceService, testService, contentService, aiService } from "../../services";
 import { loadNav, saveNav } from "../../lib/navState";
 import Badge from "../../components/ui/Badge";
@@ -115,6 +115,7 @@ export default function AdminPractice({ clientMode = false, fixedKind = "" }) {
   const [error, setError] = useState("");
   const [modal, setModal] = useState(null); // { type, mode, data }
   const [saving, setSaving] = useState(false);
+  const [togglingId, setTogglingId] = useState(null); // node currently being enabled/disabled
   // Split a My-Quiz item / topic into quizzes of N. { kind:"quiz"|"topic", id, name, count }
   const [splitTarget, setSplitTarget] = useState(null);
   const [splitPer, setSplitPer] = useState(50);
@@ -305,6 +306,23 @@ export default function AdminPractice({ clientMode = false, fixedKind = "" }) {
       else if (type === "item") await testService.remove(id);
       load(view);
     } catch (e) { setError(e.message); }
+  };
+
+  // Enable/disable a node (stream / subject / topic / item). A disabled node
+  // stays here in the manager but is hidden from students, public share links
+  // and the client browse/play — flip it back on any time.
+  const toggleDisabled = async (item) => {
+    const type = view === "streams" ? "stream" : view === "subjects" ? "subject" : view === "topics" ? "topic" : "item";
+    const next = !item.disabled;
+    setTogglingId(item._id);
+    setError("");
+    try {
+      if (type === "stream") await practiceService.updateStream(item._id, { disabled: next });
+      else if (type === "subject") await practiceService.updateSubject(item._id, { disabled: next });
+      else if (type === "topic") await practiceService.updateTopic(item._id, { disabled: next });
+      else await practiceService.updateItem(item._id, { disabled: next });
+      load(view);
+    } catch (e) { setError(e.message); } finally { setTogglingId(null); }
   };
 
   // Delete every ticked node at the current level (streams / subjects / topics /
@@ -1006,7 +1024,7 @@ export default function AdminPractice({ clientMode = false, fixedKind = "" }) {
       ) : (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {items.map((item) => (
-            <div key={item._id} className="card p-4">
+            <div key={item._id} className={`card p-4 ${item.disabled ? "opacity-60" : ""}`}>
               <div className="flex items-start justify-between gap-2">
                 <input
                   type="checkbox"
@@ -1019,7 +1037,10 @@ export default function AdminPractice({ clientMode = false, fixedKind = "" }) {
                   onClick={() => (view === "streams" ? openStream(item) : view === "subjects" ? openSubject(item) : view === "topics" ? openTopic(item) : openQuestions(item))}
                   className="min-w-0 flex-1 text-left"
                 >
-                  <p className="font-bold">{item.name}</p>
+                  <p className="flex items-center gap-2 font-bold">
+                    {item.name}
+                    {item.disabled && <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700 dark:bg-amber-900/40 dark:text-amber-300">Disabled</span>}
+                  </p>
                   <p className="mt-0.5 text-xs text-slate-400">
                     {view === "streams" && `${item.subjects ?? 0} ${L.subjectPl.toLowerCase()}`}
                     {view === "subjects" && (hasTopics ? L.openTopics : `${item.items ?? 0} tests`)}
@@ -1055,6 +1076,9 @@ export default function AdminPractice({ clientMode = false, fixedKind = "" }) {
                   {view !== "items" && (
                     <button onClick={() => setModal({ type: view === "streams" ? "stream" : view === "subjects" ? "subject" : "topic", mode: "edit", data: item })} className="rounded-lg p-2 text-brand-600 hover:bg-brand-50 dark:hover:bg-brand-900/30"><Pencil className="h-4 w-4" /></button>
                   )}
+                  {view !== "items" && (
+                    <button onClick={() => toggleDisabled(item)} disabled={togglingId === item._id} title={item.disabled ? "Enable — show to students again" : "Disable — hide from students (stays here in the manager)"} className={`rounded-lg p-2 hover:bg-amber-50 disabled:opacity-50 dark:hover:bg-amber-900/30 ${item.disabled ? "text-amber-600" : "text-slate-500 hover:text-amber-600 dark:text-slate-400"}`}>{item.disabled ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}</button>
+                  )}
                   <button onClick={() => remove(view === "streams" ? "stream" : view === "subjects" ? "subject" : view === "topics" ? "topic" : "item", item._id, item.name)} className="rounded-lg p-2 text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-900/30"><Trash2 className="h-4 w-4" /></button>
                 </div>
               </div>
@@ -1081,6 +1105,7 @@ export default function AdminPractice({ clientMode = false, fixedKind = "" }) {
                     <button onClick={() => openAccess(item)} className="btn-outline py-1.5 text-xs"><Users className="h-3.5 w-3.5" /> Visibility</button>
                   )}
                   <button onClick={() => { setDupScope({ params: { testSeries: item._id }, name: item.name }); setDupOpen(true); }} className="btn-outline py-1.5 text-xs"><Files className="h-3.5 w-3.5" /> Duplicates</button>
+                  <button onClick={() => toggleDisabled(item)} disabled={togglingId === item._id} className={`btn-outline py-1.5 text-xs disabled:opacity-50 ${item.disabled ? "text-amber-600" : ""}`} title={item.disabled ? "Enable — show to students again" : "Disable — hide from students (stays here in the manager)"}>{item.disabled ? <><Eye className="h-3.5 w-3.5" /> Enable</> : <><EyeOff className="h-3.5 w-3.5" /> Disable</>}</button>
                   <button onClick={() => setModal({ type: "item", mode: "edit", data: item })} className="btn-outline py-1.5 text-xs"><Pencil className="h-3.5 w-3.5" /> Edit</button>
                 </div>
               )}
