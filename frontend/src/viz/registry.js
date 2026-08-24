@@ -69,6 +69,7 @@ export const CATALOG = {
     "Renewable Energy Sources", "Latitude & Longitude", "Earthquake (seismic waves)",
     "Day & Night", "Continental Drift", "Cloud Types", "Ozone Layer", "Volcano Types",
     "Types of Rainfall", "Weathering", "Meander & Oxbow Lake", "Coastal Features",
+    "Glacial Landforms", "Waterfall Formation", "Longshore Drift",
   ],
   biology: [
     "Cell Structure", "DNA", "RNA", "Mitosis", "Meiosis", "Food Chain", "Food Web", "Human Body",
@@ -87,6 +88,8 @@ export const CATALOG = {
     "Alveoli (gas exchange)", "Villi (absorption)", "Specialized Cells", "Types of Muscle", "Blood Vessels",
     "Ecosystem", "Classification Tree", "Menstrual Cycle", "Pedigree Chart", "Pyramid of Numbers",
     "Nervous System (CNS/PNS)", "Leaf External Structure", "Guard Cells & Stomata",
+    "Thermoregulation (Feedback)", "Natural Selection", "Five Kingdoms Classification",
+    "Sarcomere (Muscle Contraction)", "Eutrophication", "Vaccination & Immune Memory",
   ],
   chemistry: [
     "Bohr Model", "Atomic Structure", "Molecular Structure", "Reaction Diagram",
@@ -98,6 +101,7 @@ export const CATALOG = {
     "Types of Chemical Reactions", "Paper Chromatography", "Atomic Structure", "Isotopes", "Water Treatment",
     "Reactivity Series", "Rusting", "Separating Mixtures", "Endothermic vs Exothermic",
     "Blast Furnace (Iron Extraction)", "Haber Process", "Metallic Bonding", "Giant Ionic Lattice (NaCl)",
+    "Collision Theory", "Dynamic Equilibrium", "Alloys vs Pure Metals", "Displacement Reaction",
   ],
   physics: [
     "Free Body Diagram", "Projectile Motion", "Wave", "Circuit Diagram", "Optics", "Ray Diagram",
@@ -110,6 +114,7 @@ export const CATALOG = {
     "Heat Transfer", "Newton's Cradle", "Density & Floating", "Sankey Energy Diagram", "Radioactive Half-life",
     "Electromagnet", "Comet Structure", "Newton's Three Laws", "Moments & Balancing",
     "Pressure in Liquids", "Hooke's Law", "Motor Effect (Fleming's LHR)", "Concave (Diverging) Lens",
+    "Stopping Distance", "Diffraction", "Conservation of Momentum", "The National Grid", "Radiation Penetration",
   ],
   cs: [
     "Flowchart", "Algorithm Flow", "ER Diagram", "DFD", "UML", "Sequence Diagram",
@@ -541,6 +546,24 @@ Object.assign(MODULES, {
   concavelens:       _il("concavelens", "Concave (Diverging) Lens", "physics", { kind: "concavelens" }),
   meander:           _il("meander", "Meander & Oxbow Lake", "geography", { kind: "meander" }),
   coastalfeatures:   _il("coastalfeatures", "Coastal Features", "geography", { kind: "coastal" }),
+  thermoregulation:  _il("thermoregulation", "Thermoregulation (Feedback)", "biology", { kind: "thermoregulation" }),
+  naturalselection:  _il("naturalselection", "Natural Selection", "biology", { kind: "naturalselection" }),
+  fivekingdoms:      _il("fivekingdoms", "Five Kingdoms Classification", "biology", { kind: "fivekingdoms" }),
+  sarcomere:         _il("sarcomere", "Sarcomere (Muscle Contraction)", "biology", { kind: "sarcomere" }),
+  eutrophication:    _il("eutrophication", "Eutrophication", "biology", { kind: "eutrophication" }),
+  vaccination:       _il("vaccination", "Vaccination & Immune Memory", "biology", { kind: "vaccination" }),
+  collisiontheory:   _il("collisiontheory", "Collision Theory", "chemistry", { kind: "collisiontheory" }),
+  equilibrium:       _il("equilibrium", "Dynamic Equilibrium", "chemistry", { kind: "equilibrium" }),
+  alloys:            _il("alloys", "Alloys vs Pure Metals", "chemistry", { kind: "alloys" }),
+  displacement:      _il("displacement", "Displacement Reaction", "chemistry", { kind: "displacement" }),
+  stoppingdistance:  _il("stoppingdistance", "Stopping Distance", "physics", { kind: "stoppingdistance" }),
+  diffraction:       _il("diffraction", "Diffraction", "physics", { kind: "diffraction" }),
+  momentum:          _il("momentum", "Conservation of Momentum", "physics", { kind: "momentum" }),
+  nationalgrid:      _il("nationalgrid", "The National Grid", "physics", { kind: "nationalgrid" }),
+  radiationpenetration: _il("radiationpenetration", "Radiation Penetration", "physics", { kind: "radiationpenetration" }),
+  glaciallandforms:  _il("glaciallandforms", "Glacial Landforms", "geography", { kind: "glacier" }),
+  waterfall:         _il("waterfall", "Waterfall Formation", "geography", { kind: "waterfall" }),
+  longshoredrift:    _il("longshoredrift", "Longshore Drift", "geography", { kind: "longshoredrift" }),
 });
 
 // ---- Phase 10: fill remaining catalog (aliases + charts/graphs/tables/illustrations) ----
