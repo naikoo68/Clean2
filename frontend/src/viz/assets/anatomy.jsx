@@ -3600,3 +3600,456 @@ export function VolcanoTypes({ showLabels = true }) {
     </g>
   );
 }
+
+
+// ---- Alveoli gas exchange --------------------------------------------------
+export function Alveoli({ showLabels = true }) {
+  const cx = W / 2 - 40, cy = H / 2;
+  return (
+    <g>
+      {/* alveolus */}
+      <g filter="url(#viz-shadow)"><Sphere cx={cx} cy={cy} r={90} fill="#fecdd3" /></g>
+      <circle cx={cx} cy={cy} r={80} fill="#fff1f2" stroke="#e11d48" strokeWidth="2" />
+      {/* capillary wrapping */}
+      <path d={`M ${cx + 80} ${cy - 70} Q ${cx + 150} ${cy} ${cx + 80} ${cy + 70}`} fill="none" stroke="#dc2626" strokeWidth="14" />
+      <path d={`M ${cx + 80} ${cy - 70} Q ${cx + 130} ${cy} ${cx + 80} ${cy + 70}`} fill="none" stroke="#2563eb" strokeWidth="6" opacity="0.6" />
+      {/* gas exchange arrows */}
+      <line x1={cx + 60} y1={cy - 20} x2={cx + 96} y2={cy - 20} stroke="#dc2626" strokeWidth="2.5" markerEnd="url(#il-arrow)" />
+      <line x1={cx + 96} y1={cy + 20} x2={cx + 60} y2={cy + 20} stroke="#2563eb" strokeWidth="2.5" markerEnd="url(#il-arrow)" />
+      {showLabels && (
+        <g>
+          <Leader x={cx} y={cy} tx={70} ty={cy} text="Alveolus (thin, moist wall)" color="#e11d48" side="left" />
+          <Leader x={cx + 120} y={cy} tx={W - 60} ty={cy - 80} text="Capillary" color="#dc2626" side="right" />
+          <text x={cx + 108} y={cy - 26} fontSize="10.5" fill="#dc2626">O₂ →</text>
+          <text x={cx + 44} y={cy + 40} fontSize="10.5" fill="#2563eb">← CO₂</text>
+        </g>
+      )}
+    </g>
+  );
+}
+
+// ---- Villi (intestinal absorption) -----------------------------------------
+export function Villi({ showLabels = true }) {
+  const baseY = H / 2 + 80, x0 = 120, x1 = W - 120;
+  return (
+    <g>
+      <path d={`M ${x0} ${baseY} ${Array.from({ length: 7 }).map((_, i) => { const x = x0 + 30 + i * ((x1 - x0 - 60) / 6); return `Q ${x - 20} ${baseY - 130} ${x} ${baseY - 130} Q ${x + 20} ${baseY - 130} ${x + 20} ${baseY}`; }).join(" ")} L ${x1} ${baseY} Z`} fill="#fecdd3" stroke="#e11d48" strokeWidth="2.5" filter="url(#viz-shadow)" />
+      {/* capillary network + lacteal inside one villus */}
+      <path d={`M ${x0 + 130} ${baseY} q -6 -90 0 -120`} fill="none" stroke="#dc2626" strokeWidth="3" />
+      <path d={`M ${x0 + 150} ${baseY} q 6 -90 0 -120`} fill="none" stroke="#2563eb" strokeWidth="3" />
+      <path d={`M ${x0 + 140} ${baseY} v -110`} fill="none" stroke="#f59e0b" strokeWidth="3" />
+      {/* nutrient arrows */}
+      {[...Array(4)].map((_, i) => <line key={i} x1={x0 + 60 + i * 120} y1={baseY - 150} x2={x0 + 60 + i * 120} y2={baseY - 120} stroke="#16a34a" strokeWidth="2" markerEnd="url(#il-arrow)" />)}
+      {showLabels && (
+        <g>
+          <Leader x={x0 + 90} y={baseY - 90} tx={70} ty={baseY - 110} text="Villus (large surface area)" color="#e11d48" side="left" />
+          <Leader x={x0 + 140} y={baseY - 60} tx={W - 60} ty={baseY - 90} text="Capillaries + lacteal" color="#dc2626" side="right" />
+          <text x={W / 2} y={80} fontSize="12" fontWeight="700" fill="#334155" textAnchor="middle">Villi — nutrient absorption in the small intestine</text>
+        </g>
+      )}
+    </g>
+  );
+}
+
+// ---- Specialized cells -----------------------------------------------------
+export function SpecializedCells({ showLabels = true }) {
+  const y = H / 2, xs = [130, 320, 520, 680];
+  return (
+    <g>
+      {/* red blood cell */}
+      <ellipse cx={xs[0]} cy={y} rx="40" ry="26" fill="#fca5a5" stroke="#dc2626" strokeWidth="2" />
+      <ellipse cx={xs[0]} cy={y} rx="16" ry="10" fill="#f87171" />
+      {/* nerve cell */}
+      <Sphere cx={xs[1] - 20} cy={y} r={20} fill="#c7d2fe" />
+      <line x1={xs[1]} y1={y} x2={xs[1] + 70} y2={y} stroke="#4f46e5" strokeWidth="4" />
+      {[[-1, -1], [-1, 1]].map(([a, b], i) => <line key={i} x1={xs[1] - 20} y1={y} x2={xs[1] - 20 + a * 24} y2={y + b * 22} stroke="#4f46e5" strokeWidth="2.5" />)}
+      {/* sperm cell */}
+      <ellipse cx={xs[2] - 30} cy={y} rx="16" ry="12" fill="#a78bfa" stroke="#7c3aed" strokeWidth="1.5" />
+      <path d={`M ${xs[2] - 14} ${y} q 40 -16 70 0 q -40 16 -70 0`} fill="none" stroke="#7c3aed" strokeWidth="2" />
+      {/* root hair cell */}
+      <rect x={xs[3] - 30} y={y - 24} width="60" height="48" fill="#bbf7d0" stroke="#16a34a" strokeWidth="2" />
+      <line x1={xs[3] - 30} y1={y} x2={xs[3] - 70} y2={y} stroke="#16a34a" strokeWidth="4" />
+      {showLabels && (
+        <g textAnchor="middle" fill="#334155" fontSize="11">
+          <text x={xs[0]} y={y + 50} fontWeight="700">Red blood cell</text>
+          <text x={xs[1]} y={y + 50} fontWeight="700">Nerve cell</text>
+          <text x={xs[2]} y={y + 50} fontWeight="700">Sperm cell</text>
+          <text x={xs[3]} y={y + 50} fontWeight="700">Root hair cell</text>
+        </g>
+      )}
+    </g>
+  );
+}
+
+// ---- Types of muscle -------------------------------------------------------
+export function MuscleTypes({ showLabels = true }) {
+  const y = H / 2, xs = [W / 6, W / 2, 5 * W / 6];
+  return (
+    <g>
+      {/* skeletal — long striated fibres */}
+      {[...Array(4)].map((_, i) => <g key={i}><rect x={xs[0] - 70} y={y - 40 + i * 22} width="140" height="16" rx="8" fill="#fca5a5" stroke="#dc2626" strokeWidth="1.2" />{[...Array(6)].map((_, k) => <line key={k} x1={xs[0] - 60 + k * 24} y1={y - 40 + i * 22} x2={xs[0] - 60 + k * 24} y2={y - 24 + i * 22} stroke="#b91c1c" strokeWidth="1" />)}</g>)}
+      {/* cardiac — branched striated */}
+      {[...Array(3)].map((_, i) => <path key={i} d={`M ${xs[1] - 70} ${y - 30 + i * 30} h 60 l 20 20 h 60`} fill="none" stroke="#e11d48" strokeWidth="8" strokeLinecap="round" />)}
+      {/* smooth — spindle cells */}
+      {[...Array(6)].map((_, i) => <ellipse key={i} cx={xs[2] - 50 + (i % 3) * 50} cy={y - 20 + Math.floor(i / 3) * 40} rx="26" ry="10" fill="#c7d2fe" stroke="#4f46e5" strokeWidth="1.5" />)}
+      {showLabels && (
+        <g textAnchor="middle" fill="#334155" fontSize="12">
+          <text x={xs[0]} y={y + 60} fontWeight="700">Skeletal</text><text x={xs[0]} y={y + 76} fontSize="9.5" fill="#64748b">striated, voluntary</text>
+          <text x={xs[1]} y={y + 60} fontWeight="700">Cardiac</text><text x={xs[1]} y={y + 76} fontSize="9.5" fill="#64748b">branched, in heart</text>
+          <text x={xs[2]} y={y + 60} fontWeight="700">Smooth</text><text x={xs[2]} y={y + 76} fontSize="9.5" fill="#64748b">spindle, involuntary</text>
+        </g>
+      )}
+    </g>
+  );
+}
+
+// ---- Blood vessels ---------------------------------------------------------
+export function BloodVessels({ showLabels = true }) {
+  const y = H / 2, xs = [W / 6 + 20, W / 2, 5 * W / 6 - 20];
+  const vessel = (cx, rOut, rIn, wall, label, sub) => (
+    <g>
+      <circle cx={cx} cy={y} r={rOut} fill="#fecaca" stroke="#dc2626" strokeWidth={wall} />
+      <circle cx={cx} cy={y} r={rIn} fill="#fff" />
+      {showLabels && <><text x={cx} y={y + rOut + 26} fontSize="13" fontWeight="700" fill="#334155" textAnchor="middle">{label}</text><text x={cx} y={y + rOut + 42} fontSize="9.5" fill="#64748b" textAnchor="middle">{sub}</text></>}
+    </g>
+  );
+  return (
+    <g>
+      {vessel(xs[0], 60, 24, 14, "Artery", "thick wall, small lumen")}
+      {vessel(xs[1], 60, 44, 5, "Vein", "thin wall, large lumen")}
+      {/* capillary — single cell wall */}
+      <circle cx={xs[2]} cy={y} r={40} fill="#fff" stroke="#dc2626" strokeWidth="2" />
+      {showLabels && <><text x={xs[2]} y={y + 66} fontSize="13" fontWeight="700" fill="#334155" textAnchor="middle">Capillary</text><text x={xs[2]} y={y + 82} fontSize="9.5" fill="#64748b" textAnchor="middle">one-cell-thick wall</text></>}
+    </g>
+  );
+}
+
+// ---- Reactivity series -----------------------------------------------------
+export function ReactivitySeries({ showLabels = true }) {
+  const metals = ["Potassium (K)", "Sodium (Na)", "Calcium (Ca)", "Magnesium (Mg)", "Aluminium (Al)", "Zinc (Zn)", "Iron (Fe)", "Copper (Cu)", "Silver (Ag)", "Gold (Au)"];
+  const x = W / 2, top = 70, step = 40;
+  return (
+    <g>
+      <line x1={x - 150} y1={top - 10} x2={x - 150} y2={top + metals.length * step} stroke="#334155" strokeWidth="3" markerStart="url(#il-arrow)" markerEnd="url(#il-arrow)" />
+      {metals.map((m, i) => {
+        const y = top + i * step;
+        const c = `hsl(${120 - i * 12}, 70%, 55%)`;
+        return <g key={i}><rect x={x - 130} y={y} width="260" height="30" rx="6" fill={c} opacity="0.85" /><text x={x} y={y + 20} fontSize="13" fontWeight="700" fill="#fff" textAnchor="middle">{m}</text></g>;
+      })}
+      {showLabels && (
+        <g fill="#334155">
+          <text x={x - 160} y={top + 6} fontSize="11" textAnchor="end">most reactive</text>
+          <text x={x - 160} y={top + metals.length * step - 6} fontSize="11" textAnchor="end">least reactive</text>
+        </g>
+      )}
+    </g>
+  );
+}
+
+// ---- Rusting (conditions) --------------------------------------------------
+export function Rusting({ showLabels = true }) {
+  const tubes = [["Water + air", true], ["Boiled water\n(no air)", false], ["Dry air\n(no water)", false]];
+  const cw = W / 3, top = 120, bot = 340;
+  return (
+    <g>
+      {tubes.map(([label, rusts], i) => {
+        const x = cw / 2 + i * cw;
+        return (
+          <g key={i}>
+            <path d={`M ${x - 26} ${top} L ${x - 26} ${bot - 20} Q ${x - 26} ${bot} ${x} ${bot} Q ${x + 26} ${bot} ${x + 26} ${bot - 20} L ${x + 26} ${top}`} fill="none" stroke="#334155" strokeWidth="2.5" />
+            {i === 0 && <path d={`M ${x - 26} ${top + 60} L ${x - 26} ${bot - 20} Q ${x - 26} ${bot} ${x} ${bot} Q ${x + 26} ${bot} ${x + 26} ${bot - 20} L ${x + 26} ${top + 60} Z`} fill="#bae6fd" opacity="0.5" />}
+            <rect x={x - 8} y={bot - 70} width="16" height="50" fill={rusts ? "#b45309" : "#94a3b8"} />
+            {rusts && [...Array(6)].map((_, k) => <circle key={k} cx={x - 6 + (k % 2) * 12} cy={bot - 60 + k * 8} r="2.5" fill="#7c2d12" />)}
+            {showLabels && (
+              <g textAnchor="middle">
+                <text x={x} y={bot + 26} fontSize="11" fontWeight="700" fill="#334155">{label.split("\n")[0]}</text>
+                {label.split("\n")[1] && <text x={x} y={bot + 42} fontSize="10" fill="#64748b">{label.split("\n")[1]}</text>}
+                <text x={x} y={bot + 62} fontSize="11" fontWeight="700" fill={rusts ? "#b45309" : "#16a34a"}>{rusts ? "RUSTS" : "no rust"}</text>
+              </g>
+            )}
+          </g>
+        );
+      })}
+      {showLabels && <text x={W / 2} y={70} fontSize="13" fontWeight="700" fill="#334155" textAnchor="middle">Rusting needs both water AND oxygen</text>}
+    </g>
+  );
+}
+
+// ---- Separating mixtures ---------------------------------------------------
+export function SeparatingMixtures({ showLabels = true }) {
+  return (
+    <g>
+      {/* Filtration (left) */}
+      <path d="M 90 120 L 150 200 L 130 200 L 130 260 L 110 260 L 110 200 Z" fill="#e2e8f0" stroke="#334155" strokeWidth="2" />
+      <path d="M 90 120 L 210 120 L 150 200 Z" fill="none" stroke="#334155" strokeWidth="2" />
+      <path d="M 100 300 L 100 350 Q 100 366 116 366 L 184 366 Q 200 366 200 350 L 200 300" fill="none" stroke="#334155" strokeWidth="2" />
+      <line x1={120} y1={266} x2={120} y2={300} stroke="#0ea5e9" strokeWidth="3" strokeDasharray="4 3" />
+      {showLabels && <text x={150} y={H - 30} fontSize="12" fontWeight="700" fill="#334155" textAnchor="middle">Filtration</text>}
+      {/* Evaporation (middle) */}
+      <path d="M 340 300 Q 340 340 380 340 L 420 340 Q 460 340 460 300" fill="#bae6fd" fillOpacity="0.5" stroke="#334155" strokeWidth="2" />
+      {[-10, 0, 10].map((o, i) => <path key={i} d={`M ${400 + o} 300 q 6 -20 0 -40`} fill="none" stroke="#94a3b8" strokeWidth="2" />)}
+      <path d="M 384 356 q 8 -16 16 0 q 8 16 16 0" fill="none" stroke="#f97316" strokeWidth="3" />
+      {showLabels && <text x={400} y={H - 30} fontSize="12" fontWeight="700" fill="#334155" textAnchor="middle">Evaporation</text>}
+      {/* Crystallization (right) */}
+      <path d="M 600 300 Q 600 340 640 340 L 680 340 Q 720 340 720 300" fill="#dbeafe" fillOpacity="0.5" stroke="#334155" strokeWidth="2" />
+      {[[630, 320], [660, 328], [690, 322]].map(([x, y], i) => <rect key={i} x={x - 6} y={y - 6} width="12" height="12" fill="#7c3aed" transform={`rotate(45 ${x} ${y})`} />)}
+      {showLabels && <text x={660} y={H - 30} fontSize="12" fontWeight="700" fill="#334155" textAnchor="middle">Crystallization</text>}
+      {showLabels && <text x={W / 2} y={70} fontSize="13" fontWeight="700" fill="#334155" textAnchor="middle">Separating mixtures</text>}
+    </g>
+  );
+}
+
+// ---- Endothermic vs exothermic ---------------------------------------------
+export function Energetics({ showLabels = true }) {
+  const draw = (x0, exo) => {
+    const bottom = H - 120, top = 150, left = x0, right = x0 + 260;
+    const rY = exo ? top + 20 : bottom - 20, pY = exo ? bottom - 20 : top + 20;
+    return (
+      <g>
+        <line x1={left} y1={bottom} x2={right} y2={bottom} stroke="currentColor" strokeWidth="1.5" />
+        <line x1={left} y1={bottom} x2={left} y2={top - 10} stroke="currentColor" strokeWidth="1.5" markerEnd="url(#il-arrow)" />
+        <path d={`M ${left + 20} ${rY} L ${left + 90} ${rY} Q ${left + 130} ${exo ? top - 30 : bottom + 30} ${left + 170} ${(rY + pY) / 2} Q ${left + 200} ${pY - (exo ? -20 : 20)} ${left + 240} ${pY}`} fill="none" stroke={exo ? "#dc2626" : "#2563eb"} strokeWidth="3" />
+        {showLabels && (
+          <g textAnchor="middle" fill="#334155">
+            <text x={left + 130} y={top - 30} fontSize="13" fontWeight="800" fill={exo ? "#dc2626" : "#2563eb"}>{exo ? "Exothermic" : "Endothermic"}</text>
+            <text x={left + 130} y={bottom + 24} fontSize="10" fill="#64748b">progress of reaction →</text>
+            <text x={left + 200} y={pY + (exo ? 18 : -8)} fontSize="10" fill="#64748b">{exo ? "products lower (ΔH<0)" : "products higher (ΔH>0)"}</text>
+          </g>
+        )}
+      </g>
+    );
+  };
+  return <g>{draw(70, true)}{draw(W / 2 + 20, false)}</g>;
+}
+
+
+// ---- Heat transfer (conduction / convection / radiation) -------------------
+export function HeatTransfer({ showLabels = true }) {
+  const y = H / 2, xs = [W / 6, W / 2, 5 * W / 6];
+  return (
+    <g>
+      {/* conduction: heated rod */}
+      <rect x={xs[0] - 70} y={y - 12} width="140" height="24" rx="6" fill="#94a3b8" stroke="#475569" strokeWidth="1.5" />
+      <path d={`M ${xs[0] - 70} ${y + 20} q 8 -16 16 0 q 8 16 16 0`} fill="none" stroke="#f97316" strokeWidth="3" />
+      {[...Array(5)].map((_, i) => <line key={i} x1={xs[0] - 60 + i * 24} y1={y} x2={xs[0] - 48 + i * 24} y2={y} stroke="#dc2626" strokeWidth="2" markerEnd="url(#il-arrow)" />)}
+      {/* convection: beaker current */}
+      <path d={`M ${xs[1] - 40} ${y - 40} L ${xs[1] - 40} ${y + 40} Q ${xs[1] - 40} ${y + 54} ${xs[1] - 26} ${y + 54} L ${xs[1] + 26} ${y + 54} Q ${xs[1] + 40} ${y + 54} ${xs[1] + 40} ${y + 40} L ${xs[1] + 40} ${y - 40}`} fill="#bae6fd" fillOpacity="0.5" stroke="#334155" strokeWidth="2" />
+      <path d={`M ${xs[1] - 20} ${y + 40} q -20 -40 0 -70 q 20 -20 20 10 q 0 30 -20 60`} fill="none" stroke="#dc2626" strokeWidth="2.5" markerEnd="url(#il-arrow)" />
+      <path d={`M ${xs[1] + 20} ${y - 20} q 20 40 0 60 q -20 20 -20 -10` } fill="none" stroke="#2563eb" strokeWidth="2.5" markerEnd="url(#il-arrow)" />
+      <path d={`M ${xs[1] - 8} ${y + 66} q 8 -14 16 0`} fill="none" stroke="#f97316" strokeWidth="3" />
+      {/* radiation: source emitting waves */}
+      <g filter="url(#viz-shadow)"><Sphere cx={xs[2] - 40} cy={y} r={22} fill="#fbbf24" /></g>
+      {[0, 1, 2].map((i) => <path key={i} d={`M ${xs[2]} ${y - 20 + i * 20} q 12 -8 24 0 q 12 8 24 0`} fill="none" stroke="#dc2626" strokeWidth="2" />)}
+      {showLabels && (
+        <g textAnchor="middle" fill="#334155" fontSize="12" fontWeight="700">
+          <text x={xs[0]} y={y + 70}>Conduction</text><text x={xs[1]} y={y + 92}>Convection</text><text x={xs[2]} y={y + 70}>Radiation</text>
+        </g>
+      )}
+    </g>
+  );
+}
+
+// ---- Newton's cradle -------------------------------------------------------
+export function NewtonsCradle({ showLabels = true }) {
+  const topY = 110, r = 24, n = 5, x0 = W / 2 - (n - 1) * r, by = topY + 200;
+  return (
+    <g>
+      <line x1={W / 2 - 150} y1={topY} x2={W / 2 + 150} y2={topY} stroke="#334155" strokeWidth="6" strokeLinecap="round" />
+      {/* raised ball on left */}
+      <line x1={x0} y1={topY} x2={x0 - 60} y2={by - 40} stroke="#64748b" strokeWidth="1.5" />
+      <g filter="url(#viz-shadow)"><Sphere cx={x0 - 60} cy={by - 40} r={r} fill="#94a3b8" /></g>
+      {/* middle stationary balls */}
+      {[1, 2, 3].map((i) => <g key={i}><line x1={x0 + i * 2 * r} y1={topY} x2={x0 + i * 2 * r} y2={by} stroke="#64748b" strokeWidth="1.5" /><Sphere cx={x0 + i * 2 * r} cy={by} r={r} fill="#94a3b8" /></g>)}
+      {/* flying ball on right */}
+      <line x1={x0 + 4 * 2 * r} y1={topY} x2={x0 + 4 * 2 * r + 60} y2={by - 40} stroke="#64748b" strokeWidth="1.5" />
+      <g filter="url(#viz-shadow)"><Sphere cx={x0 + 4 * 2 * r + 60} cy={by - 40} r={r} fill="#94a3b8" /></g>
+      {showLabels && (
+        <g fill="#334155" textAnchor="middle">
+          <text x={x0 - 60} y={by} fontSize="11">raised</text>
+          <text x={x0 + 4 * 2 * r + 60} y={by} fontSize="11">swings out</text>
+          <text x={W / 2} y={H - 30} fontSize="12" fontWeight="700">Conservation of momentum & energy</text>
+        </g>
+      )}
+    </g>
+  );
+}
+
+// ---- Density & floating ----------------------------------------------------
+export function Density({ showLabels = true }) {
+  const x0 = 150, x1 = W - 150, top = 130, waterY = 190, bot = H - 90;
+  return (
+    <g>
+      <path d={`M ${x0} ${top} L ${x0} ${bot} L ${x1} ${bot} L ${x1} ${top}`} fill="none" stroke="#334155" strokeWidth="2.5" />
+      <rect x={x0} y={waterY} width={x1 - x0} height={bot - waterY} fill="#bae6fd" opacity="0.6" />
+      <line x1={x0} y1={waterY} x2={x1} y2={waterY} stroke="#0284c7" strokeWidth="2" />
+      {/* floating object (half submerged) */}
+      <rect x={W / 2 - 130} y={waterY - 26} width="70" height="52" rx="4" fill="#a16207" stroke="#78350f" strokeWidth="1.5" />
+      <line x1={W / 2 - 95} y1={waterY + 60} x2={W / 2 - 95} y2={waterY + 20} stroke="#16a34a" strokeWidth="3" markerEnd="url(#il-arrow)" />
+      {/* sinking object (dense, at bottom) */}
+      <rect x={W / 2 + 70} y={bot - 44} width="56" height="40" rx="4" fill="#334155" />
+      {showLabels && (
+        <g fill="#334155">
+          <text x={W / 2 - 95} y={waterY - 36} fontSize="11" textAnchor="middle" fontWeight="700">floats (less dense)</text>
+          <text x={W / 2 - 60} y={waterY + 50} fontSize="10" fill="#16a34a">upthrust</text>
+          <text x={W / 2 + 98} y={bot + 18} fontSize="11" textAnchor="middle" fontWeight="700">sinks (denser)</text>
+          <text x={W / 2} y={80} fontSize="13" fontWeight="700" textAnchor="middle">Density & floating (upthrust vs weight)</text>
+        </g>
+      )}
+    </g>
+  );
+}
+
+// ---- Sankey energy diagram -------------------------------------------------
+export function SankeyEnergy({ showLabels = true }) {
+  const x0 = 120, inY = H / 2, inH = 160;
+  return (
+    <g>
+      {/* input */}
+      <rect x={x0} y={inY - inH / 2} width="60" height={inH} fill="#f59e0b" opacity="0.8" />
+      {/* useful (top) */}
+      <path d={`M ${x0 + 60} ${inY - inH / 2} L ${W - 120} ${inY - 120} L ${W - 120} ${inY - 80} L ${x0 + 60} ${inY - inH / 2 + 48} Z`} fill="#16a34a" opacity="0.8" />
+      {/* wasted (bottom) */}
+      <path d={`M ${x0 + 60} ${inY - inH / 2 + 48} L ${W - 120} ${inY + 40} L ${W - 120} ${inY + 140} L ${x0 + 60} ${inY + inH / 2} Z`} fill="#dc2626" opacity="0.6" />
+      {showLabels && (
+        <g fill="#334155">
+          <text x={x0 + 30} y={inY - inH / 2 - 10} fontSize="12" fontWeight="700" textAnchor="middle">100 J in</text>
+          <text x={W - 116} y={inY - 100} fontSize="12" fontWeight="700" fill="#16a34a">useful (light) 30 J</text>
+          <text x={W - 116} y={inY + 96} fontSize="12" fontWeight="700" fill="#dc2626">wasted (heat) 70 J</text>
+          <text x={W / 2} y={60} fontSize="13" fontWeight="700" textAnchor="middle">Sankey diagram — energy transfer</text>
+        </g>
+      )}
+    </g>
+  );
+}
+
+// ---- Half-life -------------------------------------------------------------
+export function HalfLife({ showLabels = true }) {
+  const x0 = 90, y0 = H - 80, x1 = W - 70, y1 = 70, plotW = x1 - x0, plotH = y0 - y1;
+  const pts = [];
+  for (let t = 0; t <= 4; t += 0.1) pts.push(`${(x0 + (t / 4) * plotW).toFixed(1)},${(y0 - (Math.pow(0.5, t)) * plotH).toFixed(1)}`);
+  return (
+    <g>
+      <line x1={x0} y1={y0} x2={x1} y2={y0} stroke="currentColor" strokeWidth="1.8" markerEnd="url(#il-arrow)" />
+      <line x1={x0} y1={y0} x2={x0} y2={y1} stroke="currentColor" strokeWidth="1.8" markerEnd="url(#il-arrow)" />
+      <polyline points={pts.join(" ")} fill="none" stroke="#7c3aed" strokeWidth="3" />
+      {[1, 2, 3].map((t, i) => { const x = x0 + (t / 4) * plotW, y = y0 - Math.pow(0.5, t) * plotH; return <g key={i}><line x1={x} y1={y0} x2={x} y2={y} stroke="#dc2626" strokeWidth="1" strokeDasharray="4 3" /><line x1={x0} y1={y} x2={x} y2={y} stroke="#dc2626" strokeWidth="1" strokeDasharray="4 3" /></g>; })}
+      {showLabels && (
+        <g fill="#334155">
+          <text x={(x0 + x1) / 2} y={y0 + 30} fontSize="12" textAnchor="middle">time (half-lives)</text>
+          <text x={30} y={(y0 + y1) / 2} fontSize="12" textAnchor="middle" transform={`rotate(-90 30 ${(y0 + y1) / 2})`}>amount remaining</text>
+          <text x={x0 + plotW / 4} y={y0 - Math.pow(0.5, 1) * plotH - 8} fontSize="10" fill="#dc2626">50%</text>
+          <text x={x0 + plotW / 2} y={y0 - Math.pow(0.5, 2) * plotH - 8} fontSize="10" fill="#dc2626">25%</text>
+          <text x={W / 2} y={50} fontSize="13" fontWeight="700" textAnchor="middle">Radioactive half-life</text>
+        </g>
+      )}
+    </g>
+  );
+}
+
+// ---- Electromagnet ---------------------------------------------------------
+export function Electromagnet({ showLabels = true }) {
+  const cx = W / 2, cy = H / 2, x0 = cx - 120, x1 = cx + 120;
+  return (
+    <g>
+      {/* iron core */}
+      <rect x={x0} y={cy - 20} width={x1 - x0} height="40" rx="6" fill="#94a3b8" stroke="#475569" strokeWidth="2" />
+      {/* coil loops */}
+      {Array.from({ length: 8 }).map((_, i) => <ellipse key={i} cx={x0 + 20 + i * 28} cy={cy} rx="10" ry="34" fill="none" stroke="#b45309" strokeWidth="3" />)}
+      {/* battery leads */}
+      <line x1={x0 + 20} y1={cy + 34} x2={x0 + 20} y2={cy + 90} stroke="#334155" strokeWidth="2.5" />
+      <line x1={x1 - 20} y1={cy + 34} x2={x1 - 20} y2={cy + 90} stroke="#334155" strokeWidth="2.5" />
+      <line x1={x0 + 20} y1={cy + 90} x2={cx - 8} y2={cy + 90} stroke="#334155" strokeWidth="2.5" />
+      <line x1={cx + 8} y1={cy + 90} x2={x1 - 20} y2={cy + 90} stroke="#334155" strokeWidth="2.5" />
+      <line x1={cx - 8} y1={cy + 80} x2={cx - 8} y2={cy + 100} stroke="#334155" strokeWidth="4" /><line x1={cx + 8} y1={cy + 85} x2={cx + 8} y2={cy + 95} stroke="#334155" strokeWidth="4" />
+      {/* poles */}
+      <text x={x0 - 6} y={cy + 5} fontSize="18" fontWeight="800" fill="#dc2626" textAnchor="end">N</text>
+      <text x={x1 + 6} y={cy + 5} fontSize="18" fontWeight="800" fill="#2563eb">S</text>
+      {showLabels && (
+        <g fill="#334155">
+          <Leader x={cx} y={cy - 34} tx={cx} ty={80} text="Coil (solenoid)" color="#b45309" side="right" />
+          <Leader x={cx} y={cy} tx={70} ty={cy} text="Soft iron core" color="#475569" side="left" />
+          <text x={cx} y={cy + 130} fontSize="11" textAnchor="middle">current through the coil magnetises the core</text>
+        </g>
+      )}
+    </g>
+  );
+}
+
+// ---- Types of rainfall -----------------------------------------------------
+export function RainfallTypes({ showLabels = true }) {
+  const y = H - 120, xs = [W / 6, W / 2, 5 * W / 6];
+  const rain = (cx, cy) => [...Array(5)].map((_, i) => <line key={i} x1={cx - 24 + i * 12} y1={cy} x2={cx - 28 + i * 12} y2={cy + 24} stroke="#2563eb" strokeWidth="2" />);
+  return (
+    <g>
+      {/* Relief */}
+      <path d={`M ${xs[0] - 80} ${y} L ${xs[0]} ${y - 120} L ${xs[0] + 80} ${y} Z`} fill="#cbd5e1" stroke="#64748b" strokeWidth="2" />
+      <circle cx={xs[0] - 20} cy={y - 110} r="20" fill="#94a3b8" />{rain(xs[0] - 20, y - 90)}
+      <line x1={xs[0] - 110} y1={y - 40} x2={xs[0] - 60} y2={y - 80} stroke="#0ea5e9" strokeWidth="2.5" markerEnd="url(#il-arrow)" />
+      {/* Convectional */}
+      <circle cx={xs[1]} cy={y - 120} r="26" fill="#94a3b8" />{rain(xs[1], y - 96)}
+      {[-1, 0, 1].map((o, i) => <line key={i} x1={xs[1] + o * 20} y1={y} x2={xs[1] + o * 20} y2={y - 90} stroke="#dc2626" strokeWidth="2" markerEnd="url(#il-arrow)" />)}
+      <path d={`M ${xs[1] - 40} ${y} h 80`} stroke="#f59e0b" strokeWidth="3" />
+      {/* Frontal */}
+      <path d={`M ${xs[2] - 80} ${y} q 80 -30 160 0`} fill="#bfdbfe" opacity="0.5" />
+      <circle cx={xs[2]} cy={y - 90} r="22" fill="#94a3b8" />{rain(xs[2], y - 68)}
+      <text x={xs[2] - 60} y={y - 10} fontSize="10" fill="#2563eb">cold</text><text x={xs[2] + 50} y={y - 10} fontSize="10" fill="#dc2626">warm</text>
+      {showLabels && (
+        <g textAnchor="middle" fill="#334155" fontSize="12" fontWeight="700">
+          <text x={xs[0]} y={y + 44}>Relief</text><text x={xs[1]} y={y + 44}>Convectional</text><text x={xs[2]} y={y + 44}>Frontal</text>
+        </g>
+      )}
+    </g>
+  );
+}
+
+// ---- Weathering ------------------------------------------------------------
+export function Weathering({ showLabels = true }) {
+  const y = H / 2, xs = [W / 6, W / 2, 5 * W / 6];
+  return (
+    <g>
+      {/* physical: freeze-thaw crack */}
+      <path d={`M ${xs[0] - 60} ${y + 50} L ${xs[0] - 40} ${y - 40} L ${xs[0] + 60} ${y - 30} L ${xs[0] + 50} ${y + 50} Z`} fill="#a8a29e" stroke="#57534e" strokeWidth="2" />
+      <path d={`M ${xs[0]} ${y - 36} L ${xs[0] + 6} ${y + 20}`} stroke="#0ea5e9" strokeWidth="4" />
+      {/* chemical: acid rain dissolving */}
+      <path d={`M ${xs[1] - 60} ${y + 50} L ${xs[1] - 40} ${y - 30} Q ${xs[1]} ${y - 50} ${xs[1] + 50} ${y - 20} L ${xs[1] + 55} ${y + 50} Z`} fill="#d6d3d1" stroke="#57534e" strokeWidth="2" />
+      {[...Array(4)].map((_, i) => <line key={i} x1={xs[1] - 30 + i * 20} y1={y - 60} x2={xs[1] - 34 + i * 20} y2={y - 36} stroke="#84cc16" strokeWidth="2" markerEnd="url(#il-arrow)" />)}
+      {/* biological: roots split rock */}
+      <path d={`M ${xs[2] - 60} ${y + 50} L ${xs[2] - 50} ${y - 30} L ${xs[2] + 50} ${y - 30} L ${xs[2] + 55} ${y + 50} Z`} fill="#a8a29e" stroke="#57534e" strokeWidth="2" />
+      <path d={`M ${xs[2]} ${y - 60} v 40 M ${xs[2]} ${y - 30} q -14 30 -20 60 M ${xs[2]} ${y - 30} q 14 30 20 60`} fill="none" stroke="#16a34a" strokeWidth="3" />
+      {showLabels && (
+        <g textAnchor="middle" fill="#334155" fontSize="12" fontWeight="700">
+          <text x={xs[0]} y={y + 80}>Physical</text><text x={xs[0]} y={y + 96} fontSize="9.5" fontWeight="400" fill="#64748b">freeze–thaw</text>
+          <text x={xs[1]} y={y + 80}>Chemical</text><text x={xs[1]} y={y + 96} fontSize="9.5" fontWeight="400" fill="#64748b">acid rain</text>
+          <text x={xs[2]} y={y + 80}>Biological</text><text x={xs[2]} y={y + 96} fontSize="9.5" fontWeight="400" fill="#64748b">plant roots</text>
+        </g>
+      )}
+    </g>
+  );
+}
+
+// ---- Comet structure -------------------------------------------------------
+export function CometStructure({ showLabels = true }) {
+  const cx = W / 2 + 60, cy = H / 2;
+  return (
+    <g>
+      {/* Sun (far left) */}
+      <g filter="url(#viz-shadow)"><Sphere cx={70} cy={cy} r={30} fill="#fbbf24" /></g>
+      {/* coma + nucleus */}
+      <circle cx={cx} cy={cy} r="46" fill="#bae6fd" opacity="0.6" />
+      <g filter="url(#viz-shadow)"><Sphere cx={cx} cy={cy} r={18} fill="#64748b" /></g>
+      {/* ion tail (straight, away from sun) + dust tail (curved) */}
+      <path d={`M ${cx + 20} ${cy - 6} L ${W - 40} ${cy - 70}`} stroke="#38bdf8" strokeWidth="8" strokeLinecap="round" opacity="0.7" />
+      <path d={`M ${cx + 20} ${cy + 10} Q ${cx + 180} ${cy + 40} ${W - 40} ${cy + 30}`} fill="none" stroke="#fcd34d" strokeWidth="12" strokeLinecap="round" opacity="0.6" />
+      {showLabels && (
+        <g fill="#334155">
+          <text x={70} y={cy + 50} fontSize="11" textAnchor="middle" fill="#f59e0b">Sun</text>
+          <Leader x={cx} y={cy} tx={cx} ty={H - 24} text="Nucleus (ice + dust)" color="#334155" side="right" />
+          <Leader x={cx} y={cy - 40} tx={70} ty={90} text="Coma" color="#0284c7" side="left" />
+          <text x={W - 120} y={cy - 70} fontSize="11" fill="#0284c7">ion tail</text>
+          <text x={W - 120} y={cy + 50} fontSize="11" fill="#a16207">dust tail</text>
+          <text x={W / 2} y={40} fontSize="11" fill="#64748b" textAnchor="middle">tails always point away from the Sun</text>
+        </g>
+      )}
+    </g>
+  );
+}
