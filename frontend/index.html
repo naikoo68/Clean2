@@ -2,6 +2,27 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
+
+    <!-- Move visitors off the legacy *.vercel.app URL onto the custom domain.
+         Runs before anything else so it works even when the page is served
+         from the PWA / service-worker cache (which a server-side redirect in
+         vercel.json can't reach). No-op on the real domain and on Vercel
+         preview deployments (their hostnames don't match). -->
+    <script>
+      (function () {
+        try {
+          if (window.location.hostname === "mystudyguideme.vercel.app") {
+            var l = window.location;
+            window.location.replace(
+              "https://www.mystudyguide.in" + l.pathname + l.search + l.hash
+            );
+          }
+        } catch (e) {
+          /* never let this block the app from loading */
+        }
+      })();
+    </script>
+
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="theme-color" content="#2563eb" />
@@ -44,18 +65,18 @@
     />
     <meta name="keywords" content="quiz, test series, exam preparation, JEE, NEET, mock tests, online learning" />
     <meta name="author" content="My Study Guide" />
-    <link rel="canonical" href="https://mystudyguideme.vercel.app/" />
+    <link rel="canonical" href="https://www.mystudyguide.in/" />
 
     <!-- Open Graph -->
     <meta property="og:type" content="website" />
-    <meta property="og:url" content="https://mystudyguideme.vercel.app/" />
+    <meta property="og:url" content="https://www.mystudyguide.in/" />
     <meta property="og:title" content="My Study Guide — Prepare Smart, Achieve More" />
     <meta
       property="og:description"
       content="Subject-wise quizzes, full-length test series, instant results and analytics."
     />
     <meta property="og:site_name" content="My Study Guide" />
-    <meta property="og:image" content="https://mystudyguideme.vercel.app/og-image.png" />
+    <meta property="og:image" content="https://www.mystudyguide.in/og-image.png" />
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />
     <meta property="og:image:alt" content="My Study Guide — Prepare Smart, Achieve More" />
@@ -64,7 +85,7 @@
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content="My Study Guide — Prepare Smart, Achieve More" />
     <meta name="twitter:description" content="Quizzes, test series and analytics for exam aspirants." />
-    <meta name="twitter:image" content="https://mystudyguideme.vercel.app/og-image.png" />
+    <meta name="twitter:image" content="https://www.mystudyguide.in/og-image.png" />
   </head>
   <body>
     <div id="root"></div>
