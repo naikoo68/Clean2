@@ -1179,3 +1179,169 @@ export function PlantLifeCycle({ showLabels = true }) {
   ];
   return <LifeCycle stages={showLabels ? stages : stages.map((s) => ({ ...s, label: "" }))} R={150} />;
 }
+
+
+// ---- States of matter ------------------------------------------------------
+export function StatesOfMatter({ showLabels = true }) {
+  const bw = 200, bh = 190, gap = 40, y = 150;
+  const x0 = (W - (3 * bw + 2 * gap)) / 2;
+  const box = (bx, title, color) => <rect x={bx} y={y} width={bw} height={bh} rx="12" fill="#f8fafc" stroke={color} strokeWidth="2.5" filter="url(#viz-shadow)" />;
+  const solid = []; for (let r = 0; r < 5; r++) for (let c = 0; c < 5; c++) solid.push([x0 + 34 + c * 33, y + 40 + r * 30]);
+  const liquid = []; for (let i = 0; i < 16; i++) { const row = Math.floor(i / 5); liquid.push([x0 + bw + gap + 30 + (i % 5) * 32 + (row % 2 ? 12 : 0), y + 90 + row * 30]); }
+  const gas = Array.from({ length: 8 }).map((_, i) => { const a = i * 2.399; return [x0 + 2 * (bw + gap) + bw / 2 + 66 * Math.cos(a), y + bh / 2 + 60 * Math.sin(a)]; });
+  return (
+    <g>
+      {box(x0, "Solid", "#2563eb")}
+      {box(x0 + bw + gap, "Liquid", "#0891b2")}
+      {box(x0 + 2 * (bw + gap), "Gas", "#dc2626")}
+      {solid.map(([x, y2], i) => <Sphere key={`s${i}`} cx={x} cy={y2} r={11} fill="#3b82f6" />)}
+      {liquid.map(([x, y2], i) => <Sphere key={`l${i}`} cx={x} cy={y2} r={11} fill="#06b6d4" />)}
+      {gas.map(([x, y2], i) => <Sphere key={`g${i}`} cx={x} cy={y2} r={11} fill="#ef4444" />)}
+      {/* change-of-state arrows */}
+      <line x1={x0 + bw} y1={y - 18} x2={x0 + bw + gap} y2={y - 18} stroke="#334155" strokeWidth="2" markerEnd="url(#il-arrow)" />
+      <line x1={x0 + bw + gap} y1={y - 2} x2={x0 + bw} y2={y - 2} stroke="#334155" strokeWidth="2" markerEnd="url(#il-arrow)" />
+      <line x1={x0 + 2 * bw + gap} y1={y - 18} x2={x0 + 2 * (bw + gap)} y2={y - 18} stroke="#334155" strokeWidth="2" markerEnd="url(#il-arrow)" />
+      <line x1={x0 + 2 * (bw + gap)} y1={y - 2} x2={x0 + 2 * bw + gap} y2={y - 2} stroke="#334155" strokeWidth="2" markerEnd="url(#il-arrow)" />
+      {showLabels && (
+        <g>
+          <text x={x0 + bw / 2} y={y + bh + 26} fontSize="14" fontWeight="700" fill="#2563eb" textAnchor="middle">Solid</text>
+          <text x={x0 + bw + gap + bw / 2} y={y + bh + 26} fontSize="14" fontWeight="700" fill="#0891b2" textAnchor="middle">Liquid</text>
+          <text x={x0 + 2 * (bw + gap) + bw / 2} y={y + bh + 26} fontSize="14" fontWeight="700" fill="#dc2626" textAnchor="middle">Gas</text>
+          <text x={x0 + bw + gap / 2} y={y - 24} fontSize="10" fill="#334155" textAnchor="middle">melt</text>
+          <text x={x0 + bw + gap / 2} y={y + 10} fontSize="10" fill="#334155" textAnchor="middle">freeze</text>
+          <text x={x0 + 2 * bw + gap + gap / 2} y={y - 24} fontSize="10" fill="#334155" textAnchor="middle">evaporate</text>
+          <text x={x0 + 2 * bw + gap + gap / 2} y={y + 10} fontSize="10" fill="#334155" textAnchor="middle">condense</text>
+        </g>
+      )}
+    </g>
+  );
+}
+
+// ---- pH scale --------------------------------------------------------------
+export function PhScale({ showLabels = true }) {
+  const colors = ["#b91c1c", "#dc2626", "#ea580c", "#f97316", "#f59e0b", "#eab308", "#facc15", "#84cc16", "#22c55e", "#10b981", "#06b6d4", "#0ea5e9", "#3b82f6", "#6366f1", "#7c3aed"];
+  const n = 15, x0 = 60, x1 = W - 60, seg = (x1 - x0) / n, y = H / 2 - 30, h = 70;
+  return (
+    <g>
+      {colors.map((c, i) => (
+        <g key={i}>
+          <rect x={x0 + i * seg} y={y} width={seg} height={h} fill={c} />
+          <text x={x0 + i * seg + seg / 2} y={y + h + 20} fontSize="12" fontWeight="700" fill="currentColor" textAnchor="middle">{i}</text>
+        </g>
+      ))}
+      <rect x={x0} y={y} width={x1 - x0} height={h} fill="none" stroke="#334155" strokeWidth="2" rx="4" />
+      {showLabels && (
+        <g>
+          <text x={x0 + 3.5 * seg} y={y - 16} fontSize="14" fontWeight="700" fill="#dc2626" textAnchor="middle">ACIDIC</text>
+          <text x={x0 + 7.5 * seg} y={y - 16} fontSize="13" fontWeight="700" fill="#16a34a" textAnchor="middle">NEUTRAL</text>
+          <text x={x0 + 11.5 * seg} y={y - 16} fontSize="14" fontWeight="700" fill="#2563eb" textAnchor="middle">ALKALINE</text>
+          <line x1={x0 + 7 * seg + seg / 2} y1={y - 6} x2={x0 + 7 * seg + seg / 2} y2={y} stroke="#16a34a" strokeWidth="2" />
+          <text x={W / 2} y={y + h + 48} fontSize="12" fill="#64748b" textAnchor="middle">pH 7 = neutral (pure water) · lower = more acidic · higher = more alkaline</text>
+        </g>
+      )}
+    </g>
+  );
+}
+
+// ---- Electromagnetic spectrum ----------------------------------------------
+export function EMSpectrum({ showLabels = true }) {
+  const bands = [
+    ["Radio", "#7c3aed"], ["Microwave", "#2563eb"], ["Infrared", "#dc2626"],
+    ["Visible", "__rainbow__"], ["Ultraviolet", "#8b5cf6"], ["X-ray", "#0891b2"], ["Gamma", "#334155"],
+  ];
+  const rainbow = ["#7c3aed", "#2563eb", "#06b6d4", "#22c55e", "#eab308", "#f97316", "#ef4444"];
+  const x0 = 50, x1 = W - 50, y = H / 2 - 40, h = 74, bw = (x1 - x0) / bands.length;
+  return (
+    <g>
+      {bands.map(([name, color], i) => {
+        const bx = x0 + i * bw;
+        return (
+          <g key={i}>
+            {color === "__rainbow__"
+              ? rainbow.map((c, k) => <rect key={k} x={bx + (k * bw) / rainbow.length} y={y} width={bw / rainbow.length + 0.6} height={h} fill={c} />)
+              : <rect x={bx} y={y} width={bw} height={h} fill={color} />}
+            <text x={bx + bw / 2} y={y + h + 22} fontSize="11.5" fontWeight="700" fill="currentColor" textAnchor="middle">{name}</text>
+          </g>
+        );
+      })}
+      <rect x={x0} y={y} width={x1 - x0} height={h} fill="none" stroke="#334155" strokeWidth="2" />
+      {showLabels && (
+        <g>
+          <line x1={x0} y1={y - 20} x2={x0 + 150} y2={y - 20} stroke="#334155" strokeWidth="2" markerStart="url(#il-arrow)" />
+          <text x={x0 + 4} y={y - 26} fontSize="11" fontWeight="600" fill="#334155">longer wavelength</text>
+          <line x1={x1} y1={y - 20} x2={x1 - 150} y2={y - 20} stroke="#334155" strokeWidth="2" markerStart="url(#il-arrow)" />
+          <text x={x1 - 4} y={y - 26} fontSize="11" fontWeight="600" fill="#334155" textAnchor="end">higher frequency / energy</text>
+        </g>
+      )}
+    </g>
+  );
+}
+
+// ---- Energy (trophic) pyramid ----------------------------------------------
+export function EnergyPyramid({ showLabels = true }) {
+  const cx = W / 2, base = H - 70, levelH = 82;
+  const levels = [
+    ["Producers", "e.g. grass, algae", "#16a34a", 440, 330],
+    ["Primary consumers", "herbivores", "#84cc16", 330, 232],
+    ["Secondary consumers", "carnivores", "#f59e0b", 232, 140],
+    ["Tertiary consumers", "top predators", "#dc2626", 140, 44],
+  ];
+  return (
+    <g>
+      {levels.map(([name, ex, color, wb, wt], i) => {
+        const yb = base - i * levelH, yt = yb - levelH;
+        return (
+          <g key={i} filter="url(#viz-shadow)">
+            <path d={`M ${cx - wb / 2} ${yb} L ${cx + wb / 2} ${yb} L ${cx + wt / 2} ${yt} L ${cx - wt / 2} ${yt} Z`} fill={color} stroke="#334155" strokeWidth="1.5" />
+            <text x={cx} y={yb - levelH / 2 - 2} fontSize="13" fontWeight="700" fill="#fff" textAnchor="middle">{name}</text>
+            {showLabels && <text x={cx} y={yb - levelH / 2 + 15} fontSize="10.5" fill="#f8fafc" textAnchor="middle">{ex}</text>}
+          </g>
+        );
+      })}
+      {showLabels && (
+        <g>
+          <line x1={40} y1={base} x2={40} y2={base - 4 * levelH} stroke="#334155" strokeWidth="2.5" markerEnd="url(#il-arrow)" />
+          <text x={30} y={base - 2 * levelH} fontSize="12" fontWeight="600" fill="#334155" textAnchor="middle" transform={`rotate(-90 30 ${base - 2 * levelH})`}>energy decreases (~10% per level)</text>
+        </g>
+      )}
+    </g>
+  );
+}
+
+// ---- Kidney (gross anatomy) ------------------------------------------------
+export function Kidney({ showLabels = true }) {
+  const cx = W / 2 + 10, cy = H / 2;
+  const bean = `M ${cx + 150} ${cy - 150} C ${cx + 240} ${cy - 96} ${cx + 240} ${cy + 96} ${cx + 150} ${cy + 150}
+    C ${cx + 40} ${cy + 196} ${cx - 90} ${cy + 130} ${cx - 90} ${cy + 44}
+    Q ${cx - 40} ${cy} ${cx - 90} ${cy - 44}
+    C ${cx - 90} ${cy - 130} ${cx + 40} ${cy - 196} ${cx + 150} ${cy - 150} Z`;
+  return (
+    <g>
+      <path d={bean} fill="#fca5a5" stroke="#b91c1c" strokeWidth="2.5" filter="url(#viz-shadow)" />
+      <path d={bean} fill="url(#viz-gloss)" opacity="0.5" />
+      {/* Cortex (outer band) */}
+      <path d={`M ${cx + 132} ${cy - 128} C ${cx + 196} ${cy - 82} ${cx + 196} ${cy + 82} ${cx + 132} ${cy + 128}`} fill="none" stroke="#f87171" strokeWidth="2" strokeDasharray="4 4" />
+      {/* Renal pyramids (medulla) pointing toward the hilum */}
+      {[-84, -28, 28, 84].map((dy, i) => (
+        <path key={i} d={`M ${cx + 150} ${cy + dy - 26} L ${cx + 20} ${cy + dy} L ${cx + 150} ${cy + dy + 26} Z`} fill="#ef4444" stroke="#991b1b" strokeWidth="1" opacity="0.85" />
+      ))}
+      {/* Renal pelvis + calyces */}
+      <path d={`M ${cx + 20} ${cy - 60} Q ${cx - 30} ${cy} ${cx + 20} ${cy + 60} Q ${cx - 6} ${cy} ${cx + 20} ${cy - 60} Z`} fill="#fef9c3" stroke="#a16207" strokeWidth="2" />
+      {/* Ureter */}
+      <path d={`M ${cx - 30} ${cy + 6} q -40 60 -30 150`} fill="none" stroke="#eab308" strokeWidth="9" strokeLinecap="round" />
+      {/* Renal artery / vein at hilum */}
+      <path d={`M ${cx - 60} ${cy - 24} q -60 -6 -96 -30`} stroke="#dc2626" strokeWidth="9" fill="none" strokeLinecap="round" />
+      <path d={`M ${cx - 60} ${cy + 20} q -70 8 -110 34`} stroke="#2563eb" strokeWidth="9" fill="none" strokeLinecap="round" />
+      {showLabels && (
+        <g>
+          <Leader x={cx + 170} y={cy - 90} tx={W - 70} ty={cy - 130} text="Cortex" color="#b91c1c" side="right" />
+          <Leader x={cx + 90} y={cy + 28} tx={W - 70} ty={cy + 40} text="Medulla (renal pyramid)" color="#991b1b" side="right" />
+          <Leader x={cx + 8} y={cy} tx={W - 70} ty={cy + 140} text="Renal pelvis" color="#a16207" side="right" />
+          <Leader x={cx - 156} y={cy - 54} tx={70} ty={cy - 90} text="Renal artery" color="#dc2626" side="left" />
+          <Leader x={cx - 168} y={cy + 54} tx={70} ty={cy + 10} text="Renal vein" color="#2563eb" side="left" />
+          <Leader x={cx - 56} y={cy + 130} tx={70} ty={cy + 150} text="Ureter" color="#a16207" side="left" />
+        </g>
+      )}
+    </g>
+  );
+}
