@@ -14,7 +14,7 @@
 //   bmagnet   {}
 import { forwardRef, useImperativeHandle, useRef } from "react";
 import { PALETTE as P, VizDefs, Sphere } from "./vizStyle";
-import { AnimalCell, PlantCell, Neuron, Heart, Flower, DigestiveSystem, Respiratory, Eye, Nephron, Ear, LeafSection, Skeleton, Brain, WaterCycle, RockCycle, Circulation, SolarSystem, Volcano, Tooth, CarbonCycle, NitrogenCycle, MoonPhases, Photosynthesis, ButterflyLifeCycle, FrogLifeCycle, PlantLifeCycle, StatesOfMatter, PhScale, EMSpectrum, EnergyPyramid, Kidney } from "./assets/anatomy";
+import { AnimalCell, PlantCell, Neuron, Heart, Flower, DigestiveSystem, Respiratory, Eye, Nephron, Ear, LeafSection, Skeleton, Brain, WaterCycle, RockCycle, Circulation, SolarSystem, Volcano, Tooth, CarbonCycle, NitrogenCycle, MoonPhases, Photosynthesis, ButterflyLifeCycle, FrogLifeCycle, PlantLifeCycle, StatesOfMatter, PhScale, EMSpectrum, EnergyPyramid, Kidney, EarthLayers, AtmosphereLayers, Circuits, Waves, ReflexArc } from "./assets/anatomy";
 
 const W = 760, H = 520;
 const num = (v, d = 0) => (Number.isFinite(Number(v)) ? Number(v) : d);
@@ -574,6 +574,9 @@ const KINDS = {
   statesofmatter: (p) => <StatesOfMatter showLabels={p.s?.showLabels !== false} />, phscale: (p) => <PhScale showLabels={p.s?.showLabels !== false} />,
   emspectrum: (p) => <EMSpectrum showLabels={p.s?.showLabels !== false} />, energypyramid: (p) => <EnergyPyramid showLabels={p.s?.showLabels !== false} />,
   kidney: (p) => <Kidney showLabels={p.s?.showLabels !== false} />,
+  earthlayers: (p) => <EarthLayers showLabels={p.s?.showLabels !== false} />, atmosphere: (p) => <AtmosphereLayers showLabels={p.s?.showLabels !== false} />,
+  circuits: (p) => <Circuits showLabels={p.s?.showLabels !== false} />, waves: (p) => <Waves showLabels={p.s?.showLabels !== false} />,
+  reflexarc: (p) => <ReflexArc showLabels={p.s?.showLabels !== false} />,
   efield: (p) => <EField {...p} />, bmagnet: (p) => <BMagnet {...p} />,
   field: (p) => <Field {...p} />, table: (p) => <TableFig {...p} />, celldivision: (p) => <CellDivision {...p} />,
   humanbody: (p) => <HumanBody {...p} />, periodictable: (p) => <PeriodicTable {...p} />, fishbone: (p) => <Fishbone {...p} />,
