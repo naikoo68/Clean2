@@ -58,6 +58,9 @@ const clientPlanSchema = new mongoose.Schema(
     label: { type: String, default: "Plan" },
     cycle: { type: String, default: "" }, // billing group: Monthly | Quarterly | Semi-Annually | Yearly | Trial (blank = inferred from months)
     months: { type: Number, default: 1 },
+    // Free-trial length in DAYS. Only used when this is the trial plan
+    // (months = 0). 0 = fall back to the built-in default.
+    days: { type: Number, default: 0 },
     price: { type: Number, default: 0 },
     trial: { type: Boolean, default: false },
     maxPerBatch: { type: Number, default: 50 },
@@ -75,6 +78,9 @@ const studentPlanSchema = new mongoose.Schema(
     label: { type: String, default: "Plan" },
     cycle: { type: String, default: "" }, // Monthly | Quarterly | Semi-Annually | Yearly | Trial (blank = inferred from months)
     months: { type: Number, default: 1 },
+    // Free-trial length in DAYS. Only used when this is the trial plan
+    // (months = 0). 0 = fall back to the built-in default.
+    days: { type: Number, default: 0 },
     price: { type: Number, default: 0 },
     trial: { type: Boolean, default: false },
   },
