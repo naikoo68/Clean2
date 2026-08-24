@@ -2868,3 +2868,135 @@ export function Earthquake({ showLabels = true }) {
     </g>
   );
 }
+
+
+// ---- Day & night (Earth's rotation) ----------------------------------------
+export function DayNight({ showLabels = true }) {
+  const cx = W / 2, cy = H / 2, R = 150;
+  return (
+    <g>
+      {/* Sunlight from the left */}
+      {[-60, 0, 60].map((o, i) => <line key={i} x1={60} y1={cy + o} x2={cx - R - 10} y2={cy + o} stroke="#f59e0b" strokeWidth="3" markerEnd="url(#il-arrow)" />)}
+      <g filter="url(#viz-shadow)"><Sphere cx={cx} cy={cy} r={R} fill="#2563eb" /></g>
+      {/* Night half (right) shaded */}
+      <path d={`M ${cx} ${cy - R} A ${R} ${R} 0 0 1 ${cx} ${cy + R} Z`} fill="#0f172a" opacity="0.6" />
+      {/* Axis + rotation arrow */}
+      <line x1={cx + 12} y1={cy - R - 14} x2={cx - 12} y2={cy + R + 14} stroke="#334155" strokeWidth="2" strokeDasharray="5 4" />
+      <path d={`M ${cx - 40} ${cy - R - 8} A 46 20 0 0 1 ${cx + 40} ${cy - R - 8}`} fill="none" stroke="#16a34a" strokeWidth="2.5" markerEnd="url(#il-arrow)" />
+      {showLabels && (
+        <g>
+          <text x={cx - R / 2} y={cy} fontSize="14" fontWeight="800" fill="#fde68a" textAnchor="middle">DAY</text>
+          <text x={cx + R / 2} y={cy} fontSize="14" fontWeight="800" fill="#e2e8f0" textAnchor="middle">NIGHT</text>
+          <text x={120} y={cy - 76} fontSize="12" fontWeight="600" fill="#f59e0b">sunlight</text>
+          <text x={cx} y={cy - R - 24} fontSize="11" fill="#16a34a" textAnchor="middle">rotation (W → E)</text>
+          <Leader x={cx + 6} y={cy + R} tx={W - 70} ty={cy + R + 20} text="axis" color="#334155" side="right" />
+        </g>
+      )}
+    </g>
+  );
+}
+
+// ---- DNA replication -------------------------------------------------------
+export function DnaReplication({ showLabels = true }) {
+  const y = H / 2, x0 = 90, fork = W / 2 - 20;
+  const BASE = { A: "#2563eb", T: "#ef4444", G: "#16a34a", C: "#f59e0b" };
+  const seq = ["A", "T", "G", "C", "A", "G"];
+  return (
+    <g>
+      {/* Parent double strand (left, joined) */}
+      <line x1={x0} y1={y - 30} x2={fork} y2={y - 30} stroke="#334155" strokeWidth="4" />
+      <line x1={x0} y1={y + 30} x2={fork} y2={y + 30} stroke="#334155" strokeWidth="4" />
+      {seq.map((b, i) => { const x = x0 + 30 + i * 60; if (x > fork) return null; return <g key={i}><line x1={x} y1={y - 28} x2={x} y2={y + 28} stroke={BASE[b]} strokeWidth="3" /></g>; })}
+      {/* Fork: two separated strands going right */}
+      <path d={`M ${fork} ${y - 30} Q ${fork + 60} ${y - 40} ${W - 80} ${y - 70}`} fill="none" stroke="#334155" strokeWidth="4" />
+      <path d={`M ${fork} ${y + 30} Q ${fork + 60} ${y + 40} ${W - 80} ${y + 70}`} fill="none" stroke="#334155" strokeWidth="4" />
+      {/* New complementary strands (colored, dashed backbone) */}
+      <path d={`M ${fork} ${y - 30} Q ${fork + 60} ${y - 20} ${W - 80} ${y - 10}`} fill="none" stroke="#7c3aed" strokeWidth="3" strokeDasharray="6 4" />
+      <path d={`M ${fork} ${y + 30} Q ${fork + 60} ${y + 20} ${W - 80} ${y + 10}`} fill="none" stroke="#7c3aed" strokeWidth="3" strokeDasharray="6 4" />
+      {showLabels && (
+        <g>
+          <text x={x0 + 60} y={y - 44} fontSize="12" fontWeight="700" fill="#334155">parent DNA</text>
+          <Leader x={fork} y={y} tx={fork} ty={H - 30} text="replication fork" color="#334155" side="right" />
+          <text x={W - 120} y={y - 78} fontSize="11" fill="#334155">original strand</text>
+          <text x={W - 120} y={y + 2} fontSize="11" fill="#7c3aed">new strand</text>
+        </g>
+      )}
+    </g>
+  );
+}
+
+// ---- Radioactive decay (alpha, beta, gamma) --------------------------------
+export function RadioactiveDecay({ showLabels = true }) {
+  const nx = 150, ny = H / 2;
+  const rows = [
+    ["α", "alpha (He nucleus)", "#dc2626", 150, "paper"],
+    ["β", "beta (electron)", "#2563eb", 250, "aluminium"],
+    ["γ", "gamma (EM wave)", "#7c3aed", 350, "lead"],
+  ];
+  return (
+    <g>
+      {/* Nucleus */}
+      <g filter="url(#viz-shadow)"><Sphere cx={nx} cy={ny} r={40} fill="#334155" /></g>
+      {[...Array(8)].map((_, i) => { const a = i / 8 * 2 * Math.PI; return <circle key={i} cx={nx + 16 * Math.cos(a)} cy={ny + 16 * Math.sin(a)} r="7" fill={i % 2 ? "#ef4444" : "#3b82f6"} />; })}
+      {rows.map(([sym, name, color, y, stop], i) => (
+        <g key={i}>
+          <line x1={nx + 44} y1={ny} x2={W - 220} y2={y} stroke={color} strokeWidth="3" markerEnd="url(#il-arrow)" />
+          <text x={nx + 120} y={((ny + y) / 2) - 6} fontSize="15" fontWeight="800" fill={color}>{sym}</text>
+          {/* stopping barrier */}
+          <rect x={W - 210} y={y - 26} width="12" height="52" fill="#94a3b8" />
+          {showLabels && <><text x={W - 190} y={y + 4} fontSize="11" fontWeight="600" fill={color}>{name}</text><text x={W - 204} y={y - 32} fontSize="9" fill="#64748b" textAnchor="middle">{stop}</text></>}
+        </g>
+      ))}
+      {showLabels && <text x={nx} y={ny + 66} fontSize="12" fontWeight="700" fill="#334155" textAnchor="middle">unstable nucleus</text>}
+    </g>
+  );
+}
+
+// ---- Periodic table trends -------------------------------------------------
+export function PeriodicTrends({ showLabels = true }) {
+  const x0 = 150, y0 = 130, cell = 26, cols = 18, rows = 7;
+  const filled = (r, c) => (r === 0 ? c === 0 || c === 17 : r === 1 || r === 2 ? c < 2 || c > 11 : true);
+  return (
+    <g>
+      {Array.from({ length: rows }).map((_, r) => Array.from({ length: cols }).map((_, c) => filled(r, c) ? <rect key={`${r}-${c}`} x={x0 + c * cell} y={y0 + r * cell} width={cell - 2} height={cell - 2} rx="2" fill="#e2e8f0" stroke="#94a3b8" strokeWidth="0.5" /> : null))}
+      {showLabels && (
+        <g>
+          {/* Atomic radius: increases down & left */}
+          <line x1={x0 + cols * cell + 20} y1={y0} x2={x0 + cols * cell + 20} y2={y0 + rows * cell} stroke="#16a34a" strokeWidth="2.5" markerEnd="url(#il-arrow)" />
+          <text x={x0 + cols * cell + 34} y={y0 + rows * cell / 2} fontSize="11" fill="#16a34a" transform={`rotate(90 ${x0 + cols * cell + 34} ${y0 + rows * cell / 2})`} textAnchor="middle">atomic radius increases ↓</text>
+          <line x1={x0 + cols * cell} y1={y0 - 16} x2={x0} y2={y0 - 16} stroke="#16a34a" strokeWidth="2.5" markerEnd="url(#il-arrow)" />
+          <text x={x0 + cols * cell / 2} y={y0 - 22} fontSize="11" fill="#16a34a" textAnchor="middle">atomic radius increases ←</text>
+          {/* Electronegativity: increases up & right */}
+          <line x1={x0} y1={y0 + rows * cell + 20} x2={x0 + cols * cell} y2={y0 + rows * cell + 20} stroke="#dc2626" strokeWidth="2.5" markerEnd="url(#il-arrow)" />
+          <text x={x0 + cols * cell / 2} y={y0 + rows * cell + 40} fontSize="11" fill="#dc2626" textAnchor="middle">electronegativity increases →</text>
+        </g>
+      )}
+    </g>
+  );
+}
+
+// ---- Continental drift (Pangaea → present) ---------------------------------
+export function ContinentalDrift({ showLabels = true }) {
+  const blob = (cx, cy, pts, fill) => <path d={pts} fill={fill} stroke="#15803d" strokeWidth="1.5" transform={`translate(${cx} ${cy})`} />;
+  const globe = (cx, cy) => <><g filter="url(#viz-shadow)"><Sphere cx={cx} cy={cy} r={120} fill="#bae6fd" /></g><circle cx={cx} cy={cy} r={120} fill="url(#viz-gloss)" opacity="0.4" /></>;
+  return (
+    <g>
+      {/* Pangaea (left) — one supercontinent */}
+      {globe(210, H / 2)}
+      {blob(210, H / 2, "M -60 -50 q 60 -20 90 20 q 30 40 -10 70 q -50 40 -100 10 q -40 -30 -10 -60 q 10 -30 40 -40 Z", "#22c55e")}
+      {/* Present (right) — separated continents */}
+      {globe(W - 210, H / 2)}
+      {[["M -70 -40 q 30 -14 44 10 q 6 30 -20 34 q -34 4 -34 -20 z", "#22c55e"], ["M 6 -46 q 40 -6 40 30 q -6 34 -34 26 q -20 -30 -6 -56 z", "#16a34a"], ["M -20 30 q 30 -6 40 20 q -4 26 -34 20 q -20 -20 -6 -40 z", "#4ade80"], ["M 40 34 q 24 0 24 22 q -10 18 -30 8 z", "#22c55e"]].map(([p, c], i) => blob(W - 210, H / 2, p, c))}
+      {/* Arrow */}
+      <line x1={340} y1={H / 2} x2={W - 340} y2={H / 2} stroke="#334155" strokeWidth="3" markerEnd="url(#il-arrow)" />
+      {showLabels && (
+        <g textAnchor="middle" fill="#334155">
+          <text x={210} y={H / 2 + 150} fontSize="14" fontWeight="800">Pangaea</text>
+          <text x={210} y={H / 2 + 168} fontSize="10" fill="#64748b">~300 million years ago</text>
+          <text x={W - 210} y={H / 2 + 150} fontSize="14" fontWeight="800">Present day</text>
+          <text x={W / 2} y={H / 2 - 14} fontSize="11" fill="#64748b">continents drift apart</text>
+        </g>
+      )}
+    </g>
+  );
+}
