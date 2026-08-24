@@ -38,6 +38,10 @@ export default function ClientRegister() {
   const { settings } = useSettings();
   const navigate = useNavigate();
   const location = useLocation();
+  // If the super-admin hid Client sign-up from the public, block direct-URL access too.
+  useEffect(() => {
+    if (settings?.publicClientEnabled === false) navigate("/", { replace: true });
+  }, [settings?.publicClientEnabled, navigate]);
   const [showPw, setShowPw] = useState(false);
   const [otpStep, setOtpStep] = useState(null); // { email, devOtp, emailSent }
   const [form, setForm] = useState({ name: "", email: "", password: "" });
