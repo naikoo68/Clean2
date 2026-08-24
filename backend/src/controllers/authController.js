@@ -1,9 +1,9 @@
 import crypto from "crypto";
 import User from "../models/User.js";
 import Tenant from "../models/Tenant.js";
-import Coupon from "../models/Coupon.js";
+import Coupon, { redeemCoupon } from "../models/Coupon.js";
 import generateToken from "../utils/generateToken.js";
-import { razorpayConfigured, verifyPaymentSignature } from "../config/razorpay.js";
+import { razorpayConfigured, verifyPaymentSignature, verifyPaidOrder } from "../config/razorpay.js";
 import { sendMail } from "../config/mailer.js";
 import { clientBaseFromReq } from "../config/clientUrl.js";
 import { notifyNewUser } from "../utils/notify.js";
@@ -248,6 +248,25 @@ export async function register(req, res) {
               "Payment signature check failed. This almost always means RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET on the server are not from the SAME key pair (or aren't both Live). Please re-check them on Render.",
           });
         }
+        // The signature only proves the payment is authentic for ITS order — not
+        // that the order was for THIS plan/amount. Re-fetch the order and confirm
+        // it was paid in full for the exact plan+price we're about to grant, so a
+        // cheap order can't be used to claim an expensive plan.
+        const match = await verifyPaidOrder({
+          orderId: razorpay_order_id,
+          expectedAmountRupees: offer.finalPrice,
+          expectedPlan: offer.plan.key,
+          expectedEmail: email,
+        });
+        if (!match.ok) {
+          console.error("[payment] order verification failed", { order: razorpay_order_id, reason: match.reason });
+          return res.status(400).json({ message: "Payment could not be verified. Please try again." });
+        }
+        // Replay protection: a payment id may only ever activate ONE account.
+        const usedPayment = await runUnscoped(() => User.findOne({ paymentId: razorpay_payment_id }).select("_id"));
+        if (usedPayment) {
+          return res.status(400).json({ message: "This payment has already been used to create an account." });
+        }
         doc.isEmailVerified = true;
         doc.paymentId = razorpay_payment_id;
         const exp = new Date();
@@ -272,7 +291,7 @@ export async function register(req, res) {
   }
 
   // Count usage of an admin-managed coupon (built-in codes have no DB doc → no-op).
-  if (doc.couponCode) Coupon.updateOne({ code: doc.couponCode }, { $inc: { usedCount: 1 } }).catch(() => {});
+  if (doc.couponCode) redeemCoupon(doc.couponCode).catch(() => {});
 
   // Paid client → already active & verified, sign them straight in (no OTP step).
   if (paidActive) {
@@ -386,9 +405,16 @@ export async function googleLogin(req, res) {
       }
       const payload = await gRes.json();
       // Verify the audience matches our app's client ID (prevents tokens issued
-      // for other apps from being accepted).
+      // for OTHER apps from being accepted — without this, a token minted for any
+      // Google OAuth client could be replayed here to log in as its email).
+      // GOOGLE_CLIENT_ID is REQUIRED: if it isn't configured we refuse rather
+      // than skip the check, so a misconfiguration can never open this hole.
       const expectedClientId = process.env.GOOGLE_CLIENT_ID;
-      if (expectedClientId && payload.aud !== expectedClientId) {
+      if (!expectedClientId) {
+        console.error("[google-login] GOOGLE_CLIENT_ID is not set — refusing to trust Google tokens.");
+        return res.status(500).json({ message: "Google login is not configured on the server." });
+      }
+      if (payload.aud !== expectedClientId) {
         return res.status(401).json({ message: "Google token audience mismatch." });
       }
       if (!payload.email || payload.email_verified === "false") {
