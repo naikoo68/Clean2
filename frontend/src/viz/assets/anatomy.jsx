@@ -2581,3 +2581,153 @@ export function Tides({ showLabels = true }) {
     </g>
   );
 }
+
+
+// ---- Concave mirror image formation ----------------------------------------
+export function MirrorImage({ showLabels = true }) {
+  const axisY = H / 2, mx = W - 140, cx = mx - 300, fx = mx - 150; // C and F on axis
+  const objX = mx - 360, objTop = axisY - 70;
+  // image (real, inverted) between C and F for object beyond C
+  const imgX = mx - 200, imgBot = axisY + 44;
+  return (
+    <g>
+      <line x1={80} y1={axisY} x2={mx} y2={axisY} stroke="#94a3b8" strokeWidth="1.5" />
+      {/* concave mirror arc */}
+      <path d={`M ${mx} ${axisY - 110} A 150 150 0 0 0 ${mx} ${axisY + 110}`} fill="none" stroke="#334155" strokeWidth="4" />
+      {[cx, fx].map((x, i) => <g key={i}><circle cx={x} cy={axisY} r="3" fill="#64748b" /><text x={x} y={axisY + 18} fontSize="11" fill="#64748b" textAnchor="middle">{i ? "F" : "C"}</text></g>)}
+      {/* object */}
+      <line x1={objX} y1={axisY} x2={objX} y2={objTop} stroke="#16a34a" strokeWidth="3" markerEnd="url(#il-arrow)" />
+      {/* rays */}
+      <polyline points={`${objX},${objTop} ${mx - 6},${objTop} ${imgX},${imgBot}`} fill="none" stroke="#f59e0b" strokeWidth="1.8" />
+      <polyline points={`${objX},${objTop} ${mx - 6},${axisY} ${imgX},${imgBot}`} fill="none" stroke="#dc2626" strokeWidth="1.8" />
+      {/* image */}
+      <line x1={imgX} y1={axisY} x2={imgX} y2={imgBot} stroke="#7c3aed" strokeWidth="3" markerEnd="url(#il-arrow)" />
+      {showLabels && (
+        <g>
+          <text x={objX} y={objTop - 8} fontSize="11" fill="#16a34a" textAnchor="middle">object</text>
+          <text x={imgX} y={imgBot + 16} fontSize="11" fill="#7c3aed" textAnchor="middle">image (real, inverted)</text>
+          <text x={mx + 6} y={axisY - 96} fontSize="11" fill="#334155">concave mirror</text>
+          <text x={110} y={axisY - 8} fontSize="10.5" fill="#64748b">principal axis</text>
+        </g>
+      )}
+    </g>
+  );
+}
+
+// ---- Carbon allotropes -----------------------------------------------------
+export function CarbonAllotropes({ showLabels = true }) {
+  const hexPts = (cx, cy, r) => Array.from({ length: 6 }, (_, i) => { const a = -Math.PI / 2 + i * Math.PI / 3; return `${cx + r * Math.cos(a)},${cy + r * Math.sin(a)}`; }).join(" ");
+  const c1 = 150, c2 = W / 2, c3 = W - 150, cy = H / 2 - 10;
+  return (
+    <g>
+      {/* Diamond (tetrahedral) */}
+      <g>
+        {[[0, -40], [-34, 20], [34, 20], [0, 46]].map(([dx, dy], i) => <line key={i} x1={c1} y1={cy} x2={c1 + dx} y2={cy + dy} stroke="#334155" strokeWidth="2.5" />)}
+        {[[0, 0], [0, -40], [-34, 20], [34, 20], [0, 46]].map(([dx, dy], i) => <Sphere key={i} cx={c1 + dx} cy={cy + dy} r={i === 0 ? 12 : 10} fill="#334155" />)}
+      </g>
+      {/* Graphite (layers of hexagons) */}
+      <g>
+        {[0, 1, 2].map((L) => <polygon key={L} points={hexPts(c2, cy - 30 + L * 34, 26)} fill="none" stroke="#0891b2" strokeWidth="2.5" transform={`skewX(-20)`} />)}
+      </g>
+      {/* Fullerene (buckyball) */}
+      <g>
+        <circle cx={c3} cy={cy} r="44" fill="none" stroke="#7c3aed" strokeWidth="2" />
+        <polygon points={hexPts(c3, cy, 22)} fill="none" stroke="#7c3aed" strokeWidth="2" />
+        {Array.from({ length: 6 }, (_, i) => { const a = -Math.PI / 2 + i * Math.PI / 3; return <line key={i} x1={c3 + 22 * Math.cos(a)} y1={cy + 22 * Math.sin(a)} x2={c3 + 44 * Math.cos(a)} y2={cy + 44 * Math.sin(a)} stroke="#7c3aed" strokeWidth="1.6" />; })}
+      </g>
+      {showLabels && (
+        <g>
+          <text x={c1} y={cy + 96} fontSize="13" fontWeight="700" fill="#334155" textAnchor="middle">Diamond</text>
+          <text x={c1} y={cy + 112} fontSize="10" fill="#64748b" textAnchor="middle">tetrahedral, hard</text>
+          <text x={c2} y={cy + 96} fontSize="13" fontWeight="700" fill="#0891b2" textAnchor="middle">Graphite</text>
+          <text x={c2} y={cy + 112} fontSize="10" fill="#64748b" textAnchor="middle">layers, conducts</text>
+          <text x={c3} y={cy + 96} fontSize="13" fontWeight="700" fill="#7c3aed" textAnchor="middle">Fullerene (C₆₀)</text>
+          <text x={c3} y={cy + 112} fontSize="10" fill="#64748b" textAnchor="middle">molecular cage</text>
+        </g>
+      )}
+    </g>
+  );
+}
+
+// ---- Aerobic vs anaerobic respiration --------------------------------------
+export function RespirationTypes({ showLabels = true }) {
+  return (
+    <g>
+      <g filter="url(#viz-shadow)"><rect x={60} y={130} width={W / 2 - 100} height={260} rx="14" fill="#dcfce7" stroke="#16a34a" strokeWidth="2.5" /></g>
+      <g filter="url(#viz-shadow)"><rect x={W / 2 + 40} y={130} width={W / 2 - 100} height={260} rx="14" fill="#fee2e2" stroke="#dc2626" strokeWidth="2.5" /></g>
+      {showLabels && (
+        <g textAnchor="middle">
+          <text x={60 + (W / 2 - 100) / 2} y={168} fontSize="16" fontWeight="800" fill="#16a34a">Aerobic</text>
+          <text x={60 + (W / 2 - 100) / 2} y={210} fontSize="12" fill="#166534">glucose + oxygen</text>
+          <text x={60 + (W / 2 - 100) / 2} y={236} fontSize="18" fill="#16a34a">↓</text>
+          <text x={60 + (W / 2 - 100) / 2} y={266} fontSize="12" fill="#166534">carbon dioxide + water</text>
+          <text x={60 + (W / 2 - 100) / 2} y={318} fontSize="14" fontWeight="700" fill="#15803d">large ATP yield (~38)</text>
+          <text x={60 + (W / 2 - 100) / 2} y={344} fontSize="11" fill="#64748b">needs O₂ · in mitochondria</text>
+
+          <text x={W / 2 + 40 + (W / 2 - 100) / 2} y={168} fontSize="16" fontWeight="800" fill="#dc2626">Anaerobic</text>
+          <text x={W / 2 + 40 + (W / 2 - 100) / 2} y={206} fontSize="12" fill="#7f1d1d">glucose</text>
+          <text x={W / 2 + 40 + (W / 2 - 100) / 2} y={230} fontSize="18" fill="#dc2626">↓</text>
+          <text x={W / 2 + 40 + (W / 2 - 100) / 2} y={258} fontSize="11.5" fill="#7f1d1d">lactic acid (muscle)</text>
+          <text x={W / 2 + 40 + (W / 2 - 100) / 2} y={278} fontSize="11.5" fill="#7f1d1d">ethanol + CO₂ (yeast)</text>
+          <text x={W / 2 + 40 + (W / 2 - 100) / 2} y={322} fontSize="14" fontWeight="700" fill="#b91c1c">small ATP yield (~2)</text>
+          <text x={W / 2 + 40 + (W / 2 - 100) / 2} y={348} fontSize="11" fill="#64748b">no O₂ · in cytoplasm</text>
+        </g>
+      )}
+    </g>
+  );
+}
+
+// ---- Renewable energy sources ----------------------------------------------
+export function RenewableEnergy({ showLabels = true }) {
+  const gy = H - 90;
+  return (
+    <g>
+      {/* Solar */}
+      <g filter="url(#viz-shadow)"><Sphere cx={130} cy={110} r={26} fill="#fbbf24" /></g>
+      <rect x={90} y={gy - 60} width="90" height="56" rx="4" fill="#1e3a8a" stroke="#334155" strokeWidth="2" transform={`rotate(-12 135 ${gy - 32})`} />
+      {[...Array(3)].map((_, i) => <line key={i} x1={100 + i * 26} y1={gy - 66} x2={110 + i * 26} y2={gy - 2} stroke="#3b82f6" strokeWidth="1" transform={`rotate(-12 135 ${gy - 32})`} />)}
+      {/* Wind turbine */}
+      <line x1={W / 2} y1={gy} x2={W / 2} y2={gy - 130} stroke="#94a3b8" strokeWidth="8" strokeLinecap="round" />
+      {[0, 120, 240].map((a, i) => <line key={i} x1={W / 2} y1={gy - 130} x2={W / 2 + 54 * Math.cos((a - 90) * Math.PI / 180)} y2={gy - 130 + 54 * Math.sin((a - 90) * Math.PI / 180)} stroke="#0891b2" strokeWidth="6" strokeLinecap="round" />)}
+      <circle cx={W / 2} cy={gy - 130} r="6" fill="#334155" />
+      {/* Hydro dam */}
+      <path d={`M ${W - 210} ${gy} L ${W - 210} ${gy - 90} L ${W - 120} ${gy - 60} L ${W - 120} ${gy} Z`} fill="#94a3b8" stroke="#475569" strokeWidth="2" />
+      <path d={`M ${W - 210} ${gy - 84} L ${W - 260} ${gy - 84} L ${W - 260} ${gy} L ${W - 210} ${gy} Z`} fill="#38bdf8" opacity="0.7" />
+      {/* Ground */}
+      <line x1={40} y1={gy} x2={W - 40} y2={gy} stroke="#16a34a" strokeWidth="4" />
+      {showLabels && (
+        <g textAnchor="middle" fill="#334155">
+          <text x={135} y={gy + 24} fontSize="12" fontWeight="700">Solar</text>
+          <text x={W / 2} y={gy + 24} fontSize="12" fontWeight="700">Wind</text>
+          <text x={W - 170} y={gy + 24} fontSize="12" fontWeight="700">Hydroelectric</text>
+          <text x={W / 2} y={40} fontSize="13" fontWeight="700">Renewable energy sources</text>
+        </g>
+      )}
+    </g>
+  );
+}
+
+// ---- Latitude & longitude --------------------------------------------------
+export function LatLong({ showLabels = true }) {
+  const cx = W / 2 - 20, cy = H / 2, R = 180;
+  return (
+    <g>
+      <g filter="url(#viz-shadow)"><circle cx={cx} cy={cy} r={R} fill="#dbeafe" stroke="#0284c7" strokeWidth="2.5" /></g>
+      <circle cx={cx} cy={cy} r={R} fill="url(#viz-gloss)" opacity="0.4" />
+      {/* Latitude lines */}
+      {[-0.66, -0.33, 0.33, 0.66].map((f, i) => { const yy = cy + f * R, w = R * Math.sqrt(1 - f * f); return <line key={i} x1={cx - w} y1={yy} x2={cx + w} y2={yy} stroke="#60a5fa" strokeWidth="1.2" />; })}
+      <line x1={cx - R} y1={cy} x2={cx + R} y2={cy} stroke="#dc2626" strokeWidth="2.5" />
+      {/* Longitude lines (ellipse arcs) */}
+      {[0.4, 0.75, 1].map((f, i) => <ellipse key={i} cx={cx} cy={cy} rx={R * f} ry={R} fill="none" stroke="#60a5fa" strokeWidth="1.2" />)}
+      <line x1={cx} y1={cy - R} x2={cx} y2={cy + R} stroke="#16a34a" strokeWidth="2.5" />
+      {showLabels && (
+        <g>
+          <Leader x={cx + R} y={cy} tx={W - 60} ty={cy} text="Equator (0° lat)" color="#dc2626" side="right" />
+          <Leader x={cx} y={cy - R} tx={cx} ty={40} text="Prime Meridian (0° long)" color="#16a34a" side="right" />
+          <Leader x={cx - R * 0.7} y={cy - R * 0.5} tx={70} ty={cy - 90} text="Latitude (parallels)" color="#2563eb" side="left" />
+          <Leader x={cx - R * 0.4} y={cy + R * 0.7} tx={70} ty={cy + 120} text="Longitude (meridians)" color="#2563eb" side="left" />
+        </g>
+      )}
+    </g>
+  );
+}
