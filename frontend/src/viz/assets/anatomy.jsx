@@ -1055,3 +1055,127 @@ export function NitrogenCycle({ showLabels = true }) {
     </g>
   );
 }
+
+
+// ---- Life-cycle ring helper -------------------------------------------------
+// Lays `stages` [{ draw:(x,y)=>JSX, label }] evenly around a circle and draws
+// clockwise arrows between them. Reused by the butterfly / frog / plant cycles.
+function LifeCycle({ stages, cx = W / 2, cy = H / 2 + 10, R = 150 }) {
+  const n = stages.length;
+  const pos = stages.map((_, i) => { const a = -Math.PI / 2 + (i / n) * 2 * Math.PI; return { x: cx + R * Math.cos(a), y: cy + R * Math.sin(a) }; });
+  return (
+    <g>
+      {pos.map((p, i) => {
+        const q = pos[(i + 1) % n];
+        const midA = -Math.PI / 2 + ((i + 0.5) / n) * 2 * Math.PI;
+        const mx = cx + (R + 34) * Math.cos(midA), my = cy + (R + 34) * Math.sin(midA);
+        return <path key={i} d={`M ${p.x + (q.x - p.x) * 0.22} ${p.y + (q.y - p.y) * 0.22} Q ${mx} ${my} ${q.x - (q.x - p.x) * 0.22} ${q.y - (q.y - p.y) * 0.22}`} fill="none" stroke="#334155" strokeWidth="2.5" markerEnd="url(#il-arrow)" />;
+      })}
+      {stages.map((s, i) => (
+        <g key={i}>
+          {s.draw(pos[i].x, pos[i].y)}
+          <text x={pos[i].x} y={pos[i].y + 56} fontSize="12.5" fontWeight="700" fill="currentColor" textAnchor="middle">{s.label}</text>
+        </g>
+      ))}
+    </g>
+  );
+}
+
+// ---- Phases of the Moon ----------------------------------------------------
+export function MoonPhases({ showLabels = true }) {
+  const cx = W / 2 - 24, cy = H / 2, R = 172, mr = 26;
+  const names = ["New Moon", "Waxing Crescent", "First Quarter", "Waxing Gibbous", "Full Moon", "Waning Gibbous", "Third Quarter", "Waning Crescent"];
+  return (
+    <g>
+      {/* Sunlight from the right */}
+      {[-46, 0, 46].map((o, i) => <line key={i} x1={W - 34} y1={cy + o} x2={cx + R + mr + 14} y2={cy + o} stroke="#f59e0b" strokeWidth="3" markerEnd="url(#il-arrow)" />)}
+      <text x={W - 40} y={cy - 78} fontSize="12" fontWeight="600" fill="#f59e0b" textAnchor="end">Sunlight</text>
+      {/* Orbit + Earth */}
+      <circle cx={cx} cy={cy} r={R} fill="none" stroke="#cbd5e1" strokeWidth="1" strokeDasharray="3 6" />
+      <g filter="url(#viz-shadow)"><Sphere cx={cx} cy={cy} r={34} fill="#2563eb" /></g>
+      <text x={cx} y={cy + 4} fontSize="11" fontWeight="700" fill="#fff" textAnchor="middle">Earth</text>
+      {/* Moons: dark disc + lit RIGHT (sun-facing) half */}
+      {names.map((name, i) => {
+        const a = -(i / 8) * 2 * Math.PI;
+        const x = cx + R * Math.cos(a), y = cy + R * Math.sin(a), right = Math.cos(a) >= -0.01;
+        return (
+          <g key={i}>
+            <circle cx={x} cy={y} r={mr} fill="#334155" stroke="#1e293b" strokeWidth="1" />
+            <path d={`M ${x} ${y - mr} A ${mr} ${mr} 0 0 1 ${x} ${y + mr} Z`} fill="#f8fafc" />
+            {showLabels && <text x={x + (right ? mr + 7 : -(mr + 7))} y={y + 3.5} fontSize="10" fontWeight="600" fill="currentColor" textAnchor={right ? "start" : "end"}>{name}</text>}
+          </g>
+        );
+      })}
+    </g>
+  );
+}
+
+// ---- Photosynthesis --------------------------------------------------------
+export function Photosynthesis({ showLabels = true }) {
+  const cx = W / 2, cy = 250, green = "#16a34a";
+  return (
+    <g>
+      {/* Sun + light */}
+      <g filter="url(#viz-shadow)"><Sphere cx={96} cy={86} r={30} fill="#fbbf24" /></g>
+      {[0, 1, 2].map((i) => <line key={i} x1={120} y1={106 + i * 8} x2={cx - 130} y2={cy - 40 + i * 10} stroke="#f59e0b" strokeWidth="3" markerEnd="url(#il-arrow)" />)}
+      <text x={150} y={150} fontSize="11" fontWeight="600" fill="#f59e0b">Sunlight</text>
+      {/* Leaf */}
+      <path d={`M ${cx - 150} ${cy} Q ${cx} ${cy - 96} ${cx + 150} ${cy} Q ${cx} ${cy + 96} ${cx - 150} ${cy} Z`} fill="#bbf7d0" stroke={green} strokeWidth="2.5" filter="url(#viz-shadow)" />
+      <line x1={cx - 140} y1={cy} x2={cx + 140} y2={cy} stroke={green} strokeWidth="2" />
+      {[-1, 1].map((d) => [1, 2, 3].map((k) => <line key={`${d}-${k}`} x1={cx - 90 + k * 46} y1={cy} x2={cx - 90 + k * 46 + 18} y2={cy + d * 26} stroke={green} strokeWidth="1.4" />))}
+      <text x={cx} y={cy + 6} fontSize="12" fontWeight="700" fill="#166534" textAnchor="middle">Glucose (C₆H₁₂O₆)</text>
+      {/* Inputs / outputs */}
+      <line x1={60} y1={cy + 70} x2={cx - 120} y2={cy + 24} stroke="#64748b" strokeWidth="3.5" markerEnd="url(#il-arrow)" />
+      <line x1={cx} y1={H - 40} x2={cx} y2={cy + 60} stroke="#0ea5e9" strokeWidth="3.5" markerEnd="url(#il-arrow)" />
+      <line x1={cx + 120} y1={cy - 30} x2={W - 70} y2={110} stroke="#0284c7" strokeWidth="3.5" markerEnd="url(#il-arrow)" />
+      {/* Equation */}
+      <text x={cx} y={H - 20} fontSize="13" fontWeight="700" fill="#334155" textAnchor="middle">6CO₂ + 6H₂O + light → C₆H₁₂O₆ + 6O₂</text>
+      {showLabels && (
+        <g>
+          <text x={54} y={cy + 84} fontSize="12" fontWeight="600" fill="#64748b" textAnchor="start">CO₂ (in)</text>
+          <text x={cx + 8} y={H - 46} fontSize="12" fontWeight="600" fill="#0ea5e9">H₂O (from roots)</text>
+          <text x={W - 66} y={104} fontSize="12" fontWeight="600" fill="#0284c7" textAnchor="end">O₂ (out)</text>
+        </g>
+      )}
+    </g>
+  );
+}
+
+// ---- Butterfly life cycle --------------------------------------------------
+function iEgg(x, y) { return <g>{[[-8, -4], [4, -8], [10, 4], [-4, 8], [0, 0]].map(([dx, dy], i) => <ellipse key={i} cx={x + dx} cy={y + dy} rx="6" ry="8" fill="#fde68a" stroke="#ca8a04" strokeWidth="1" />)}<line x1={x - 22} y1={y + 16} x2={x + 22} y2={y + 16} stroke="#16a34a" strokeWidth="3" /></g>; }
+function iCaterpillar(x, y) { return <g>{Array.from({ length: 6 }).map((_, i) => <circle key={i} cx={x - 26 + i * 11} cy={y} r="9" fill="#84cc16" stroke="#4d7c0f" strokeWidth="1.2" />)}<circle cx={x + 34} cy={y} r="10" fill="#65a30d" /><circle cx={x + 37} cy={y - 3} r="2" fill="#1e293b" /></g>; }
+function iChrysalis(x, y) { return <g><path d={`M ${x} ${y - 22} Q ${x + 16} ${y - 6} ${x + 8} ${y + 20} Q ${x} ${y + 28} ${x - 8} ${y + 20} Q ${x - 16} ${y - 6} ${x} ${y - 22} Z`} fill="#a3e635" stroke="#4d7c0f" strokeWidth="1.5" /><line x1={x} y1={y - 30} x2={x} y2={y - 22} stroke="#4d7c0f" strokeWidth="2" /></g>; }
+function iButterfly(x, y) { return <g><ellipse cx={x} cy={y} rx="3.5" ry="16" fill="#1e293b" />{[[-1, -1], [1, -1], [-1, 1], [1, 1]].map(([sx, sy], i) => <ellipse key={i} cx={x + sx * 18} cy={y + sy * 12} rx="16" ry="11" fill={i < 2 ? "#f97316" : "#fb923c"} stroke="#c2410c" strokeWidth="1.2" />)}<line x1={x} y1={y - 14} x2={x - 6} y2={y - 24} stroke="#1e293b" strokeWidth="1.4" /><line x1={x} y1={y - 14} x2={x + 6} y2={y - 24} stroke="#1e293b" strokeWidth="1.4" /></g>; }
+export function ButterflyLifeCycle({ showLabels = true }) {
+  const stages = [
+    { draw: iEgg, label: "Egg" }, { draw: iCaterpillar, label: "Caterpillar (larva)" },
+    { draw: iChrysalis, label: "Chrysalis (pupa)" }, { draw: iButterfly, label: "Butterfly (adult)" },
+  ];
+  return <LifeCycle stages={showLabels ? stages : stages.map((s) => ({ ...s, label: "" }))} R={148} />;
+}
+
+// ---- Frog life cycle -------------------------------------------------------
+function iSpawn(x, y) { return <g>{[[-10, -6], [2, -10], [12, -2], [-6, 6], [6, 8], [0, 0], [-14, 4]].map(([dx, dy], i) => <g key={i}><circle cx={x + dx} cy={y + dy} r="7" fill="#dbeafe" stroke="#60a5fa" strokeWidth="1" /><circle cx={x + dx} cy={y + dy} r="2.6" fill="#1e293b" /></g>)}</g>; }
+function iTadpole(x, y) { return <g><circle cx={x - 6} cy={y} r="14" fill="#4b5563" /><path d={`M ${x + 6} ${y} Q ${x + 30} ${y - 14} ${x + 36} ${y} Q ${x + 30} ${y + 14} ${x + 6} ${y} Z`} fill="#6b7280" /><circle cx={x - 10} cy={y - 4} r="2.5" fill="#fff" /></g>; }
+function iFroglet(x, y) { return <g><circle cx={x - 4} cy={y} r="15" fill="#16a34a" /><path d={`M ${x + 8} ${y} Q ${x + 26} ${y - 10} ${x + 30} ${y} Q ${x + 26} ${y + 10} ${x + 8} ${y} Z`} fill="#22c55e" /><line x1={x - 6} y1={y + 12} x2={x - 14} y2={y + 22} stroke="#15803d" strokeWidth="3" strokeLinecap="round" /><line x1={x + 4} y1={y + 12} x2={x + 10} y2={y + 24} stroke="#15803d" strokeWidth="3" strokeLinecap="round" /></g>; }
+function iFrog(x, y) { return <g><ellipse cx={x} cy={y + 4} rx="22" ry="16" fill="#16a34a" stroke="#15803d" strokeWidth="1.5" />{[-1, 1].map((d, i) => <circle key={i} cx={x + d * 9} cy={y - 10} r="7" fill="#22c55e" stroke="#15803d" strokeWidth="1.2" />)}{[-1, 1].map((d, i) => <circle key={`e${i}`} cx={x + d * 9} cy={y - 11} r="2.6" fill="#1e293b" />)}{[-1, 1].map((d, i) => <line key={`l${i}`} x1={x + d * 16} y1={y + 14} x2={x + d * 28} y2={y + 24} stroke="#15803d" strokeWidth="4" strokeLinecap="round" />)}</g>; }
+export function FrogLifeCycle({ showLabels = true }) {
+  const stages = [
+    { draw: iSpawn, label: "Eggs (frogspawn)" }, { draw: iTadpole, label: "Tadpole" },
+    { draw: iFroglet, label: "Froglet" }, { draw: iFrog, label: "Adult frog" },
+  ];
+  return <LifeCycle stages={showLabels ? stages : stages.map((s) => ({ ...s, label: "" }))} R={148} />;
+}
+
+// ---- Plant life cycle ------------------------------------------------------
+function iSeed(x, y) { return <ellipse cx={x} cy={y} rx="14" ry="10" fill="#a16207" stroke="#78350f" strokeWidth="1.5" transform={`rotate(-20 ${x} ${y})`} />; }
+function iGerm(x, y) { return <g><ellipse cx={x} cy={y - 4} rx="12" ry="8" fill="#a16207" stroke="#78350f" strokeWidth="1.2" /><path d={`M ${x} ${y + 2} q -6 14 -12 22`} fill="none" stroke="#92400e" strokeWidth="2.5" /><path d={`M ${x} ${y - 4} q 2 -16 8 -22`} fill="none" stroke="#16a34a" strokeWidth="2.5" /></g>; }
+function iSeedling(x, y) { return <g><line x1={x} y1={y + 24} x2={x} y2={y - 14} stroke="#16a34a" strokeWidth="3" /><path d={`M ${x} ${y - 4} q -22 -6 -26 -22 q 20 -2 26 18`} fill="#22c55e" stroke="#15803d" strokeWidth="1" /><path d={`M ${x} ${y - 4} q 22 -6 26 -22 q -20 -2 -26 18`} fill="#22c55e" stroke="#15803d" strokeWidth="1" /></g>; }
+function iFlowering(x, y) { return <g><line x1={x} y1={y + 28} x2={x} y2={y - 20} stroke="#16a34a" strokeWidth="3" /><path d={`M ${x} ${y + 6} q -22 -4 -28 -20 q 22 -2 28 16`} fill="#22c55e" stroke="#15803d" strokeWidth="1" /><path d={`M ${x} ${y + 2} q 22 -4 28 -20 q -22 -2 -28 16`} fill="#22c55e" stroke="#15803d" strokeWidth="1" />{[0, 1, 2, 3, 4].map((i) => { const a = -Math.PI / 2 + i * (2 * Math.PI / 5); return <ellipse key={i} cx={x + 12 * Math.cos(a)} cy={y - 22 + 12 * Math.sin(a)} rx="8" ry="5" fill="#ec4899" transform={`rotate(${(a * 180) / Math.PI + 90} ${x + 12 * Math.cos(a)} ${y - 22 + 12 * Math.sin(a)})`} />; })}<circle cx={x} cy={y - 22} r="6" fill="#f59e0b" /></g>; }
+export function PlantLifeCycle({ showLabels = true }) {
+  const stages = [
+    { draw: iSeed, label: "Seed" }, { draw: iGerm, label: "Germination" },
+    { draw: iSeedling, label: "Seedling" }, { draw: iFlowering, label: "Flowering plant" },
+  ];
+  return <LifeCycle stages={showLabels ? stages : stages.map((s) => ({ ...s, label: "" }))} R={150} />;
+}
