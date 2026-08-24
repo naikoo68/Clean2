@@ -33,6 +33,10 @@ export default function InstituteRegister() {
   const { applySession, refreshUser } = useAuth();
   const { settings } = useSettings();
   const navigate = useNavigate();
+  // If the super-admin hid Institute sign-up from the public, block direct-URL access too.
+  useEffect(() => {
+    if (settings?.publicInstituteEnabled === false) navigate("/", { replace: true });
+  }, [settings?.publicInstituteEnabled, navigate]);
 
   const [cfg, setCfg] = useState({ enabled: true, payEnabled: false, plans: FALLBACK_PLANS });
   const [showPw, setShowPw] = useState(false);
