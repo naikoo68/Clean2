@@ -63,13 +63,14 @@ export const CATALOG = {
   geography: [
     "Population Pyramid", "Climate Graph", "Rainfall Graph", "River System", "Drainage Pattern",
     "Topographic Profile", "Contour Diagram", "Map", "Choropleth", "Flow Map", "Elevation",
-    "DEM", "Terrain", "Wind Rose", "Water Cycle", "Rock Cycle",
+    "DEM", "Terrain", "Wind Rose", "Water Cycle", "Rock Cycle", "Volcano",
   ],
   biology: [
     "Cell Structure", "DNA", "RNA", "Mitosis", "Meiosis", "Food Chain", "Food Web", "Human Body",
     "Plant Cell", "Animal Cell", "Neuron", "Human Heart", "Flower (parts)", "Digestive System",
     "Respiratory System", "Eye (cross-section)", "Nephron", "Ear", "Leaf Cross-section",
-    "Human Skeleton", "Brain Regions", "Circulatory System", "Ecosystem", "Classification Tree",
+    "Human Skeleton", "Brain Regions", "Circulatory System", "Tooth (cross-section)",
+    "Carbon Cycle", "Nitrogen Cycle", "Ecosystem", "Classification Tree",
   ],
   chemistry: [
     "Bohr Model", "Atomic Structure", "Molecular Structure", "Reaction Diagram",
@@ -79,7 +80,7 @@ export const CATALOG = {
   ],
   physics: [
     "Free Body Diagram", "Projectile Motion", "Wave", "Circuit Diagram", "Optics", "Ray Diagram",
-    "Electric Field", "Magnetic Field", "Energy Diagram",
+    "Electric Field", "Magnetic Field", "Energy Diagram", "Solar System",
   ],
   cs: [
     "Flowchart", "Algorithm Flow", "ER Diagram", "DFD", "UML", "Sequence Diagram",
@@ -382,6 +383,11 @@ Object.assign(MODULES, {
   circulation:       _il("circulation", "Circulatory System", "biology", { kind: "circulation" }),
   watercycle:        _il("watercycle", "Water Cycle", "geography", { kind: "watercycle" }),
   rockcycle:         _il("rockcycle", "Rock Cycle", "geography", { kind: "rockcycle" }),
+  solarsystem:       _il("solarsystem", "Solar System", "physics", { kind: "solarsystem" }),
+  volcano:           _il("volcano", "Volcano", "geography", { kind: "volcano" }),
+  tooth:             _il("tooth", "Tooth (cross-section)", "biology", { kind: "tooth" }),
+  carboncycle:       _il("carboncycle", "Carbon Cycle", "biology", { kind: "carboncycle" }),
+  nitrogencycle:     _il("nitrogencycle", "Nitrogen Cycle", "biology", { kind: "nitrogencycle" }),
 });
 
 // ---- Phase 10: fill remaining catalog (aliases + charts/graphs/tables/illustrations) ----
