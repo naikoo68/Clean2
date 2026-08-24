@@ -4,13 +4,13 @@ import { settingsService } from "../../services";
 
 // Defaults shown only if settings have no institute plans yet (mirror backend).
 const DEFAULT_PLANS = [
-  { key: "trial", label: "14-Day Free Trial", cycle: "Trial", months: 0, price: 0, trial: true },
+  { key: "trial", label: "14-Day Free Trial", cycle: "Trial", months: 0, days: 14, price: 0, trial: true },
   { key: "1m", label: "1 Month", cycle: "Monthly", months: 1, price: 1499 },
   { key: "6m", label: "6 Months", cycle: "Semi-Annually", months: 6, price: 6999 },
   { key: "1y", label: "1 Year", cycle: "Yearly", months: 12, price: 11999 },
 ];
 const CYCLE_OPTIONS = ["Monthly", "Quarterly", "Semi-Annually", "Yearly", "Trial"];
-const blankPlan = () => ({ key: "", label: "", cycle: "Monthly", months: 1, price: 0, trial: false });
+const blankPlan = () => ({ key: "", label: "", cycle: "Monthly", months: 1, days: 0, price: 0, trial: false });
 const num = (v, min, max) => Math.max(min, Math.min(max, parseInt(v, 10) || min));
 
 // Admin-only: manage the INSTITUTE (tenant) subscription plans shown on the
@@ -46,6 +46,7 @@ export default function TenantPlansManager() {
           label: String(p.label || "").trim(),
           cycle: String(p.cycle || "").trim(),
           months: num(p.months, 0, 120),
+          days: num(p.days, 0, 3650),
           price: num(p.price, 0, 10000000),
           trial: !!p.trial,
         }))
@@ -89,13 +90,14 @@ export default function TenantPlansManager() {
                   <th className="px-3 py-2 text-left font-semibold">Plan label</th>
                   <th className="px-3 py-2 text-left font-semibold">Cycle</th>
                   <th className="px-3 py-2 text-left font-semibold">Months</th>
+                  <th className="px-3 py-2 text-left font-semibold">Trial days</th>
                   <th className="px-3 py-2 text-left font-semibold">Price (₹)</th>
                   <th className="px-3 py-2"></th>
                 </tr>
               </thead>
               <tbody>
                 {plans.length === 0 ? (
-                  <tr><td colSpan={5} className="px-3 py-4 text-center text-slate-400">No plans yet. Click “Add plan”.</td></tr>
+                  <tr><td colSpan={6} className="px-3 py-4 text-center text-slate-400">No plans yet. Click “Add plan”.</td></tr>
                 ) : plans.map((p, i) => (
                   <tr key={i} className="border-b border-slate-100 last:border-0 dark:border-slate-800">
                     <td className="px-3 py-2"><input value={p.label} onChange={(e) => setPlan(i, "label", e.target.value)} placeholder="e.g. 1 Year" className="input !py-1 min-w-[140px]" /></td>
@@ -106,6 +108,7 @@ export default function TenantPlansManager() {
                       </select>
                     </td>
                     <td className="px-3 py-2"><input type="number" min={0} value={p.months} onChange={(e) => setPlan(i, "months", e.target.value)} className="input !py-1 w-16" /></td>
+                    <td className="px-3 py-2"><input type="number" min={0} value={p.days ?? 0} onChange={(e) => setPlan(i, "days", e.target.value)} placeholder="0" className="input !py-1 w-16" title="Free-trial length in days (used only when Months = 0)" /></td>
                     <td className="px-3 py-2"><input type="number" min={0} value={p.price} onChange={(e) => setPlan(i, "price", e.target.value)} className="input !py-1 w-24" /></td>
                     <td className="px-3 py-2 text-right"><button onClick={() => removePlan(i)} title="Remove plan" className="rounded-lg p-1.5 text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-900/30"><Trash2 className="h-4 w-4" /></button></td>
                   </tr>
@@ -113,7 +116,7 @@ export default function TenantPlansManager() {
               </tbody>
             </table>
           </div>
-          <p className="mt-2 text-xs text-slate-400"><b>Months</b> = plan length (0 = free trial). Prices show on the public institute signup.</p>
+          <p className="mt-2 text-xs text-slate-400"><b>Months</b> = plan length. For a <b>free trial</b>, set Months = 0 and put the length in <b>Trial days</b> (e.g. 14). Prices show on the public institute signup.</p>
           {msg && <p className="mt-2 text-sm font-medium text-emerald-600">{msg}</p>}
           {err && <p className="mt-2 text-sm font-medium text-rose-600">{err}</p>}
         </>

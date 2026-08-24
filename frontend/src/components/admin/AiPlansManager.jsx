@@ -4,14 +4,14 @@ import { settingsService } from "../../services";
 
 // Defaults shown only if settings have no plans yet (mirror the backend).
 const DEFAULT_PLANS = [
-  { key: "trial", label: "1-Day Free Trial", cycle: "Trial", months: 0, price: 0, trial: true, maxPerBatch: 20, perWindow: 20, windowMinutes: 5 },
+  { key: "trial", label: "1-Day Free Trial", cycle: "Trial", months: 0, days: 1, price: 0, trial: true, maxPerBatch: 20, perWindow: 20, windowMinutes: 5 },
   { key: "1m", label: "1 Month", cycle: "Monthly", months: 1, price: 299, maxPerBatch: 50, perWindow: 100, windowMinutes: 5 },
   { key: "2m", label: "2 Months", cycle: "Monthly", months: 2, price: 499, maxPerBatch: 100, perWindow: 200, windowMinutes: 5 },
   { key: "6m", label: "6 Months", cycle: "Semi-Annually", months: 6, price: 699, maxPerBatch: 200, perWindow: 400, windowMinutes: 5 },
   { key: "1y", label: "1 Year", cycle: "Yearly", months: 12, price: 899, maxPerBatch: 500, perWindow: 1000, windowMinutes: 5 },
 ];
 const CYCLE_OPTIONS = ["Monthly", "Quarterly", "Semi-Annually", "Yearly", "Trial"];
-const blankPlan = () => ({ key: "", label: "", cycle: "Monthly", months: 1, price: 0, trial: false, maxPerBatch: 50, perWindow: 100, windowMinutes: 5 });
+const blankPlan = () => ({ key: "", label: "", cycle: "Monthly", months: 1, days: 0, price: 0, trial: false, maxPerBatch: 50, perWindow: 100, windowMinutes: 5 });
 const num = (v, min, max) => Math.max(min, Math.min(max, parseInt(v, 10) || min));
 
 // Admin-only card: manage the client SUBSCRIPTION plans in one place — pricing
@@ -52,6 +52,7 @@ export default function AiPlansManager() {
           label: String(p.label || "").trim(),
           cycle: String(p.cycle || "").trim(),
           months: num(p.months, 0, 120),
+          days: num(p.days, 0, 3650),
           price: num(p.price, 0, 10000000),
           trial: !!p.trial,
           maxPerBatch: num(p.maxPerBatch, 1, 5000),
@@ -105,6 +106,7 @@ export default function AiPlansManager() {
                   <th className="px-3 py-2 text-left font-semibold">Plan label</th>
                   <th className="px-3 py-2 text-left font-semibold">Cycle</th>
                   <th className="px-3 py-2 text-left font-semibold">Months</th>
+                  <th className="px-3 py-2 text-left font-semibold">Trial days</th>
                   <th className="px-3 py-2 text-left font-semibold">Price (₹)</th>
                   <th className="px-3 py-2 text-left font-semibold">Max / batch</th>
                   <th className="px-3 py-2 text-left font-semibold">Q / window</th>
@@ -114,7 +116,7 @@ export default function AiPlansManager() {
               </thead>
               <tbody>
                 {plans.length === 0 ? (
-                  <tr><td colSpan={8} className="px-3 py-4 text-center text-slate-400">No plans yet. Click “Add plan”.</td></tr>
+                  <tr><td colSpan={9} className="px-3 py-4 text-center text-slate-400">No plans yet. Click “Add plan”.</td></tr>
                 ) : plans.map((p, i) => (
                   <tr key={i} className="border-b border-slate-100 last:border-0 dark:border-slate-800">
                     <td className="px-3 py-2"><input value={p.label} onChange={(e) => setPlan(i, "label", e.target.value)} placeholder="e.g. 3 Months" className="input !py-1 min-w-[130px]" /></td>
@@ -125,6 +127,7 @@ export default function AiPlansManager() {
                       </select>
                     </td>
                     <td className="px-3 py-2"><input type="number" min={0} value={p.months} onChange={(e) => setPlan(i, "months", e.target.value)} className="input !py-1 w-16" /></td>
+                    <td className="px-3 py-2"><input type="number" min={0} value={p.days ?? 0} onChange={(e) => setPlan(i, "days", e.target.value)} placeholder="0" className="input !py-1 w-16" title="Free-trial length in days (used only when Months = 0)" /></td>
                     <td className="px-3 py-2"><input type="number" min={0} value={p.price} onChange={(e) => setPlan(i, "price", e.target.value)} className="input !py-1 w-24" /></td>
                     <td className="px-3 py-2"><input type="number" min={1} value={p.maxPerBatch} onChange={(e) => setPlan(i, "maxPerBatch", e.target.value)} className="input !py-1 w-20" /></td>
                     <td className="px-3 py-2"><input type="number" min={1} value={p.perWindow} onChange={(e) => setPlan(i, "perWindow", e.target.value)} className="input !py-1 w-20" /></td>
@@ -136,7 +139,7 @@ export default function AiPlansManager() {
             </table>
           </div>
           <p className="mt-2 text-xs text-slate-400">
-            <b>Months</b> = how long the plan lasts (0 = a trial). <b>Q / window</b> + <b>Window</b> = e.g. 100 questions every 5 minutes. Prices here are what clients see at registration &amp; upgrade.
+            <b>Months</b> = how long a paid plan lasts. For a <b>free trial</b>, set Months = 0 and put the length in <b>Trial days</b>. <b>Q / window</b> + <b>Window</b> = e.g. 100 questions every 5 minutes. Prices here are what clients see at registration &amp; upgrade.
           </p>
           {msg && <p className="mt-2 text-sm font-medium text-emerald-600">{msg}</p>}
           {err && <p className="mt-2 text-sm font-medium text-rose-600">{err}</p>}

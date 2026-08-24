@@ -1,6 +1,7 @@
 import { redeemCoupon } from "../models/Coupon.js";
 import User from "../models/User.js";
 import { computeOffer } from "./authController.js";
+import { trialDays } from "../utils/plans.js";
 import { razorpayConfigured, razorpayKeyId, createRazorpayOrder, verifyPaymentSignature, verifyPaidOrder } from "../config/razorpay.js";
 import { runUnscoped } from "../utils/tenantContext.js";
 
@@ -73,12 +74,12 @@ export async function studentUpgradeActivate(req, res) {
     : new Date();
 
   if (offer.plan.key === "trial") {
-    // One-time free trial → 1 day of access.
+    // One-time free trial → the plan's configured number of days (default 1).
     if (req.user.studentTrialUsed) {
       return res.status(400).json({ message: "You've already used your free trial. Please choose a paid plan." });
     }
     const trialEnd = new Date();
-    trialEnd.setDate(trialEnd.getDate() + 1);
+    trialEnd.setDate(trialEnd.getDate() + trialDays(offer.plan, 1));
     req.user.studentPlanExpiresAt = trialEnd;
     req.user.studentTrial = true;
     req.user.studentTrialUsed = true;
