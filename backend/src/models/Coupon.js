@@ -14,4 +14,27 @@ const couponSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-export default mongoose.model("Coupon", couponSchema);
+const Coupon = mongoose.model("Coupon", couponSchema);
+
+// Atomically record ONE redemption of a coupon, but ONLY while it's still under
+// its usage limit (usageLimit 0 = unlimited). Doing the limit check and the
+// increment in a single conditional update prevents concurrent redemptions from
+// pushing usedCount past usageLimit. No-op for built-in (non-DB) codes. Returns
+// true if a redemption was counted. Safe to call fire-and-forget.
+export async function redeemCoupon(code) {
+  if (!code) return false;
+  try {
+    const result = await Coupon.updateOne(
+      {
+        code: String(code).toUpperCase(),
+        $or: [{ usageLimit: { $lte: 0 } }, { $expr: { $lt: ["$usedCount", "$usageLimit"] } }],
+      },
+      { $inc: { usedCount: 1 } }
+    );
+    return result.modifiedCount > 0;
+  } catch {
+    return false;
+  }
+}
+
+export default Coupon;
