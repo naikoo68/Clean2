@@ -64,7 +64,7 @@ export const CATALOG = {
     "Population Pyramid", "Climate Graph", "Rainfall Graph", "River System", "Drainage Pattern",
     "Topographic Profile", "Contour Diagram", "Map", "Choropleth", "Flow Map", "Elevation",
     "DEM", "Terrain", "Wind Rose", "Water Cycle", "Rock Cycle", "Volcano",
-    "Layers of the Earth", "Layers of the Atmosphere", "Greenhouse Effect",
+    "Layers of the Earth", "Layers of the Atmosphere", "Greenhouse Effect", "Plate Tectonics",
   ],
   biology: [
     "Cell Structure", "DNA", "RNA", "Mitosis", "Meiosis", "Food Chain", "Food Web", "Human Body",
@@ -73,20 +73,21 @@ export const CATALOG = {
     "Human Skeleton", "Brain Regions", "Circulatory System", "Tooth (cross-section)",
     "Carbon Cycle", "Nitrogen Cycle", "Photosynthesis", "Butterfly Life Cycle",
     "Frog Life Cycle", "Plant Life Cycle", "Energy Pyramid", "Kidney (gross anatomy)",
-    "Reflex Arc", "Food Chain (illustrated)", "Seed Structure", "Ecosystem", "Classification Tree",
+    "Reflex Arc", "Food Chain (illustrated)", "Seed Structure", "Punnett Square",
+    "Ecosystem", "Classification Tree",
   ],
   chemistry: [
     "Bohr Model", "Atomic Structure", "Molecular Structure", "Reaction Diagram",
     "Reaction Mechanism", "Substitution Mechanism", "Addition Mechanism",
     "Elimination Mechanism", "Rearrangement Mechanism", "Combined Mechanisms",
     "Periodic Table", "Electron Configuration", "Energy Level", "Orbital Diagram",
-    "States of Matter", "pH Scale",
+    "States of Matter", "pH Scale", "Ionic vs Covalent Bonding",
   ],
   physics: [
     "Free Body Diagram", "Projectile Motion", "Wave", "Circuit Diagram", "Optics", "Ray Diagram",
     "Electric Field", "Magnetic Field", "Energy Diagram", "Solar System", "Phases of the Moon",
     "Electromagnetic Spectrum", "Series & Parallel Circuits", "Transverse & Longitudinal Waves",
-    "Levers", "Solar & Lunar Eclipse",
+    "Levers", "Solar & Lunar Eclipse", "Simple Machines", "Star Life Cycle",
   ],
   cs: [
     "Flowchart", "Algorithm Flow", "ER Diagram", "DFD", "UML", "Sequence Diagram",
@@ -414,6 +415,11 @@ Object.assign(MODULES, {
   eclipse:           _il("eclipse", "Solar & Lunar Eclipse", "physics", { kind: "eclipse" }),
   greenhouseeffect:  _il("greenhouseeffect", "Greenhouse Effect", "geography", { kind: "greenhouse" }),
   seedstructure:     _il("seedstructure", "Seed Structure", "biology", { kind: "seed" }),
+  punnettsquare:     _il("punnettsquare", "Punnett Square", "biology", { kind: "punnett" }),
+  platetectonics:    _il("platetectonics", "Plate Tectonics", "geography", { kind: "platetectonics" }),
+  simplemachines:    _il("simplemachines", "Simple Machines", "physics", { kind: "simplemachines" }),
+  bonding:           _il("bonding", "Ionic vs Covalent Bonding", "chemistry", { kind: "bonding" }),
+  starlifecycle:     _il("starlifecycle", "Star Life Cycle", "physics", { kind: "starlifecycle" }),
 });
 
 // ---- Phase 10: fill remaining catalog (aliases + charts/graphs/tables/illustrations) ----
