@@ -74,6 +74,7 @@ export const CATALOG = {
     "Carbon Cycle", "Nitrogen Cycle", "Photosynthesis", "Butterfly Life Cycle",
     "Frog Life Cycle", "Plant Life Cycle", "Energy Pyramid", "Kidney (gross anatomy)",
     "Reflex Arc", "Food Chain (illustrated)", "Seed Structure", "Punnett Square",
+    "Types of Joints", "Skin (cross-section)", "Protein Synthesis", "Oxygen Cycle",
     "Ecosystem", "Classification Tree",
   ],
   chemistry: [
@@ -87,7 +88,7 @@ export const CATALOG = {
     "Free Body Diagram", "Projectile Motion", "Wave", "Circuit Diagram", "Optics", "Ray Diagram",
     "Electric Field", "Magnetic Field", "Energy Diagram", "Solar System", "Phases of the Moon",
     "Electromagnetic Spectrum", "Series & Parallel Circuits", "Transverse & Longitudinal Waves",
-    "Levers", "Solar & Lunar Eclipse", "Simple Machines", "Star Life Cycle",
+    "Levers", "Solar & Lunar Eclipse", "Simple Machines", "Star Life Cycle", "Reflection & Refraction",
   ],
   cs: [
     "Flowchart", "Algorithm Flow", "ER Diagram", "DFD", "UML", "Sequence Diagram",
@@ -420,6 +421,11 @@ Object.assign(MODULES, {
   simplemachines:    _il("simplemachines", "Simple Machines", "physics", { kind: "simplemachines" }),
   bonding:           _il("bonding", "Ionic vs Covalent Bonding", "chemistry", { kind: "bonding" }),
   starlifecycle:     _il("starlifecycle", "Star Life Cycle", "physics", { kind: "starlifecycle" }),
+  typesofjoints:     _il("typesofjoints", "Types of Joints", "biology", { kind: "joints" }),
+  skinsection:       _il("skinsection", "Skin (cross-section)", "biology", { kind: "skin" }),
+  reflectionrefraction: _il("reflectionrefraction", "Reflection & Refraction", "physics", { kind: "refraction" }),
+  proteinsynthesis:  _il("proteinsynthesis", "Protein Synthesis", "biology", { kind: "proteinsynthesis" }),
+  oxygencycle:       _il("oxygencycle", "Oxygen Cycle", "biology", { kind: "oxygencycle" }),
 });
 
 // ---- Phase 10: fill remaining catalog (aliases + charts/graphs/tables/illustrations) ----
