@@ -143,6 +143,12 @@ const settingsSchema = new mongoose.Schema(
     guardHoldMs: { type: Number, default: 1500 }, // how long the screen-guard cover stays after a screenshot key (ms)
     // Email + notice-board announcement when a new quiz/test is added.
     notifyOnNewContent: { type: Boolean, default: false },
+    // Platform-wide public visibility switches. When OFF, the corresponding
+    // account type is hidden everywhere on the PUBLIC site (sign-up tabs,
+    // pricing audience, sign-in links) and its register route is blocked, so
+    // visitors can't discover or join that feature. Default ON.
+    publicClientEnabled: { type: Boolean, default: true },
+    publicInstituteEnabled: { type: Boolean, default: true },
     // Welcome popup shown to clients each time they open their workspace.
     clientAnnouncement: {
       type: clientAnnouncementSchema,
