@@ -5,7 +5,7 @@ import Settings from "../models/Settings.js";
 import EmailOtp from "../models/EmailOtp.js";
 import generateToken from "../utils/generateToken.js";
 import { computeOffer } from "./authController.js";
-import { getTenantPlans } from "../utils/plans.js";
+import { getTenantPlans, trialDays } from "../utils/plans.js";
 import { razorpayConfigured, razorpayKeyId, createRazorpayOrder, verifyPaymentSignature } from "../config/razorpay.js";
 import { cleanTenantSeed } from "./settingsController.js";
 import { runUnscoped } from "../utils/tenantContext.js";
@@ -222,7 +222,7 @@ export async function provisionInstitute(req, res) {
 
   // Compute validity.
   const expiresAt = new Date();
-  if (isTrial) expiresAt.setDate(expiresAt.getDate() + TRIAL_TENANT_DAYS);
+  if (isTrial) expiresAt.setDate(expiresAt.getDate() + trialDays(offer.plan, TRIAL_TENANT_DAYS));
   else expiresAt.setMonth(expiresAt.getMonth() + (offer.plan.months || 0));
 
   // Provision atomically-ish (unscoped: creating a NEW tenant's data). If the
