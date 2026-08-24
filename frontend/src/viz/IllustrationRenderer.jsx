@@ -14,7 +14,7 @@
 //   bmagnet   {}
 import { forwardRef, useImperativeHandle, useRef } from "react";
 import { PALETTE as P, VizDefs, Sphere } from "./vizStyle";
-import { AnimalCell, PlantCell, Neuron, Heart, Flower, DigestiveSystem, Respiratory, Eye, Nephron, Ear, LeafSection, Skeleton, Brain, WaterCycle, RockCycle, Circulation, SolarSystem, Volcano, Tooth, CarbonCycle, NitrogenCycle, MoonPhases, Photosynthesis, ButterflyLifeCycle, FrogLifeCycle, PlantLifeCycle, StatesOfMatter, PhScale, EMSpectrum, EnergyPyramid, Kidney, EarthLayers, AtmosphereLayers, Circuits, Waves, ReflexArc, FoodChain, Levers, Eclipse, GreenhouseEffect, SeedStructure, PunnettSquare, PlateTectonics, SimpleMachines, Bonding, StarLifeCycle } from "./assets/anatomy";
+import { AnimalCell, PlantCell, Neuron, Heart, Flower, DigestiveSystem, Respiratory, Eye, Nephron, Ear, LeafSection, Skeleton, Brain, WaterCycle, RockCycle, Circulation, SolarSystem, Volcano, Tooth, CarbonCycle, NitrogenCycle, MoonPhases, Photosynthesis, ButterflyLifeCycle, FrogLifeCycle, PlantLifeCycle, StatesOfMatter, PhScale, EMSpectrum, EnergyPyramid, Kidney, EarthLayers, AtmosphereLayers, Circuits, Waves, ReflexArc, FoodChain, Levers, Eclipse, GreenhouseEffect, SeedStructure, PunnettSquare, PlateTectonics, SimpleMachines, Bonding, StarLifeCycle, Joints, SkinSection, ReflectionRefraction, ProteinSynthesis, OxygenCycle } from "./assets/anatomy";
 
 const W = 760, H = 520;
 const num = (v, d = 0) => (Number.isFinite(Number(v)) ? Number(v) : d);
@@ -583,6 +583,9 @@ const KINDS = {
   punnett: (p) => <PunnettSquare showLabels={p.s?.showLabels !== false} />, platetectonics: (p) => <PlateTectonics showLabels={p.s?.showLabels !== false} />,
   simplemachines: (p) => <SimpleMachines showLabels={p.s?.showLabels !== false} />, bonding: (p) => <Bonding showLabels={p.s?.showLabels !== false} />,
   starlifecycle: (p) => <StarLifeCycle showLabels={p.s?.showLabels !== false} />,
+  joints: (p) => <Joints showLabels={p.s?.showLabels !== false} />, skin: (p) => <SkinSection showLabels={p.s?.showLabels !== false} />,
+  refraction: (p) => <ReflectionRefraction showLabels={p.s?.showLabels !== false} />, proteinsynthesis: (p) => <ProteinSynthesis showLabels={p.s?.showLabels !== false} />,
+  oxygencycle: (p) => <OxygenCycle showLabels={p.s?.showLabels !== false} />,
   efield: (p) => <EField {...p} />, bmagnet: (p) => <BMagnet {...p} />,
   field: (p) => <Field {...p} />, table: (p) => <TableFig {...p} />, celldivision: (p) => <CellDivision {...p} />,
   humanbody: (p) => <HumanBody {...p} />, periodictable: (p) => <PeriodicTable {...p} />, fishbone: (p) => <Fishbone {...p} />,
