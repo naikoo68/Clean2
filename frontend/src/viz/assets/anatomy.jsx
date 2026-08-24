@@ -2011,3 +2011,158 @@ export function OxygenCycle({ showLabels = true }) {
     </g>
   );
 }
+
+
+// ---- Soil horizons ---------------------------------------------------------
+export function SoilHorizons({ showLabels = true }) {
+  const x0 = 150, x1 = 560, layers = [
+    ["O — Humus / litter", "#3f2d1a", 56], ["A — Topsoil", "#7c4a1e", 78],
+    ["B — Subsoil", "#b45309", 96], ["C — Parent material", "#a8a29e", 96], ["R — Bedrock", "#64748b", 88],
+  ];
+  let y = 70;
+  return (
+    <g>
+      {/* grass on top */}
+      {[...Array(9)].map((_, i) => <path key={i} d={`M ${x0 + 20 + i * 46} ${y} q ${i % 2 ? 5 : -5} -16 0 -26`} fill="none" stroke="#16a34a" strokeWidth="3" strokeLinecap="round" />)}
+      {layers.map(([name, color, h], i) => {
+        const yy = y; y += h;
+        return (
+          <g key={i}>
+            <rect x={x0} y={yy} width={x1 - x0} height={h} fill={color} stroke="#1c1917" strokeWidth="1" />
+            {name.startsWith("C") && [...Array(6)].map((_, k) => <circle key={k} cx={x0 + 40 + k * 70} cy={yy + h / 2} r="8" fill="#78716c" />)}
+            {name.startsWith("R") && [...Array(4)].map((_, k) => <line key={k} x1={x0 + 30 + k * 130} y1={yy + 10} x2={x0 + 70 + k * 130} y2={yy + h - 10} stroke="#334155" strokeWidth="1.5" />)}
+            {showLabels && <Leader x={x1} y={yy + h / 2} tx={W - 60} ty={yy + h / 2} text={name} color={color === "#a8a29e" || color === "#64748b" ? "#475569" : color} side="right" />}
+          </g>
+        );
+      })}
+    </g>
+  );
+}
+
+// ---- Electrolysis ----------------------------------------------------------
+export function Electrolysis({ showLabels = true }) {
+  const cx = W / 2, top = 120;
+  return (
+    <g>
+      {/* Battery + wires */}
+      <line x1={cx - 60} y1={top - 10} x2={cx - 60} y2={40} stroke="#334155" strokeWidth="3" />
+      <line x1={cx + 60} y1={top - 10} x2={cx + 60} y2={40} stroke="#334155" strokeWidth="3" />
+      <line x1={cx - 60} y1={40} x2={cx - 14} y2={40} stroke="#334155" strokeWidth="3" />
+      <line x1={cx + 60} y1={40} x2={cx + 14} y2={40} stroke="#334155" strokeWidth="3" />
+      <line x1={cx - 8} y1={28} x2={cx - 8} y2={52} stroke="#334155" strokeWidth="4" />
+      <line x1={cx + 8} y1={34} x2={cx + 8} y2={46} stroke="#334155" strokeWidth="4" />
+      <text x={cx - 60} y={26} fontSize="16" fontWeight="800" fill="#dc2626" textAnchor="middle">−</text>
+      <text x={cx + 60} y={26} fontSize="16" fontWeight="800" fill="#2563eb" textAnchor="middle">+</text>
+      {/* Beaker + electrolyte */}
+      <path d={`M ${cx - 150} ${top} L ${cx - 150} ${H - 70} Q ${cx - 150} ${H - 40} ${cx - 120} ${H - 40} L ${cx + 120} ${H - 40} Q ${cx + 150} ${H - 40} ${cx + 150} ${H - 70} L ${cx + 150} ${top}`} fill="#bae6fd" fillOpacity="0.5" stroke="#0284c7" strokeWidth="2.5" />
+      {/* Electrodes */}
+      <rect x={cx - 66} y={top - 10} width="12" height={H - top - 60} fill="#94a3b8" stroke="#475569" strokeWidth="1.5" />
+      <rect x={cx + 54} y={top - 10} width="12" height={H - top - 60} fill="#94a3b8" stroke="#475569" strokeWidth="1.5" />
+      {/* Ion movement + bubbles */}
+      <line x1={cx + 20} y1={H - 120} x2={cx - 44} y2={H - 120} stroke="#dc2626" strokeWidth="2" markerEnd="url(#il-arrow)" />
+      <line x1={cx - 20} y1={H - 90} x2={cx + 44} y2={H - 90} stroke="#2563eb" strokeWidth="2" markerEnd="url(#il-arrow)" />
+      {[...Array(4)].map((_, i) => <circle key={i} cx={cx - 60 + (i % 2) * 8} cy={top + 30 + i * 22} r="4" fill="none" stroke="#0891b2" strokeWidth="1.5" />)}
+      {[...Array(4)].map((_, i) => <circle key={`b${i}`} cx={cx + 60 - (i % 2) * 8} cy={top + 30 + i * 22} r="4" fill="none" stroke="#0891b2" strokeWidth="1.5" />)}
+      {showLabels && (
+        <g>
+          <Leader x={cx - 60} y={top + 40} tx={70} ty={top} text="Cathode (−)" color="#dc2626" side="left" />
+          <Leader x={cx + 60} y={top + 40} tx={W - 70} ty={top} text="Anode (+)" color="#2563eb" side="right" />
+          <text x={cx} y={H - 150} fontSize="11" fill="#dc2626" textAnchor="middle">cations →</text>
+          <text x={cx} y={H - 72} fontSize="11" fill="#2563eb" textAnchor="middle">anions →</text>
+          <text x={cx} y={H - 30} fontSize="11" fill="#0284c7" textAnchor="middle">electrolyte</text>
+        </g>
+      )}
+    </g>
+  );
+}
+
+// ---- Distillation ----------------------------------------------------------
+export function Distillation({ showLabels = true }) {
+  return (
+    <g>
+      {/* Flask + liquid + heat */}
+      <path d="M 150 210 L 150 150 M 130 150 L 170 150" stroke="#334155" strokeWidth="2.5" fill="none" />
+      <circle cx={150} cy={250} r={44} fill="#bae6fd" fillOpacity="0.5" stroke="#334155" strokeWidth="2.5" />
+      <path d="M 118 268 A 44 44 0 0 0 182 268 Z" fill="#7dd3fc" />
+      <path d="M 138 300 q 6 -16 12 0 q 6 16 12 0" fill="none" stroke="#f97316" strokeWidth="3" />
+      {/* thermometer */}
+      <line x1={150} y1={150} x2={150} y2={110} stroke="#dc2626" strokeWidth="3" />
+      <circle cx={150} cy={110} r="6" fill="#dc2626" />
+      {/* Delivery tube to condenser */}
+      <path d="M 170 176 Q 250 150 300 200 L 470 320" stroke="#334155" strokeWidth="2.5" fill="none" />
+      {/* Condenser jacket */}
+      <path d="M 300 188 L 476 308 M 312 168 L 488 288" stroke="#0284c7" strokeWidth="2" fill="none" />
+      <line x1={306} y1={178} x2={482} y2={298} stroke="#94a3b8" strokeWidth="1" strokeDasharray="4 4" />
+      {/* Collection flask */}
+      <path d="M 470 320 L 470 360 M 452 360 L 452 430 Q 452 450 472 450 L 512 450 Q 532 450 532 430 L 532 360 L 514 360" stroke="#334155" strokeWidth="2.5" fill="none" />
+      <path d="M 452 420 L 532 420 L 532 430 Q 532 450 512 450 L 472 450 Q 452 450 452 430 Z" fill="#7dd3fc" />
+      {showLabels && (
+        <g>
+          <Leader x={150} y={110} tx={70} ty={90} text="Thermometer" color="#dc2626" side="left" />
+          <Leader x={150} y={250} tx={70} ty={300} text="Heated mixture" color="#334155" side="left" />
+          <Leader x={392} y={248} tx={392} ty={140} text="Condenser (water-cooled)" color="#0284c7" side="right" />
+          <Leader x={492} y={430} tx={W - 60} ty={430} text="Distillate" color="#0284c7" side="right" />
+          <text x={490} y={150} fontSize="10" fill="#0284c7">water out</text>
+          <text x={470} y={330} fontSize="10" fill="#0284c7">water in</text>
+        </g>
+      )}
+    </g>
+  );
+}
+
+// ---- Breathing mechanism ---------------------------------------------------
+export function Breathing({ showLabels = true }) {
+  const panel = (cx, inhale) => {
+    const lungR = inhale ? 60 : 46, diaphY = inhale ? 330 : 300;
+    return (
+      <g>
+        {/* trachea */}
+        <rect x={cx - 8} y={110} width="16" height="60" rx="6" fill="#cbd5e1" stroke="#64748b" strokeWidth="1.5" />
+        {/* lungs */}
+        {[-1, 1].map((d, i) => <ellipse key={i} cx={cx + d * (lungR * 0.7)} cy={220} rx={lungR * 0.7} ry={lungR} fill="#fecdd3" stroke="#e11d48" strokeWidth="2" />)}
+        {/* ribcage */}
+        {[0, 1, 2, 3].map((i) => <path key={i} d={`M ${cx - 90} ${160 + i * 30} Q ${cx} ${150 + i * 30 - (inhale ? 14 : 0)} ${cx + 90} ${160 + i * 30}`} fill="none" stroke="#94a3b8" strokeWidth="3" />)}
+        {/* diaphragm */}
+        <path d={inhale ? `M ${cx - 100} ${diaphY} L ${cx + 100} ${diaphY}` : `M ${cx - 100} ${diaphY} Q ${cx} ${diaphY - 46} ${cx + 100} ${diaphY}`} fill="none" stroke="#a16207" strokeWidth="5" />
+        {/* airflow arrow */}
+        <line x1={cx} y1={inhale ? 80 : 170} x2={cx} y2={inhale ? 150 : 80} stroke={inhale ? "#2563eb" : "#dc2626"} strokeWidth="3" markerEnd="url(#il-arrow)" />
+        {showLabels && (
+          <g>
+            <text x={cx} y={diaphY + 24} fontSize="11" fontWeight="600" fill="#a16207" textAnchor="middle">{inhale ? "diaphragm flattens" : "diaphragm domes up"}</text>
+            <text x={cx} y={410} fontSize="14" fontWeight="800" fill="#334155" textAnchor="middle">{inhale ? "Inhalation" : "Exhalation"}</text>
+          </g>
+        )}
+      </g>
+    );
+  };
+  return <g>{panel(W / 4, true)}{panel((3 * W) / 4, false)}</g>;
+}
+
+// ---- Synapse ---------------------------------------------------------------
+export function Synapse({ showLabels = true }) {
+  const cy = H / 2;
+  return (
+    <g>
+      {/* Presynaptic terminal */}
+      <path d={`M 60 ${cy - 90} Q 340 ${cy - 120} 360 ${cy - 30} L 360 ${cy + 30} Q 340 ${cy + 120} 60 ${cy + 90} Z`} fill="#c7d2fe" stroke="#4f46e5" strokeWidth="2.5" filter="url(#viz-shadow)" />
+      {/* Vesicles */}
+      {[[250, cy - 40], [300, cy - 10], [280, cy + 40], [320, cy + 20], [230, cy + 30]].map(([x, y], i) => <g key={i}><circle cx={x} cy={y} r="16" fill="none" stroke="#6366f1" strokeWidth="2" />{[...Array(4)].map((_, k) => <circle key={k} cx={x - 6 + (k % 2) * 12} cy={y - 6 + Math.floor(k / 2) * 12} r="2.6" fill="#f59e0b" />)}</g>)}
+      {/* Cleft */}
+      <rect x={366} y={cy - 120} width="34" height="240" fill="#f8fafc" />
+      {/* Neurotransmitters crossing */}
+      {[[380, cy - 30], [390, cy], [382, cy + 34], [398, cy - 60]].map(([x, y], i) => <circle key={i} cx={x} cy={y} r="4.5" fill="#f59e0b" />)}
+      {/* Postsynaptic membrane + receptors */}
+      <path d={`M 406 ${cy - 120} L 406 ${cy + 120}`} stroke="#0f766e" strokeWidth="5" />
+      <rect x={406} y={cy - 120} width={W - 60 - 406} height="240" fill="#ccfbf1" opacity="0.6" />
+      {[cy - 60, cy - 20, cy + 20, cy + 60].map((y, i) => <path key={i} d={`M 402 ${y} q 12 0 12 12 q 0 -12 12 -12`} fill="none" stroke="#0d9488" strokeWidth="3" />)}
+      {showLabels && (
+        <g>
+          <Leader x={200} y={cy - 60} tx={70} ty={cy - 130} text="Presynaptic neuron" color="#4f46e5" side="left" />
+          <Leader x={285} y={cy} tx={200} ty={cy + 150} text="Synaptic vesicles (neurotransmitter)" color="#6366f1" side="left" />
+          <Leader x={388} y={cy + 60} tx={388} ty={H - 24} text="Synaptic cleft" color="#334155" side="right" />
+          <Leader x={W - 120} y={cy + 20} tx={W - 60} ty={cy + 110} text="Receptors (postsynaptic)" color="#0d9488" side="right" />
+        </g>
+      )}
+    </g>
+  );
+}
