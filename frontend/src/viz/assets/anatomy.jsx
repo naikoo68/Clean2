@@ -4053,3 +4053,457 @@ export function CometStructure({ showLabels = true }) {
     </g>
   );
 }
+
+
+// ---- Menstrual cycle (hormones + uterine lining) ---------------------------
+export function MenstrualCycle({ showLabels = true }) {
+  const x0 = 90, x1 = W - 60, y0 = H - 90, plotW = x1 - x0;
+  const wave = (amp, base, phase, k, color) => {
+    const pts = [];
+    for (let d = 0; d <= 28; d += 0.5) pts.push(`${(x0 + (d / 28) * plotW).toFixed(1)},${(base - amp * Math.max(0, Math.sin((d - phase) / 28 * Math.PI * 2 + Math.PI / 2))).toFixed(1)}`);
+    return <polyline key={k} points={pts.join(" ")} fill="none" stroke={color} strokeWidth="2.5" />;
+  };
+  return (
+    <g>
+      <line x1={x0} y1={y0} x2={x1} y2={y0} stroke="currentColor" strokeWidth="1.5" markerEnd="url(#il-arrow)" />
+      {/* uterine lining thickness (grows to ~day 22 then sheds) */}
+      <path d={`M ${x0} ${y0} L ${x0 + plotW * 0.18} ${y0} L ${x0 + plotW * 0.8} ${y0 - 70} L ${x0 + plotW} ${y0 - 40} L ${x0 + plotW} ${y0} Z`} fill="#fecaca" opacity="0.5" />
+      {wave(90, y0 - 20, 12, "estrogen", "#16a34a")}
+      {wave(70, y0 - 20, 20, "progesterone", "#7c3aed")}
+      {/* ovulation marker ~day 14 */}
+      <line x1={x0 + plotW * 0.5} y1={y0} x2={x0 + plotW * 0.5} y2={110} stroke="#f59e0b" strokeWidth="1.5" strokeDasharray="4 3" />
+      {showLabels && (
+        <g fill="#334155">
+          <text x={(x0 + x1) / 2} y={y0 + 30} fontSize="12" textAnchor="middle">day of cycle (0 → 28)</text>
+          <text x={x0 + plotW * 0.5} y={100} fontSize="11" fill="#f59e0b" textAnchor="middle">ovulation (~day 14)</text>
+          <text x={x0 + 20} y={y0 - 10} fontSize="10" fill="#dc2626">menstruation</text>
+          <text x={x1 - 10} y={130} fontSize="11" fill="#16a34a" textAnchor="end">estrogen</text>
+          <text x={x1 - 10} y={148} fontSize="11" fill="#7c3aed" textAnchor="end">progesterone</text>
+          <text x={W / 2} y={40} fontSize="13" fontWeight="700" textAnchor="middle">Menstrual cycle</text>
+        </g>
+      )}
+    </g>
+  );
+}
+
+// ---- Pedigree chart --------------------------------------------------------
+export function PedigreeChart({ showLabels = true }) {
+  const male = (x, y, aff) => <rect x={x - 16} y={y - 16} width="32" height="32" fill={aff ? "#334155" : "#fff"} stroke="#334155" strokeWidth="2" />;
+  const female = (x, y, aff) => <circle cx={x} cy={y} r="18" fill={aff ? "#334155" : "#fff"} stroke="#334155" strokeWidth="2" />;
+  const cx = W / 2;
+  return (
+    <g>
+      {/* Gen I */}
+      {male(cx - 80, 120, false)}{female(cx + 80, 120, true)}
+      <line x1={cx - 64} y1={120} x2={cx + 62} y2={120} stroke="#334155" strokeWidth="2" />
+      <line x1={cx} y1={120} x2={cx} y2={180} stroke="#334155" strokeWidth="2" />
+      {/* Gen II */}
+      <line x1={cx - 140} y1={180} x2={cx + 140} y2={180} stroke="#334155" strokeWidth="2" />
+      {[[-140, false], [0, true], [140, false]].map(([dx, aff], i) => <g key={i}><line x1={cx + dx} y1={180} x2={cx + dx} y2={220} stroke="#334155" strokeWidth="2" />{i === 1 ? male(cx + dx, 240, aff) : (i === 0 ? female(cx + dx, 240, aff) : male(cx + dx, 240, aff))}</g>)}
+      {/* couple II + spouse -> Gen III */}
+      <line x1={cx} y1={240} x2={cx + 200} y2={240} stroke="#334155" strokeWidth="2" />{female(cx + 200, 240, false)}
+      <line x1={cx + 100} y1={240} x2={cx + 100} y2={300} stroke="#334155" strokeWidth="2" />
+      <line x1={cx + 60} y1={300} x2={cx + 140} y2={300} stroke="#334155" strokeWidth="2" />
+      {female(cx + 60, 340, true)}{male(cx + 140, 340, false)}
+      <line x1={cx + 60} y1={300} x2={cx + 60} y2={322} stroke="#334155" strokeWidth="2" /><line x1={cx + 140} y1={300} x2={cx + 140} y2={322} stroke="#334155" strokeWidth="2" />
+      {showLabels && (
+        <g fill="#334155" fontSize="11">
+          <text x={70} y={126} textAnchor="end">I</text><text x={70} y={246} textAnchor="end">II</text><text x={70} y={346} textAnchor="end">III</text>
+          <rect x={80} y={H - 60} width="18" height="18" fill="#334155" /><text x={104} y={H - 46}>affected</text>
+          <rect x={200} y={H - 60} width="18" height="18" fill="#fff" stroke="#334155" strokeWidth="2" /><text x={224} y={H - 46}>unaffected</text>
+          <text x={W - 80} y={H - 46} textAnchor="end">□ male · ○ female</text>
+        </g>
+      )}
+    </g>
+  );
+}
+
+// ---- Pyramid of numbers ----------------------------------------------------
+export function PyramidOfNumbers({ showLabels = true }) {
+  const cx = W / 2, base = H - 90, levelH = 70;
+  const levels = [["Producers (many)", 460, "#16a34a"], ["Primary consumers", 300, "#84cc16"], ["Secondary consumers", 170, "#f59e0b"], ["Top consumer (few)", 70, "#dc2626"]];
+  return (
+    <g>
+      {levels.map(([name, w, color], i) => {
+        const y = base - i * levelH;
+        return (
+          <g key={i} filter="url(#viz-shadow)">
+            <rect x={cx - w / 2} y={y - levelH + 6} width={w} height={levelH - 10} fill={color} stroke="#334155" strokeWidth="1.5" />
+            {showLabels && <text x={cx} y={y - levelH / 2 + 4} fontSize="12" fontWeight="700" fill="#fff" textAnchor="middle">{name}</text>}
+          </g>
+        );
+      })}
+      {showLabels && <text x={W / 2} y={60} fontSize="13" fontWeight="700" fill="#334155" textAnchor="middle">Pyramid of numbers</text>}
+    </g>
+  );
+}
+
+// ---- Nervous system (CNS / PNS) --------------------------------------------
+export function NervousSystem({ showLabels = true }) {
+  const cx = W / 2;
+  return (
+    <g>
+      {/* brain */}
+      <path d={`M ${cx - 34} 100 Q ${cx} 60 ${cx + 34} 100 Q ${cx + 46} 130 ${cx} 140 Q ${cx - 46} 130 ${cx - 34} 100 Z`} fill="#fecdd3" stroke="#be185d" strokeWidth="2.5" filter="url(#viz-shadow)" />
+      {/* spinal cord */}
+      <rect x={cx - 10} y={140} width="20" height="260" rx="8" fill="#fbcfe8" stroke="#be185d" strokeWidth="2" />
+      {/* peripheral nerves */}
+      {[170, 220, 270, 320, 370].map((y, i) => <g key={i}><line x1={cx - 10} y1={y} x2={cx - 120} y2={y + 20} stroke="#f59e0b" strokeWidth="2.5" /><line x1={cx + 10} y1={y} x2={cx + 120} y2={y + 20} stroke="#f59e0b" strokeWidth="2.5" /></g>)}
+      {showLabels && (
+        <g>
+          <Leader x={cx} y={100} tx={70} ty={90} text="Brain" color="#be185d" side="left" />
+          <Leader x={cx} y={260} tx={70} ty={280} text="Spinal cord" color="#be185d" side="left" />
+          <Leader x={cx + 100} y={290} tx={W - 60} ty={300} text="Peripheral nerves (PNS)" color="#f59e0b" side="right" />
+          <text x={cx} y={H - 30} fontSize="11" fill="#64748b" textAnchor="middle">CNS = brain + spinal cord · PNS = nerves</text>
+        </g>
+      )}
+    </g>
+  );
+}
+
+// ---- Leaf external structure -----------------------------------------------
+export function LeafStructure({ showLabels = true }) {
+  const cx = W / 2, cy = H / 2 - 10;
+  return (
+    <g>
+      <path d={`M ${cx} ${cy - 150} Q ${cx + 150} ${cy - 40} ${cx} ${cy + 150} Q ${cx - 150} ${cy - 40} ${cx} ${cy - 150} Z`} fill="#bbf7d0" stroke="#16a34a" strokeWidth="2.5" filter="url(#viz-shadow)" />
+      {/* midrib + veins */}
+      <line x1={cx} y1={cy - 150} x2={cx} y2={cy + 150} stroke="#15803d" strokeWidth="3" />
+      {[-100, -50, 0, 50, 100].map((o, i) => <g key={i}><path d={`M ${cx} ${cy + o} q -60 -20 -100 -40`} fill="none" stroke="#16a34a" strokeWidth="1.5" /><path d={`M ${cx} ${cy + o} q 60 -20 100 -40`} fill="none" stroke="#16a34a" strokeWidth="1.5" /></g>)}
+      {/* petiole */}
+      <line x1={cx} y1={cy + 150} x2={cx} y2={cy + 200} stroke="#15803d" strokeWidth="6" strokeLinecap="round" />
+      {showLabels && (
+        <g>
+          <Leader x={cx + 90} y={cy - 60} tx={W - 60} ty={cy - 120} text="Blade (lamina)" color="#16a34a" side="right" />
+          <Leader x={cx} y={cy} tx={70} ty={cy - 40} text="Midrib" color="#15803d" side="left" />
+          <Leader x={cx - 70} y={cy + 20} tx={70} ty={cy + 80} text="Veins" color="#16a34a" side="left" />
+          <Leader x={cx} y={cy + 180} tx={W - 60} ty={cy + 180} text="Petiole (stalk)" color="#15803d" side="right" />
+        </g>
+      )}
+    </g>
+  );
+}
+
+// ---- Guard cells / stomata (open & closed) ---------------------------------
+export function GuardCells({ showLabels = true }) {
+  const y = H / 2;
+  const stoma = (cx, open) => (
+    <g>
+      <path d={`M ${cx - 40} ${y} q -20 ${-open ? 0 : 0} 0 0`} />
+      <path d={`M ${cx} ${y - 50} q ${open ? 34 : 12} 24 0 100 q ${open ? -34 : -12} -24 0 -100`} fill="#86efac" stroke="#15803d" strokeWidth="2.5" transform={`translate(${-open ? 0 : 0} 0)`} />
+      <path d={`M ${cx} ${y - 50} q ${open ? -34 : -12} 24 0 100 q ${open ? 34 : 12} -24 0 -100`} fill="#86efac" stroke="#15803d" strokeWidth="2.5" />
+      {showLabels && <text x={cx} y={y + 84} fontSize="13" fontWeight="700" fill="#334155" textAnchor="middle">{open ? "Open (turgid)" : "Closed (flaccid)"}</text>}
+    </g>
+  );
+  return (
+    <g>
+      {stoma(W / 3, true)}
+      {stoma((2 * W) / 3, false)}
+      {showLabels && (
+        <g fill="#334155" textAnchor="middle">
+          <text x={W / 3} y={y + 104} fontSize="10" fill="#64748b">gas exchange & transpiration</text>
+          <text x={(2 * W) / 3} y={y + 104} fontSize="10" fill="#64748b">reduces water loss</text>
+          <text x={W / 2} y={70} fontSize="13" fontWeight="700">Guard cells control the stoma</text>
+        </g>
+      )}
+    </g>
+  );
+}
+
+// ---- Blast furnace (iron extraction) ---------------------------------------
+export function BlastFurnace({ showLabels = true }) {
+  const cx = W / 2, top = 90, bot = H - 80;
+  return (
+    <g>
+      <path d={`M ${cx - 90} ${top} L ${cx - 90} ${top + 70} L ${cx - 120} ${bot - 90} L ${cx - 70} ${bot} L ${cx + 70} ${bot} L ${cx + 120} ${bot - 90} L ${cx + 90} ${top + 70} L ${cx + 90} ${top} Z`} fill="#e2e8f0" stroke="#334155" strokeWidth="2.5" filter="url(#viz-shadow)" />
+      {/* zones */}
+      <rect x={cx - 100} y={bot - 60} width="200" height="50" fill="#f97316" opacity="0.5" />
+      {/* charge in top */}
+      <line x1={cx} y1={40} x2={cx} y2={top} stroke="#334155" strokeWidth="3" markerEnd="url(#il-arrow)" />
+      {/* hot air blast */}
+      {[-1, 1].map((d, i) => <line key={i} x1={cx + d * 160} y1={bot - 40} x2={cx + d * 90} y2={bot - 40} stroke="#dc2626" strokeWidth="3" markerEnd="url(#il-arrow)" />)}
+      {/* molten iron + slag taps */}
+      <line x1={cx - 60} y1={bot} x2={cx - 130} y2={bot + 30} stroke="#f59e0b" strokeWidth="4" />
+      <line x1={cx + 60} y1={bot - 20} x2={cx + 130} y2={bot + 10} stroke="#a16207" strokeWidth="4" />
+      {showLabels && (
+        <g fill="#334155">
+          <text x={cx} y={34} fontSize="11" textAnchor="middle">iron ore + coke + limestone</text>
+          <text x={cx + 150} y={bot - 46} fontSize="10.5" textAnchor="end" fill="#dc2626">hot air</text>
+          <text x={cx - 132} y={bot + 44} fontSize="10.5" textAnchor="end" fill="#f59e0b">molten iron</text>
+          <text x={cx + 132} y={bot + 24} fontSize="10.5" fill="#a16207">slag</text>
+          <text x={W / 2} y={H - 20} fontSize="12" fontWeight="700" textAnchor="middle">Blast furnace — iron extraction</text>
+        </g>
+      )}
+    </g>
+  );
+}
+
+// ---- Haber process ---------------------------------------------------------
+export function HaberProcess({ showLabels = true }) {
+  const y = H / 2;
+  return (
+    <g>
+      {/* reactants in */}
+      <line x1={70} y1={y - 40} x2={W / 2 - 80} y2={y - 40} stroke="#2563eb" strokeWidth="3" markerEnd="url(#il-arrow)" />
+      <line x1={70} y1={y + 40} x2={W / 2 - 80} y2={y + 40} stroke="#16a34a" strokeWidth="3" markerEnd="url(#il-arrow)" />
+      {/* reactor */}
+      <rect x={W / 2 - 80} y={y - 70} width="160" height="140" rx="12" fill="#fef9c3" stroke="#ca8a04" strokeWidth="2.5" filter="url(#viz-shadow)" />
+      {/* product out */}
+      <line x1={W / 2 + 80} y1={y} x2={W - 90} y2={y} stroke="#7c3aed" strokeWidth="3" markerEnd="url(#il-arrow)" />
+      {showLabels && (
+        <g fill="#334155">
+          <text x={90} y={y - 50} fontSize="12" fontWeight="700" fill="#2563eb">N₂ (air)</text>
+          <text x={90} y={y + 58} fontSize="12" fontWeight="700" fill="#16a34a">H₂ (natural gas)</text>
+          <text x={W / 2} y={y - 20} fontSize="11" textAnchor="middle">Fe catalyst</text>
+          <text x={W / 2} y={y + 4} fontSize="11" textAnchor="middle">~450 °C, 200 atm</text>
+          <text x={W / 2} y={y + 26} fontSize="11" textAnchor="middle" fill="#64748b">N₂ + 3H₂ ⇌ 2NH₃</text>
+          <text x={W - 90} y={y - 14} fontSize="12" fontWeight="700" fill="#7c3aed" textAnchor="end">NH₃ (ammonia)</text>
+          <text x={W / 2} y={60} fontSize="13" fontWeight="700" textAnchor="middle">Haber process</text>
+        </g>
+      )}
+    </g>
+  );
+}
+
+// ---- Metallic bonding ------------------------------------------------------
+export function MetallicBonding({ showLabels = true }) {
+  const x0 = W / 2 - 150, y0 = H / 2 - 100;
+  const ions = [];
+  for (let r = 0; r < 4; r++) for (let c = 0; c < 4; c++) ions.push([x0 + 40 + c * 90, y0 + 40 + r * 60]);
+  return (
+    <g>
+      {ions.map(([x, y], i) => <g key={i}><g filter="url(#viz-shadow)"><Sphere cx={x} cy={y} r={22} fill="#2563eb" /></g><text x={x} y={y + 4} fontSize="12" fontWeight="700" fill="#fff" textAnchor="middle">+</text></g>)}
+      {/* delocalised electrons scattered */}
+      {[...Array(24)].map((_, i) => { const a = i * 2.399; const x = W / 2 + (140 * Math.cos(a)) * ((i % 6 + 1) / 6); const y = H / 2 + (110 * Math.sin(a)) * ((i % 6 + 1) / 6); return <circle key={i} cx={x} cy={y} r="4" fill="#f59e0b" />; })}
+      {showLabels && (
+        <g fill="#334155" textAnchor="middle">
+          <text x={W / 2} y={60} fontSize="13" fontWeight="700">Metallic bonding</text>
+          <text x={W / 2} y={H - 40} fontSize="11" fill="#64748b">lattice of positive ions in a "sea" of delocalised electrons (yellow)</text>
+        </g>
+      )}
+    </g>
+  );
+}
+
+
+// ---- Giant ionic lattice (NaCl) --------------------------------------------
+export function IonicLattice({ showLabels = true }) {
+  const x0 = W / 2 - 150, y0 = H / 2 - 120, gap = 74;
+  const ions = [];
+  for (let r = 0; r < 4; r++) for (let c = 0; c < 4; c++) ions.push([x0 + c * gap, y0 + r * gap, (r + c) % 2 === 0]);
+  return (
+    <g>
+      {ions.map(([x, y], i) => { const [rx, ry] = [ions[i][0], ions[i][1]]; return <g key={`b${i}`}>{i % 4 !== 3 && <line x1={x} y1={y} x2={x + gap} y2={y} stroke="#cbd5e1" strokeWidth="1.5" />}{Math.floor(i / 4) !== 3 && <line x1={x} y1={y} x2={x} y2={y + gap} stroke="#cbd5e1" strokeWidth="1.5" />}</g>; })}
+      {ions.map(([x, y, na], i) => (
+        <g key={i}>
+          <g filter="url(#viz-shadow)"><Sphere cx={x} cy={y} r={na ? 16 : 24} fill={na ? "#8b5cf6" : "#10b981"} /></g>
+          <text x={x} y={y + 4} fontSize={na ? 9 : 11} fontWeight="700" fill="#fff" textAnchor="middle">{na ? "Na⁺" : "Cl⁻"}</text>
+        </g>
+      ))}
+      {showLabels && (
+        <g fill="#334155" textAnchor="middle">
+          <text x={W / 2} y={50} fontSize="13" fontWeight="700">Giant ionic lattice (NaCl)</text>
+          <text x={W / 2} y={H - 34} fontSize="11" fill="#64748b">regular repeating array of oppositely-charged ions</text>
+        </g>
+      )}
+    </g>
+  );
+}
+
+// ---- Newton's three laws ---------------------------------------------------
+export function NewtonsLaws({ showLabels = true }) {
+  const y = H / 2, xs = [W / 6, W / 2, 5 * W / 6];
+  return (
+    <g>
+      {/* 1st: inertia (object at rest) */}
+      <rect x={xs[0] - 30} y={y - 26} width="60" height="52" rx="6" fill="#2563eb" />
+      <line x1={xs[0] - 70} y1={y + 40} x2={xs[0] + 70} y2={y + 40} stroke="#334155" strokeWidth="3" />
+      {/* 2nd: F = ma */}
+      <rect x={xs[1] - 26} y={y - 22} width="52" height="44" rx="6" fill="#16a34a" />
+      <line x1={xs[1] + 26} y1={y} x2={xs[1] + 90} y2={y} stroke="#dc2626" strokeWidth="4" markerEnd="url(#il-arrow)" />
+      {/* 3rd: action-reaction */}
+      <rect x={xs[2] - 26} y={y - 22} width="52" height="44" rx="6" fill="#f59e0b" />
+      <line x1={xs[2] - 26} y1={y} x2={xs[2] - 90} y2={y} stroke="#dc2626" strokeWidth="3.5" markerEnd="url(#il-arrow)" />
+      <line x1={xs[2] + 26} y1={y} x2={xs[2] + 90} y2={y} stroke="#7c3aed" strokeWidth="3.5" markerEnd="url(#il-arrow)" />
+      {showLabels && (
+        <g textAnchor="middle" fill="#334155">
+          <text x={xs[0]} y={y + 76} fontSize="12" fontWeight="700">1st law</text><text x={xs[0]} y={y + 92} fontSize="9.5" fill="#64748b">inertia (stays at rest)</text>
+          <text x={xs[1]} y={y + 76} fontSize="12" fontWeight="700">2nd law</text><text x={xs[1]} y={y + 92} fontSize="9.5" fill="#64748b">F = m × a</text>
+          <text x={xs[2]} y={y + 76} fontSize="12" fontWeight="700">3rd law</text><text x={xs[2]} y={y + 92} fontSize="9.5" fill="#64748b">action = reaction</text>
+        </g>
+      )}
+    </g>
+  );
+}
+
+// ---- Moments (balancing) ---------------------------------------------------
+export function Moments({ showLabels = true }) {
+  const cx = W / 2, y = H / 2;
+  return (
+    <g>
+      <line x1={cx - 220} y1={y} x2={cx + 220} y2={y} stroke="#a16207" strokeWidth="8" strokeLinecap="round" />
+      <path d={`M ${cx - 20} ${y + 40} L ${cx} ${y + 8} L ${cx + 20} ${y + 40} Z`} fill="#334155" />
+      <rect x={cx - 200} y={y - 60} width="50" height="50" fill="#2563eb" />
+      <rect x={cx + 130} y={y - 44} width="34" height="34" fill="#dc2626" />
+      <line x1={cx - 175} y1={y} x2={cx - 175} y2={y - 62} stroke="#334155" strokeWidth="1" strokeDasharray="3 3" />
+      <line x1={cx + 147} y1={y} x2={cx + 147} y2={y - 46} stroke="#334155" strokeWidth="1" strokeDasharray="3 3" />
+      {showLabels && (
+        <g fill="#334155" textAnchor="middle">
+          <text x={cx} y={y + 70} fontSize="11">pivot</text>
+          <text x={cx - 100} y={y + 24} fontSize="10.5">d₁</text><text x={cx + 74} y={y + 24} fontSize="10.5">d₂</text>
+          <text x={W / 2} y={70} fontSize="13" fontWeight="700">Moments: F₁ × d₁ = F₂ × d₂ (balanced)</text>
+        </g>
+      )}
+    </g>
+  );
+}
+
+// ---- Pressure in liquids ---------------------------------------------------
+export function LiquidPressure({ showLabels = true }) {
+  const x0 = 180, top = 110, bot = H - 80;
+  return (
+    <g>
+      <path d={`M ${x0} ${top} L ${x0} ${bot} L ${x0 + 120} ${bot} L ${x0 + 120} ${top}`} fill="#bae6fd" fillOpacity="0.5" stroke="#334155" strokeWidth="2.5" />
+      {[0.3, 0.55, 0.8].map((f, i) => { const y = top + f * (bot - top); const len = 40 + f * 140; return <g key={i}><path d={`M ${x0 + 120} ${y} q ${len * 0.5} 10 ${len} ${len * 0.4}`} fill="none" stroke="#0ea5e9" strokeWidth="3" markerEnd="url(#il-arrow)" /></g>; })}
+      {showLabels && (
+        <g fill="#334155">
+          <text x={x0 + 60} y={top - 16} fontSize="12" fontWeight="700" textAnchor="middle">water tank</text>
+          <text x={x0 + 260} y={bot} fontSize="11" fill="#0ea5e9">deeper → higher pressure → jet travels further</text>
+          <text x={W / 2} y={60} fontSize="13" fontWeight="700" textAnchor="middle">Pressure increases with depth</text>
+        </g>
+      )}
+    </g>
+  );
+}
+
+// ---- Hooke's law -----------------------------------------------------------
+export function HookesLaw({ showLabels = true }) {
+  const sx = 170, top = 90;
+  const coils = 8, gap = 16;
+  const x0 = W / 2 + 30, y0 = H - 90, x1 = W - 70, y1 = 90;
+  return (
+    <g>
+      {/* spring + weight (left) */}
+      <line x1={sx - 60} y1={top} x2={sx + 60} y2={top} stroke="#334155" strokeWidth="5" />
+      {Array.from({ length: coils }).map((_, i) => <line key={i} x1={sx - 16} y1={top + 10 + i * gap} x2={sx + 16} y2={top + 18 + i * gap} stroke="#64748b" strokeWidth="2.5" />)}
+      <rect x={sx - 22} y={top + 10 + coils * gap} width="44" height="40" fill="#2563eb" />
+      {/* graph (right) */}
+      <line x1={x0} y1={y0} x2={x1} y2={y0} stroke="currentColor" strokeWidth="1.5" markerEnd="url(#il-arrow)" />
+      <line x1={x0} y1={y0} x2={x0} y2={y1} stroke="currentColor" strokeWidth="1.5" markerEnd="url(#il-arrow)" />
+      <line x1={x0} y1={y0} x2={x1 - 30} y2={y1 + 20} stroke="#dc2626" strokeWidth="3" />
+      {showLabels && (
+        <g fill="#334155">
+          <text x={sx} y={top + 10 + coils * gap + 74} fontSize="11" textAnchor="middle">load stretches spring</text>
+          <text x={(x0 + x1) / 2} y={y0 + 26} fontSize="11" textAnchor="middle">extension</text>
+          <text x={x0 - 14} y={(y0 + y1) / 2} fontSize="11" textAnchor="middle" transform={`rotate(-90 ${x0 - 14} ${(y0 + y1) / 2})`}>force</text>
+          <text x={x1 - 60} y={y1 + 40} fontSize="10.5" fill="#dc2626">F ∝ e (linear)</text>
+          <text x={W / 2} y={50} fontSize="13" fontWeight="700" textAnchor="middle">Hooke's law</text>
+        </g>
+      )}
+    </g>
+  );
+}
+
+// ---- Motor effect / Fleming's left-hand rule -------------------------------
+export function MotorEffect({ showLabels = true }) {
+  const cx = W / 2, cy = H / 2;
+  return (
+    <g>
+      {/* magnet poles */}
+      <rect x={cx - 160} y={cy - 80} width="46" height="160" fill="#dc2626" /><text x={cx - 137} y={cy + 6} fontSize="20" fontWeight="800" fill="#fff" textAnchor="middle">N</text>
+      <rect x={cx + 114} y={cy - 80} width="46" height="160" fill="#2563eb" /><text x={cx + 137} y={cy + 6} fontSize="20" fontWeight="800" fill="#fff" textAnchor="middle">S</text>
+      <line x1={cx - 114} y1={cy} x2={cx + 114} y2={cy} stroke="#94a3b8" strokeWidth="2" markerEnd="url(#il-arrow)" />
+      {/* wire (current, into/out) */}
+      <circle cx={cx} cy={cy} r="14" fill="#fff" stroke="#b45309" strokeWidth="3" /><circle cx={cx} cy={cy} r="3" fill="#b45309" />
+      {/* force (up) */}
+      <line x1={cx} y1={cy - 20} x2={cx} y2={cy - 110} stroke="#16a34a" strokeWidth="4" markerEnd="url(#il-arrow)" />
+      {showLabels && (
+        <g fill="#334155">
+          <text x={cx + 10} y={cy - 90} fontSize="13" fontWeight="700" fill="#16a34a">F (force)</text>
+          <text x={cx - 60} y={cy - 8} fontSize="12" fill="#94a3b8">B (field →)</text>
+          <text x={cx + 20} y={cy + 6} fontSize="12" fill="#b45309">I (current)</text>
+          <text x={W / 2} y={60} fontSize="13" fontWeight="700" textAnchor="middle">Motor effect (Fleming's left-hand rule)</text>
+        </g>
+      )}
+    </g>
+  );
+}
+
+// ---- Concave lens image ----------------------------------------------------
+export function ConcaveLens({ showLabels = true }) {
+  const cx = W / 2, ay = H / 2, objX = cx - 220, objTop = ay - 80, f = 120;
+  const imgX = cx - 70, imgTop = ay - 34;
+  return (
+    <g>
+      <line x1={80} y1={ay} x2={W - 80} y2={ay} stroke="#94a3b8" strokeWidth="1.5" />
+      {/* concave lens (thin middle) */}
+      <path d={`M ${cx - 10} ${ay - 110} Q ${cx + 14} ${ay} ${cx - 10} ${ay + 110} M ${cx + 10} ${ay - 110} Q ${cx - 14} ${ay} ${cx + 10} ${ay + 110}`} fill="#bae6fd" fillOpacity="0.5" stroke="#0284c7" strokeWidth="2.5" />
+      <circle cx={cx - f} cy={ay} r="3" fill="#64748b" /><text x={cx - f} y={ay + 16} fontSize="10" fill="#64748b" textAnchor="middle">F</text>
+      {/* object */}
+      <line x1={objX} y1={ay} x2={objX} y2={objTop} stroke="#16a34a" strokeWidth="3" markerEnd="url(#il-arrow)" />
+      {/* rays diverge; virtual image (dashed back-projection) */}
+      <polyline points={`${objX},${objTop} ${cx},${objTop} ${W - 120},${ay - 130}`} fill="none" stroke="#f59e0b" strokeWidth="1.6" />
+      <line x1={cx} y1={objTop} x2={imgX} y2={imgTop} stroke="#f59e0b" strokeWidth="1" strokeDasharray="4 3" />
+      <polyline points={`${objX},${objTop} ${W - 120},${ay - 20}`} fill="none" stroke="#dc2626" strokeWidth="1.6" />
+      <line x1={imgX} y1={ay} x2={imgX} y2={imgTop} stroke="#7c3aed" strokeWidth="3" markerEnd="url(#il-arrow)" />
+      {showLabels && (
+        <g fill="#334155">
+          <text x={objX} y={objTop - 8} fontSize="11" fill="#16a34a" textAnchor="middle">object</text>
+          <text x={imgX} y={imgTop - 8} fontSize="10.5" fill="#7c3aed" textAnchor="middle">virtual, upright, smaller</text>
+          <text x={cx} y={ay - 116} fontSize="11" fill="#0284c7" textAnchor="middle">concave (diverging) lens</text>
+        </g>
+      )}
+    </g>
+  );
+}
+
+// ---- Meander & oxbow lake --------------------------------------------------
+export function Meander({ showLabels = true }) {
+  const y = H / 2;
+  return (
+    <g>
+      <path d={`M 60 ${y} Q 200 ${y - 120} 340 ${y} Q 480 ${y + 120} 620 ${y} Q 720 ${y - 60} ${W - 40} ${y}`} fill="none" stroke="#38bdf8" strokeWidth="30" strokeLinecap="round" />
+      {/* erosion (outer) + deposition (inner) markers */}
+      <line x1={200} y1={y - 130} x2={200} y2={y - 100} stroke="#dc2626" strokeWidth="3" markerEnd="url(#il-arrow)" />
+      <line x1={340} y1={y + 30} x2={340} y2={y + 8} stroke="#16a34a" strokeWidth="3" />
+      {/* oxbow */}
+      <path d={`M 470 ${y + 70} q 40 40 80 0`} fill="none" stroke="#7dd3fc" strokeWidth="14" strokeLinecap="round" opacity="0.7" />
+      {showLabels && (
+        <g fill="#334155">
+          <text x={200} y={y - 140} fontSize="11" fill="#dc2626" textAnchor="middle">erosion (outer bank)</text>
+          <text x={340} y={y + 54} fontSize="11" fill="#16a34a" textAnchor="middle">deposition (inner bank)</text>
+          <text x={510} y={y + 106} fontSize="11" fill="#0284c7" textAnchor="middle">oxbow lake</text>
+          <text x={W / 2} y={60} fontSize="13" fontWeight="700" textAnchor="middle">Meander & oxbow lake</text>
+        </g>
+      )}
+    </g>
+  );
+}
+
+// ---- Coastal features ------------------------------------------------------
+export function CoastalFeatures({ showLabels = true }) {
+  const sea = H - 120;
+  return (
+    <g>
+      {/* sea */}
+      <rect x={40} y={sea} width={W - 80} height={H - sea - 20} fill="#bae6fd" opacity="0.6" />
+      {/* headland with arch and stack */}
+      <path d={`M 120 ${sea} L 120 ${sea - 140} Q 220 ${sea - 170} 320 ${sea - 120} L 320 ${sea} Z`} fill="#a8a29e" stroke="#57534e" strokeWidth="2" />
+      {/* arch */}
+      <path d={`M 300 ${sea} q 0 -50 40 -50 q 40 0 40 50 Z`} fill="#bae6fd" opacity="0.6" stroke="#57534e" strokeWidth="2" />
+      {/* stack */}
+      <path d={`M 440 ${sea} L 450 ${sea - 80} L 480 ${sea - 80} L 490 ${sea} Z`} fill="#a8a29e" stroke="#57534e" strokeWidth="2" />
+      {/* cliff on right */}
+      <path d={`M ${W - 220} ${sea} L ${W - 220} ${sea - 150} L ${W - 40} ${sea - 150} L ${W - 40} ${sea} Z`} fill="#a8a29e" stroke="#57534e" strokeWidth="2" />
+      <rect x={W - 220} y={sea - 10} width="180" height="10" fill="#78716c" />
+      {showLabels && (
+        <g fill="#334155">
+          <Leader x={200} y={sea - 150} tx={110} ty={sea - 170} text="Headland" color="#57534e" side="left" />
+          <Leader x={340} y={sea - 50} tx={340} ty={90} text="Arch" color="#57534e" side="right" />
+          <Leader x={465} y={sea - 80} tx={W - 60} ty={sea - 120} text="Stack" color="#57534e" side="right" />
+          <Leader x={W - 130} y={sea - 10} tx={W - 60} ty={sea - 30} text="Cliff & wave-cut platform" color="#78716c" side="right" />
+        </g>
+      )}
+    </g>
+  );
+}
