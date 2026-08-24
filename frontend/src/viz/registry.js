@@ -68,6 +68,7 @@ export const CATALOG = {
     "Weather Fronts", "River Course", "Seasons (Earth's tilt)", "Tides (Spring & Neap)",
     "Renewable Energy Sources", "Latitude & Longitude", "Earthquake (seismic waves)",
     "Day & Night", "Continental Drift", "Cloud Types", "Ozone Layer", "Volcano Types",
+    "Types of Rainfall", "Weathering",
   ],
   biology: [
     "Cell Structure", "DNA", "RNA", "Mitosis", "Meiosis", "Food Chain", "Food Web", "Human Body",
@@ -83,6 +84,7 @@ export const CATALOG = {
     "Enzyme Action (lock & key)", "Osmosis", "DNA Replication", "Food Tests",
     "Xylem & Phloem", "Transpiration & Stomata", "Types of Teeth", "Active vs Passive Transport",
     "Bacteria Structure", "Virus Structure", "Seed Dispersal",
+    "Alveoli (gas exchange)", "Villi (absorption)", "Specialized Cells", "Types of Muscle", "Blood Vessels",
     "Ecosystem", "Classification Tree",
   ],
   chemistry: [
@@ -93,6 +95,7 @@ export const CATALOG = {
     "States of Matter", "pH Scale", "Ionic vs Covalent Bonding", "Electrolysis", "Distillation",
     "Titration Curve", "Crude Oil Distillation", "Carbon Allotropes", "Neutralization", "Periodic Table Trends",
     "Types of Chemical Reactions", "Paper Chromatography", "Atomic Structure", "Isotopes", "Water Treatment",
+    "Reactivity Series", "Rusting", "Separating Mixtures", "Endothermic vs Exothermic",
   ],
   physics: [
     "Free Body Diagram", "Projectile Motion", "Wave", "Circuit Diagram", "Optics", "Ray Diagram",
@@ -102,6 +105,8 @@ export const CATALOG = {
     "Prism Dispersion", "Simple Pendulum", "Electric Motor", "Transformer", "Mirror Image Formation",
     "Convex Lens Image", "Radioactive Decay", "Electric Generator", "Nuclear Fission",
     "Gears", "Ohm's Law", "Total Internal Reflection", "Nuclear Fusion", "Circuit Symbols",
+    "Heat Transfer", "Newton's Cradle", "Density & Floating", "Sankey Energy Diagram", "Radioactive Half-life",
+    "Electromagnet", "Comet Structure",
   ],
   cs: [
     "Flowchart", "Algorithm Flow", "ER Diagram", "DFD", "UML", "Sequence Diagram",
@@ -497,6 +502,24 @@ Object.assign(MODULES, {
   circuitsymbols:    _il("circuitsymbols", "Circuit Symbols", "physics", { kind: "circuitsymbols" }),
   ozonelayer:        _il("ozonelayer", "Ozone Layer", "geography", { kind: "ozone" }),
   volcanotypes:      _il("volcanotypes", "Volcano Types", "geography", { kind: "volcanotypes" }),
+  alveoligasexchange: _il("alveoligasexchange", "Alveoli (gas exchange)", "biology", { kind: "alveoli" }),
+  villi:             _il("villi", "Villi (absorption)", "biology", { kind: "villi" }),
+  specializedcells:  _il("specializedcells", "Specialized Cells", "biology", { kind: "specialcells" }),
+  muscletypes:       _il("muscletypes", "Types of Muscle", "biology", { kind: "muscletypes" }),
+  bloodvessels:      _il("bloodvessels", "Blood Vessels", "biology", { kind: "bloodvessels" }),
+  reactivityseries:  _il("reactivityseries", "Reactivity Series", "chemistry", { kind: "reactivityseries" }),
+  rusting:           _il("rusting", "Rusting", "chemistry", { kind: "rusting" }),
+  separatingmixtures: _il("separatingmixtures", "Separating Mixtures", "chemistry", { kind: "separating" }),
+  energetics:        _il("energetics", "Endothermic vs Exothermic", "chemistry", { kind: "energetics" }),
+  heattransfer:      _il("heattransfer", "Heat Transfer", "physics", { kind: "heattransfer" }),
+  newtonscradle:     _il("newtonscradle", "Newton's Cradle", "physics", { kind: "newtoncradle" }),
+  density:           _il("density", "Density & Floating", "physics", { kind: "density" }),
+  sankeydiagram:     _il("sankeydiagram", "Sankey Energy Diagram", "physics", { kind: "sankey" }),
+  halflife:          _il("halflife", "Radioactive Half-life", "physics", { kind: "halflife" }),
+  electromagnet:     _il("electromagnet", "Electromagnet", "physics", { kind: "electromagnet" }),
+  rainfalltypes:     _il("rainfalltypes", "Types of Rainfall", "geography", { kind: "rainfall" }),
+  weathering:        _il("weathering", "Weathering", "geography", { kind: "weathering" }),
+  cometstructure:    _il("cometstructure", "Comet Structure", "physics", { kind: "comet" }),
 });
 
 // ---- Phase 10: fill remaining catalog (aliases + charts/graphs/tables/illustrations) ----
