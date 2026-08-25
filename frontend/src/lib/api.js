@@ -131,10 +131,10 @@ async function request(path, { method = "GET", body, auth = true, headers = {}, 
         clearToken();
         localStorage.removeItem("mpm-user");
         // Only redirect if we're not already on an auth page (avoid loops).
-        const hash = window.location.hash || "";
-        const isAuthPage = /^\#?\/(login|register|forgot-password|admin\/login|client\/register)/.test(hash);
+        const path = window.location.pathname || "";
+        const isAuthPage = /^\/(login|register|forgot-password|admin\/login|client\/register)/.test(path);
         if (!isAuthPage) {
-          window.location.hash = "#/login";
+          window.location.assign("/login");
         }
       }
 

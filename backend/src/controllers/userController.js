@@ -389,7 +389,7 @@ export async function adminResetPassword(req, res) {
 
   // Build the reset link from the site the request came from (falls back to
   // CLIENT_URL, then localhost), so it works even if CLIENT_URL isn't set.
-  const resetLink = `${clientBaseFromReq(req)}/#/reset-password/${user.resetPasswordToken}`;
+  const resetLink = `${clientBaseFromReq(req)}/reset-password/${user.resetPasswordToken}`;
   await sendMail({
     to: user.email,
     subject: "Password reset requested by admin — My Study Guide",
