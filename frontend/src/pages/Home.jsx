@@ -297,6 +297,9 @@ export default function Home() {
       stats.length > 0 ? (
         <section className="container-page">
           <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+            <p className="mb-5 text-center text-sm font-semibold uppercase tracking-wide text-slate-400">
+              Platform statistics — all time
+            </p>
             <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
               {stats.map((s) => (
                 <div key={s.label} className="flex flex-col items-center gap-2 rounded-2xl bg-slate-50 p-5 text-center dark:bg-slate-800/60">
@@ -320,7 +323,7 @@ export default function Home() {
       <section className="container-page pt-6">
         <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
           <p className="mb-5 text-center text-sm font-semibold uppercase tracking-wide text-slate-400">
-            Across all accounts — updated live
+            Across all creator accounts — updated live
           </p>
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
             {[
