@@ -6,6 +6,7 @@ import EmailOtp from "../models/EmailOtp.js";
 import generateToken from "../utils/generateToken.js";
 import { computeOffer } from "./authController.js";
 import { getTenantPlans, trialDays } from "../utils/plans.js";
+import { trialClaimed, recordTrialUsed } from "../utils/trialLedger.js";
 import { razorpayConfigured, razorpayKeyId, createRazorpayOrder, verifyPaymentSignature } from "../config/razorpay.js";
 import { cleanTenantSeed } from "./settingsController.js";
 import { runUnscoped } from "../utils/tenantContext.js";
@@ -173,6 +174,11 @@ export async function createInstituteOrder(req, res) {
   if (slugTaken) return res.status(409).json({ message: "That subdomain is already taken." });
   if (emailTaken) return res.status(409).json({ message: "That admin email is already registered." });
 
+  // One free institute trial per email (durable) — block re-claiming.
+  if (offer.plan.key === "trial" && (await trialClaimed(adminEmail, "institute"))) {
+    return res.status(400).json({ message: "This email has already used the free institute trial. Please choose a paid plan." });
+  }
+
   if (offer.plan.key === "trial" || offer.finalPrice <= 0 || !razorpayConfigured()) {
     return res.json({ free: true, finalPrice: offer.finalPrice });
   }
@@ -206,6 +212,9 @@ export async function provisionInstitute(req, res) {
   if (!offer) return res.status(400).json({ message: "Choose a valid plan." });
 
   const isTrial = offer.plan.key === "trial";
+  if (isTrial && (await trialClaimed(adminEmail, "institute"))) {
+    return res.status(400).json({ message: "This email has already used the free institute trial. Please choose a paid plan." });
+  }
   let paymentId;
 
   // Paid plan → require a verified Razorpay payment.
@@ -278,6 +287,7 @@ export async function provisionInstitute(req, res) {
   }
 
   notifyNewUser(created.admin); // fire-and-forget admin notification
+  if (isTrial) recordTrialUsed(adminEmail, "institute").catch(() => {}); // durable per-email ledger
   runUnscoped(() => EmailOtp.deleteOne({ email: adminEmail })).catch(() => {}); // one-time code, no longer needed
 
   res.status(201).json({
