@@ -1,5 +1,6 @@
 import { redeemCoupon } from "../models/Coupon.js";
 import User from "../models/User.js";
+import TrialClaim from "../models/TrialClaim.js";
 import { computeOffer } from "./authController.js";
 import { trialDays } from "../utils/plans.js";
 import { razorpayConfigured, razorpayKeyId, createRazorpayOrder, verifyPaymentSignature, verifyPaidOrder } from "../config/razorpay.js";
@@ -19,8 +20,26 @@ function addMonths(from, months) {
   return d;
 }
 
+// True if this EMAIL has already consumed a student free trial — durable and
+// global (survives account deletion), so a fresh account with the same email
+// can't re-claim it. Checked in addition to the per-account studentTrialUsed.
+async function studentTrialClaimed(email) {
+  const e = String(email || "").toLowerCase().trim();
+  if (!e) return false;
+  return !!(await runUnscoped(() => TrialClaim.findOne({ email: e, kind: "student" }).select("_id")));
+}
+
+// Record (idempotently) that this email has used its student trial.
+async function recordStudentTrial(email) {
+  const e = String(email || "").toLowerCase().trim();
+  if (!e) return;
+  await runUnscoped(() =>
+    TrialClaim.updateOne({ email: e, kind: "student" }, { $setOnInsert: { email: e, kind: "student" } }, { upsert: true })
+  ).catch(() => {});
+}
+
 // POST /api/student-subscriptions/order — create a Razorpay order for a paid
-// student plan. The free 1-day trial is activated directly (no order needed).
+// student plan. The free trial is activated directly (no order needed).
 export async function studentUpgradeOrder(req, res) {
   const offer = await computeOffer({
     planKey: req.body?.plan,
@@ -31,10 +50,10 @@ export async function studentUpgradeOrder(req, res) {
   });
   if (!offer) return res.status(400).json({ message: "Choose a valid plan." });
 
-  // The free trial is claimable once — no payment/order.
+  // The free trial is claimable once per email — no payment/order.
   if (offer.plan.key === "trial") {
-    if (req.user.studentTrialUsed) {
-      return res.status(400).json({ message: "You've already used your free trial. Please choose a paid plan." });
+    if (req.user.studentTrialUsed || (await studentTrialClaimed(req.user.email))) {
+      return res.status(400).json({ message: "This email has already used the free trial. Please choose a paid plan." });
     }
     return res.json({ free: true, trial: true, finalPrice: 0 });
   }
@@ -74,9 +93,9 @@ export async function studentUpgradeActivate(req, res) {
     : new Date();
 
   if (offer.plan.key === "trial") {
-    // One-time free trial → the plan's configured number of days (default 1).
-    if (req.user.studentTrialUsed) {
-      return res.status(400).json({ message: "You've already used your free trial. Please choose a paid plan." });
+    // One-time free trial (per email) → the plan's configured number of days.
+    if (req.user.studentTrialUsed || (await studentTrialClaimed(req.user.email))) {
+      return res.status(400).json({ message: "This email has already used the free trial. Please choose a paid plan." });
     }
     const trialEnd = new Date();
     trialEnd.setDate(trialEnd.getDate() + trialDays(offer.plan, 1));
@@ -87,6 +106,7 @@ export async function studentUpgradeActivate(req, res) {
     req.user.studentPlanMonths = 0;
     req.user.studentPlanPrice = 0;
     await req.user.save();
+    await recordStudentTrial(req.user.email); // durable per-email ledger
     return res.json({ ok: true, trial: true, studentPlanExpiresAt: req.user.studentPlanExpiresAt, plan: "trial" });
   }
 

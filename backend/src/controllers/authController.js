@@ -1,6 +1,7 @@
 import crypto from "crypto";
 import User from "../models/User.js";
 import Tenant from "../models/Tenant.js";
+import TrialClaim from "../models/TrialClaim.js";
 import Coupon, { redeemCoupon } from "../models/Coupon.js";
 import generateToken from "../utils/generateToken.js";
 import { razorpayConfigured, verifyPaymentSignature, verifyPaidOrder } from "../config/razorpay.js";
@@ -214,6 +215,14 @@ export async function register(req, res) {
   // admin can still turn it off per-account later (User → aiAccess).
   const doc = { name, email, password, role, isEmailVerified: false, referralCode: makeReferralCode(name) };
   if (role === "client") doc.aiAccess = true;
+
+  // If this email already consumed a student free trial before (durable ledger),
+  // carry that forward so a re-registered account can't claim the trial again —
+  // and the trial option stays hidden for them in the UI.
+  if (role === "student") {
+    const claimed = await runUnscoped(() => TrialClaim.findOne({ email, kind: "student" }).select("_id"));
+    if (claimed) doc.studentTrialUsed = true;
+  }
 
   // Clients pick a subscription plan and may use a coupon / friend's referral
   // code. Store the selection; validity (expiresAt) starts when they verify.
