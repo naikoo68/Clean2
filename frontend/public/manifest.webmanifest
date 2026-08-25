@@ -3,7 +3,7 @@
   "short_name": "My Practice",
   "description": "Build and practise your own quizzes, tests and previous papers, with AI tools, documents and notes.",
   "id": "/client",
-  "start_url": "/client",
+  "start_url": "/creator",
   "scope": "/",
   "display": "standalone",
   "orientation": "portrait",

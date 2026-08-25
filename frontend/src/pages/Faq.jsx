@@ -28,7 +28,7 @@ const GROUPS = {
     Icon: Store,
     intro: "For teachers and creators — what a Creator account includes and how to start building and sharing your own quizzes, tests and study material.",
     ctas: [
-      { label: "Become a Creator", to: "/client/register", primary: true },
+      { label: "Become a Creator", to: "/creator/register", primary: true },
       { label: "See Creator pricing", to: "/pricing" },
     ],
   },
