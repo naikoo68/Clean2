@@ -126,6 +126,35 @@
     <meta name="twitter:title" content="My Study Guide — Prepare Smart, Achieve More" />
     <meta name="twitter:description" content="Quizzes, test series and analytics for exam aspirants." />
     <meta name="twitter:image" content="https://www.mystudyguide.in/og-image.png" />
+
+    <!-- Site-wide structured data (Schema.org). Organization + WebSite only —
+         real facts (name, URL, logo, description). No SearchAction (there is no
+         public search results URL) and no fake ratings/reviews. Page-level
+         JSON-LD (BreadcrumbList etc.) is injected separately by useSeo under a
+         different <script id="seo-jsonld">, so these never collide. -->
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@graph": [
+          {
+            "@type": "Organization",
+            "@id": "https://www.mystudyguide.in/#organization",
+            "name": "My Study Guide",
+            "url": "https://www.mystudyguide.in/",
+            "logo": "https://www.mystudyguide.in/apple-touch-icon.png",
+            "description": "My Study Guide offers subject-wise quizzes, mock tests, test series, instant results, performance analytics and study resources for competitive exam preparation."
+          },
+          {
+            "@type": "WebSite",
+            "@id": "https://www.mystudyguide.in/#website",
+            "name": "My Study Guide",
+            "url": "https://www.mystudyguide.in/",
+            "inLanguage": "en",
+            "publisher": { "@id": "https://www.mystudyguide.in/#organization" }
+          }
+        ]
+      }
+    </script>
   </head>
   <body>
     <div id="root"></div>
