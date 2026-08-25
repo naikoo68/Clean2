@@ -77,7 +77,7 @@ export async function updateSettings(req, res) {
     "clientAnnouncement",
     "onboardingCompleted",
     "privacyPolicy", "termsOfService", "refundPolicy",
-    "aboutHeading", "aboutIntro", "aboutValues", "aboutStats", "testimonials",
+    "aboutHeading", "aboutIntro", "aboutValues", "aboutStats", "testimonials", "faqs",
     "aiMaxPerBatch", "clientPlans", "studentPlans", "tenantPlans",
     "fbEnabled", "fbPageId", "fbAutoOnNotice", "fbGraphVersion", "fbPageAccessToken",
     "fbDefaultHashtags", "fbAutoHashtags", "fbExtraTargets",
@@ -133,6 +133,19 @@ export async function updateSettings(req, res) {
       title: String(a.title || "").trim().slice(0, 200),
       message: String(a.message || "").trim().slice(0, 4000),
     };
+  }
+
+  // FAQ page content (per audience). Keep only {q,a} strings, trim + cap length,
+  // drop fully-empty rows, and cap the number of questions per audience. An
+  // audience left empty means the front end uses its built-in default FAQs.
+  if ("faqs" in update) {
+    const cleanFaqs = (arr) =>
+      (Array.isArray(arr) ? arr : [])
+        .map((f) => ({ q: String(f?.q || "").trim().slice(0, 300), a: String(f?.a || "").trim().slice(0, 4000) }))
+        .filter((f) => f.q || f.a)
+        .slice(0, 50);
+    const f = update.faqs || {};
+    update.faqs = { student: cleanFaqs(f.student), creator: cleanFaqs(f.creator), institute: cleanFaqs(f.institute) };
   }
 
   // AI limits: clamp the admin's global per-batch ceiling.

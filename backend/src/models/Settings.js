@@ -49,6 +49,24 @@ const clientAnnouncementSchema = new mongoose.Schema(
   { _id: false }
 );
 
+// One admin-editable FAQ entry (question + answer) for the public /faq page.
+const faqItemSchema = new mongoose.Schema(
+  { q: { type: String, default: "" }, a: { type: String, default: "" } },
+  { _id: false }
+);
+
+// FAQ content for the public /faq page, grouped by audience. Empty arrays mean
+// "use the built-in default FAQs" — the front end falls back to its defaults
+// per audience, so leaving an audience blank keeps the shipped questions.
+const faqsSchema = new mongoose.Schema(
+  {
+    student: { type: [faqItemSchema], default: () => [] },
+    creator: { type: [faqItemSchema], default: () => [] },
+    institute: { type: [faqItemSchema], default: () => [] },
+  },
+  { _id: false }
+);
+
 // A client subscription plan (admin-managed). Carries BOTH pricing
 // (label/months/price) AND the AI generation limits granted to a client on the
 // plan (maxPerBatch per generation, perWindow questions per windowMinutes).
@@ -273,6 +291,13 @@ const settingsSchema = new mongoose.Schema(
         { value: "8,500+", label: "Total Quizzes" },
         { value: "640+", label: "Total Test Series" },
       ],
+    },
+    // Admin-editable FAQ content for the public /faq page, per audience
+    // (Students / Creators / Institutes). Any audience left empty falls back to
+    // the front end's built-in default questions for that audience.
+    faqs: {
+      type: faqsSchema,
+      default: () => ({ student: [], creator: [], institute: [] }),
     },
     // Student testimonials for the home page.
     testimonials: {
