@@ -6,6 +6,8 @@ import { examService, testService } from "../../services";
 import Badge from "../../components/ui/Badge";
 import PaperExport from "../../components/admin/PaperExport";
 import { Loading, ErrorState, EmptyState } from "../../components/ui/AsyncState";
+import { useSeo } from "../../lib/useSeo";
+import Breadcrumbs, { breadcrumbLd } from "../../components/ui/Breadcrumbs";
 
 const categories = ["All", "Full-Length", "Subject-wise", "Chapter-wise", "Previous Year"];
 
@@ -18,6 +20,18 @@ export default function PostTests() {
   const [tests, setTests] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+
+  const crumbs = post
+    ? [{ label: "Home", to: "/" }, { label: "Test Series", to: "/test-series" }, { label: post.name }]
+    : [];
+  useSeo(
+    post ? `${post.name} — Mock Tests` : "Test Series",
+    post
+      ? `Attempt ${post.name} tests on My Study Guide — full-length mocks, subject and chapter tests and previous-year papers with instant results and detailed solutions.`
+      : undefined,
+    undefined,
+    post ? breadcrumbLd(crumbs) : undefined
+  );
 
   const load = () => {
     setLoading(true);
@@ -36,6 +50,7 @@ export default function PostTests() {
 
   return (
     <div className="container-page py-12">
+      {crumbs.length > 0 && <Breadcrumbs items={crumbs} />}
       <Link to={`/test-series/${examId}`} className="btn-ghost mb-6 -ml-2 w-fit">
         <ChevronLeft className="h-4 w-4" /> Back to posts
       </Link>
