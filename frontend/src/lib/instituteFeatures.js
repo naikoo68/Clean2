@@ -17,7 +17,7 @@ export const INSTITUTE_FEATURES = [
   { key: "pdfBuilder", label: "PDF Builder" },
   { key: "resume", label: "Resume Builder" },
   { key: "users", label: "Users / Students (& their subscriptions)" },
-  { key: "clients", label: "Clients (& their subscriptions)" },
+  { key: "clients", label: "Creators (& their subscriptions)" },
   { key: "plans", label: "Plans (subscription pricing)" },
   { key: "coupons", label: "Coupons (discount codes)" },
   { key: "performance", label: "Performance" },

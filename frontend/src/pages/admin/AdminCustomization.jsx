@@ -374,9 +374,9 @@ export default function AdminCustomization() {
 
         {/* Client welcome popup */}
         <div className="card p-6 lg:col-span-2">
-          <h3 className="mb-1 flex items-center gap-2 font-bold"><Megaphone className="h-5 w-5 text-brand-600" /> Client welcome popup</h3>
+          <h3 className="mb-1 flex items-center gap-2 font-bold"><Megaphone className="h-5 w-5 text-brand-600" /> Creator welcome popup</h3>
           <p className="mb-4 text-sm text-slate-500 dark:text-slate-400">
-            A popup shown to clients <span className="font-semibold">every time</span> they open their workspace. It always shows a welcome heading (your tagline); add an optional announcement below.
+            A popup shown to creators <span className="font-semibold">every time</span> they open their workspace. It always shows a welcome heading (your tagline); add an optional announcement below.
           </p>
           <label className="mb-4 flex items-center gap-3">
             <input
@@ -403,7 +403,7 @@ export default function AdminCustomization() {
                 className="input min-h-[110px]"
                 value={form.clientAnnouncement?.message || ""}
                 onChange={(e) => set("clientAnnouncement", { ...form.clientAnnouncement, message: e.target.value })}
-                placeholder="Write the message clients will see in the popup…"
+                placeholder="Write the message creators will see in the popup…"
               />
             </div>
             <p className="text-xs text-slate-400">The announcement appears only when enabled and has a title or message. Line breaks are preserved.</p>

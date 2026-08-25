@@ -75,9 +75,9 @@ export default function AiPlansManager() {
     <div className="card p-5">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 className="flex items-center gap-2 text-lg font-bold"><Sparkles className="h-5 w-5 text-brand-600" /> Client plans &amp; AI limits</h2>
+          <h2 className="flex items-center gap-2 text-lg font-bold"><Sparkles className="h-5 w-5 text-brand-600" /> Creator plans &amp; AI limits</h2>
           <p className="text-sm text-slate-500 dark:text-slate-400">
-            These are the plans clients buy. Edit the price/duration and the AI generation limits per plan — a client's AI limits follow the plan they purchased. Assign a plan to a specific client on the <b>Clients</b> page.
+            These are the plans creators buy. Edit the price/duration and the AI generation limits per plan — a creator's AI limits follow the plan they purchased. Assign a plan to a specific creator on the <b>Creators</b> page.
           </p>
         </div>
         <button onClick={save} disabled={saving || loading} className="btn-primary flex-shrink-0">
@@ -139,7 +139,7 @@ export default function AiPlansManager() {
             </table>
           </div>
           <p className="mt-2 text-xs text-slate-400">
-            <b>Months</b> = how long a paid plan lasts. For a <b>free trial</b>, set Months = 0 and put the length in <b>Trial days</b>. <b>Q / window</b> + <b>Window</b> = e.g. 100 questions every 5 minutes. Prices here are what clients see at registration &amp; upgrade.
+            <b>Months</b> = how long a paid plan lasts. For a <b>free trial</b>, set Months = 0 and put the length in <b>Trial days</b>. <b>Q / window</b> + <b>Window</b> = e.g. 100 questions every 5 minutes. Prices here are what creators see at registration &amp; upgrade.
           </p>
           {msg && <p className="mt-2 text-sm font-medium text-emerald-600">{msg}</p>}
           {err && <p className="mt-2 text-sm font-medium text-rose-600">{err}</p>}
