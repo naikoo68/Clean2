@@ -28,7 +28,18 @@ const isExpired = (d) => d && new Date(d).getTime() < Date.now();
 export default function Account() {
   const { user } = useAuth();
   const [copied, setCopied] = useState(false);
-  const expired = isExpired(user?.expiresAt);
+
+  // Two independent validities: a TEMPORARY account has a hard `expiresAt`; a
+  // STUDENT's access is governed by their subscription (`studentPlanExpiresAt`).
+  // Show whichever actually applies so a subscribed student sees their real
+  // plan end date instead of a misleading "never expires".
+  const isStudent = user?.role === "student";
+  const isTempAccount = !!user?.expiresAt;
+  const acctExpired = isExpired(user?.expiresAt);
+  const subExpiry = user?.studentPlanExpiresAt;
+  const subActive = !!(subExpiry && new Date(subExpiry).getTime() > Date.now());
+  const onTrial = user?.studentTrial === true;
+  const cardExpired = acctExpired || (isStudent && !isTempAccount && !!subExpiry && !subActive);
 
   const copyReferral = () => {
     if (!user?.referralCode) return;
@@ -57,16 +68,18 @@ export default function Account() {
         {/* Editable details */}
         <ProfileEditCard className="sm:col-span-2" />
 
-        {/* Validity */}
-        <div className={`card p-5 ${expired ? "border-rose-300 dark:border-rose-900/60" : ""}`}>
+        {/* Validity — a temporary account shows its hard expiry; a student shows
+            their subscription (plan/trial) end date; everyone else "never expires". */}
+        <div className={`card p-5 ${cardExpired ? "border-rose-300 dark:border-rose-900/60" : ""}`}>
           <div className="flex items-center gap-2">
-            <span className={`flex h-9 w-9 items-center justify-center rounded-xl ${expired ? "bg-rose-100 text-rose-600 dark:bg-rose-900/40 dark:text-rose-300" : "bg-emerald-100 text-emerald-600 dark:bg-emerald-900/40 dark:text-emerald-300"}`}>
-              {user?.expiresAt ? <AlarmClock className="h-5 w-5" /> : <ShieldCheck className="h-5 w-5" />}
+            <span className={`flex h-9 w-9 items-center justify-center rounded-xl ${cardExpired ? "bg-rose-100 text-rose-600 dark:bg-rose-900/40 dark:text-rose-300" : "bg-emerald-100 text-emerald-600 dark:bg-emerald-900/40 dark:text-emerald-300"}`}>
+              {cardExpired ? <AlarmClock className="h-5 w-5" /> : <ShieldCheck className="h-5 w-5" />}
             </span>
-            <h2 className="font-bold">Account validity</h2>
+            <h2 className="font-bold">{isStudent && !isTempAccount ? "Subscription" : "Account validity"}</h2>
           </div>
-          {user?.expiresAt ? (
-            expired ? (
+
+          {isTempAccount ? (
+            acctExpired ? (
               <div className="mt-3">
                 <Badge variant="Hard">Expired</Badge>
                 <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">Your access ended on {fmtDate(user.expiresAt)}. Contact the administrator to renew.</p>
@@ -75,6 +88,26 @@ export default function Account() {
               <div className="mt-3">
                 <Badge variant="accent"><Clock className="h-3 w-3" /> Active · expires {relativeTo(user.expiresAt)}</Badge>
                 <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">Valid until {fmtDate(user.expiresAt)}.</p>
+              </div>
+            )
+          ) : isStudent ? (
+            subActive ? (
+              <div className="mt-3">
+                <Badge variant="accent"><Clock className="h-3 w-3" /> {onTrial ? "Free trial" : "Subscribed"} · expires {relativeTo(subExpiry)}</Badge>
+                <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">Your {onTrial ? "free trial" : "plan"} is valid until {fmtDate(subExpiry)}.</p>
+                <Link to="/subscribe" className="mt-3 inline-flex items-center gap-1 text-sm font-medium text-brand-600 hover:underline dark:text-brand-400">Renew / change plan <ArrowRight className="h-3.5 w-3.5" /></Link>
+              </div>
+            ) : subExpiry ? (
+              <div className="mt-3">
+                <Badge variant="Hard">{onTrial ? "Trial ended" : "Subscription expired"}</Badge>
+                <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">Your {onTrial ? "free trial" : "subscription"} ended on {fmtDate(subExpiry)}. Subscribe to regain full access.</p>
+                <Link to="/subscribe" className="mt-3 inline-flex items-center gap-1 text-sm font-medium text-brand-600 hover:underline dark:text-brand-400">Subscribe <ArrowRight className="h-3.5 w-3.5" /></Link>
+              </div>
+            ) : (
+              <div className="mt-3">
+                <Badge variant="Easy">Free plan</Badge>
+                <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">You're on the free plan. Subscribe to unlock full test-series, quizzes and your performance dashboard.</p>
+                <Link to="/subscribe" className="mt-3 inline-flex items-center gap-1 text-sm font-medium text-brand-600 hover:underline dark:text-brand-400">See plans <ArrowRight className="h-3.5 w-3.5" /></Link>
               </div>
             )
           ) : (
