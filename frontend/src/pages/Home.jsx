@@ -296,15 +296,15 @@ export default function Home() {
     stats:
       stats.length > 0 ? (
         <section className="container-page">
-          <div className="grid gap-4 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm sm:grid-cols-3 dark:border-slate-800 dark:bg-slate-900">
+          <div className="grid grid-cols-2 gap-3 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm sm:grid-cols-3 sm:gap-4 dark:border-slate-800 dark:bg-slate-900">
             {stats.map((s) => (
-              <div key={s.label} className="flex items-center justify-center gap-4 py-4">
-                <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-brand-100 text-brand-600 dark:bg-brand-900/40 dark:text-brand-300">
-                  <s.icon className="h-7 w-7" />
+              <div key={s.label} className="flex items-center justify-center gap-3 py-4 sm:gap-4">
+                <span className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-2xl bg-brand-100 text-brand-600 sm:h-14 sm:w-14 dark:bg-brand-900/40 dark:text-brand-300">
+                  <s.icon className="h-5 w-5 sm:h-7 sm:w-7" />
                 </span>
                 <div>
-                  <p className="text-2xl font-extrabold sm:text-3xl">{s.value}</p>
-                  <p className="text-sm text-slate-500 dark:text-slate-400">{s.label}</p>
+                  <p className="text-xl font-extrabold sm:text-3xl">{s.value}</p>
+                  <p className="text-xs text-slate-500 sm:text-sm dark:text-slate-400">{s.label}</p>
                 </div>
               </div>
             ))}
