@@ -21,6 +21,7 @@ import { Loading } from "./components/ui/AsyncState";
 const Home = lazy(() => import("./pages/Home"));
 const About = lazy(() => import("./pages/About"));
 const Contact = lazy(() => import("./pages/Contact"));
+const Faq = lazy(() => import("./pages/Faq"));
 const Pricing = lazy(() => import("./pages/Pricing"));
 const Privacy = lazy(() => import("./pages/Privacy"));
 const Terms = lazy(() => import("./pages/Terms"));
@@ -127,6 +128,7 @@ const router = createBrowserRouter([
       { path: "/", element: S(Home) },
       { path: "/about", element: S(About) },
       { path: "/contact", element: S(Contact) },
+      { path: "/faq", element: S(Faq) },
       { path: "/pricing", element: S(Pricing) },
       { path: "/privacy", element: S(Privacy) },
       { path: "/terms", element: S(Terms) },
