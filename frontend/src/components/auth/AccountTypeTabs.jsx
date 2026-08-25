@@ -16,7 +16,7 @@ export default function AccountTypeTabs({ active, onSelect, withInstitute = fals
   const showInstitute = withInstitute && settings?.publicInstituteEnabled !== false;
   const tabs = [
     { key: "student", label: "Student", Icon: GraduationCap },
-    ...(showClient ? [{ key: "client", label: "Client", Icon: Store }] : []),
+    ...(showClient ? [{ key: "client", label: "Creator", Icon: Store }] : []),
     ...(showInstitute ? [{ key: "institute", label: "Institute", Icon: School }] : []),
   ];
   return (

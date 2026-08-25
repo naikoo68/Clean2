@@ -64,7 +64,7 @@ export default function AdminReviews() {
         <div>
           <h1 className="text-xl font-bold leading-none">Reviews</h1>
           <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-            Approve student &amp; client reviews to feature them on your home page.{pendingCount ? ` ${pendingCount} awaiting review.` : ""}
+            Approve student &amp; creator reviews to feature them on your home page.{pendingCount ? ` ${pendingCount} awaiting review.` : ""}
           </p>
         </div>
       </div>

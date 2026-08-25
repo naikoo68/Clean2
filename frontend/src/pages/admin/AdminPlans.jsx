@@ -22,7 +22,7 @@ export default function AdminPlans() {
       <div>
         <h1 className="text-2xl font-extrabold">Plans</h1>
         <p className="text-slate-500 dark:text-slate-400">
-          Manage the subscription plans &amp; pricing for students and clients in one place.
+          Manage the subscription plans &amp; pricing for students and creators in one place.
         </p>
       </div>
 
@@ -42,7 +42,7 @@ export default function AdminPlans() {
             tab === "client" ? "bg-brand-600 text-white shadow-sm" : "text-slate-600 dark:text-slate-300"
           }`}
         >
-          <Store className="h-4 w-4" /> Client Plans
+          <Store className="h-4 w-4" /> Creator Plans
         </button>
         {isSuper && (
           <button
