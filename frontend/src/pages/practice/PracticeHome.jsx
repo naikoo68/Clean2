@@ -1,8 +1,10 @@
 import { Link } from "react-router-dom";
 import { ListChecks, FileStack, ArrowRight } from "lucide-react";
+import { useSeo } from "../../lib/useSeo";
 
 // "Practice Quizzes" landing — two entry points: My Quiz and My Test Series.
 export default function PracticeHome() {
+  useSeo("My Practice", "Build and practise your own quizzes, tests and previous papers with AI-powered tools on My Study Guide.");
   const cards = [
     { to: "/practice/quiz", label: "My Quiz", desc: "Curated practice quizzes shared with you.", Icon: ListChecks, cls: "from-violet-500 to-fuchsia-600" },
     { to: "/practice/test", label: "My Test", desc: "Personal tests shared with you.", Icon: FileStack, cls: "from-brand-600 to-indigo-600" },

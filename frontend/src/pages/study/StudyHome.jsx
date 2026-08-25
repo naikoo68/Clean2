@@ -3,8 +3,10 @@ import { Link } from "react-router-dom";
 import { GraduationCap, School, ChevronRight, BookOpen } from "lucide-react";
 import { studyService } from "../../services";
 import { Loading, ErrorState, EmptyState } from "../../components/ui/AsyncState";
+import { useSeo } from "../../lib/useSeo";
 
 export default function StudyHome() {
+  useSeo("Study Material", "Access curated notes, PDFs and study resources organised by subject and class on My Study Guide.");
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
