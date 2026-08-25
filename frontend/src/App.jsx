@@ -35,6 +35,8 @@ const PublicNode = lazy(() => import("./pages/PublicNode"));
 const ChooseMode = lazy(() => import("./pages/ChooseMode"));
 const SubjectsIndex = lazy(() => import("./pages/subjects/SubjectsIndex"));
 const SubjectLanding = lazy(() => import("./pages/subjects/SubjectLanding"));
+const StreamsIndex = lazy(() => import("./pages/streams/StreamsIndex"));
+const StreamLanding = lazy(() => import("./pages/streams/StreamLanding"));
 const QuizHome = lazy(() => import("./pages/quiz/QuizHome"));
 const StreamSubjects = lazy(() => import("./pages/quiz/StreamSubjects"));
 const PracticeHome = lazy(() => import("./pages/practice/PracticeHome"));
@@ -169,6 +171,8 @@ const router = createBrowserRouter([
       // SEO landing pages for the subjects/streams we actually offer.
       { path: "/subjects", element: S(SubjectsIndex) },
       { path: "/subjects/:slug", element: S(SubjectLanding) },
+      { path: "/streams", element: S(StreamsIndex) },
+      { path: "/streams/:slug", element: S(StreamLanding) },
 
       { path: "/login", element: S(Login) },
       { path: "/register", element: S(Register) },
