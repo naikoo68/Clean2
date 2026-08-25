@@ -407,7 +407,14 @@ export default function ClientDashboard({ onBuild, onUpgrade }) {
       {user?.isTrial && !expired && onUpgrade && (
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 dark:border-amber-900/50 dark:bg-amber-900/20">
           <p className="text-sm text-amber-800 dark:text-amber-200">
-            <span className="font-semibold">You're on a free 1-day trial.</span> Upgrade to a paid plan for uninterrupted access.
+            <span className="font-semibold">
+              {planInfo?.days
+                ? `You're on a free ${planInfo.days}-day trial.`
+                : planInfo?.label
+                ? `You're on the ${planInfo.label}.`
+                : "You're on a free trial."}
+            </span>{" "}
+            Upgrade to a paid plan for uninterrupted access.
           </p>
           <button onClick={onUpgrade} className="btn-primary py-1.5 text-xs">
             <Crown className="h-3.5 w-3.5" /> Upgrade plan
