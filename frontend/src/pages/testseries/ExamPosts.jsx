@@ -3,6 +3,8 @@ import { Link, useParams } from "react-router-dom";
 import { ChevronLeft, ChevronRight, Briefcase, FileText } from "lucide-react";
 import { examService } from "../../services";
 import { Loading, ErrorState, EmptyState } from "../../components/ui/AsyncState";
+import { useSeo } from "../../lib/useSeo";
+import Breadcrumbs, { breadcrumbLd } from "../../components/ui/Breadcrumbs";
 
 export default function ExamPosts() {
   const { examId } = useParams();
@@ -10,6 +12,20 @@ export default function ExamPosts() {
   const [posts, setPosts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+
+  const crumbs = exam
+    ? [{ label: "Home", to: "/" }, { label: "Test Series", to: "/test-series" }, { label: exam.name }]
+    : [];
+  useSeo(
+    exam ? `${exam.name} — Test Series & Mock Tests` : "Test Series",
+    exam
+      ? (exam.description
+          ? `${exam.description} Attempt ${exam.name} mock tests and test series on My Study Guide with instant results and detailed solutions.`
+          : `Attempt ${exam.name} full-length mock tests and test series on My Study Guide — online, with instant results and detailed solutions.`)
+      : undefined,
+    undefined,
+    exam ? breadcrumbLd(crumbs) : undefined
+  );
 
   const load = () => {
     setLoading(true);
@@ -29,6 +45,7 @@ export default function ExamPosts() {
 
   return (
     <div className="container-page py-12">
+      {crumbs.length > 0 && <Breadcrumbs items={crumbs} />}
       <Link to="/test-series" className="btn-ghost mb-6 -ml-2 w-fit">
         <ChevronLeft className="h-4 w-4" /> Back to exams
       </Link>

@@ -1,9 +1,11 @@
 import LegalLayout from "../components/ui/LegalLayout";
 import { useSettings } from "../context/SettingsContext";
+import { useSeo } from "../lib/useSeo";
 
 export default function Privacy() {
   const { settings } = useSettings();
   const name = settings.siteName || "our platform";
+  useSeo("Privacy Policy", `Read the ${name} Privacy Policy — how we collect, use and protect your information when you use our quizzes, test series and study resources.`);
 
   return (
     <LegalLayout

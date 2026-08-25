@@ -10,6 +10,7 @@ const columns = [
     links: [
       { label: "Quizzes", to: "/choose/practice" },
       { label: "Test Series", to: "/choose/tests" },
+      { label: "Exams", to: "/exams" },
       { label: "Streams", to: "/streams" },
       { label: "Subjects", to: "/subjects" },
       { label: "Study Material", to: "/study" },
@@ -30,6 +31,7 @@ const columns = [
     title: "Resources",
     links: [
       { label: "Help Center", to: "/contact" },
+      { label: "FAQ", to: "/faq" },
       { label: "Privacy Policy", to: "/privacy" },
       { label: "Terms of Service", to: "/terms" },
       { label: "Refund Policy", to: "/refund" },
