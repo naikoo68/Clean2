@@ -2,6 +2,7 @@ import crypto from "crypto";
 import User from "../models/User.js";
 import Tenant from "../models/Tenant.js";
 import TrialClaim from "../models/TrialClaim.js";
+import { trialClaimed, recordTrialUsed } from "../utils/trialLedger.js";
 import Coupon, { redeemCoupon } from "../models/Coupon.js";
 import generateToken from "../utils/generateToken.js";
 import { razorpayConfigured, verifyPaymentSignature, verifyPaidOrder } from "../config/razorpay.js";
@@ -233,6 +234,10 @@ export async function register(req, res) {
       (await computeOffer({ planKey: req.body.plan, couponCode: req.body.couponCode, referralCode: req.body.referralCode, selfEmail: email })) ||
       (await computeOffer({ planKey: "trial", selfEmail: email }));
     if (offer) {
+      // One free trial per email (durable) — block re-claiming via a new account.
+      if (offer.plan.key === "trial" && (await trialClaimed(email, "client"))) {
+        return res.status(400).json({ message: "This email has already used the free trial. Please choose a paid plan." });
+      }
       doc.subscriptionPlan = offer.plan.key;
       doc.subscriptionMonths = offer.plan.months;
       doc.subscriptionPrice = offer.finalPrice;
@@ -302,6 +307,10 @@ export async function register(req, res) {
 
   // Count usage of an admin-managed coupon (built-in codes have no DB doc → no-op).
   if (doc.couponCode) redeemCoupon(doc.couponCode).catch(() => {});
+
+  // Record a client's free-trial use against their email (durable, global) so
+  // the same email can't claim another client trial later.
+  if (role === "client" && doc.isTrial) recordTrialUsed(email, "client").catch(() => {});
 
   // Paid client → already active & verified, sign them straight in (no OTP step).
   if (paidActive) {
