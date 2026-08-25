@@ -1,49 +1,78 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { KeyRound, Wrench, RefreshCw, Feather, CheckCircle2, ArrowRight, Loader2, Rocket, X, PartyPopper } from "lucide-react";
+import { KeyRound, Layers, BookOpen, FolderOpen, ListChecks, HelpCircle, RefreshCw, Feather, CheckCircle2, ArrowRight, Loader2, Rocket, X, PartyPopper } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import { aiService, authService, practiceService } from "../../services";
 
 // First-run CREATOR setup guide — a step-by-step POPUP tour shown to a creator
-// (role "client") until they've completed all four onboarding steps:
-//   1. Add their own AI API key        (AI tab)      → detected: ownKeys >= 1
-//   2. Build their first question      (Build tab)   → detected: questionCount >= 1
-//   3. Regenerate a question           (Build tab)   → detected: creatorGuide.regenerated
-//   4. Extend an explanation           (Build tab)   → detected: creatorGuide.extended
+// (role "client") until they've completed every onboarding step. It walks them
+// through the WHOLE build flow, one popup at a time:
+//   1. Add their own AI API key   (AI tab)
+//   2. Add a stream               (Build tab)  ┐
+//   3. Add a subject              (Build tab)  │ the My Quiz content hierarchy:
+//   4. Add a topic                (Build tab)  │ stream → subject → topic →
+//   5. Add a quiz                 (Build tab)  │ quiz → question
+//   6. Add a question             (Build tab)  ┘
+//   7. Regenerate a question      (Build tab)  — AI rebuilds options/answer
+//   8. Extend an explanation      (Build tab)  — AI enriches the explanation
 //
-// UX: instead of a static checklist, the guide shows ONE popup at a time for the
-// current step. "Take me there" jumps to the right tab and minimises the popup
-// (to a small floating pill) so the creator can actually do the task. Each step
-// is detected automatically — steps 1–2 from live data, 3–4 from server-side
-// flags the backend records when the creator performs the action — and the very
-// moment a step completes the popup springs back up with the NEXT step. Once all
-// four are done a final "you're all set" popup lets them finish; completing it
-// marks the guide done server-side so it never shows again.
+// Every step is detected AUTOMATICALLY (no manual "mark done"):
+//   • API key           → aiService.access().ownKeys >= 1
+//   • stream/subject/…  → the creator's practice hierarchy (see detect() below)
+//   • regenerate/extend → server-side flags the backend records when the
+//                         creator actually performs the action.
+// Because the hierarchy is built strictly top-down (you can't add a subject
+// without a stream, a quiz without a topic, etc.), a deeper level existing
+// implies every shallower level is done — so detection only walks as deep as
+// needed. The moment a step completes the popup springs up with the NEXT step;
+// "Take me there" jumps to the right tab and minimises the popup to a floating
+// pill so the creator can actually do the task. After the final step a
+// "you're all set" popup marks the guide complete server-side for good.
 //
 // `onGoTab(tabKey)` switches the workspace to the tab where a step is performed.
 export default function CreatorSetupGuide({ onGoTab }) {
   const { user, refreshUser } = useAuth();
-  const [ownKeys, setOwnKeys] = useState(null); // number of the creator's own API keys
-  const [questionCount, setQuestionCount] = useState(null); // total questions they've built
+  // Detected progress across the build hierarchy + the API key.
+  const [d, setD] = useState({ own: null, stream: false, subject: false, topic: false, quiz: false, question: false });
   const [checking, setChecking] = useState(true);
   const [minimized, setMinimized] = useState(false); // popup collapsed to the floating pill
   const [finishing, setFinishing] = useState(false); // marking the guide complete
   const prevActiveRef = useRef(undefined); // track step changes to re-surface the popup
 
-  // Pull the two pieces of live state (own API keys + built questions) and
-  // refresh the profile (which carries the regenerate/extend flags). Runs on a
-  // timer + focus so the tour keeps up as the creator does each step.
+  // Work out how far the creator has got. Detection walks the hierarchy only as
+  // deep as it needs to, relying on the fact that a deeper level can't exist
+  // without every shallower one. Steps 3–4's flags come from the profile, so we
+  // also refresh it here.
   const check = useCallback(async () => {
     try {
-      const [access] = await Promise.all([
+      const [access, items] = await Promise.all([
         aiService.access().catch(() => null),
+        practiceService.myItems().catch(() => []),
         refreshUser?.().catch(() => {}),
       ]);
-      if (access) setOwnKeys(Number(access.ownKeys || 0));
-      try {
-        const items = await practiceService.myItems();
-        const total = (items || []).reduce((s, i) => s + (i.questionCount || 0), 0);
-        setQuestionCount(total);
-      } catch { /* keep previous value */ }
+      const own = Number(access?.ownKeys || 0);
+      const quizzes = (items || []).filter((i) => i.kind === "quiz");
+      const questionTotal = (items || []).reduce((s, i) => s + (i.questionCount || 0), 0);
+
+      let stream = false, subject = false, topic = false, quiz = false, question = false;
+      if (questionTotal >= 1) {
+        stream = subject = topic = quiz = question = true; // a question exists → everything above it does too
+      } else if (quizzes.length >= 1) {
+        stream = subject = topic = quiz = true; // a quiz exists → its topic/subject/stream do too
+      } else {
+        // No quiz yet — inspect the (small) hierarchy directly. Streams carry a
+        // `subjects` count, so subject existence is known without extra calls;
+        // topics need one lookup per subject (only in this brief no-quiz window).
+        const streams = await practiceService.adminStreams("quiz").catch(() => []);
+        if (streams.length) {
+          stream = true;
+          const withSubjects = streams.filter((s) => (s.subjects || 0) > 0);
+          if (withSubjects.length) {
+            subject = true;
+            topic = await anyTopicExists(withSubjects);
+          }
+        }
+      }
+      setD({ own, stream, subject, topic, quiz, question });
     } finally {
       setChecking(false);
     }
@@ -62,32 +91,44 @@ export default function CreatorSetupGuide({ onGoTab }) {
     };
   }, [check]);
 
-  // Per-step completion. Steps 1–2 come from live data; 3–4 from server flags.
-  const done = {
-    key: (ownKeys ?? 0) >= 1,
-    build: (questionCount ?? 0) >= 1,
-    regen: user?.creatorGuide?.regenerated === true,
-    extend: user?.creatorGuide?.extended === true,
-  };
-
   const STEPS = [
     {
-      k: "key", n: 1, Icon: KeyRound, done: done.key, tab: "ai", cta: "Take me to the AI tab",
+      k: "key", Icon: KeyRound, done: (d.own ?? 0) >= 1, tab: "ai", cta: "Take me to the AI tab",
       title: "Add your AI API key",
       desc: 'Open the AI tab, choose "My own APIs", and add a provider key. This powers every AI tool you\'ll use next.',
     },
     {
-      k: "build", n: 2, Icon: Wrench, done: done.build, tab: "build", cta: "Take me to Build",
-      title: "Build your first question",
-      desc: "In the Build tab, create a quiz (or test) and add a question to it. This is your own private practice content.",
+      k: "stream", Icon: Layers, done: d.stream, tab: "build", cta: "Take me to Build",
+      title: "Add a stream",
+      desc: 'In the Build tab (My Quiz), add your first stream — a broad category, e.g. "JKSSB" or "Class 10".',
     },
     {
-      k: "regen", n: 3, Icon: RefreshCw, done: done.regen, tab: "build", cta: "Take me to Build",
+      k: "subject", Icon: BookOpen, done: d.subject, tab: "build", cta: "Take me to Build",
+      title: "Add a subject",
+      desc: 'Open your stream and add a subject inside it, e.g. "Economics".',
+    },
+    {
+      k: "topic", Icon: FolderOpen, done: d.topic, tab: "build", cta: "Take me to Build",
+      title: "Add a topic",
+      desc: 'Open your subject and add a topic, e.g. "Theory of Rent".',
+    },
+    {
+      k: "quiz", Icon: ListChecks, done: d.quiz, tab: "build", cta: "Take me to Build",
+      title: "Add a quiz",
+      desc: "Open your topic and add a quiz — this is the container your questions live in.",
+    },
+    {
+      k: "question", Icon: HelpCircle, done: d.question, tab: "build", cta: "Take me to Build",
+      title: "Add a question",
+      desc: "Open your quiz and add a question (type it in, or generate one with AI).",
+    },
+    {
+      k: "regen", Icon: RefreshCw, done: user?.creatorGuide?.regenerated === true, tab: "build", cta: "Take me to Build",
       title: "Regenerate a question",
       desc: 'Open a question and tap "Regenerate" — the AI rebuilds its options, answer and explanation to fit the stem.',
     },
     {
-      k: "extend", n: 4, Icon: Feather, done: done.extend, tab: "build", cta: "Take me to Build",
+      k: "extend", Icon: Feather, done: user?.creatorGuide?.extended === true, tab: "build", cta: "Take me to Build",
       title: "Extend an explanation",
       desc: 'Open a question and tap "Extend explanation" to enrich its explanation with the AI.',
     },
@@ -191,7 +232,7 @@ export default function CreatorSetupGuide({ onGoTab }) {
             </span>
             <h2 className="mt-4 text-xl font-extrabold">You're all set!</h2>
             <p className="mt-1.5 text-sm text-slate-500 dark:text-slate-400">
-              You've added a key, built a question, and used the AI to regenerate and extend it. Your creator workspace is ready to go.
+              You've added a key and built a full stream → subject → topic → quiz → question, then used the AI to regenerate and extend it. Your creator workspace is ready to go.
             </p>
             <button type="button" onClick={finish} disabled={finishing} className="btn-primary mt-6 w-full justify-center">
               {finishing ? <Loader2 className="h-4 w-4 animate-spin" /> : <>Start creating <ArrowRight className="h-4 w-4" /></>}
@@ -205,7 +246,7 @@ export default function CreatorSetupGuide({ onGoTab }) {
                 <step.Icon className="h-6 w-6" />
               </span>
               <div className="min-w-0">
-                <p className="text-xs font-bold uppercase tracking-wide text-brand-600 dark:text-brand-400">Step {step.n} of {total}</p>
+                <p className="text-xs font-bold uppercase tracking-wide text-brand-600 dark:text-brand-400">Step {activeIndex + 1} of {total}</p>
                 <h2 className="text-lg font-extrabold leading-tight">{step.title}</h2>
               </div>
             </div>
@@ -234,4 +275,19 @@ export default function CreatorSetupGuide({ onGoTab }) {
       </div>
     </div>
   );
+}
+
+// Does the creator have at least one topic anywhere under the given streams
+// (which already have subjects)? Walks subjects → topics, stopping at the first
+// hit. Only called during the brief window where a subject exists but no quiz
+// does yet, so the number of lookups stays tiny.
+async function anyTopicExists(streamsWithSubjects) {
+  for (const s of streamsWithSubjects) {
+    const subs = await practiceService.adminSubjects(s._id).catch(() => []);
+    for (const sub of subs) {
+      const topics = await practiceService.adminTopics(sub._id).catch(() => []);
+      if (topics.length) return true;
+    }
+  }
+  return false;
 }
