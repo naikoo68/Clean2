@@ -139,7 +139,7 @@ export default function Login() {
         </p>
       ) : acctType === "client" ? (
         <p className="mt-6 text-center text-sm text-slate-600 dark:text-slate-300">
-          New client?{" "}
+          New creator?{" "}
           <Link to="/client/register" className="font-semibold text-accent-600 hover:underline dark:text-accent-400">
             Pick a plan &amp; sign up
           </Link>

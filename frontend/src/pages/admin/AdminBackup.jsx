@@ -250,7 +250,7 @@ export default function AdminBackup() {
       <div className="card mt-4 p-5">
         <h2 className="text-sm font-bold">Google Drive connection</h2>
         <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-          Paste your Google OAuth <b>Client ID</b> (from Google Cloud Console) to turn on the "Back up / Restore to Google Drive" buttons — for both admins and clients. It's not a password; it's safe to store here. Leave blank to hide the Drive buttons.
+          Paste your Google OAuth <b>Client ID</b> (from Google Cloud Console) to turn on the "Back up / Restore to Google Drive" buttons — for both admins and creators. It's not a password; it's safe to store here. Leave blank to hide the Drive buttons.
         </p>
         <div className="mt-3 flex flex-col gap-2 sm:flex-row">
           <input
