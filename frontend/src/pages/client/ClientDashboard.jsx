@@ -132,6 +132,13 @@ export default function ClientDashboard({ onBuild, onUpgrade }) {
   const [qLoading, setQLoading] = useState(false);
   const [detail, setDetail] = useState(null); // question shown in the detail panel
   const [shareTarget, setShareTarget] = useState(null); // { level, id, name } for the Share-by-email modal
+  const [lockedMsg, setLockedMsg] = useState(""); // "not available on Free trial" toast
+  // Sharing content to other users is a paid feature — blocked on the free trial.
+  const trialLocked = user?.role === "client" && user?.isTrial === true;
+  const openShare = (target) => {
+    if (trialLocked) { setLockedMsg("Sharing isn't available on the Free trial. Upgrade to a paid plan to use it."); return; }
+    setShareTarget(target);
+  };
 
   const copyReferral = () => {
     if (!user?.referralCode) return;
@@ -597,8 +604,8 @@ export default function ClientDashboard({ onBuild, onUpgrade }) {
                       </button>
                     ) : (
                       <button
-                        onClick={() => setShareTarget({ level: "item", id: item._id, name: item.name })}
-                        title="Share with another user by email"
+                        onClick={() => openShare({ level: "item", id: item._id, name: item.name })}
+                        title={trialLocked ? "Sharing isn't available on the Free trial" : "Share with another user by email"}
                         className="rounded-lg border border-slate-200 p-2 text-slate-500 hover:bg-slate-100 dark:border-slate-700 dark:hover:bg-slate-800"
                       >
                         <Share2 className="h-3.5 w-3.5" />
@@ -664,6 +671,16 @@ export default function ClientDashboard({ onBuild, onUpgrade }) {
 
       {/* Share practice content with another registered user by email. */}
       {shareTarget && <ShareByEmailModal target={shareTarget} onClose={() => setShareTarget(null)} />}
+
+      {/* "Not available on the Free trial" toast (sharing / paid features). */}
+      {lockedMsg && (
+        <div className="fixed bottom-6 left-1/2 z-50 w-[92%] max-w-sm -translate-x-1/2 rounded-xl bg-slate-900 px-4 py-3 text-sm text-white shadow-lg dark:bg-white dark:text-slate-900">
+          <div className="flex items-start gap-2">
+            <span className="flex-1">{lockedMsg}</span>
+            <button onClick={() => setLockedMsg("")} className="font-semibold text-slate-300 hover:text-white dark:text-slate-500 dark:hover:text-slate-900">✕</button>
+          </div>
+        </div>
+      )}
 
       {/* This institute's approved reviews — shown to clients too (renders
           nothing until the institute has approved reviews). */}
