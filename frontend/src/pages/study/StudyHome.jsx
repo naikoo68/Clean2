@@ -6,7 +6,7 @@ import { Loading, ErrorState, EmptyState } from "../../components/ui/AsyncState"
 import { useSeo } from "../../lib/useSeo";
 
 export default function StudyHome() {
-  useSeo("Study Material", "Access curated notes, PDFs and study resources organised by subject and class on My Study Guide.");
+  useSeo("Study Materials & Resources", "Access curated study materials, notes, PDFs and resources organised by subject and class on My Study Guide.");
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
