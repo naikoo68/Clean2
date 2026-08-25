@@ -16,6 +16,11 @@
     <priority>0.6</priority>
   </url>
   <url>
+    <loc>https://www.mystudyguide.in/faq</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
     <loc>https://www.mystudyguide.in/quiz</loc>
     <changefreq>weekly</changefreq>
     <priority>0.8</priority>
