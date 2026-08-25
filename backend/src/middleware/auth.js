@@ -105,6 +105,19 @@ export function authorize(...roles) {
   };
 }
 
+// Block a client on the FREE TRIAL from paid-only features (backup & restore,
+// sharing content to other users). Admins and paid clients pass through. Reply
+// carries { trialLocked:true } so the frontend can show a clear message.
+export function blockTrialClient(req, res, next) {
+  if (req.user?.role === "client" && req.user?.isTrial) {
+    return res.status(403).json({
+      message: "This feature isn't available on the Free trial. Upgrade to a paid plan to use it.",
+      trialLocked: true,
+    });
+  }
+  next();
+}
+
 // Restricts a route to the platform SUPER-ADMIN only ("admin"). Use for
 // cross-tenant / platform-wide actions an institute_admin must never perform
 // (managing institutes, full-library backup/restore, storage, platform
