@@ -16,6 +16,7 @@ export const authService = {
   google: (profile) => api.post("/auth/google", profile, { auth: false }),
   me: () => api.get("/auth/me"),
   updateProfile: (data) => api.put("/auth/profile", data), // update own name / photo
+  completeCreatorGuide: () => api.patch("/auth/creator-guide", {}), // creator finished first-run setup guide
   forgotPassword: (email) => api.post("/auth/forgot-password", { email }, { auth: false }),
   resetPassword: (token, password) => api.post(`/auth/reset-password/${token}`, { password }, { auth: false }),
 };
