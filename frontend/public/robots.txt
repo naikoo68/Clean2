@@ -1,10 +1,7 @@
 User-agent: *
 Allow: /
-
-# Keep private/app areas out of search results
 Disallow: /admin
 Disallow: /client
 Disallow: /dashboard
 Disallow: /register
-
-Sitemap: https://mystudyguide.in/sitemap.xml
+Sitemap: https://www.mystudyguide.in/sitemap.xml

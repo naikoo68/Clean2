@@ -1,39 +1,38 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>
-    <loc>https://mystudyguide.in/</loc>
+    <loc>https://www.mystudyguide.in/</loc>
     <changefreq>weekly</changefreq>
     <priority>1.0</priority>
   </url>
   <url>
-    <loc>https://mystudyguide.in/about</loc>
+    <loc>https://www.mystudyguide.in/about</loc>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   <url>
-    <loc>https://mystudyguide.in/contact</loc>
+    <loc>https://www.mystudyguide.in/contact</loc>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://mystudyguide.in/quiz</loc>
+    <loc>https://www.mystudyguide.in/quiz</loc>
     <changefreq>weekly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://mystudyguide.in/test-series</loc>
+    <loc>https://www.mystudyguide.in/test-series</loc>
     <changefreq>weekly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://mystudyguide.in/practice</loc>
+    <loc>https://www.mystudyguide.in/practice</loc>
     <changefreq>weekly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>https://mystudyguide.in/study</loc>
+    <loc>https://www.mystudyguide.in/study</loc>
     <changefreq>weekly</changefreq>
     <priority>0.7</priority>
   </url>
-    
 </urlset>
