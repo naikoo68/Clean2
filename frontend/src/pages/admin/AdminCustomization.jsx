@@ -1,11 +1,12 @@
 import { useState, useRef } from "react";
 import {
   Palette, Type, ImagePlus, Save, RotateCcw, CheckCircle2, Eye, EyeOff,
-  Share2, Phone, Plus, Trash2, Upload, X, Info, BarChart3, PanelTop, GripVertical, LayoutList, Megaphone, Star, Camera,
+  Share2, Phone, Plus, Trash2, Upload, X, Info, BarChart3, PanelTop, GripVertical, LayoutList, Megaphone, Star, Camera, HelpCircle,
 } from "lucide-react";
 import { useSettings } from "../../context/SettingsContext";
 import Avatar from "../../components/ui/Avatar";
 import { fileToResizedDataUrl } from "../../lib/imageResize";
+import { FAQ_DEFAULTS } from "../../lib/faqDefaults";
 
 // Home-page sections (fixed set) that the admin can reorder / hide.
 const HOME_ORDER = ["hero", "stats", "quickAccess", "features", "howItWorks", "testimonials", "cta"];
@@ -187,7 +188,15 @@ export default function AdminCustomization() {
     testimonials: settings.testimonials?.length ? settings.testimonials : DEFAULTS.testimonials,
     clientAnnouncement: { ...DEFAULTS.clientAnnouncement, ...(settings.clientAnnouncement || {}) },
     homeSections: normalizeHomeSections(settings.homeSections),
+    // FAQ page content per audience — pre-fill with the current custom FAQs, or
+    // the built-in defaults so the admin edits the live questions.
+    faqs: {
+      student: settings.faqs?.student?.length ? settings.faqs.student : FAQ_DEFAULTS.student,
+      creator: settings.faqs?.creator?.length ? settings.faqs.creator : FAQ_DEFAULTS.creator,
+      institute: settings.faqs?.institute?.length ? settings.faqs.institute : FAQ_DEFAULTS.institute,
+    },
   });
+  const [faqTab, setFaqTab] = useState("student");
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState("");
   const [error, setError] = useState("");
@@ -225,6 +234,13 @@ export default function AdminCustomization() {
     try { updateTestimonial(i, "photo", await fileToResizedDataUrl(file, 200, 0.85)); } catch { /* ignore */ }
   };
 
+  // ---- FAQ page (per audience: student / creator / institute) ----
+  const addFaq = (aud) => set("faqs", { ...form.faqs, [aud]: [...(form.faqs[aud] || []), { q: "", a: "" }] });
+  const updateFaq = (aud, i, key, val) =>
+    set("faqs", { ...form.faqs, [aud]: (form.faqs[aud] || []).map((f, idx) => (idx === i ? { ...f, [key]: val } : f)) });
+  const removeFaq = (aud, i) =>
+    set("faqs", { ...form.faqs, [aud]: (form.faqs[aud] || []).filter((_, idx) => idx !== i) });
+
   // ---- Home layout ----
   const toggleSection = (i) =>
     set("homeSections", form.homeSections.map((s, idx) => (idx === i ? { ...s, visible: s.visible === false ? true : false } : s)));
@@ -259,6 +275,11 @@ export default function AdminCustomization() {
         aboutValues: form.aboutValues.filter((v) => v.title?.trim() || v.desc?.trim()),
         aboutStats: form.aboutStats.filter((s) => s.value?.trim() || s.label?.trim()),
         testimonials: form.testimonials.filter((t) => t.text?.trim() || t.name?.trim()),
+        faqs: {
+          student: (form.faqs.student || []).filter((f) => f.q?.trim() || f.a?.trim()),
+          creator: (form.faqs.creator || []).filter((f) => f.q?.trim() || f.a?.trim()),
+          institute: (form.faqs.institute || []).filter((f) => f.q?.trim() || f.a?.trim()),
+        },
       };
       await save(payload);
       flash("Saved! Your changes are now live across the site.");
@@ -718,6 +739,53 @@ export default function AdminCustomization() {
               </div>
             ))}
           </div>
+        </div>
+
+        {/* FAQ page (public /faq) — editable per audience */}
+        <div className="card p-6 lg:col-span-2">
+          <h3 className="mb-1 flex items-center gap-2 font-bold"><HelpCircle className="h-5 w-5 text-brand-600" /> FAQ page</h3>
+          <p className="mb-4 text-sm text-slate-500 dark:text-slate-400">
+            Questions &amp; answers shown on your public <span className="font-semibold">/faq</span> page. Pick an audience, then edit its questions. Leave an audience with no questions to fall back to the built-in default FAQs.
+          </p>
+
+          {/* Audience sub-tabs */}
+          <div className="mb-4 flex flex-wrap gap-2">
+            {[
+              { key: "student", label: "Students" },
+              { key: "creator", label: "Creators" },
+              { key: "institute", label: "Institutes" },
+            ].map((t) => (
+              <button
+                key={t.key}
+                type="button"
+                onClick={() => setFaqTab(t.key)}
+                className={`rounded-lg px-3 py-1.5 text-sm font-semibold transition ${faqTab === t.key ? "bg-brand-600 text-white shadow-sm" : "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300"}`}
+              >
+                {t.label} <span className="opacity-70">({(form.faqs[t.key] || []).length})</span>
+              </button>
+            ))}
+          </div>
+
+          <div className="space-y-3">
+            {(form.faqs[faqTab] || []).length === 0 ? (
+              <p className="rounded-xl border border-dashed border-slate-300 p-4 text-sm text-slate-500 dark:border-slate-700 dark:text-slate-400">
+                No questions for this audience — the built-in default FAQs will be shown on the site. Add a question below to override them.
+              </p>
+            ) : (
+              (form.faqs[faqTab] || []).map((f, i) => (
+                <div key={i} className="flex items-start gap-2 rounded-xl border border-slate-200 p-3 dark:border-slate-700">
+                  <span className="mt-2 text-xs font-semibold text-slate-400">{i + 1}</span>
+                  <div className="flex-1 space-y-2">
+                    <input className="input" value={f.q} onChange={(e) => updateFaq(faqTab, i, "q", e.target.value)} placeholder="Question" />
+                    <textarea rows={3} className="input resize-none" value={f.a} onChange={(e) => updateFaq(faqTab, i, "a", e.target.value)} placeholder="Answer" />
+                  </div>
+                  <button type="button" onClick={() => removeFaq(faqTab, i)} className="rounded-lg p-2 text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-900/30"><Trash2 className="h-4 w-4" /></button>
+                </div>
+              ))
+            )}
+          </div>
+
+          <button type="button" onClick={() => addFaq(faqTab)} className="btn-outline mt-3"><Plus className="h-4 w-4" /> Add question</button>
         </div>
       </div>
 
