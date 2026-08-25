@@ -33,6 +33,8 @@ const NotFound = lazy(() => import("./pages/NotFound"));
 const PublicNode = lazy(() => import("./pages/PublicNode"));
 
 const ChooseMode = lazy(() => import("./pages/ChooseMode"));
+const SubjectsIndex = lazy(() => import("./pages/subjects/SubjectsIndex"));
+const SubjectLanding = lazy(() => import("./pages/subjects/SubjectLanding"));
 const QuizHome = lazy(() => import("./pages/quiz/QuizHome"));
 const StreamSubjects = lazy(() => import("./pages/quiz/StreamSubjects"));
 const PracticeHome = lazy(() => import("./pages/practice/PracticeHome"));
@@ -163,6 +165,10 @@ const router = createBrowserRouter([
       { path: "/study/:institutionId", element: S(StudySubjects) },
       { path: "/study/:institutionId/:subjectId", element: S(StudyClasses) },
       { path: "/study/:institutionId/:subjectId/:classId", element: S(StudyFiles) },
+
+      // SEO landing pages for the subjects/streams we actually offer.
+      { path: "/subjects", element: S(SubjectsIndex) },
+      { path: "/subjects/:slug", element: S(SubjectLanding) },
 
       { path: "/login", element: S(Login) },
       { path: "/register", element: S(Register) },
