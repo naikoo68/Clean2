@@ -9,6 +9,7 @@
   ],
   "rewrites": [
     { "source": "/s/:token", "destination": "https://my-prep-mart-api-39nk.onrender.com/s/:token" },
+    { "source": "/sitemap.xml", "destination": "https://my-prep-mart-api-39nk.onrender.com/sitemap.xml" },
     { "source": "/((?!.*\\.).*)", "destination": "/index.html" }
   ]
 }

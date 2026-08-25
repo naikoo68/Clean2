@@ -66,6 +66,7 @@ import userManualRoutes from "./routes/userManualRoutes.js";
 import backupRoutes from "./routes/backupRoutes.js";
 import recycleBinRoutes from "./routes/recycleBinRoutes.js";
 import { shareTestPreview } from "./controllers/testController.js";
+import { sitemap } from "./controllers/sitemapController.js";
 import { releaseEndedCbtExams } from "./controllers/cbtController.js";
 import { runDueFbSchedules } from "./config/facebook.js";
 import { notFound, errorHandler } from "./middleware/error.js";
@@ -226,6 +227,11 @@ app.use("/api/manual", userManualRoutes); // editable User Manual (public read, 
 // Serves per-item Open Graph HTML (subject, topic, name + first question) and
 // redirects a human visitor on to the in-app player. Public, no auth.
 app.get("/s/:token", shareTestPreview);
+
+// Dynamic XML sitemap (served at the site root; the frontend host proxies
+// /sitemap.xml here — see frontend/vercel.json). Lists the fixed public pages
+// plus every real, public subject/stream/exam landing page. Public, no auth.
+app.get("/sitemap.xml", sitemap);
 
 // Errors
 app.use(notFound);
