@@ -10,6 +10,7 @@ import {
   resetPassword,
   getMe,
   updateProfile,
+  completeCreatorGuide,
   getPlans,
   getStudentPlans,
   validateOffer,
@@ -31,5 +32,6 @@ router.post("/forgot-password", forgotPassword);
 router.post("/reset-password/:token", resetPassword);
 router.get("/me", attachUser, getMe); // expired clients can still load their profile (to upgrade)
 router.put("/profile", attachUser, updateProfile); // update own name / profile photo
+router.patch("/creator-guide", attachUser, completeCreatorGuide); // creator marks first-run setup guide done
 
 export default router;
