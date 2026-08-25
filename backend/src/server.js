@@ -88,6 +88,34 @@ async function enableClientAiAccess() {
   }
 }
 
+// One-time migration: the first-run CREATOR setup guide is only for NEWLY
+// registered creators learning the tools for the first time — existing creators
+// already know the platform and shouldn't be shown it. So mark every EXISTING
+// creator as having already finished the guide (creatorGuide.completed = true).
+// New sign-ups register with completed = false (schema default) and get the
+// guide; this migration only touches accounts that exist at deploy time, and a
+// flag in Settings prevents it from ever re-running (so it never grandfathers
+// creators who register later).
+async function grandfatherCreatorGuide() {
+  try {
+    const settings = await Settings.findOneAndUpdate(
+      { key: "site" },
+      {},
+      { new: true, upsert: true, setDefaultsOnInsert: true }
+    );
+    if (settings.creatorGuideGrandfathered) return;
+    const { modifiedCount } = await User.updateMany(
+      { role: "client", "creatorGuide.completed": { $ne: true } },
+      { $set: { "creatorGuide.completed": true } }
+    );
+    settings.creatorGuideGrandfathered = true;
+    await settings.save();
+    console.log(`✅ Grandfathered ${modifiedCount} existing creator(s) past the first-run setup guide (one-time).`);
+  } catch (err) {
+    console.error("Creator-guide grandfather migration skipped:", err.message);
+  }
+}
+
 // One-time migration (multi-tenancy Phase 2): assign every EXISTING record to a
 // "default" institute (tenant), so nothing disappears when tenant scoping turns
 // on in Phase 3. Runs once — a flag in Settings prevents repeats — and is
@@ -154,6 +182,9 @@ async function start() {
 
   // Grant AI access to existing client accounts (one-time).
   enableClientAiAccess();
+
+  // Hide the first-run setup guide from existing creators (new sign-ups only).
+  grandfatherCreatorGuide();
 
   // Assign existing data to the default institute (one-time multi-tenant backfill).
   backfillTenantsOnce();
