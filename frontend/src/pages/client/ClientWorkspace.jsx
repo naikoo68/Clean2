@@ -110,6 +110,7 @@ export default function ClientWorkspace() {
     user?.role === "client" &&
     user?.aiAccess === true &&
     user?.featBuild !== false &&
+    user?.featAiGenerator === true &&
     user?.creatorGuide?.completed !== true;
 
   // Jump to the tab where a guide step is performed (closes the menu, leaves the

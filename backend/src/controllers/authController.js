@@ -221,7 +221,10 @@ export async function register(req, res) {
   // own AI generation limits, so a client can use the generator right away. An
   // admin can still turn it off per-account later (User → aiAccess).
   const doc = { name, email, password, role, isEmailVerified: false, referralCode: makeReferralCode(name) };
-  if (role === "client") doc.aiAccess = true;
+  // Creators get AI access AND the AI Generator on by default — the first-run
+  // setup guide adds the first question via the AI Generator page, so both must
+  // be available out of the box. An admin can still turn either off per-account.
+  if (role === "client") { doc.aiAccess = true; doc.featAiGenerator = true; }
 
   // If this email already consumed a student free trial before (durable ledger),
   // carry that forward so a re-registered account can't claim the trial again —

@@ -1,30 +1,29 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { KeyRound, Layers, BookOpen, FolderOpen, ListChecks, HelpCircle, RefreshCw, Feather, CheckCircle2, ArrowRight, Loader2, Rocket, X, PartyPopper } from "lucide-react";
+import { KeyRound, Layers, BookOpen, FolderOpen, ListChecks, Sparkles, RefreshCw, Feather, CheckCircle2, ArrowRight, Loader2, Rocket, X, PartyPopper } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import { aiService, authService, practiceService, testService } from "../../services";
 
-// First-run CREATOR setup guide — a step-by-step POPUP that the creator does
-// EVERYTHING inside: they type what to add and the popup creates it for them
-// (via the API) and advances to the next step — no jumping to the Build tab and
-// getting bounced around. It walks the full My-Quiz build flow, then the two AI
-// tools, one popup at a time:
-//   1. Add your AI API key   (paste key)      → aiService.keys.create + mode "self"
-//   2. Add a stream          (type a name)    → practiceService.createStream
-//   3. Add a subject         (type a name)    → createSubject (under the stream)
-//   4. Add a topic           (type a name)    → createTopic (under the subject)
-//   5. Add a quiz            (type a name)    → createItem (quiz under the topic)
-//   6. Add a question        (stem+4 options) → testService.addQuestion (in the quiz)
-//   7. Regenerate a question (one tap)        → aiService.regenerate on that question
-//   8. Extend an explanation (one tap)        → aiService.extendOne on that question
+// First-run CREATOR setup guide — a step-by-step POPUP. The creator builds the
+// content hierarchy right inside the popup (type a name → it's created), and
+// the ONE question is generated on the main AI Generator page:
+//   1. Add your AI API key   (paste key)   → aiService.keys.create + mode "self"
+//   2. Add a stream          (type a name) → practiceService.createStream
+//   3. Add a subject         (type a name) → createSubject (under the stream)
+//   4. Add a topic           (type a name) → createTopic (under the subject)
+//   5. Add a quiz            (type a name) → createItem (quiz under the topic)
+//   6. Generate a question   (AI Generator)→ opens the AI Generator page; the
+//                                            popup detects the new question
+//   7. Regenerate a question (one tap)     → aiService.regenerate on that question
+//   8. Extend an explanation (one tap)     → aiService.extendOne on that question
 //
 // Progress is remembered by what actually exists: on open we "hydrate" the
-// creator's newest stream → subject → topic → quiz → question so the tour
-// resumes exactly where they left off (and steps 7–8 target the real question).
-// Completing the last step marks the guide done server-side so it never returns.
+// creator's newest stream → subject → topic → quiz → question, and a light poll
+// keeps watching so a question generated on the AI Generator page auto-advances
+// the tour (and steps 7–8 target that real question). Completing the last step
+// marks the guide done server-side so it never returns.
 //
-// `onGoTab(tabKey)` is only used at the very end to drop them into the Build tab.
-const EMPTY_Q = { text: "", options: ["", "", "", ""], correct: 0 };
-
+// `onGoTab(tabKey)` switches the workspace tab — used to open the AI Generator
+// for step 6 and to drop the creator into Build at the end.
 export default function CreatorSetupGuide({ onGoTab }) {
   const { user, refreshUser } = useAuth();
   const [ownKeys, setOwnKeys] = useState(0); // creator's own API keys
@@ -35,8 +34,9 @@ export default function CreatorSetupGuide({ onGoTab }) {
   const [error, setError] = useState("");
   const [finishing, setFinishing] = useState(false);
   const [val, setVal] = useState("");     // single-line input (key / names)
-  const [q, setQ] = useState(EMPTY_Q);    // the "add a question" form
   const prevActiveRef = useRef(undefined);
+  const questionIdRef = useRef(null);     // latest question id for the poll to read
+  useEffect(() => { questionIdRef.current = ids.question; }, [ids.question]);
 
   // Resume support: find the creator's newest path through the hierarchy so the
   // tour continues from where they are and the AI steps target a real question.
@@ -73,9 +73,35 @@ export default function CreatorSetupGuide({ onGoTab }) {
 
   useEffect(() => { hydrate(); }, [hydrate]);
 
+  // Light poll: refresh the profile (for the regenerate/extend flags) and, until
+  // we have a question, watch for one appearing (e.g. generated on the AI
+  // Generator page) so the tour auto-advances even while minimised.
+  useEffect(() => {
+    const tick = async () => {
+      await refreshUser?.().catch(() => {});
+      if (!questionIdRef.current) {
+        const items = await practiceService.myItems().catch(() => []);
+        const withQ = (items || []).find((i) => i.kind === "quiz" && (i.questionCount || 0) >= 1);
+        if (withQ) {
+          const qs = await testService.getQuestions(withQ._id).catch(() => []);
+          if (qs.length) setIds((p) => ({ ...p, quiz: p.quiz || withQ._id, question: qs[0]._id }));
+        }
+      }
+    };
+    const id = setInterval(tick, 5000);
+    const onFocus = () => tick();
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onFocus);
+    return () => {
+      clearInterval(id);
+      window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onFocus);
+    };
+  }, [refreshUser]);
+
   const STEPS = [
     { k: "key", Icon: KeyRound, done: ownKeys >= 1, kind: "key", title: "Add your AI API key",
-      desc: "Paste a provider API key (e.g. a Google Gemini key). It powers the AI tools you'll use in the last two steps.",
+      desc: "Paste a provider API key (e.g. a Google Gemini key). It powers the AI Generator and the last two steps.",
       placeholder: "Paste your API key…", cta: "Save key" },
     { k: "stream", Icon: Layers, done: !!ids.stream, kind: "name", title: "Add a stream",
       desc: 'A broad category for your content, e.g. "JKSSB" or "Class 10".', placeholder: "Stream name", cta: "Add stream" },
@@ -85,8 +111,9 @@ export default function CreatorSetupGuide({ onGoTab }) {
       desc: 'A topic inside your subject, e.g. "Theory of Rent".', placeholder: "Topic name", cta: "Add topic" },
     { k: "quiz", Icon: ListChecks, done: !!ids.quiz, kind: "name", title: "Add a quiz",
       desc: "The quiz that will hold your questions.", placeholder: "Quiz name (e.g. Quiz 1)", cta: "Add quiz" },
-    { k: "question", Icon: HelpCircle, done: !!ids.question, kind: "question", title: "Add a question",
-      desc: "Type your question and its four options, and mark the correct one.", cta: "Add question" },
+    { k: "question", Icon: Sparkles, done: !!ids.question, kind: "aigen", title: "Generate your first question",
+      desc: "Open the AI Generator, choose your quiz as the destination, and generate a question with AI. It'll be ticked off here automatically once it's added.",
+      cta: "Open AI Generator" },
     { k: "regen", Icon: RefreshCw, done: user?.creatorGuide?.regenerated === true, kind: "regen", title: "Regenerate the question",
       desc: "Let the AI analyse your question and rebuild its options, answer and explanation to fit the stem.", cta: "Regenerate with AI" },
     { k: "extend", Icon: Feather, done: user?.creatorGuide?.extended === true, kind: "extend", title: "Extend the explanation",
@@ -99,19 +126,27 @@ export default function CreatorSetupGuide({ onGoTab }) {
   const allDone = activeIndex === -1;
   const step = allDone ? null : STEPS[activeIndex];
 
-  // Reset the inputs and re-open the popup whenever the active step changes.
+  // Reset the input and re-open the popup whenever the active step changes.
   useEffect(() => {
     setVal("");
-    setQ(EMPTY_Q);
     setError("");
     const key = allDone ? "done" : activeIndex;
     if (prevActiveRef.current === undefined) { prevActiveRef.current = key; return; }
     if (key !== prevActiveRef.current) { prevActiveRef.current = key; setMinimized(false); }
   }, [activeIndex, allDone]);
 
-  // Perform the current step's action (create the item / run the AI tool).
+  // Perform the current step's action (create the item / open the generator /
+  // run the AI tool).
   const doStep = async () => {
     if (!step || busy) return;
+    // The "generate a question" step just opens the AI Generator page; the poll
+    // above detects the new question and advances the tour.
+    if (step.kind === "aigen") {
+      onGoTab?.("aigen");
+      setMinimized(true);
+      try { window.scrollTo({ top: 0, behavior: "smooth" }); } catch { /* no-op */ }
+      return;
+    }
     setBusy(true);
     setError("");
     try {
@@ -139,13 +174,6 @@ export default function CreatorSetupGuide({ onGoTab }) {
           });
           setIds((p) => ({ ...p, quiz: it._id }));
         }
-      } else if (step.kind === "question") {
-        const text = q.text.trim();
-        const options = q.options.map((o) => o.trim());
-        if (!text) throw new Error("Please type the question.");
-        if (options.some((o) => !o)) throw new Error("Please fill in all four options.");
-        const created = await testService.addQuestion(ids.quiz, { type: "mcq", text, options, correct: q.correct });
-        setIds((p) => ({ ...p, question: created._id }));
       } else if (step.kind === "regen") {
         await aiService.regenerate({ questionId: ids.question });
         await refreshUser?.(); // picks up creatorGuide.regenerated
@@ -188,6 +216,7 @@ export default function CreatorSetupGuide({ onGoTab }) {
   }
 
   const busyLabel = step?.kind === "regen" || step?.kind === "extend" ? "Working with AI…" : "Saving…";
+  const hasInput = step?.kind === "name" || step?.kind === "key";
 
   return (
     <div className="fixed inset-0 z-[60] flex items-end justify-center p-3 sm:items-center sm:p-6">
@@ -215,7 +244,7 @@ export default function CreatorSetupGuide({ onGoTab }) {
             <span className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-500 to-brand-500 text-white"><PartyPopper className="h-7 w-7" /></span>
             <h2 className="mt-4 text-xl font-extrabold">You're all set!</h2>
             <p className="mt-1.5 text-sm text-slate-500 dark:text-slate-400">
-              You've added a key and built a full stream → subject → topic → quiz → question, then used the AI to regenerate and extend it. Your workspace is ready.
+              You've added a key, built a full stream → subject → topic → quiz, generated a question with AI, then regenerated and extended it. Your workspace is ready.
             </p>
             <button type="button" onClick={finish} disabled={finishing} className="btn-primary mt-6 w-full justify-center">
               {finishing ? <Loader2 className="h-4 w-4 animate-spin" /> : <>Start creating <ArrowRight className="h-4 w-4" /></>}
@@ -233,38 +262,9 @@ export default function CreatorSetupGuide({ onGoTab }) {
 
             <p className="mt-3 text-sm leading-relaxed text-slate-600 dark:text-slate-300">{step.desc}</p>
 
-            {/* Input area for the current step */}
-            <div className="mt-4">
-              {step.kind === "question" ? (
-                <div className="space-y-2.5">
-                  <textarea
-                    value={q.text}
-                    onChange={(e) => setQ((p) => ({ ...p, text: e.target.value }))}
-                    placeholder="Type your question…"
-                    className="input min-h-[72px]"
-                    autoFocus
-                  />
-                  {q.options.map((opt, i) => (
-                    <label key={i} className="flex items-center gap-2">
-                      <input
-                        type="radio"
-                        name="correct"
-                        checked={q.correct === i}
-                        onChange={() => setQ((p) => ({ ...p, correct: i }))}
-                        title="Mark as the correct answer"
-                        className="h-4 w-4 flex-shrink-0 accent-brand-600"
-                      />
-                      <input
-                        value={opt}
-                        onChange={(e) => setQ((p) => { const options = [...p.options]; options[i] = e.target.value; return { ...p, options }; })}
-                        placeholder={`Option ${i + 1}${q.correct === i ? " (correct)" : ""}`}
-                        className="input flex-1"
-                      />
-                    </label>
-                  ))}
-                  <p className="text-xs text-slate-400">Tip: fill all four options and select the round button next to the correct one.</p>
-                </div>
-              ) : step.kind === "name" || step.kind === "key" ? (
+            {/* Single-line input for the name / key steps */}
+            {hasInput && (
+              <div className="mt-4">
                 <input
                   value={val}
                   onChange={(e) => setVal(e.target.value)}
@@ -276,10 +276,10 @@ export default function CreatorSetupGuide({ onGoTab }) {
                   autoCapitalize={step.kind === "key" ? "none" : "sentences"}
                   spellCheck={step.kind !== "key"}
                 />
-              ) : null}
+              </div>
+            )}
 
-              {error && <p className="mt-2 rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700 dark:bg-rose-900/30 dark:text-rose-300">{error}</p>}
-            </div>
+            {error && <p className="mt-3 rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700 dark:bg-rose-900/30 dark:text-rose-300">{error}</p>}
 
             {/* Steps already completed */}
             {doneCount > 0 && (
@@ -295,6 +295,9 @@ export default function CreatorSetupGuide({ onGoTab }) {
             <button type="button" onClick={doStep} disabled={busy} className="btn-primary mt-5 w-full justify-center">
               {busy ? <><Loader2 className="h-4 w-4 animate-spin" /> {busyLabel}</> : <>{step.cta} <ArrowRight className="h-4 w-4" /></>}
             </button>
+            {step.kind === "aigen" && (
+              <p className="mt-2 text-center text-xs text-slate-400">This step ticks off automatically once your question is added.</p>
+            )}
           </div>
         )}
       </div>

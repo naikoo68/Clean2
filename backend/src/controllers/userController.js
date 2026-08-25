@@ -106,10 +106,11 @@ export async function createUser(req, res) {
   }
 
   const doc = { name, email, password, role, plan, isEmailVerified: true, expiresAt: expiry };
-  // Creator (client) accounts get AI access ON by default — same as self-service
-  // registration — so a newly-created creator can add keys and use the AI tools
-  // (and the first-run setup guide) right away. An admin can still turn it off.
-  if (role === "client") doc.aiAccess = true;
+  // Creator (client) accounts get AI access AND the AI Generator ON by default —
+  // same as self-service registration — so a newly-created creator can add keys,
+  // use the AI tools, and run the first-run setup guide (which generates the
+  // first question on the AI Generator page). An admin can still turn them off.
+  if (role === "client") { doc.aiAccess = true; doc.featAiGenerator = true; }
 
   // Optional student subscription granted at creation (admin manual grant).
   if (req.body.studentPlan) {
