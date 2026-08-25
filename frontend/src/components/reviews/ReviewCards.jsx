@@ -22,7 +22,7 @@ export default function ReviewCards({ items = [] }) {
           </blockquote>
           <figcaption className="mt-5 flex items-center gap-3">
             {t.photo ? (
-              <img src={t.photo} alt={t.name} className="h-11 w-11 rounded-full object-cover" />
+              <img src={t.photo} alt={`${t.name}${t.exam ? ` — ${t.exam}` : ""}`} loading="lazy" decoding="async" width="44" height="44" className="h-11 w-11 rounded-full object-cover" />
             ) : (
               <span className="flex h-11 w-11 items-center justify-center rounded-full bg-gradient-to-br from-brand-600 to-accent-500 text-sm font-bold text-white">
                 {initials(t.name)}
