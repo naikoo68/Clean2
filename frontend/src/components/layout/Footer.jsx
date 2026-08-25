@@ -10,6 +10,7 @@ const columns = [
     links: [
       { label: "Quizzes", to: "/choose/practice" },
       { label: "Test Series", to: "/choose/tests" },
+      { label: "Exams", to: "/exams" },
       { label: "Streams", to: "/streams" },
       { label: "Subjects", to: "/subjects" },
       { label: "Study Material", to: "/study" },
