@@ -54,7 +54,7 @@ export default function AdminCbt() {
     setError("");
     // Build the portal link from the browser's own URL so it's always correct
     // (never localhost), regardless of any backend CLIENT_URL config.
-    setPortalLink(`${window.location.origin}${window.location.pathname}#/online-exams`);
+    setPortalLink(`${window.location.origin}/online-exams`);
     cbtService
       .exams()
       .then((r) => {
@@ -352,7 +352,7 @@ export default function AdminCbt() {
                 </div>
 
                 <div className="mt-3 flex flex-wrap items-center gap-2">
-                  <a href={`#/cbt/exam/${r.cbtToken}`} target="_blank" rel="noreferrer" className="btn-outline py-1.5 text-xs" title="Preview the exam as a candidate">
+                  <a href={`/cbt/exam/${r.cbtToken}`} target="_blank" rel="noreferrer" className="btn-outline py-1.5 text-xs" title="Preview the exam as a candidate">
                     <ExternalLink className="h-3.5 w-3.5" /> Preview
                   </a>
                   <button onClick={() => openStudents(r)} className="btn-outline py-1.5 text-xs" title="Status of all students who joined this exam">

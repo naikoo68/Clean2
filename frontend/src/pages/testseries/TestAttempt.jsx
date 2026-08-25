@@ -97,7 +97,7 @@ function CbtSubmitted({ result, test, candidate, navigate }) {
 
         <div className="mt-6 flex flex-wrap justify-center gap-3">
           {result?.resultToken && (
-            <a href={`#/cbt/result/${result.resultToken}`} target="_blank" rel="noreferrer" className="btn-outline">
+            <a href={`/cbt/result/${result.resultToken}`} target="_blank" rel="noreferrer" className="btn-outline">
               Check result status
             </a>
           )}
