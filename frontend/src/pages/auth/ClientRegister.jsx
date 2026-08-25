@@ -100,7 +100,7 @@ export default function ClientRegister() {
     // Paid signup → server returns a session; log in and go straight to the app.
     if (res?.paid && res?.token) {
       applySession(res.token, res.user);
-      navigate("/client", { replace: true });
+      navigate("/creator", { replace: true });
       return;
     }
     // Free / payments-off → verify email via OTP.
@@ -172,7 +172,7 @@ export default function ClientRegister() {
           email={otpStep.email}
           devOtp={otpStep.devOtp}
           emailSent={otpStep.emailSent}
-          onVerified={() => navigate("/client", { replace: true })}
+          onVerified={() => navigate("/creator", { replace: true })}
           onLater={() => navigate("/login")}
         />
       </AuthShell>

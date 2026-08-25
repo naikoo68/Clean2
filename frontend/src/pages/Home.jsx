@@ -461,7 +461,7 @@ export default function Home() {
   // intentionally visit the public site, so they are NOT redirected. Declared
   // AFTER all hooks so the Rules of Hooks are preserved.
   if (user?.role === "client") {
-    return <Navigate to="/client" replace />;
+    return <Navigate to="/creator" replace />;
   }
 
   return (

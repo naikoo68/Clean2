@@ -4,7 +4,7 @@ import { lazy, Suspense } from "react";
 // any deep route still works because the host serves index.html for every path
 // (Vercel rewrite in vercel.json + public/_redirects, with public/404.html +
 // the index.html "?/" decoder as a static-host fallback).
-import { createBrowserRouter, RouterProvider } from "react-router-dom";
+import { createBrowserRouter, RouterProvider, Navigate } from "react-router-dom";
 import { ThemeProvider } from "./context/ThemeContext";
 import { SettingsProvider } from "./context/SettingsContext";
 import { AuthProvider } from "./context/AuthContext";
@@ -182,7 +182,9 @@ const router = createBrowserRouter([
 
       { path: "/login", element: S(Login) },
       { path: "/register", element: S(Register) },
-      { path: "/client/register", element: S(ClientRegister) },
+      { path: "/creator/register", element: S(ClientRegister) },
+      // Back-compat: old /client/register links (bookmarks, shared, emails) → /creator/register.
+      { path: "/client/register", element: <Navigate to="/creator/register" replace /> },
       { path: "/institute/register", element: S(InstituteRegister) },
       { path: "/forgot-password", element: S(ForgotPassword) },
       { path: "/reset-password/:token", element: S(ResetPassword) },
@@ -262,9 +264,10 @@ const router = createBrowserRouter([
     element: S(CbtResult),
   },
 
-  // Client "My Practice" workspace (separate shell, own content only)
+  // Creator "My Practice" workspace (separate shell, own content only).
+  // (The account role is still internally "client"; only the URL is /creator.)
   {
-    path: "/client",
+    path: "/creator",
     element: (
       <ProtectedRoute role="client">
         {S(ClientWorkspace)}
@@ -273,13 +276,17 @@ const router = createBrowserRouter([
   },
   // Full-page performance details (opened from the dashboard's Attempts card)
   {
-    path: "/client/performance",
+    path: "/creator/performance",
     element: (
       <ProtectedRoute role="client">
         {S(ClientPerformanceDetails)}
       </ProtectedRoute>
     ),
   },
+  // Back-compat: old /client links (installed PWA start_url, bookmarks, emails)
+  // redirect to the new /creator URLs so nothing breaks.
+  { path: "/client", element: <Navigate to="/creator" replace /> },
+  { path: "/client/performance", element: <Navigate to="/creator/performance" replace /> },
 
   // Admin (separate shell)
   { path: "/admin/login", element: S(AdminLogin) },
