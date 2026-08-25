@@ -11,7 +11,7 @@ import {
   startBackup, backupJobStatus, backupJobFile, startRestore, restoreJobStatus,
   toggleStreamPublicLink, toggleSubjectPublicLink, toggleTopicPublicLink, getPublicNode,
 } from "../controllers/practiceController.js";
-import { protect, authorize, optionalAuth } from "../middleware/auth.js";
+import { protect, authorize, optionalAuth, blockTrialClient } from "../middleware/auth.js";
 
 const router = Router();
 // Content-management routes are shared by admins (platform content) and clients
@@ -44,16 +44,16 @@ router.get("/my-items", ...admin, myItems);
 // UI can show a live % progress bar.
 // A restored admin backup can be large — allow a higher body limit for restore.
 const bigJson = express.json({ limit: "60mb" });
-router.post("/backup/start", ...admin, startBackup);
+router.post("/backup/start", ...admin, blockTrialClient, startBackup);
 router.get("/backup/job/:id", ...admin, backupJobStatus);
 router.get("/backup/job/:id/file", ...admin, backupJobFile);
-router.post("/restore/start", bigJson, ...admin, startRestore);
+router.post("/restore/start", bigJson, ...admin, blockTrialClient, startRestore);
 router.get("/restore/job/:id", ...admin, restoreJobStatus);
 
 // Share practice content (stream/subject/topic/quiz/test) with another
 // REGISTERED user by email (account-to-account). Creates a PENDING share the
 // recipient must accept.
-router.post("/share", ...admin, shareContent);
+router.post("/share", ...admin, blockTrialClient, shareContent);
 // Recipient's incoming shares + accept (duplicate into their account) / decline.
 router.get("/shares/incoming", ...admin, incomingShares);
 router.get("/shares/job/:id", ...admin, acceptShareJob); // poll accept progress (declared before "/shares/:id/...")
