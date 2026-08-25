@@ -38,7 +38,23 @@ function upsertCanonical(href) {
   el.setAttribute("href", href);
 }
 
-export function useSeo(title, description, canonical) {
+// Inject (or clear) a single page-level Schema.org JSON-LD block. Pass a plain
+// object (e.g. a BreadcrumbList) or null to remove it. Kept in the ONE SEO
+// system so we don't sprinkle competing <script> tags around.
+function upsertJsonLd(obj) {
+  if (typeof document === "undefined") return;
+  let el = document.getElementById("seo-jsonld");
+  if (!obj) { if (el) el.remove(); return; }
+  if (!el) {
+    el = document.createElement("script");
+    el.type = "application/ld+json";
+    el.id = "seo-jsonld";
+    document.head.appendChild(el);
+  }
+  el.textContent = JSON.stringify(obj);
+}
+
+export function useSeo(title, description, canonical, jsonLd) {
   useEffect(() => {
     const fullTitle = title ? `${title} | ${SITE}` : DEFAULT_TITLE;
     const desc = description || DEFAULT_DESC;
@@ -53,5 +69,8 @@ export function useSeo(title, description, canonical) {
     upsertMeta("name", "twitter:title", fullTitle);
     upsertMeta("name", "twitter:description", desc);
     upsertCanonical(url);
-  }, [title, description, canonical]);
+    upsertJsonLd(jsonLd || null);
+    // Clear page-specific JSON-LD on unmount so it never leaks to the next page.
+    return () => upsertJsonLd(null);
+  }, [title, description, canonical, JSON.stringify(jsonLd)]);
 }
