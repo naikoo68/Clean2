@@ -116,7 +116,7 @@ export default function Pricing() {
 
   const heroText = {
     student: `Practice free, subscribe to unlock full test-series, quizzes and your ${site} performance dashboard.`,
-    client: `Every ${site} Client plan includes the full toolkit — longer plans cost less per month and unlock higher AI limits.`,
+    client: `Every ${site} Creator plan includes the full toolkit — longer plans cost less per month and unlock higher AI limits.`,
     institute: `Run your institute on ${site} — your own branding, subdomain, admin and fully isolated students & content.`,
   };
 

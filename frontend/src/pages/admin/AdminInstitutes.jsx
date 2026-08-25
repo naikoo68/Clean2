@@ -299,7 +299,7 @@ export default function AdminInstitutes() {
               </div>
 
               <div className="mt-2 flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
-                <span className="inline-flex items-center gap-1"><Store className="h-3.5 w-3.5" /> {t.stats?.clients ?? 0} clients</span>
+                <span className="inline-flex items-center gap-1"><Store className="h-3.5 w-3.5" /> {t.stats?.clients ?? 0} creators</span>
                 <span>{t.stats?.instituteAdmins ?? 0} admin(s)</span>
               </div>
 
@@ -478,7 +478,7 @@ export default function AdminInstitutes() {
               <button type="button" onClick={() => setDeleteFor(null)}><X className="h-5 w-5" /></button>
             </div>
             <p className="mb-3 text-sm text-slate-600 dark:text-slate-300">
-              This permanently deletes <b>{deleteFor.name}</b> and <b>everything inside it</b> — its admins, students, clients, questions, tests and settings. Its subdomain <b>{deleteFor.slug}</b> will become available again. <span className="font-semibold text-rose-600 dark:text-rose-400">This cannot be undone.</span>
+              This permanently deletes <b>{deleteFor.name}</b> and <b>everything inside it</b> — its admins, students, creators, questions, tests and settings. Its subdomain <b>{deleteFor.slug}</b> will become available again. <span className="font-semibold text-rose-600 dark:text-rose-400">This cannot be undone.</span>
             </p>
             <div className="mb-3 rounded-xl bg-slate-50 p-3 text-xs text-slate-500 dark:bg-slate-800/60 dark:text-slate-400">
               Contains: {deleteFor.stats?.students ?? 0} students · {deleteFor.stats?.instituteAdmins ?? 0} admin(s) · {deleteFor.stats?.tests ?? 0} tests · {deleteFor.stats?.questions ?? 0} questions

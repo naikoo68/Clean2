@@ -324,7 +324,7 @@ export default function Home() {
           </p>
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
             {[
-              { v: realStats.clients, l: "Total Clients", Icon: Users },
+              { v: realStats.clients, l: "Total Creators", Icon: Users },
               { v: realStats.clientQuizzes, l: "Total Quizzes", Icon: ListChecks },
               { v: realStats.clientTests, l: "Total Tests", Icon: FileStack },
               { v: realStats.clientQuestions, l: "Total Questions", Icon: HelpCircle },

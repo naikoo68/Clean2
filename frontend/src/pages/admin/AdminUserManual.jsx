@@ -128,7 +128,7 @@ export default function AdminUserManual() {
       .update(sections)
       .then((r) => {
         if (Array.isArray(r?.sections)) setSections(r.sections);
-        setMsg("Saved. Clients now see this manual.");
+        setMsg("Saved. Creators now see this manual.");
       })
       .catch((e) => setError(e.message || "Save failed."))
       .finally(() => setSaving(false));
@@ -255,7 +255,7 @@ export default function AdminUserManual() {
           {/* Optional tab key */}
           <div>
             <label className="mb-1 block text-xs font-semibold text-slate-500">
-              Workspace tab key (optional — shows an “Open” button for clients)
+              Workspace tab key (optional — shows an “Open” button for creators)
             </label>
             <input
               className="input"
@@ -290,7 +290,7 @@ export default function AdminUserManual() {
           <div className="min-w-0">
             <h1 className="text-2xl font-extrabold leading-none">User Manual</h1>
             <p className="mt-1 text-sm text-slate-400">
-              Edit every function, sub-function, image and step here. Save to publish it to clients.
+              Edit every function, sub-function, image and step here. Save to publish it to creators.
             </p>
           </div>
           <div className="ml-auto flex items-center gap-2">

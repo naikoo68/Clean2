@@ -114,7 +114,7 @@ export default function AdminClients() {
     setTogglingPublic(true);
     try {
       await saveSettings({ publicClientEnabled: !publicClientOn });
-      flash(!publicClientOn ? "Client sign-up is now visible on your public site." : "Client sign-up is now hidden from the public.");
+      flash(!publicClientOn ? "Creator sign-up is now visible on your public site." : "Creator sign-up is now hidden from the public.");
     } catch (e) {
       flash(e.message || "Could not update.");
     } finally {
@@ -174,12 +174,12 @@ export default function AdminClients() {
   };
 
   const removeClient = async (c) => {
-    if (!window.confirm(`Move client "${c.name}" to the Recycle bin?\n\nTheir account and all My Practice content are KEPT and can be restored later. (To erase permanently, use the Recycle bin below.)`)) return;
+    if (!window.confirm(`Move creator "${c.name}" to the Recycle bin?\n\nTheir account and all My Practice content are KEPT and can be restored later. (To erase permanently, use the Recycle bin below.)`)) return;
     try {
       await userService.remove(c._id);
       setClients((list) => list.filter((x) => x._id !== c._id));
       loadDeleted();
-      flash("Client moved to Recycle bin — you can restore it below.");
+      flash("Creator moved to Recycle bin — you can restore it below.");
     } catch (e) {
       flash(e.message);
     }
@@ -191,7 +191,7 @@ export default function AdminClients() {
       await userService.restore(c._id);
       setDeletedClients((list) => list.filter((x) => x._id !== c._id));
       load();
-      flash("Client restored.");
+      flash("Creator restored.");
     } catch (e) {
       flash(e.message);
     }
@@ -203,7 +203,7 @@ export default function AdminClients() {
     try {
       await userService.deletePermanent(c._id);
       setDeletedClients((list) => list.filter((x) => x._id !== c._id));
-      flash("Client permanently deleted.");
+      flash("Creator permanently deleted.");
     } catch (e) {
       flash(e.message);
     }
@@ -246,7 +246,7 @@ export default function AdminClients() {
           status = res.status;
         }
         setClients((list) => list.map((x) => (x._id === editing._id ? { ...x, ...updated, status } : x)));
-        flash("Client updated.");
+        flash("Creator updated.");
       } else {
         const created = await userService.create({
           name: form.name,
@@ -256,7 +256,7 @@ export default function AdminClients() {
           expiresAt,
         });
         setClients((list) => [{ ...created, quizzes: 0, tests: 0, questions: 0 }, ...list]);
-        flash(form.isTemp ? "Temporary client created." : "Client created.");
+        flash(form.isTemp ? "Temporary creator created." : "Creator created.");
       }
       setModal(false);
       setForm(blank);
@@ -278,20 +278,20 @@ export default function AdminClients() {
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="flex items-center gap-2 text-2xl font-extrabold"><Store className="h-6 w-6 text-accent-500" /> Clients</h1>
+          <h1 className="flex items-center gap-2 text-2xl font-extrabold"><Store className="h-6 w-6 text-accent-500" /> Creators</h1>
           <p className="text-slate-500 dark:text-slate-400">
             Self-service accounts that build & practice their own private My Practice content. Manage validity, access, passwords and deletion here.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <button onClick={togglePublicClient} disabled={togglingPublic} title="Show or hide the Client sign-up option on your public website. Existing clients are not affected." className={`btn-outline ${publicClientOn ? "" : "!border-amber-300 !text-amber-700 dark:!text-amber-300"}`}>
+          <button onClick={togglePublicClient} disabled={togglingPublic} title="Show or hide the Creator sign-up option on your public website. Existing creators are not affected." className={`btn-outline ${publicClientOn ? "" : "!border-amber-300 !text-amber-700 dark:!text-amber-300"}`}>
             {publicClientOn ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />} {publicClientOn ? "Public sign-up: On" : "Public sign-up: Hidden"}
           </button>
           <button onClick={() => setFeatAllOpen(true)} className="btn-outline">
             <CheckCircle2 className="h-4 w-4" /> Apply features to all
           </button>
           <button onClick={openAdd} className="btn-primary">
-            <UserPlus className="h-4 w-4" /> Add Client
+            <UserPlus className="h-4 w-4" /> Add Creator
           </button>
         </div>
       </div>
@@ -301,10 +301,10 @@ export default function AdminClients() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={applyingAll ? undefined : () => setFeatAllOpen(false)}>
           <div onClick={(e) => e.stopPropagation()} className="w-full max-w-md animate-scale-in card p-6">
             <div className="mb-3 flex items-center justify-between">
-              <h3 className="text-lg font-bold">Apply features to all clients</h3>
+              <h3 className="text-lg font-bold">Apply features to all creators</h3>
               <button type="button" onClick={() => setFeatAllOpen(false)} disabled={applyingAll}><X className="h-5 w-5" /></button>
             </div>
-            <p className="mb-4 text-sm text-slate-500 dark:text-slate-400">Tick the tabs to grant, untick to revoke — this overwrites these features for <b>every</b> client at once.</p>
+            <p className="mb-4 text-sm text-slate-500 dark:text-slate-400">Tick the tabs to grant, untick to revoke — this overwrites these features for <b>every</b> creator at once.</p>
             <div className="grid grid-cols-2 gap-2">
               {FEATURES.map((f) => (
                 <label key={f.key} className="flex cursor-pointer items-center justify-between gap-2 rounded-lg bg-slate-50 px-3 py-2 text-sm dark:bg-slate-800/60">
@@ -319,11 +319,11 @@ export default function AdminClients() {
                 type="button"
                 disabled={applyingAll}
                 onClick={async () => {
-                  if (!window.confirm("Apply these feature settings to ALL clients? This overwrites their current per-tab access.")) return;
+                  if (!window.confirm("Apply these feature settings to ALL creators? This overwrites their current per-tab access.")) return;
                   setApplyingAll(true);
                   try {
                     const res = await userService.applyClientFeatures(featAll);
-                    flash(`Applied to ${res?.updated ?? "all"} client(s).`);
+                    flash(`Applied to ${res?.updated ?? "all"} creator(s).`);
                     setFeatAllOpen(false);
                     load();
                   } catch (e) { flash(e.message); } finally { setApplyingAll(false); }
@@ -338,14 +338,14 @@ export default function AdminClients() {
       )}
 
       {loading ? (
-        <Loading label="Loading clients..." />
+        <Loading label="Loading creators..." />
       ) : error && !modal ? (
         <ErrorState message={error} onRetry={load} />
       ) : (
         <>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {[
-              { l: "Total Clients", v: clients.length, c: "text-brand-600" },
+              { l: "Total Creators", v: clients.length, c: "text-brand-600" },
               { l: "Active", v: clients.filter((c) => c.status === "active" && !isExpired(c.expiresAt)).length, c: "text-emerald-600" },
               { l: "Blocked / Expired", v: clients.filter((c) => c.status === "blocked" || isExpired(c.expiresAt)).length, c: "text-rose-600" },
               { l: "Questions Created", v: clients.reduce((s, c) => s + (c.questions || 0), 0), c: "text-accent-600" },
@@ -359,17 +359,17 @@ export default function AdminClients() {
 
           <div className="relative max-w-sm">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-            <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search clients..." className="input pl-9" />
+            <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search creators..." className="input pl-9" />
           </div>
 
           {filtered.length === 0 ? (
-            <EmptyState message={search ? "No clients match your search." : "No client accounts yet. They appear here when people register at /client/register (or add one above)."} />
+            <EmptyState message={search ? "No creators match your search." : "No creator accounts yet. They appear here when people register at /client/register (or add one above)."} />
           ) : (
             <div className="card overflow-x-auto">
               <table className="w-full min-w-[1000px] text-sm">
                 <thead className="bg-slate-50 text-left text-slate-500 dark:bg-slate-800/60">
                   <tr>
-                    <th className="px-5 py-3 font-semibold">Client</th>
+                    <th className="px-5 py-3 font-semibold">Creator</th>
                     <th className="px-5 py-3 font-semibold">Content</th>
                     <th className="px-5 py-3 font-semibold">Plan</th>
                     <th className="px-5 py-3 font-semibold">Access</th>
@@ -478,7 +478,7 @@ export default function AdminClients() {
                 <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-500 dark:bg-slate-800">{deletedClients.length}</span>
               </h3>
               <p className="mb-3 text-sm text-slate-500 dark:text-slate-400">
-                Deleted clients are kept here with all their content. <b>Restore</b> brings the account fully back; <b>Delete permanently</b> erases it and cannot be undone.
+                Deleted creators are kept here with all their content. <b>Restore</b> brings the account fully back; <b>Delete permanently</b> erases it and cannot be undone.
               </p>
               <div className="divide-y divide-slate-100 dark:divide-slate-800">
                 {deletedClients.map((c) => (
@@ -514,18 +514,18 @@ export default function AdminClients() {
         <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/50 p-4">
           <form onSubmit={saveClient} className="my-8 w-full max-w-md animate-scale-in card p-6">
             <div className="mb-4 flex items-center justify-between">
-              <h3 className="text-lg font-bold">{editing ? "Edit Client" : "Add Client"}</h3>
+              <h3 className="text-lg font-bold">{editing ? "Edit Creator" : "Add Creator"}</h3>
               <button type="button" onClick={() => setModal(false)}><X className="h-5 w-5" /></button>
             </div>
             {error && <div className="mb-3 rounded-xl bg-rose-50 px-3 py-2 text-sm text-rose-700 dark:bg-rose-900/30 dark:text-rose-300">{error}</div>}
             <div className="space-y-4">
               <div>
                 <label className="mb-1.5 block text-sm font-medium">Full Name</label>
-                <input required className="input" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Client name" />
+                <input required className="input" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Creator name" />
               </div>
               <div>
                 <label className="mb-1.5 block text-sm font-medium">Email</label>
-                <input required type="email" autoCapitalize="none" autoCorrect="off" spellCheck={false} className="input" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} placeholder="client@example.com" />
+                <input required type="email" autoCapitalize="none" autoCorrect="off" spellCheck={false} className="input" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} placeholder="creator@example.com" />
               </div>
               <div>
                 <label className="mb-1.5 block text-sm font-medium">
@@ -538,7 +538,7 @@ export default function AdminClients() {
               <div className="flex items-center justify-between rounded-xl border border-slate-200 p-4 dark:border-slate-700">
                 <div>
                   <p className="text-sm font-medium">Account access</p>
-                  <p className="text-xs text-slate-500 dark:text-slate-400">When off, the client can't log in.</p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">When off, the creator can't log in.</p>
                 </div>
                 <label className="inline-flex cursor-pointer items-center gap-2 text-sm font-medium">
                   <input type="checkbox" className="h-4 w-4 accent-emerald-600" checked={form.active} onChange={(e) => setForm({ ...form, active: e.target.checked })} />
@@ -599,7 +599,7 @@ export default function AdminClients() {
                       </option>
                     ))}
                   </select>
-                  <p className="mt-1 text-xs text-slate-400">Sets this client's plan — its price label and AI generation limits. Manage plans in <b>AI Keys</b>.</p>
+                  <p className="mt-1 text-xs text-slate-400">Sets this creator's plan — its price label and AI generation limits. Manage plans in <b>AI Keys</b>.</p>
                 </div>
               )}
 
@@ -607,7 +607,7 @@ export default function AdminClients() {
               {editing && (
                 <div className="rounded-xl border border-slate-200 p-4 dark:border-slate-700">
                   <p className="mb-2 text-sm font-semibold">Workspace features</p>
-                  <p className="mb-3 text-xs text-slate-500 dark:text-slate-400">Tick which tabs this client sees. AI (API keys) &amp; AI Generator are off by default.</p>
+                  <p className="mb-3 text-xs text-slate-500 dark:text-slate-400">Tick which tabs this creator sees. AI (API keys) &amp; AI Generator are off by default.</p>
                   <div className="grid grid-cols-2 gap-2">
                     {FEATURES.map((f) => (
                       <label key={f.key} className="flex cursor-pointer items-center justify-between gap-2 rounded-lg bg-slate-50 px-3 py-2 text-sm dark:bg-slate-800/60">
@@ -629,7 +629,7 @@ export default function AdminClients() {
                     <input type="checkbox" className="h-4 w-4 accent-brand-600" checked={form.aiAccess} onChange={(e) => setForm({ ...form, aiAccess: e.target.checked })} />
                   </label>
                   <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-                    When on, this client sees an <b>AI</b> tab to generate/import questions.
+                    When on, this creator sees an <b>AI</b> tab to generate/import questions.
                   </p>
 
                   {form.aiAccess && (
@@ -640,11 +640,11 @@ export default function AdminClients() {
                         <input type="checkbox" className="h-4 w-4 accent-brand-600" checked={form.aiAllowInbuilt} onChange={(e) => setForm({ ...form, aiAllowInbuilt: e.target.checked })} />
                       </label>
                       <label className="flex items-center justify-between gap-3 rounded-lg bg-slate-50 px-3 py-2 text-sm dark:bg-slate-800/60">
-                        <span>Own APIs <span className="text-xs text-slate-400">(keys the client adds)</span></span>
+                        <span>Own APIs <span className="text-xs text-slate-400">(keys the creator adds)</span></span>
                         <input type="checkbox" className="h-4 w-4 accent-brand-600" checked={form.aiAllowSelf} onChange={(e) => setForm({ ...form, aiAllowSelf: e.target.checked })} />
                       </label>
                       {!form.aiAllowInbuilt && !form.aiAllowSelf && (
-                        <p className="text-xs font-medium text-rose-600 dark:text-rose-400">Enable at least one source, or the client won't be able to use AI.</p>
+                        <p className="text-xs font-medium text-rose-600 dark:text-rose-400">Enable at least one source, or the creator won't be able to use AI.</p>
                       )}
                     </div>
                   )}
@@ -653,7 +653,7 @@ export default function AdminClients() {
             </div>
             <div className="mt-6 flex justify-end gap-3">
               <button type="button" onClick={() => setModal(false)} className="btn-outline">Cancel</button>
-              <button type="submit" disabled={saving} className="btn-primary">{saving ? "Saving..." : editing ? "Save Changes" : "Create Client"}</button>
+              <button type="submit" disabled={saving} className="btn-primary">{saving ? "Saving..." : editing ? "Save Changes" : "Create Creator"}</button>
             </div>
           </form>
         </div>

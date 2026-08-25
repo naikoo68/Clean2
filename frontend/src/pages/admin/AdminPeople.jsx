@@ -26,7 +26,7 @@ export default function AdminPeople() {
 
   const tabs = [
     { key: "students", label: "Students", Icon: GraduationCap },
-    ...(canClients ? [{ key: "clients", label: "Clients", Icon: Store }] : []),
+    ...(canClients ? [{ key: "clients", label: "Creators", Icon: Store }] : []),
     ...(isSuper ? [{ key: "institutes", label: "Institutes", Icon: School }] : []),
   ];
 
@@ -52,7 +52,7 @@ export default function AdminPeople() {
           <Users className="h-6 w-6 text-brand-600" /> Users
         </h1>
         <p className="text-slate-500 dark:text-slate-400">
-          Manage your students, clients{isSuper ? " and institutes" : ""} — their accounts and plans, all in one place.
+          Manage your students, creators{isSuper ? " and institutes" : ""} — their accounts and plans, all in one place.
         </p>
       </div>
 

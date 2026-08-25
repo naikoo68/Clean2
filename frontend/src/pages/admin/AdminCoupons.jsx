@@ -98,7 +98,7 @@ export default function AdminCoupons() {
         <div>
           <h1 className="flex items-center gap-2 text-2xl font-extrabold"><Ticket className="h-6 w-6 text-accent-500" /> Coupons</h1>
           <p className="text-slate-500 dark:text-slate-400">
-            Discount codes clients can apply when registering. A percent (%) or flat (₹) discount off the plan price.
+            Discount codes creators can apply when registering. A percent (%) or flat (₹) discount off the plan price.
           </p>
         </div>
         <button onClick={openAdd} className="btn-primary">
@@ -111,7 +111,7 @@ export default function AdminCoupons() {
       ) : error && !modal ? (
         <ErrorState message={error} onRetry={load} />
       ) : coupons.length === 0 ? (
-        <EmptyState message="No coupons yet. Create one so clients can get a discount at registration." />
+        <EmptyState message="No coupons yet. Create one so creators can get a discount at registration." />
       ) : (
         <div className="card overflow-x-auto">
           <table className="w-full min-w-[640px] text-sm">
@@ -189,7 +189,7 @@ export default function AdminCoupons() {
               </div>
               <label className="flex items-center gap-2 text-sm font-medium">
                 <input type="checkbox" className="h-4 w-4 accent-emerald-600" checked={form.active} onChange={(e) => setForm({ ...form, active: e.target.checked })} />
-                Active (clients can use it)
+                Active (creators can use it)
               </label>
             </div>
             <div className="mt-6 flex justify-end gap-3">
