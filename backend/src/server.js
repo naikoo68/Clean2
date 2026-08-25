@@ -88,6 +88,32 @@ async function enableClientAiAccess() {
   }
 }
 
+// One-time migration: enable the AI Generator for every EXISTING client account.
+// featAiGenerator defaulted OFF, so creators registered before it became a
+// default (and the first-run setup guide, which generates the first question on
+// the AI Generator page) couldn't use it. Turn it on once for all existing
+// creators — a flag in Settings prevents repeats, so an admin can still turn it
+// off for a specific creator afterwards without it flipping back on.
+async function enableClientAiGenerator() {
+  try {
+    const settings = await Settings.findOneAndUpdate(
+      { key: "site" },
+      {},
+      { new: true, upsert: true, setDefaultsOnInsert: true }
+    );
+    if (settings.aiClientGeneratorBackfilled) return;
+    const { modifiedCount } = await User.updateMany(
+      { role: "client", featAiGenerator: { $ne: true } },
+      { $set: { featAiGenerator: true } }
+    );
+    settings.aiClientGeneratorBackfilled = true;
+    await settings.save();
+    console.log(`✨ Enabled the AI Generator for ${modifiedCount} existing client account(s) (one-time migration).`);
+  } catch (err) {
+    console.error("Client AI-generator migration skipped:", err.message);
+  }
+}
+
 // One-time migration (multi-tenancy Phase 2): assign every EXISTING record to a
 // "default" institute (tenant), so nothing disappears when tenant scoping turns
 // on in Phase 3. Runs once — a flag in Settings prevents repeats — and is
@@ -154,6 +180,9 @@ async function start() {
 
   // Grant AI access to existing client accounts (one-time).
   enableClientAiAccess();
+
+  // Enable the AI Generator for existing client accounts (one-time).
+  enableClientAiGenerator();
 
   // Assign existing data to the default institute (one-time multi-tenant backfill).
   backfillTenantsOnce();
