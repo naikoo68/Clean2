@@ -32,11 +32,11 @@ export default function Navbar() {
   // nav with a single link back to it so "Home"/the logo never strands them on
   // a page with no way back to their created questions.
   const visibleLinks = isClient
-    ? [{ to: "/client", label: "My Practice", end: true }]
+    ? [{ to: "/creator", label: "My Practice", end: true }]
     : user && user.quizAccess === false
     ? links.filter((l) => l.to !== "/quiz")
     : links;
-  const homeTo = isClient ? "/client" : "/";
+  const homeTo = isClient ? "/creator" : "/";
 
   const handleLogout = () => {
     logout();
@@ -101,7 +101,7 @@ export default function Navbar() {
                   <ShieldCheck className="h-4 w-4" /> Admin Mode
                 </Link>
               )}
-              <Link to={isClient ? "/client" : "/dashboard"} className="btn-ghost">
+              <Link to={isClient ? "/creator" : "/dashboard"} className="btn-ghost">
                 <LayoutDashboard className="h-4 w-4" /> {isClient ? "My Practice" : "Dashboard"}
               </Link>
               {/* Students manage their profile here; clients use the Account tab in their workspace */}
@@ -165,7 +165,7 @@ export default function Navbar() {
                       <ShieldCheck className="h-4 w-4" /> Admin Mode
                     </Link>
                   )}
-                  <Link to={isClient ? "/client" : "/dashboard"} onClick={() => setOpen(false)} className="btn-outline w-full">
+                  <Link to={isClient ? "/creator" : "/dashboard"} onClick={() => setOpen(false)} className="btn-outline w-full">
                     <LayoutDashboard className="h-4 w-4" /> {isClient ? "My Practice" : "Dashboard"}
                   </Link>
                   {!isClient && !isAdmin && (

@@ -32,7 +32,7 @@ export default function PracticeSlideshow() {
   useEffect(load, [load]);
 
   // Clients return to their workspace; admins to the practice manager.
-  const backTo = user?.role === "client" ? "/client" : "/admin/practice";
+  const backTo = user?.role === "client" ? "/creator" : "/admin/practice";
 
   if (loading) return <div className="container-page"><Loading label="Loading quiz…" /></div>;
   if (error) return <div className="container-page"><ErrorState message={error} onRetry={load} /></div>;

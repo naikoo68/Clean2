@@ -11,7 +11,7 @@ export default function Register() {
   const navigate = useNavigate();
   // Switching tabs jumps to the matching registration flow.
   const onType = (k) => {
-    if (k === "client") navigate("/client/register");
+    if (k === "client") navigate("/creator/register");
     else if (k === "institute") navigate("/institute/register");
   };
   const [showPw, setShowPw] = useState(false);

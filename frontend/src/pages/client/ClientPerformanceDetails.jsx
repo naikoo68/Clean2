@@ -11,7 +11,7 @@ export default function ClientPerformanceDetails() {
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
       <header className="sticky top-0 z-30 border-b border-slate-200 bg-white px-4 py-3 dark:border-slate-800 dark:bg-slate-900">
         <div className="mx-auto flex max-w-6xl items-center gap-3">
-          <button onClick={() => navigate("/client")} className="btn-ghost" title="Back to dashboard">
+          <button onClick={() => navigate("/creator")} className="btn-ghost" title="Back to dashboard">
             <ArrowLeft className="h-4 w-4" /> <span className="hidden sm:inline">Back</span>
           </button>
           <h1 className="flex items-center gap-2 text-lg font-bold">
