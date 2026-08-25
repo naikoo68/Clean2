@@ -1,9 +1,11 @@
 import LegalLayout from "../components/ui/LegalLayout";
 import { useSettings } from "../context/SettingsContext";
+import { useSeo } from "../lib/useSeo";
 
 export default function Refund() {
   const { settings } = useSettings();
   const name = settings.siteName || "our platform";
+  useSeo("Refund & Cancellation Policy", `Understand how refunds and cancellations work for paid subscriptions on ${name}.`);
 
   return (
     <LegalLayout

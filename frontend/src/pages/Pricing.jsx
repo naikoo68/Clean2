@@ -4,6 +4,7 @@ import { Check, Sparkles, Crown, Loader2, GraduationCap, Store, School } from "l
 import { authService, paymentService, instituteSignupService } from "../services";
 import { useAuth } from "../context/AuthContext";
 import { useSettings } from "../context/SettingsContext";
+import { useSeo } from "../lib/useSeo";
 
 // Prices mirror the backend defaults so the page never renders empty while the
 // live plan responses are loading.
@@ -62,6 +63,10 @@ const CONTENT = {
 // Public pricing page: a segmented toggle switches between STUDENT, CREATOR
 // (client) and INSTITUTE (tenant) plans.
 export default function Pricing() {
+  useSeo(
+    "Pricing & Plans",
+    "See My Study Guide pricing — affordable monthly and yearly plans for students, creators and institutes, plus a free trial. Unlock quizzes, test series, study material and analytics."
+  );
   const { settings } = useSettings();
   const { user } = useAuth();
   const site = settings?.siteName || "My Study Guide";
