@@ -42,6 +42,7 @@ import { Loading, ErrorState, EmptyState } from "../../components/ui/AsyncState"
 import { questionDateText, searchQuestions, stemText, displayOptions } from "../../lib/questions";
 import { shuffleAll, toOriginalIndex, makeSeed } from "../../lib/shuffleOptions";
 import PaperExport from "../../components/admin/PaperExport";
+import { useSeo } from "../../lib/useSeo";
 
 const optionLabels = ["A", "B", "C", "D"];
 
@@ -148,6 +149,16 @@ export default function PracticeQuizPlay() {
       .finally(() => setLoading(false));
   }, [itemId, token, freeId, isPublic, isFree, seed]);
   useEffect(load, [load]);
+
+  // Dynamic SEO — only for the genuinely public, no-login views (shared link or
+  // free preview). Authenticated play keeps the app default title. Uses the
+  // real quiz name + question count; no fabricated content.
+  const anonSeo = isPublic || isFree;
+  const seoTitle = anonSeo && title && title !== "Practice Quiz" ? `${title} — Online Quiz` : null;
+  const seoDesc = anonSeo && title && title !== "Practice Quiz"
+    ? `Attempt the ${title} quiz online${questions.length ? ` with ${questions.length} question${questions.length === 1 ? "" : "s"}` : ""} on My Study Guide. Reveal answers and explanations as you go — free, no login required.`
+    : null;
+  useSeo(seoTitle, seoDesc);
 
   // Count a public OPEN once per browser (impression tracking for shared links).
   useEffect(() => {
