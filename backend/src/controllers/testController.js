@@ -780,12 +780,14 @@ export async function shareTestPreview(req, res) {
   // from. Include the institute slug (?t=) for non-default tenants so the app
   // resolves the right institute (harmless on a custom domain, which resolves by
   // host anyway).
-  const tSlug = (tenant && !tenant.isDefault && tenant.slug) ? `?t=${encodeURIComponent(tenant.slug)}` : "";
+  // Institute slug as a QUERY param (?t=) so the app resolves the right tenant.
+  const tQuery = (tenant && !tenant.isDefault && tenant.slug) ? `?t=${encodeURIComponent(tenant.slug)}` : "";
   // RELATIVE target for the human redirect: because Vercel serves this page
   // transparently under the site's own domain, a relative URL always resolves
   // to the correct site — even if we couldn't determine the absolute base. The
   // absolute form is used only for crawler metadata (og:url / canonical).
-  const targetRel = `/${tSlug}#/public/${kind}/${token}`;
+  // Path-based route (clean URL) with the tenant slug carried as a query string.
+  const targetRel = `/public/${kind}/${token}${tQuery}`;
 
   // The canonical URL for crawlers must be THIS share page (which returns the
   // rich preview), NOT the SPA player. Facebook re-reads og:url as the object's

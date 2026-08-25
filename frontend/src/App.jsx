@@ -1,10 +1,10 @@
 import { lazy, Suspense } from "react";
-// Hash-based routing: the route lives after the "#", so the web server only
-// ever receives "/" and a full-page REFRESH on ANY deep route (a quiz, an admin
-// page, the client workspace) always serves the app and restores that exact
-// page — with no host-side SPA rewrite required. This is the reliable fix for
-// "refresh drops me back to the home/streams page".
-import { createHashRouter, RouterProvider } from "react-router-dom";
+// Path-based routing (clean URLs like /quiz, /about, /subjects/...) so pages are
+// crawlable/indexable for SEO — not trapped behind a "#". A full-page REFRESH on
+// any deep route still works because the host serves index.html for every path
+// (Vercel rewrite in vercel.json + public/_redirects, with public/404.html +
+// the index.html "?/" decoder as a static-host fallback).
+import { createBrowserRouter, RouterProvider } from "react-router-dom";
 import { ThemeProvider } from "./context/ThemeContext";
 import { SettingsProvider } from "./context/SettingsContext";
 import { AuthProvider } from "./context/AuthContext";
@@ -116,7 +116,7 @@ const S = (Comp) => (
   </Suspense>
 );
 
-const router = createHashRouter([
+const router = createBrowserRouter([
   {
     element: <Layout />,
     children: [

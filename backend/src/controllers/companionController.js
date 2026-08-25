@@ -305,7 +305,7 @@ export async function companionSaveQuiz(req, res) {
     return res.status(422).json({ message: "None of the questions could be saved (format issue)." });
   }
   await recordHistory(req, { type: "quiz", title, platform: meta.platform, url: meta.url, count: created.length, itemId: item._id });
-  res.status(201).json({ itemId: item._id, inserted: created.length, playPath: `/#/practice/quiz/play/${item._id}` });
+  res.status(201).json({ itemId: item._id, inserted: created.length, playPath: `/practice/quiz/play/${item._id}` });
 }
 
 // GET /api/companion/history — the user's recent Companion activity.

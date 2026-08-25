@@ -17,8 +17,6 @@ export function publicShareUrl(token, kind) {
     if (!isLocal) return `${window.location.origin}/s/${token}`;
   } catch { /* non-browser — fall through to hash route */ }
   const k = kind === "quiz" || kind === "My Quiz" ? "quiz" : "test";
-  const base = (typeof window !== "undefined" && window.location)
-    ? `${window.location.origin}${window.location.pathname}`
-    : "";
-  return `${base}#/public/${k}/${token}`;
+  const base = (typeof window !== "undefined" && window.location) ? window.location.origin : "";
+  return `${base}/public/${k}/${token}`;
 }

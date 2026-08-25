@@ -1,5 +1,5 @@
-// Best base URL for links we email out (the frontend is a hash-router SPA, so
-// links look like `<base>/#/route`). We PREFER the real site the request came
+// Best base URL for links we email out (path-based routes, e.g. `<base>/route`).
+// We PREFER the real site the request came
 // from (Origin/Referer) when it's a trusted origin, then the configured
 // CLIENT_URL env, then localhost. This makes emailed links (e.g. password
 // reset) work correctly even when CLIENT_URL hasn't been set on the server —
