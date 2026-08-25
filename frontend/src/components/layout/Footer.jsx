@@ -30,6 +30,7 @@ const columns = [
     title: "Resources",
     links: [
       { label: "Help Center", to: "/contact" },
+      { label: "FAQ", to: "/faq" },
       { label: "Privacy Policy", to: "/privacy" },
       { label: "Terms of Service", to: "/terms" },
       { label: "Refund Policy", to: "/refund" },
