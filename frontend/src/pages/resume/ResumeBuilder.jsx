@@ -4,10 +4,15 @@ import ResumeDocument from "./ResumeDocument";
 import CoverLetterDocument from "./CoverLetterDocument";
 import { TEMPLATES, FONTS, fontCss, templateById } from "./resumeTemplates";
 import { emptyResume, sampleResume, exportJson, importJson, atsScore, factories, SECTIONS, LANGS, listDocs, getCurrentId, loadDoc, saveDoc, createDoc, duplicateDoc, deleteDoc, keywordAnalysis, writingSuggestions } from "./resumeData";
+import { useSeo } from "../../lib/useSeo";
 
 // Standalone Resume Builder (route: /resume). Self-contained — its own shell,
 // no app chrome. Data is a single JSON object autosaved to localStorage.
 export default function ResumeBuilder() {
+  useSeo(
+    "Free Online Resume Builder",
+    "Build a professional, ATS-friendly resume for free with My Study Guide — pick a template, add your details and download as PDF. No sign-up required."
+  );
   // Initialise from the multi-document store (migrates the old single draft).
   const [docId, setDocId] = useState(() => getCurrentId() || createDoc(sampleResume(), "Sample Resume").id);
   const [resume, setResume] = useState(() => loadDoc(docId) || sampleResume());

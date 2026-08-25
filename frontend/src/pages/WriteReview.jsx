@@ -7,8 +7,13 @@ import { useSettings } from "../context/SettingsContext";
 import Avatar from "../components/ui/Avatar";
 import ReviewsShowcase from "../components/reviews/ReviewsShowcase";
 import { fileToResizedDataUrl } from "../lib/imageResize";
+import { useSeo } from "../lib/useSeo";
 
 export default function WriteReview() {
+  useSeo(
+    "Write a Review",
+    "Share your experience with My Study Guide — rate the quizzes, test series and study material and help other exam aspirants choose."
+  );
   const { user } = useAuth();
   const { settings } = useSettings();
   const [form, setForm] = useState({ name: "", exam: "", rating: 5, text: "", photo: "" });
