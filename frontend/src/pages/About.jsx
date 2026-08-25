@@ -2,12 +2,14 @@ import { useEffect, useState } from "react";
 import { Target, Eye, HeartHandshake, Users, Award, BookOpen } from "lucide-react";
 import { useSettings } from "../context/SettingsContext";
 import { analyticsService } from "../services";
+import { useSeo } from "../lib/useSeo";
 
 // Fixed icon sets (cycled by index) so admins only edit the text.
 const VALUE_ICONS = [Target, Eye, HeartHandshake];
 const STAT_ICONS = [Users, BookOpen, Award];
 
 export default function About() {
+  useSeo("About Us", "Learn about My Study Guide — our mission to make structured, data-driven exam preparation accessible and affordable for every student.");
   const { settings } = useSettings();
   const values = settings.aboutValues?.length ? settings.aboutValues : [];
 
