@@ -43,6 +43,9 @@ export default function ClientAccount({ onUpgrade }) {
   }, [user?.subscriptionPlan]);
 
   const expired = isExpired(user?.expiresAt);
+  // Backup & Restore is a paid feature — not available on the free trial.
+  const trialLocked = user?.role === "client" && user?.isTrial === true;
+  const TRIAL_MSG = "Backup & Restore isn't available on the Free trial. Upgrade to a paid plan to use it.";
 
   const copyReferral = () => {
     if (!user?.referralCode) return;
@@ -118,6 +121,7 @@ export default function ClientAccount({ onUpgrade }) {
   };
 
   const downloadBackup = async () => {
+    if (trialLocked) { setBackupMsg(TRIAL_MSG); return; }
     setBackupBusy(true); setBackupMsg(""); setProgress({ done: 0, total: 0, phase: "Backing up" });
     try {
       const data = await runBackupJob();
@@ -138,6 +142,7 @@ export default function ClientAccount({ onUpgrade }) {
     const file = e.target.files?.[0];
     e.target.value = ""; // allow re-selecting the same file later
     if (!file) return;
+    if (trialLocked) { setBackupMsg(TRIAL_MSG); return; }
     if (!window.confirm("Restore will ADD everything from this backup to your account (it does not delete or replace what you already have). Continue?")) return;
     setRestoreBusy(true); setBackupMsg(""); setProgress({ done: 0, total: 0, phase: "Restoring" });
     try {
@@ -152,6 +157,7 @@ export default function ClientAccount({ onUpgrade }) {
 
   // ---- Google Drive ----
   const backupToDrive = async () => {
+    if (trialLocked) { setBackupMsg(TRIAL_MSG); return; }
     setBackupBusy(true); setBackupMsg(""); setProgress({ done: 0, total: 0, phase: "Connecting to Google Drive…" });
     try {
       const token = await getAccessToken(settings?.googleClientId);
@@ -167,6 +173,7 @@ export default function ClientAccount({ onUpgrade }) {
   };
 
   const openDrivePicker = async () => {
+    if (trialLocked) { setBackupMsg(TRIAL_MSG); return; }
     setRestoreBusy(true); setBackupMsg(""); setDriveFiles(null); setProgress({ done: 0, total: 0, phase: "Connecting to Google Drive…" });
     try {
       const token = await getAccessToken(settings?.googleClientId);
