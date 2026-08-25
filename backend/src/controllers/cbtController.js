@@ -21,8 +21,8 @@ const esc = (s) =>
 const clientBase = () => (process.env.CLIENT_URL || "http://localhost:5173").replace(/\/$/, "");
 // Prefer a per-attempt captured origin (the real site the student used) over
 // CLIENT_URL, so links are correct even when CLIENT_URL isn't set.
-const resultUrlFor = (token, base) => `${(base || clientBase()).replace(/\/$/, "")}/#/cbt/result/${token}`;
-const portalUrl = () => `${clientBase()}/#/online-exams`;
+const resultUrlFor = (token, base) => `${(base || clientBase()).replace(/\/$/, "")}/cbt/result/${token}`;
+const portalUrl = () => `${clientBase().replace(/\/$/, "")}/online-exams`;
 
 // Work out the frontend's public origin from the request (the student's browser
 // sends Origin/Referer), so emailed links don't fall back to localhost.

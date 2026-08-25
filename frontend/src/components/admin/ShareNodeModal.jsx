@@ -5,7 +5,7 @@ import { practiceService } from "../../services";
 // Public URL for a shared NODE (stream/subject/topic). Hash-router friendly —
 // opens a page that lists every shareable quiz/test under the node.
 const publicUrl = (token) =>
-  `${window.location.origin}${window.location.pathname}#/public/node/${token}`;
+  `${window.location.origin}/public/node/${token}`;
 
 // ISO date -> value for <input type="datetime-local"> (local time).
 const toLocalInput = (iso) => {

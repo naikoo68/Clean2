@@ -566,7 +566,7 @@ function MyResultsTab({ session }) {
               <div className="text-center"><p className="text-lg font-extrabold text-brand-600 dark:text-brand-400">{r.score}/{r.maxScore}</p><p className="text-[11px] text-slate-500">score</p></div>
               <div className="text-center"><p className="text-lg font-extrabold text-brand-600 dark:text-brand-400">{r.percentage}%</p><p className="text-[11px] text-slate-500">percent</p></div>
               <div className="text-center"><p className="text-lg font-extrabold text-amber-600 dark:text-amber-400">#{r.rank || "—"}{r.candidates ? `/${r.candidates}` : ""}</p><p className="text-[11px] text-slate-500">rank</p></div>
-              <a href={`#/cbt/result/${r.resultToken}`} target="_blank" rel="noreferrer" className="btn-outline py-1.5 text-xs">View result</a>
+              <a href={`/cbt/result/${r.resultToken}`} target="_blank" rel="noreferrer" className="btn-outline py-1.5 text-xs">View result</a>
             </div>
           ) : (
             <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-3 py-1 text-xs font-medium text-amber-700 dark:bg-amber-900/20 dark:text-amber-300">
