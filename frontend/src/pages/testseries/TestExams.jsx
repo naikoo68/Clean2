@@ -6,7 +6,7 @@ import { Loading, ErrorState, EmptyState } from "../../components/ui/AsyncState"
 import { useSeo } from "../../lib/useSeo";
 
 export default function TestExams() {
-  useSeo("Test Series", "Attempt full-length and sectional mock tests with real exam timing, instant scoring and performance analytics on My Study Guide.");
+  useSeo("Online Test Series & Mock Exams", "Attempt full-length and sectional online mock exams with real exam timing, instant scoring and performance analytics on My Study Guide.");
   const [exams, setExams] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");

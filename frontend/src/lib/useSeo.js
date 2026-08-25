@@ -1,11 +1,15 @@
 import { useEffect } from "react";
 
-// Per-page SEO. Now that the app uses path-based routing (BrowserRouter), each
-// route is a real, crawlable URL — so giving each page its own <title> and
-// description (plus OG/Twitter) actually helps search & social sharing.
+// Per-page SEO. Path-based routing means each route is a real, crawlable URL, so
+// every public page gets its own <title>, description, canonical URL and
+// OG/Twitter tags. This is the SINGLE SEO system for the app — reuse it, don't
+// add a competing one.
 //
-// Usage inside a page component:  useSeo("Quizzes", "Practise subject-wise …");
-// Call with no args on the homepage to fall back to the site defaults.
+// Usage:  useSeo("Online Quizzes & Mock Tests", "Practise …");
+//   - title       → shown as "<title> | My Study Guide" (omit on the homepage).
+//   - description → meta description + OG/Twitter description.
+//   - canonical   → optional absolute URL; defaults to the current clean URL
+//                   (origin + pathname), which is what search engines should index.
 
 const SITE = "My Study Guide";
 const DEFAULT_TITLE = "My Study Guide — Prepare Smart, Achieve More";
@@ -23,15 +27,31 @@ function upsertMeta(attr, key, content) {
   el.setAttribute("content", content);
 }
 
-export function useSeo(title, description) {
+function upsertCanonical(href) {
+  if (typeof document === "undefined" || !href) return;
+  let el = document.head.querySelector('link[rel="canonical"]');
+  if (!el) {
+    el = document.createElement("link");
+    el.setAttribute("rel", "canonical");
+    document.head.appendChild(el);
+  }
+  el.setAttribute("href", href);
+}
+
+export function useSeo(title, description, canonical) {
   useEffect(() => {
-    const fullTitle = title ? `${title} — ${SITE}` : DEFAULT_TITLE;
+    const fullTitle = title ? `${title} | ${SITE}` : DEFAULT_TITLE;
     const desc = description || DEFAULT_DESC;
+    const url =
+      canonical ||
+      (typeof window !== "undefined" ? window.location.origin + window.location.pathname : "");
     document.title = fullTitle;
     upsertMeta("name", "description", desc);
     upsertMeta("property", "og:title", fullTitle);
     upsertMeta("property", "og:description", desc);
+    if (url) upsertMeta("property", "og:url", url);
     upsertMeta("name", "twitter:title", fullTitle);
     upsertMeta("name", "twitter:description", desc);
-  }, [title, description]);
+    upsertCanonical(url);
+  }, [title, description, canonical]);
 }
