@@ -84,6 +84,12 @@ const sanitize = (u) => ({
   featDocuments: u.featDocuments !== false,
   featManual: u.featManual !== false,
   featAiGenerator: u.featAiGenerator === true,
+  // First-run creator setup guide progress — drives CreatorSetupGuide.
+  creatorGuide: {
+    regenerated: u.creatorGuide?.regenerated === true,
+    extended: u.creatorGuide?.extended === true,
+    completed: u.creatorGuide?.completed === true,
+  },
 });
 
 // Look up the institute (tenant) a user belongs to, exposing just the public
@@ -586,6 +592,19 @@ export async function updateProfile(req, res) {
       return res.status(409).json({ message: "That email is already in use by another account." });
     }
     throw e;
+  }
+  res.json({ user: sanitize(user) });
+}
+
+// PATCH /api/auth/creator-guide — a creator marks their first-run setup guide
+// finished (called by the frontend once all steps are complete) so it never
+// auto-opens again. Only meaningful for client accounts.
+export async function completeCreatorGuide(req, res) {
+  const user = req.user;
+  if (!user) return res.status(401).json({ message: "Not authenticated" });
+  if (user.role === "client") {
+    user.set("creatorGuide.completed", true);
+    await user.save();
   }
   res.json({ user: sanitize(user) });
 }

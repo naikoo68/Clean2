@@ -20,6 +20,7 @@ import AdminNotes from "../admin/AdminNotes";
 import AdminAiStudio from "../admin/AdminAiStudio";
 import Footer from "../../components/layout/Footer";
 import ClientWelcomeModal from "../../components/client/ClientWelcomeModal";
+import CreatorSetupGuide from "../../components/client/CreatorSetupGuide";
 import InstallAppButton from "../../components/client/InstallAppButton";
 
 // The self-service CLIENT workspace. A client only ever sees the My Practice
@@ -100,6 +101,25 @@ export default function ClientWorkspace() {
   const dashboardTab = tabs.find((t) => t.key === "dashboard");
   const menuTabs = tabs.filter((t) => t.key !== "dashboard");
   const activeMenuTab = menuTabs.find((t) => t.key === tab);
+
+  // First-run creator setup guide — shown until every step is complete. It
+  // requires AI + Build access (which new creators get by default); if an admin
+  // has turned either off, the steps couldn't be completed, so we don't show a
+  // guide the creator would get stuck on.
+  const showGuide =
+    user?.role === "client" &&
+    user?.aiAccess === true &&
+    user?.featBuild !== false &&
+    user?.creatorGuide?.completed !== true;
+
+  // Jump to the tab where a guide step is performed (closes the menu, leaves the
+  // upgrade screen, and scrolls the guide back into view).
+  const goToTab = (key) => {
+    setShowUpgrade(false);
+    setMenuOpen(false);
+    setTab(key);
+    try { window.scrollTo({ top: 0, behavior: "smooth" }); } catch { /* no-op */ }
+  };
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
@@ -192,6 +212,7 @@ export default function ClientWorkspace() {
       </header>
 
       <main className="mx-auto max-w-6xl p-4 sm:p-6">
+        {showGuide && !expired && !showUpgrade && <CreatorSetupGuide onGoTab={goToTab} />}
         {expired || showUpgrade ? (
           <ClientUpgrade onClose={expired ? undefined : () => setShowUpgrade(false)} />
         ) : tab === "dashboard" ? (

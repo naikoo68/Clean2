@@ -61,6 +61,15 @@ const userSchema = new mongoose.Schema(
     featDocuments: { type: Boolean, default: true },
     featManual: { type: Boolean, default: true },
     featAiGenerator: { type: Boolean, default: false },
+    // First-run CREATOR setup guide progress (see CreatorSetupGuide on the
+    // frontend). The two AI-action steps are recorded server-side the first
+    // time the creator performs them; `completed` is set once the whole guide
+    // is finished so it never auto-opens again.
+    creatorGuide: {
+      regenerated: { type: Boolean, default: false }, // used "Regenerate question" at least once
+      extended: { type: Boolean, default: false },    // used "Extend explanation" at least once
+      completed: { type: Boolean, default: false },   // finished every setup step
+    },
     emailVerificationToken: String,
     otpHash: { type: String, select: false },
     otpExpires: { type: Date, select: false },
