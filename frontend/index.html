@@ -78,6 +78,25 @@
     <link rel="preconnect" href="https://my-prep-mart-api-39nk.onrender.com" crossorigin />
     <link rel="dns-prefetch" href="https://my-prep-mart-api-39nk.onrender.com" />
 
+    <!-- Google Analytics (GA4). Loads ONLY when a real Measurement ID is set via
+         the VITE_GA_MEASUREMENT_ID env var (e.g. on Vercel). Vite substitutes
+         %VITE_GA_MEASUREMENT_ID% at build time; if it's unset/empty the guard
+         below skips loading gtag entirely, so nothing runs until you add the ID. -->
+    <script>
+      (function () {
+        var GA_ID = "%VITE_GA_MEASUREMENT_ID%";
+        if (!GA_ID || GA_ID.indexOf("VITE_") !== -1 || GA_ID.charAt(0) !== "G") return;
+        var s = document.createElement("script");
+        s.async = true;
+        s.src = "https://www.googletagmanager.com/gtag/js?id=" + GA_ID;
+        document.head.appendChild(s);
+        window.dataLayer = window.dataLayer || [];
+        window.gtag = function () { window.dataLayer.push(arguments); };
+        window.gtag("js", new Date());
+        window.gtag("config", GA_ID);
+      })();
+    </script>
+
     <!-- SEO -->
     <title>My Study Guide — Prepare Smart, Achieve More</title>
     <meta
