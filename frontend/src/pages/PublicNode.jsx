@@ -3,6 +3,8 @@ import { Link, useParams } from "react-router-dom";
 import { ListChecks, FileText, Clock, Award, HelpCircle, ArrowRight, Loader2, AlertCircle } from "lucide-react";
 import { practiceService } from "../services";
 import { useSettings } from "../context/SettingsContext";
+import { useSeo } from "../lib/useSeo";
+import { breadcrumbLd } from "../components/ui/Breadcrumbs";
 
 // Player URL for a shared item, by kind (hash-router friendly). My Quiz opens
 // in the reveal-style quiz player; everything else uses the exam-style player.
@@ -35,6 +37,23 @@ export default function PublicNode() {
   }, [token]);
 
   const brand = settings?.siteName || settings?.brandName || "My Study Guide";
+
+  // Dynamic SEO for this genuinely public collection page (no login required).
+  // Title/description come from the real node — no fabricated data.
+  const count = data?.items?.length || 0;
+  const levelWord = data ? (LEVEL_WORD[data.level] || "collection") : "";
+  const seoTitle = data ? `${data.name} — Quizzes & Tests` : null;
+  const seoDesc = data
+    ? (data.description
+        ? `${data.description} Attempt ${count} ${count === 1 ? "quiz/test" : "quizzes and tests"} online — no login required.`
+        : `Attempt ${count} ${count === 1 ? "quiz or test" : "quizzes and tests"} on ${data.name}${levelWord ? ` (${levelWord})` : ""} at ${brand}. Practise online with instant answers — free, no login required.`)
+    : null;
+  useSeo(
+    seoTitle,
+    seoDesc,
+    undefined,
+    data ? breadcrumbLd([{ label: "Home", to: "/" }, { label: data.name }]) : null
+  );
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-brand-50 via-white to-white dark:from-slate-900 dark:via-slate-950 dark:to-slate-950">

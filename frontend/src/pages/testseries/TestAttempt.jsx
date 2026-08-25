@@ -36,6 +36,7 @@ import { useZoom } from "../../context/ZoomContext";
 import { questionDateText, searchQuestions, stemText, displayOptions } from "../../lib/questions";
 import { shuffleAll, shuffleQuestion, shuffleQuestionOrder, toOriginalIndex, toDisplayIndex, makeSeed } from "../../lib/shuffleOptions";
 import PaperExport from "../../components/admin/PaperExport";
+import { useSeo } from "../../lib/useSeo";
 
 // Roman numerals for Column B labels (I, II, III, IV…)
 function toRoman(n) {
@@ -194,6 +195,16 @@ export default function TestAttempt() {
   }, [testId, token, cbtToken, freeId, isPublic, isCbt, isFree, seed, navigate, startCbtExam]);
 
   useEffect(load, [load]);
+
+  // Dynamic SEO — only for the genuinely public, no-login views (shared link or
+  // free preview). CBT (live time-bound exams) and authenticated attempts keep
+  // the app default. Uses the real test name + question count/marks; no fake data.
+  const anonSeo = isPublic || isFree;
+  const seoTitle = anonSeo && test?.name ? `${test.name} — Online Test` : null;
+  const seoDesc = anonSeo && test?.name
+    ? `Attempt the ${test.name} online test${questions.length ? ` (${questions.length} question${questions.length === 1 ? "" : "s"}${test.marks ? `, ${test.marks} marks` : ""})` : ""} on My Study Guide. Free mock test with instant results — no login required.`
+    : null;
+  useSeo(seoTitle, seoDesc);
 
   // Count a public OPEN once per browser (impression tracking for shared links).
   useEffect(() => {
