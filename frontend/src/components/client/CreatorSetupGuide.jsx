@@ -1,23 +1,23 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { KeyRound, Wrench, RefreshCw, Feather, CheckCircle2, Lock, ArrowRight, Loader2, Rocket } from "lucide-react";
+import { KeyRound, Wrench, RefreshCw, Feather, CheckCircle2, ArrowRight, Loader2, Rocket, X, PartyPopper } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import { aiService, authService, practiceService } from "../../services";
 
-// First-run CREATOR setup guide — a compulsory, step-by-step checklist shown to
-// a creator (role "client") until they've completed all four onboarding steps:
+// First-run CREATOR setup guide — a step-by-step POPUP tour shown to a creator
+// (role "client") until they've completed all four onboarding steps:
 //   1. Add their own AI API key        (AI tab)      → detected: ownKeys >= 1
 //   2. Build their first question      (Build tab)   → detected: questionCount >= 1
 //   3. Regenerate a question           (Build tab)   → detected: creatorGuide.regenerated
 //   4. Extend an explanation           (Build tab)   → detected: creatorGuide.extended
 //
-// Steps are STRICTLY ORDERED: a step only unlocks once every step before it is
-// done, so the creator is walked through them one at a time. Completion of each
-// step is detected automatically (no manual "mark done"): steps 1–2 from live
-// data, steps 3–4 from server-side flags the backend records when the creator
-// actually performs the action. The guide re-checks on mount, on window focus,
-// and on a short interval while still open, so progress ticks over on its own
-// as the creator works. Once all four are done it marks itself complete
-// (server-side) and disappears for good.
+// UX: instead of a static checklist, the guide shows ONE popup at a time for the
+// current step. "Take me there" jumps to the right tab and minimises the popup
+// (to a small floating pill) so the creator can actually do the task. Each step
+// is detected automatically — steps 1–2 from live data, 3–4 from server-side
+// flags the backend records when the creator performs the action — and the very
+// moment a step completes the popup springs back up with the NEXT step. Once all
+// four are done a final "you're all set" popup lets them finish; completing it
+// marks the guide done server-side so it never shows again.
 //
 // `onGoTab(tabKey)` switches the workspace to the tab where a step is performed.
 export default function CreatorSetupGuide({ onGoTab }) {
@@ -25,11 +25,13 @@ export default function CreatorSetupGuide({ onGoTab }) {
   const [ownKeys, setOwnKeys] = useState(null); // number of the creator's own API keys
   const [questionCount, setQuestionCount] = useState(null); // total questions they've built
   const [checking, setChecking] = useState(true);
-  const markingRef = useRef(false); // guard so we only POST "completed" once
+  const [minimized, setMinimized] = useState(false); // popup collapsed to the floating pill
+  const [finishing, setFinishing] = useState(false); // marking the guide complete
+  const prevActiveRef = useRef(undefined); // track step changes to re-surface the popup
 
   // Pull the two pieces of live state (own API keys + built questions) and
   // refresh the profile (which carries the regenerate/extend flags). Runs on a
-  // timer + focus so the checklist keeps up as the creator does each step.
+  // timer + focus so the tour keeps up as the creator does each step.
   const check = useCallback(async () => {
     try {
       const [access] = await Promise.all([
@@ -52,7 +54,7 @@ export default function CreatorSetupGuide({ onGoTab }) {
     const onFocus = () => check();
     window.addEventListener("focus", onFocus);
     document.addEventListener("visibilitychange", onFocus);
-    const id = setInterval(check, 8000); // keep progress in sync while working
+    const id = setInterval(check, 6000); // keep progress in sync while working
     return () => {
       window.removeEventListener("focus", onFocus);
       document.removeEventListener("visibilitychange", onFocus);
@@ -70,121 +72,166 @@ export default function CreatorSetupGuide({ onGoTab }) {
 
   const STEPS = [
     {
-      k: "key", Icon: KeyRound, done: done.key, tab: "ai", cta: "Open AI tab",
+      k: "key", n: 1, Icon: KeyRound, done: done.key, tab: "ai", cta: "Take me to the AI tab",
       title: "Add your AI API key",
-      desc: 'Open the AI tab, choose "My own APIs", and add a provider key. This powers every AI tool below.',
+      desc: 'Open the AI tab, choose "My own APIs", and add a provider key. This powers every AI tool you\'ll use next.',
     },
     {
-      k: "build", Icon: Wrench, done: done.build, tab: "build", cta: "Open Build tab",
+      k: "build", n: 2, Icon: Wrench, done: done.build, tab: "build", cta: "Take me to Build",
       title: "Build your first question",
-      desc: "Go to the Build tab, create a quiz (or test), and add a question to it.",
+      desc: "In the Build tab, create a quiz (or test) and add a question to it. This is your own private practice content.",
     },
     {
-      k: "regen", Icon: RefreshCw, done: done.regen, tab: "build", cta: "Go to Build",
+      k: "regen", n: 3, Icon: RefreshCw, done: done.regen, tab: "build", cta: "Take me to Build",
       title: "Regenerate a question",
-      desc: 'Open a question and use "Regenerate" — the AI rebuilds its options, answer and explanation to fit the stem.',
+      desc: 'Open a question and tap "Regenerate" — the AI rebuilds its options, answer and explanation to fit the stem.',
     },
     {
-      k: "extend", Icon: Feather, done: done.extend, tab: "build", cta: "Go to Build",
+      k: "extend", n: 4, Icon: Feather, done: done.extend, tab: "build", cta: "Take me to Build",
       title: "Extend an explanation",
-      desc: 'Open a question and use "Extend explanation" to enrich its explanation with the AI.',
+      desc: 'Open a question and tap "Extend explanation" to enrich its explanation with the AI.',
     },
   ];
 
+  const total = STEPS.length;
   const doneCount = STEPS.filter((s) => s.done).length;
-  // The one step the creator should do next = the first not-yet-done step.
+  // The step the creator should do next = the first not-yet-done step.
   const activeIndex = STEPS.findIndex((s) => !s.done);
   const allDone = activeIndex === -1;
+  const step = allDone ? null : STEPS[activeIndex];
 
-  // When everything is finished, persist completion once so the guide never
-  // reappears, then let the workspace hide it (creatorGuide.completed flips).
+  // Whenever the active step changes (a step just got completed, or we finished
+  // the whole tour), pop the guide back up so the creator sees the next step /
+  // the finish screen — even if they'd minimised it.
   useEffect(() => {
-    if (!allDone || markingRef.current || user?.creatorGuide?.completed === true) return;
-    markingRef.current = true;
-    (async () => {
-      try {
-        await authService.completeCreatorGuide();
-        await refreshUser?.();
-      } catch { /* will retry on next mount */ }
-      finally { markingRef.current = false; }
-    })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [allDone, user?.creatorGuide?.completed]);
+    const key = allDone ? "done" : activeIndex;
+    if (prevActiveRef.current === undefined) { prevActiveRef.current = key; return; }
+    if (key !== prevActiveRef.current) {
+      prevActiveRef.current = key;
+      setMinimized(false);
+    }
+  }, [activeIndex, allDone]);
+
+  // Finish the tour: persist completion so it never reappears, then let the
+  // workspace hide this component (creatorGuide.completed flips to true).
+  const finish = async () => {
+    setFinishing(true);
+    try {
+      await authService.completeCreatorGuide();
+      await refreshUser?.();
+    } catch { /* will retry from the finish popup next time */ }
+    finally { setFinishing(false); }
+  };
+
+  const goToStep = () => {
+    if (!step) return;
+    onGoTab?.(step.tab);
+    setMinimized(true); // step aside so they can actually do the task
+    try { window.scrollTo({ top: 0, behavior: "smooth" }); } catch { /* no-op */ }
+  };
+
+  // Minimised → a small floating pill that shows progress and reopens the popup.
+  if (minimized && !allDone) {
+    return (
+      <button
+        type="button"
+        onClick={() => setMinimized(false)}
+        className="fixed bottom-4 right-4 z-[60] flex items-center gap-2 rounded-full border border-brand-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-lg transition hover:border-brand-400 dark:border-brand-900/50 dark:bg-slate-900 dark:text-slate-200"
+      >
+        <span className="flex h-6 w-6 items-center justify-center rounded-full bg-gradient-to-br from-brand-600 to-accent-500 text-white">
+          <Rocket className="h-3.5 w-3.5" />
+        </span>
+        Setup guide
+        <span className="rounded-full bg-brand-100 px-2 py-0.5 text-xs font-bold text-brand-700 dark:bg-brand-900/40 dark:text-brand-300">
+          {doneCount}/{total}
+        </span>
+      </button>
+    );
+  }
 
   return (
-    <div className="mb-6 overflow-hidden rounded-2xl border border-brand-200 bg-gradient-to-br from-brand-50 to-white shadow-sm dark:border-brand-900/50 dark:from-brand-900/20 dark:to-slate-900">
-      <div className="flex items-start gap-3 border-b border-brand-100 p-4 dark:border-brand-900/40 sm:p-5">
-        <span className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-brand-600 to-accent-500 text-white">
-          <Rocket className="h-5 w-5" />
-        </span>
-        <div className="min-w-0 flex-1">
-          <h2 className="text-lg font-extrabold leading-tight">Finish setting up your creator account</h2>
-          <p className="mt-0.5 text-sm text-slate-500 dark:text-slate-400">
-            Complete these {STEPS.length} quick steps to learn the tools. They're required to get started.
-          </p>
-          {/* Progress */}
-          <div className="mt-3 flex items-center gap-3">
-            <div className="h-2 flex-1 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700">
-              <div
-                className="h-full rounded-full bg-gradient-to-r from-brand-500 to-accent-500 transition-all"
-                style={{ width: `${(doneCount / STEPS.length) * 100}%` }}
-              />
-            </div>
-            <span className="flex items-center gap-1 text-xs font-semibold text-slate-500 dark:text-slate-400">
-              {checking && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-              {doneCount}/{STEPS.length} done
-            </span>
+    <div className="fixed inset-0 z-[60] flex items-end justify-center p-3 sm:items-center sm:p-6">
+      {/* Backdrop — tap to minimise (not dismiss; the tour resumes automatically). */}
+      <button
+        type="button"
+        aria-label="Minimise setup guide"
+        onClick={() => setMinimized(true)}
+        className="absolute inset-0 cursor-default bg-black/50 backdrop-blur-sm"
+      />
+
+      <div role="dialog" aria-modal="true" className="relative w-full max-w-md animate-scale-in rounded-2xl bg-white p-5 shadow-2xl dark:bg-slate-900 sm:p-6">
+        {/* Minimise (do it later) */}
+        {!allDone && (
+          <button
+            type="button"
+            onClick={() => setMinimized(true)}
+            aria-label="Do this later"
+            className="absolute right-3 top-3 rounded-lg p-1.5 text-slate-400 transition hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        )}
+
+        {/* Progress bar + count */}
+        <div className="flex items-center gap-3">
+          <div className="h-2 flex-1 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700">
+            <div className="h-full rounded-full bg-gradient-to-r from-brand-500 to-accent-500 transition-all" style={{ width: `${(doneCount / total) * 100}%` }} />
           </div>
+          <span className="flex items-center gap-1 text-xs font-semibold text-slate-500 dark:text-slate-400">
+            {checking && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+            {doneCount}/{total}
+          </span>
         </div>
-      </div>
 
-      <ol className="divide-y divide-brand-100 dark:divide-brand-900/40">
-        {STEPS.map((s, i) => {
-          const isActive = i === activeIndex;
-          const locked = !s.done && !isActive; // a future step whose prerequisites aren't met yet
-          return (
-            <li key={s.k} className={`flex items-center gap-3 p-4 sm:px-5 ${locked ? "opacity-55" : ""}`}>
-              {/* Status icon */}
-              <span
-                className={`flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl ${
-                  s.done
-                    ? "bg-emerald-100 text-emerald-600 dark:bg-emerald-900/40 dark:text-emerald-300"
-                    : isActive
-                    ? "bg-brand-100 text-brand-600 dark:bg-brand-900/40 dark:text-brand-300"
-                    : "bg-slate-100 text-slate-400 dark:bg-slate-800"
-                }`}
-              >
-                {s.done ? <CheckCircle2 className="h-5 w-5" /> : locked ? <Lock className="h-4 w-4" /> : <s.Icon className="h-5 w-5" />}
+        {allDone ? (
+          /* ---- Finish screen ---- */
+          <div className="mt-5 text-center">
+            <span className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-500 to-brand-500 text-white">
+              <PartyPopper className="h-7 w-7" />
+            </span>
+            <h2 className="mt-4 text-xl font-extrabold">You're all set!</h2>
+            <p className="mt-1.5 text-sm text-slate-500 dark:text-slate-400">
+              You've added a key, built a question, and used the AI to regenerate and extend it. Your creator workspace is ready to go.
+            </p>
+            <button type="button" onClick={finish} disabled={finishing} className="btn-primary mt-6 w-full justify-center">
+              {finishing ? <Loader2 className="h-4 w-4 animate-spin" /> : <>Start creating <ArrowRight className="h-4 w-4" /></>}
+            </button>
+          </div>
+        ) : (
+          /* ---- Current step ---- */
+          <div className="mt-5">
+            <div className="flex items-center gap-3">
+              <span className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-brand-600 to-accent-500 text-white">
+                <step.Icon className="h-6 w-6" />
               </span>
-
-              {/* Text */}
-              <div className="min-w-0 flex-1">
-                <p className={`text-sm font-bold ${s.done ? "text-slate-500 line-through dark:text-slate-500" : ""}`}>
-                  <span className="mr-1.5 text-slate-400">{i + 1}.</span>{s.title}
-                </p>
-                {!s.done && <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">{s.desc}</p>}
+              <div className="min-w-0">
+                <p className="text-xs font-bold uppercase tracking-wide text-brand-600 dark:text-brand-400">Step {step.n} of {total}</p>
+                <h2 className="text-lg font-extrabold leading-tight">{step.title}</h2>
               </div>
+            </div>
 
-              {/* Action */}
-              <div className="flex-shrink-0">
-                {s.done ? (
-                  <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-semibold text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">
-                    <CheckCircle2 className="h-3.5 w-3.5" /> Done
-                  </span>
-                ) : isActive ? (
-                  <button type="button" onClick={() => onGoTab?.(s.tab)} className="btn-primary py-1.5 text-xs">
-                    {s.cta} <ArrowRight className="h-3.5 w-3.5" />
-                  </button>
-                ) : (
-                  <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-400 dark:bg-slate-800">
-                    <Lock className="h-3 w-3" /> Locked
-                  </span>
-                )}
+            <p className="mt-4 text-sm leading-relaxed text-slate-600 dark:text-slate-300">{step.desc}</p>
+
+            {/* Steps already completed, for a sense of progress */}
+            {doneCount > 0 && (
+              <div className="mt-4 space-y-1.5">
+                {STEPS.filter((s) => s.done).map((s) => (
+                  <p key={s.k} className="flex items-center gap-2 text-xs text-emerald-600 dark:text-emerald-400">
+                    <CheckCircle2 className="h-3.5 w-3.5 flex-shrink-0" /> <span className="text-slate-400 line-through dark:text-slate-500">{s.title}</span>
+                  </p>
+                ))}
               </div>
-            </li>
-          );
-        })}
-      </ol>
+            )}
+
+            <button type="button" onClick={goToStep} className="btn-primary mt-6 w-full justify-center">
+              {step.cta} <ArrowRight className="h-4 w-4" />
+            </button>
+            <p className="mt-2 text-center text-xs text-slate-400">
+              This popup will move to the next step automatically once you're done.
+            </p>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
