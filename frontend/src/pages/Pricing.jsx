@@ -101,7 +101,7 @@ export default function Pricing() {
   const ctaTarget = () => {
     if (audience === "student") return user ? { to: "/subscribe" } : { to: "/register" };
     if (audience === "institute") return { to: "/institute/register" };
-    return { to: "/client/register" };
+    return { to: "/creator/register" };
   };
 
   // Client / Institute audiences are hidden platform-wide when the super-admin

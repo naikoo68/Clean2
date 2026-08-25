@@ -21,7 +21,7 @@ export default function Login() {
   // Route each role to its home: admins & institute admins → admin panel,
   // clients → My Practice workspace, students → their intended destination.
   const homeFor = (role) =>
-    (role === "admin" || role === "institute_admin") ? "/admin" : role === "client" ? "/client" : dest;
+    (role === "admin" || role === "institute_admin") ? "/admin" : role === "client" ? "/creator" : dest;
 
   const submit = async (e) => {
     e.preventDefault();
@@ -140,7 +140,7 @@ export default function Login() {
       ) : acctType === "client" ? (
         <p className="mt-6 text-center text-sm text-slate-600 dark:text-slate-300">
           New creator?{" "}
-          <Link to="/client/register" className="font-semibold text-accent-600 hover:underline dark:text-accent-400">
+          <Link to="/creator/register" className="font-semibold text-accent-600 hover:underline dark:text-accent-400">
             Pick a plan &amp; sign up
           </Link>
         </p>

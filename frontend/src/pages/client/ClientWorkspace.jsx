@@ -106,7 +106,7 @@ export default function ClientWorkspace() {
       {showWelcome && <ClientWelcomeModal onClose={() => setShowWelcome(false)} />}
       <header className="sticky top-0 z-30 border-b border-slate-200 bg-white px-4 py-3 dark:border-slate-800 dark:bg-slate-900">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-3">
-          <Link to="/client" className="flex items-center gap-2">
+          <Link to="/creator" className="flex items-center gap-2">
             {settings.logoUrl ? (
               <img src={settings.logoUrl} alt={settings.siteName} className="h-9 w-9 rounded-xl object-cover" />
             ) : (

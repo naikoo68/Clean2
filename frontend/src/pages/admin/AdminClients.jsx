@@ -363,7 +363,7 @@ export default function AdminClients() {
           </div>
 
           {filtered.length === 0 ? (
-            <EmptyState message={search ? "No creators match your search." : "No creator accounts yet. They appear here when people register at /client/register (or add one above)."} />
+            <EmptyState message={search ? "No creators match your search." : "No creator accounts yet. They appear here when people register at /creator/register (or add one above)."} />
           ) : (
             <div className="card overflow-x-auto">
               <table className="w-full min-w-[1000px] text-sm">
