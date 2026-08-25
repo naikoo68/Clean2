@@ -21,6 +21,7 @@ import { Loading } from "./components/ui/AsyncState";
 const Home = lazy(() => import("./pages/Home"));
 const About = lazy(() => import("./pages/About"));
 const Contact = lazy(() => import("./pages/Contact"));
+const Faq = lazy(() => import("./pages/Faq"));
 const Pricing = lazy(() => import("./pages/Pricing"));
 const Privacy = lazy(() => import("./pages/Privacy"));
 const Terms = lazy(() => import("./pages/Terms"));
@@ -37,6 +38,8 @@ const SubjectsIndex = lazy(() => import("./pages/subjects/SubjectsIndex"));
 const SubjectLanding = lazy(() => import("./pages/subjects/SubjectLanding"));
 const StreamsIndex = lazy(() => import("./pages/streams/StreamsIndex"));
 const StreamLanding = lazy(() => import("./pages/streams/StreamLanding"));
+const ExamsIndex = lazy(() => import("./pages/exams/ExamsIndex"));
+const ExamLanding = lazy(() => import("./pages/exams/ExamLanding"));
 const QuizHome = lazy(() => import("./pages/quiz/QuizHome"));
 const StreamSubjects = lazy(() => import("./pages/quiz/StreamSubjects"));
 const PracticeHome = lazy(() => import("./pages/practice/PracticeHome"));
@@ -127,6 +130,7 @@ const router = createBrowserRouter([
       { path: "/", element: S(Home) },
       { path: "/about", element: S(About) },
       { path: "/contact", element: S(Contact) },
+      { path: "/faq", element: S(Faq) },
       { path: "/pricing", element: S(Pricing) },
       { path: "/privacy", element: S(Privacy) },
       { path: "/terms", element: S(Terms) },
@@ -173,6 +177,8 @@ const router = createBrowserRouter([
       { path: "/subjects/:slug", element: S(SubjectLanding) },
       { path: "/streams", element: S(StreamsIndex) },
       { path: "/streams/:slug", element: S(StreamLanding) },
+      { path: "/exams", element: S(ExamsIndex) },
+      { path: "/exams/:slug", element: S(ExamLanding) },
 
       { path: "/login", element: S(Login) },
       { path: "/register", element: S(Register) },

@@ -1,9 +1,11 @@
 import LegalLayout from "../components/ui/LegalLayout";
 import { useSettings } from "../context/SettingsContext";
+import { useSeo } from "../lib/useSeo";
 
 export default function Terms() {
   const { settings } = useSettings();
   const name = settings.siteName || "our platform";
+  useSeo("Terms of Service", `Read the ${name} Terms of Service — the rules for using our website, quizzes, test series, study material and subscriptions.`);
 
   return (
     <LegalLayout
