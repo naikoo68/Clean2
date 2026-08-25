@@ -2,6 +2,7 @@
 import AiKey from "../models/AiKey.js";
 import Question from "../models/Question.js";
 import Settings from "../models/Settings.js";
+import User from "../models/User.js";
 import { ownerFilter } from "../utils/ownership.js";
 import { DEFAULT_CLIENT_PLANS } from "../utils/plans.js";
 import { webResearch } from "../utils/webResearch.js";
@@ -3578,6 +3579,11 @@ export async function extendOneExplanation(req, res) {
 
   const set = buildExtendSet(q, parsed, !!req.body?.extendQuestion, !!req.body?.shuffleOptions); // may fix a wrong numerical answer/options, lengthen the stem, and/or reshuffle options
   await Question.updateOne({ _id: q._id }, { $set: set });
+  // First-run creator setup guide: record that this creator has used
+  // "Extend explanation" at least once (fire-and-forget; never blocks).
+  if (req.user?.role === "client" && req.user?.creatorGuide?.extended !== true) {
+    User.updateOne({ _id: req.user._id }, { $set: { "creatorGuide.extended": true } }).catch(() => {});
+  }
   res.json({
     _id: q._id,
     explanation: set.explanation,
@@ -4230,6 +4236,11 @@ export async function regenerateQuestion(req, res) {
   if (!Object.keys(set).length) return res.status(502).json({ message: "The AI did not return any usable changes. Try again." });
 
   await Question.updateOne({ _id: q._id }, { $set: set });
+  // First-run creator setup guide: record that this creator has used
+  // "Regenerate question" at least once (fire-and-forget; never blocks).
+  if (req.user?.role === "client" && req.user?.creatorGuide?.regenerated !== true) {
+    User.updateOne({ _id: req.user._id }, { $set: { "creatorGuide.regenerated": true } }).catch(() => {});
+  }
   res.json({
     _id: q._id,
     text: set.text ?? q.text,
