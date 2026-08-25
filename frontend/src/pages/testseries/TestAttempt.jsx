@@ -283,7 +283,7 @@ export default function TestAttempt() {
   // Leave the test. After submitting, just go back; mid-test, confirm first
   // (answers are not saved) and drop out of fullscreen.
   const exitTest = () => {
-    const dest = anonymous ? "/" : isClient ? "/client" : "/test-series";
+    const dest = anonymous ? "/" : isClient ? "/creator" : "/test-series";
     if (!result && !window.confirm("Exit the test? Your answers won't be submitted or saved.")) return;
     if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
     navigate(dest);
@@ -438,7 +438,7 @@ export default function TestAttempt() {
                   <button onClick={() => navigate("/register")} className="btn-primary">Sign up to unlock all tests</button>
                 </>
               ) : isClient ? (
-                <button onClick={() => navigate("/client")} className="btn-primary">Back to My Practice</button>
+                <button onClick={() => navigate("/creator")} className="btn-primary">Back to My Practice</button>
               ) : (
                 <>
                   <button onClick={() => navigate("/dashboard")} className="btn-primary">Go to Dashboard</button>

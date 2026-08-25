@@ -177,7 +177,7 @@ export default function ClientPerformance({ full = false }) {
 
       {/* Summary */}
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        <StatCard Icon={ListChecks} label="Attempts" value={s.totalAttempts} sub={full ? `${s.itemsAttempted} quiz/test` : `${s.itemsAttempted} quiz/test · tap for details`} onClick={full ? undefined : () => navigate("/client/performance")} />
+        <StatCard Icon={ListChecks} label="Attempts" value={s.totalAttempts} sub={full ? `${s.itemsAttempted} quiz/test` : `${s.itemsAttempted} quiz/test · tap for details`} onClick={full ? undefined : () => navigate("/creator/performance")} />
         <StatCard Icon={Target} label="Accuracy" value={`${s.overallAccuracy}%`} sub={`${s.totalCorrect}/${s.totalAnswered} correct`} tone="text-emerald-600" />
         <StatCard Icon={BarChart3} label="Avg score" value={`${s.avgPct}%`} sub="across attempts" tone="text-violet-600" />
         <StatCard Icon={Trophy} label="Best" value={`${s.best}%`} sub={`${s.quizzesTaken} quizzes · ${s.testsTaken} tests`} tone="text-amber-500" />

@@ -344,7 +344,7 @@ export default function PracticeQuizPlay() {
                 <button onClick={() => navigate("/register")} className="btn-primary">Sign up to unlock all quizzes</button>
               </>
             ) : isClient ? (
-              <button onClick={() => navigate("/client")} className="btn-primary">Back to My Practice</button>
+              <button onClick={() => navigate("/creator")} className="btn-primary">Back to My Practice</button>
             ) : (
               <>
                 <button onClick={() => navigate(-1)} className="btn-primary">Back to Quizzes</button>

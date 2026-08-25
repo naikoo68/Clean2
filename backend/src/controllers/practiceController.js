@@ -758,7 +758,7 @@ export async function shareContent(req, res) {
   let emailed = false;
   if (isMailConfigured()) {
     try {
-      const link = `${clientBaseFromReq(req).replace(/\/$/, "")}/client`;
+      const link = `${clientBaseFromReq(req).replace(/\/$/, "")}/creator`;
       const label = level === "item" ? `"${title}"` : `${matches.length} ${kind}(s) from "${title}"`;
       await sendMail({
         to: recipient.email,
