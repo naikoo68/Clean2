@@ -201,7 +201,7 @@ export default function AdminLayout() {
 
   return (
     <div className="flex min-h-screen bg-slate-50 dark:bg-slate-950">
-      {showOnboarding && <OnboardingWizard onDone={() => setWizardDone(true)} />}
+      {showOnboarding && <OnboardingWizard onDone={() => setWizardDone(true)} onClose={() => setWizardDone(true)} />}
 
       {/* Desktop sidebar */}
       <aside className="hidden w-64 flex-shrink-0 border-r border-slate-200 bg-white lg:block dark:border-slate-800 dark:bg-slate-900">
