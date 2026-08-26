@@ -119,6 +119,7 @@ const settingsSchema = new mongoose.Schema(
     // the generator unless an admin explicitly turns it off afterwards).
     aiClientAccessBackfilled: { type: Boolean, default: false },
     aiClientGeneratorBackfilled: { type: Boolean, default: false },
+    creatorGuideGrandfathered: { type: Boolean, default: false },
     // One-time flag: existing data was assigned to the default tenant (Phase 2
     // multi-tenancy backfill). Prevents the startup backfill from repeating.
     tenantsBackfilled: { type: Boolean, default: false },
