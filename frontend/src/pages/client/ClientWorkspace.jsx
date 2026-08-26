@@ -20,7 +20,7 @@ import AdminNotes from "../admin/AdminNotes";
 import AdminAiStudio from "../admin/AdminAiStudio";
 import Footer from "../../components/layout/Footer";
 import ClientWelcomeModal from "../../components/client/ClientWelcomeModal";
-import CreatorSetupGuide from "../../components/client/CreatorSetupGuide";
+import CreatorTour from "../../components/client/CreatorTour";
 import InstallAppButton from "../../components/client/InstallAppButton";
 
 // The self-service CLIENT workspace. A client only ever sees the My Practice
@@ -102,11 +102,11 @@ export default function ClientWorkspace() {
   const menuTabs = tabs.filter((t) => t.key !== "dashboard");
   const activeMenuTab = menuTabs.find((t) => t.key === tab);
 
-  // First-run creator setup guide — shown until every step is complete. It
-  // requires AI + Build access (which new creators get by default); if an admin
-  // has turned either off, the steps couldn't be completed, so we don't show a
-  // guide the creator would get stuck on.
-  const showGuide =
+  // First-run creator coach-mark tour — blinks the real buttons (Build → Add
+  // Stream → … → AI Generator) until the creator has generated a question. Only
+  // for NEW creators who have AI + Build + Generator access (existing creators
+  // are grandfathered past it server-side, so creatorGuide.completed is true).
+  const showTour =
     user?.role === "client" &&
     user?.aiAccess === true &&
     user?.featBuild !== false &&
@@ -181,6 +181,7 @@ export default function ClientWorkspace() {
                 onClick={() => setMenuOpen((v) => !v)}
                 aria-label="Open menu"
                 aria-expanded={menuOpen}
+                data-tour="nav-menu"
                 className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-semibold transition ${
                   activeMenuTab ? "bg-brand-600 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300"
                 }`}
@@ -195,6 +196,7 @@ export default function ClientWorkspace() {
                     {menuTabs.map((t) => (
                       <button
                         key={t.key}
+                        data-tour={`nav-${t.key}`}
                         onClick={() => { setTab(t.key); setShowUpgrade(false); setMenuOpen(false); }}
                         className={`flex w-full items-center gap-2 px-3 py-2 text-left text-sm font-medium transition ${
                           tab === t.key ? "bg-brand-50 text-brand-700 dark:bg-brand-900/30 dark:text-brand-300" : "text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"
@@ -212,8 +214,8 @@ export default function ClientWorkspace() {
         )}
       </header>
 
+      {showTour && !expired && !showUpgrade && <CreatorTour tab={tab} menuOpen={menuOpen} />}
       <main className="mx-auto max-w-6xl p-4 sm:p-6">
-        {showGuide && !expired && !showUpgrade && <CreatorSetupGuide onGoTab={goToTab} />}
         {expired || showUpgrade ? (
           <ClientUpgrade onClose={expired ? undefined : () => setShowUpgrade(false)} />
         ) : tab === "dashboard" ? (
