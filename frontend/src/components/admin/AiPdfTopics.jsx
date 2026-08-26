@@ -8,14 +8,22 @@ import { useAuth } from "../../context/AuthContext";
 import LanguageSelect from "./LanguageSelect";
 
 // The question types the generator can produce (same set as the AI Generator).
+// Kept in sync with AiGenerate's TYPE_OPTIONS so the PDF → Topics grid offers
+// every question type the main AI Generator does (they share the same backend
+// generation, so any type here is generated the same way).
 const Q_TYPES = [
   { id: "mcq", label: "MCQ" },
-  { id: "matching", label: "Matching" },
-  { id: "statement", label: "Statements" },
-  { id: "pair", label: "Pairs" },
-  { id: "pairselect", label: "Pair select" },
+  { id: "numericalmcq", label: "Numerical MCQ" },
   { id: "assertion", label: "Assertion & Reason" },
-  { id: "table", label: "Table" },
+  { id: "statement", label: "Statement-based" },
+  { id: "matching", label: "Matching" },
+  { id: "pair", label: "Pair (count)" },
+  { id: "pairselect", label: "Pair-select" },
+  { id: "table", label: "Table-based" },
+  { id: "journal", label: "Journal Entry" },
+  { id: "ledger", label: "Ledger Posting" },
+  { id: "rearrange", label: "Sentence Rearrangement" },
+  { id: "diagram", label: "Diagram" },
 ];
 
 // PDF → Topics: upload a PDF (or paste text), auto-detect its units/chapters,
