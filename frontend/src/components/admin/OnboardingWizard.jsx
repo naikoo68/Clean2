@@ -41,7 +41,7 @@ To request help with a payment, reach us using the details on our Contact page.`
 // Steps 1–3 are mandatory; 4 and 5 can be skipped. Each step saves its own
 // fields; finishing marks onboardingCompleted so the wizard never auto-opens
 // again. The Product step can also jump straight to a build page.
-export default function OnboardingWizard({ onDone }) {
+export default function OnboardingWizard({ onDone, onClose }) {
   const { save } = useSettings();
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -184,15 +184,29 @@ export default function OnboardingWizard({ onDone }) {
 
   return (
     <div className="fixed inset-0 z-[60] flex items-start justify-center overflow-y-auto bg-black/60 p-3 sm:p-6">
-      <div className="my-4 w-full max-w-2xl animate-scale-in card p-5 sm:p-7">
+      <div className="relative my-4 w-full max-w-2xl animate-scale-in card p-5 sm:p-7">
+        {/* Close — dismisses the wizard for now WITHOUT marking setup finished,
+            so it reappears next time the institute admin opens the panel (until
+            they actually complete it). */}
+        {onClose && (
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close for now"
+            title="Close for now — you can finish this later"
+            className="absolute right-3 top-3 rounded-lg p-1.5 text-slate-400 transition hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        )}
         {/* Header */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 pr-8">
           <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-brand-600 to-accent-500 text-white">
             <School className="h-5 w-5" />
           </span>
           <div>
             <h2 className="text-lg font-extrabold leading-none">Set up your website</h2>
-            <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">A few quick steps to brand your institute. Steps 1–3 are required.</p>
+            <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">A few quick steps to brand your institute. Steps 1–3 are required. You can close this and finish later.</p>
           </div>
         </div>
 
