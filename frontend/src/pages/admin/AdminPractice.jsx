@@ -985,7 +985,7 @@ export default function AdminPractice({ clientMode = false, fixedKind = "" }) {
               <Sparkles className="h-4 w-4" /> Other question types
             </button>
           )}
-          <button onClick={() => setModal({ type: addType, mode: "add", data: {} })} className="btn-primary">
+          <button onClick={() => setModal({ type: addType, mode: "add", data: {} })} className="btn-primary" data-tour={clientMode ? `add-${view}` : undefined}>
             <Plus className="h-4 w-4" /> {H.add}
           </button>
         </div>
