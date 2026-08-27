@@ -2,7 +2,9 @@
   "name": "my-study-guide-backend",
   "version": "1.0.0",
   "description": "REST API for My Study Guide — quizzes & test series platform",
+  "author": "Aadil Abdullah Naikoo",
   "type": "module",
+  "private": true,
   "main": "src/server.js",
   "scripts": {
     "start": "node src/server.js",
@@ -17,7 +19,7 @@
     "express",
     "mongodb"
   ],
-  "license": "MIT",
+  "license": "SEE LICENSE IN LICENSE",
   "dependencies": {
     "bcryptjs": "^2.4.3",
     "cloudinary": "^2.5.1",
