@@ -23,9 +23,11 @@ npm run dev                 # starts on http://localhost:5000
 
 > Requires a running MongoDB instance (local or MongoDB Atlas). Set `MONGO_URI` in `.env`.
 
-Seeded credentials:
-- Admin: `admin@mystudyguide.com` / `admin123`
-- Student: `student@mystudyguide.com` / `student123`
+Seeded demo credentials (development only — set the passwords via env vars, see [`.env.example`](.env.example)):
+- Admin: `admin@mystudyguide.com` / `<ADMIN_PASSWORD>`
+- Student: `student@mystudyguide.com` / `<SEED_STUDENT_PASSWORD>`
+
+> Change these before any public/production deployment. The passwords above are placeholders; the real values come from `ADMIN_PASSWORD` / `SEED_STUDENT_PASSWORD` in your `.env`.
 
 ## Project Structure
 
