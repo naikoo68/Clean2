@@ -2045,8 +2045,13 @@ function pickTrack(tracks) {
 // rate-limited (429) far less often here than on the public watch page, and the
 // ANDROID client rarely hits consent/age walls — so we try this FIRST.
 async function ytCaptionTracksViaInnerTube(id) {
-  // Public InnerTube key + a couple of client identities to try in order.
-  const KEY = "AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8";
+  // YouTube InnerTube API key + a couple of client identities to try in order.
+  // Read from the environment (YOUTUBE_INNERTUBE_KEY) so no credential is
+  // hardcoded in the source. When it isn't set we skip this fast path and let
+  // the caller fall back to scraping the public watch page — the transcript
+  // feature still works, just without the InnerTube speed-up.
+  const KEY = (process.env.YOUTUBE_INNERTUBE_KEY || "").trim();
+  if (!KEY) return [];
   const clients = [
     { clientName: "ANDROID", clientVersion: "20.10.38", androidSdkVersion: 30 },
     { clientName: "WEB", clientVersion: "2.20240726.00.00" },
