@@ -1,7 +1,9 @@
 {
-  "name": "frontend",
+  "name": "my-study-guide-frontend",
+  "version": "1.0.0",
+  "author": "Aadil Abdullah Naikoo",
+  "license": "SEE LICENSE IN LICENSE",
   "private": true,
-  "version": "0.0.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
