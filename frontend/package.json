@@ -5,6 +5,9 @@
   "license": "SEE LICENSE IN LICENSE",
   "private": true,
   "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "dev": "vite",
     "build": "vite build",
