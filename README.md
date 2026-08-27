@@ -32,7 +32,7 @@ cp .env.example .env          # VITE_API_URL=http://localhost:5000/api
 npm run dev                   # http://localhost:5173
 ```
 
-Seeded logins: **admin@mystudyguide.com / admin123** · **student@mystudyguide.com / student123**
+Seeded demo logins (development only): **admin@mystudyguide.com** / `<ADMIN_PASSWORD>` · **student@mystudyguide.com** / `<SEED_STUDENT_PASSWORD>`. The passwords are placeholders — set the real values via `ADMIN_PASSWORD` / `SEED_STUDENT_PASSWORD` in `backend/.env` (see [`backend/.env.example`](backend/.env.example)), and change them before any public deployment.
 
 ## ✨ Features
 
@@ -61,31 +61,8 @@ Seeded logins: **admin@mystudyguide.com / admin123** · **student@mystudyguide.c
 - User management (view, block/unblock, plans, reset password)
 - Customization (logo, theme colours, banners, notifications, announcements)
 
-## 🚀 Run the frontend
-
-```bash
-cd frontend
-npm install
-npm run dev        # http://localhost:5173
-```
-
-The frontend runs fully standalone using local sample data, so you can explore every screen immediately.
-
-**Try it:**
-- Student: log in at `/login` with any email/password → redirected to the dashboard
-- Admin: go to `/admin/login` (any password) → full admin panel
-
-## 🔌 Run the backend (optional, for real data)
-
-```bash
-cd backend
-npm install
-cp .env.example .env     # fill MONGO_URI, JWT_SECRET, Cloudinary keys
-npm run seed             # sample data + admin@mystudyguide.com / admin123
-npm run dev              # http://localhost:5000
-```
-
-See [`backend/README.md`](backend/README.md) for the full API reference.
+See [`backend/README.md`](backend/README.md) for the full API reference. Both
+run-locally steps (backend + frontend) are in **[Run locally](#-run-locally-real-mode)** above.
 
 ## 🛠 Tech Stack
 
@@ -95,6 +72,11 @@ See [`backend/README.md`](backend/README.md) for the full API reference.
 | Backend | Node.js, Express, MongoDB (Mongoose), JWT, bcrypt, Cloudinary, Multer |
 | Cross-cutting | Dark/light mode, responsive design, SEO meta tags, role-based auth |
 
-## 🔗 Connecting frontend to backend
+## 🔗 Frontend ↔ backend
 
-The frontend currently uses local sample data (`src/data/*`) and a demo auth context so it works without a server. To go live, replace those reads with `fetch`/axios calls to the API base URL (e.g. `VITE_API_URL=http://localhost:5000/api`) and store the returned JWT — the endpoints already exist in the backend.
+The frontend talks to the backend REST API for everything — authentication
+(JWT), subjects/sessions/questions, quiz attempts, test grading, dashboards, and
+the admin panel. It reads the API base URL from `VITE_API_URL` (e.g.
+`http://localhost:5000/api`) and stores the returned JWT in the browser. There
+is **no** mock/offline mode: a running backend with a MongoDB connection is
+required. See **[DEPLOYMENT.md](DEPLOYMENT.md)** to deploy both halves.
