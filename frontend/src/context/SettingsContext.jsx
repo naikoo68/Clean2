@@ -6,11 +6,13 @@ import { applyBranding } from "../lib/branding";
 const SettingsContext = createContext();
 
 // Built-in Google OAuth Web Client ID for "Back up / Restore to Google Drive".
-// WHITE-LABEL BUYERS: replace the value below with your own Client ID from
-// Google Cloud Console (or set VITE_GOOGLE_CLIENT_ID in your hosting env, which
-// overrides this). Leave it as "" to disable the built-in default and manage the
-// Client ID from Admin → Backup & Restore instead.
-const DEFAULT_GOOGLE_CLIENT_ID = "YOUR_GOOGLE_OAUTH_CLIENT_ID.apps.googleusercontent.com";
+// Intentionally left blank for distribution so no real credential ships in the
+// source. To enable Google Drive backup, either set VITE_GOOGLE_CLIENT_ID in
+// your hosting env (recommended for white-label deployments), paste your own
+// Client ID from the Google Cloud Console under Admin → Backup & Restore, or
+// hardcode your own Client ID as the value below. When left blank, the Drive
+// backup buttons stay hidden until a Client ID is configured.
+const DEFAULT_GOOGLE_CLIENT_ID = "";
 const ENV_GOOGLE_CLIENT_ID = String(
   import.meta.env.VITE_GOOGLE_CLIENT_ID || DEFAULT_GOOGLE_CLIENT_ID || ""
 ).trim();
