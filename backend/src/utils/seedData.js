@@ -100,17 +100,23 @@ export async function seedDatabase({ reset = false } = {}) {
     ]);
   }
 
+  // Demo/sample account credentials. These exist only to populate a DEMO
+  // dataset for LOCAL DEVELOPMENT and evaluation. They are NOT production
+  // secrets. Override every one of them with environment variables (see
+  // backend/.env.example) — and always do so before exposing the app publicly.
   const adminEmail = (process.env.ADMIN_EMAIL || "admin@mystudyguide.com").toLowerCase().trim();
-  const adminPassword = process.env.ADMIN_PASSWORD || "admin123";
+  const adminPassword = process.env.ADMIN_PASSWORD || "admin123"; // dev-only default
+  const studentPassword = process.env.SEED_STUDENT_PASSWORD || "student123"; // dev-only default
+  const demoUserPassword = process.env.SEED_DEMO_PASSWORD || "password123"; // dev-only default
   await User.create({ name: "Admin", email: adminEmail, password: adminPassword, role: "admin", isEmailVerified: true });
-  const student = await User.create({ name: "Demo Student", email: "student@mystudyguide.com", password: "student123", isEmailVerified: true, streak: 7, plan: "Premium" });
+  const student = await User.create({ name: "Demo Student", email: "student@mystudyguide.com", password: studentPassword, isEmailVerified: true, streak: 7, plan: "Premium" });
 
   const extraNames = ["Aarav Sharma", "Diya Patel", "Vihaan Gupta", "Ananya Reddy", "Kabir Singh"];
   await User.create(
     extraNames.map((name, i) => ({
       name,
       email: `${slugify(name)}@example.com`,
-      password: "password123",
+      password: demoUserPassword,
       isEmailVerified: true,
       plan: ["Free", "Premium", "Pro"][i % 3],
     }))
@@ -192,7 +198,7 @@ export async function seedDatabase({ reset = false } = {}) {
     day += 3;
   }
 
-  return { admin: `${adminEmail} / ${adminPassword}`, student: "student@mystudyguide.com / student123" };
+  return { admin: `${adminEmail} / ${adminPassword}`, student: `student@mystudyguide.com / ${studentPassword}` };
 }
 
 // Seeds only if the database has no users yet (safe to call on every boot).
