@@ -2,34 +2,121 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
+
+    <!-- Move visitors off the legacy *.vercel.app URL onto the custom domain.
+         Runs before anything else so it works even when the page is served
+         from the PWA / service-worker cache (which a server-side redirect in
+         vercel.json can't reach). No-op on the real domain and on Vercel
+         preview deployments (their hostnames don't match). -->
+    <script>
+      (function () {
+        try {
+          if (window.location.hostname === "mystudyguideme.vercel.app") {
+            var l = window.location;
+            window.location.replace(
+              "https://www.mystudyguide.in" + l.pathname + l.search + l.hash
+            );
+          }
+        } catch (e) {
+          /* never let this block the app from loading */
+        }
+      })();
+    </script>
+
+    <!-- Guard against the "Failed to execute 'removeChild' / 'insertBefore' on
+         'Node'" crash that browser page-translation (Google / Brave Translate)
+         triggers by swapping out React-managed text nodes. If the target's
+         parent no longer matches, no-op instead of throwing so the app keeps
+         running. Applied before React loads. See facebook/react#11538. -->
+    <script>
+      (function () {
+        if (typeof Node !== "function" || !Node.prototype) return;
+        var realRemoveChild = Node.prototype.removeChild;
+        Node.prototype.removeChild = function (child) {
+          if (child.parentNode !== this) return child;
+          return realRemoveChild.apply(this, arguments);
+        };
+        var realInsertBefore = Node.prototype.insertBefore;
+        Node.prototype.insertBefore = function (newNode, referenceNode) {
+          if (referenceNode && referenceNode.parentNode !== this) return newNode;
+          return realInsertBefore.apply(this, arguments);
+        };
+      })();
+    </script>
+
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="theme-color" content="#2563eb" />
+
+    <!-- Installable PWA (client "My Practice" app) -->
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black" />
+    <meta name="apple-mobile-web-app-title" content="My Practice" />
+    <meta name="mobile-web-app-capable" content="yes" />
+
+    <!-- SPA deep-link restore: if 404.html bounced here with the original path
+         encoded as "?/...", rewrite the URL back to that path BEFORE the app
+         boots, so refreshing a client-side route keeps you on that route
+         instead of landing on the home page. No-op on normal visits. -->
+    <script>
+      (function () {
+        var l = window.location;
+        if (l.search[1] === "/") {
+          var decoded = l.search
+            .slice(1)
+            .split("&")
+            .map(function (s) { return s.replace(/~and~/g, "&"); })
+            .join("?");
+          window.history.replaceState(null, null, l.pathname.slice(0, -1) + decoded + l.hash);
+        }
+      })();
+    </script>
 
     <!-- Connect to the API backend early to cut request latency -->
     <link rel="preconnect" href="https://my-prep-mart-api-39nk.onrender.com" crossorigin />
     <link rel="dns-prefetch" href="https://my-prep-mart-api-39nk.onrender.com" />
 
+    <!-- Google Analytics (GA4). Loads ONLY when a real Measurement ID is set via
+         the VITE_GA_MEASUREMENT_ID env var (e.g. on Vercel). Vite substitutes
+         %VITE_GA_MEASUREMENT_ID% at build time; if it's unset/empty the guard
+         below skips loading gtag entirely, so nothing runs until you add the ID. -->
+    <script>
+      (function () {
+        var GA_ID = "%VITE_GA_MEASUREMENT_ID%";
+        if (!GA_ID || GA_ID.indexOf("VITE_") !== -1 || GA_ID.charAt(0) !== "G") return;
+        var s = document.createElement("script");
+        s.async = true;
+        s.src = "https://www.googletagmanager.com/gtag/js?id=" + GA_ID;
+        document.head.appendChild(s);
+        window.dataLayer = window.dataLayer || [];
+        window.gtag = function () { window.dataLayer.push(arguments); };
+        window.gtag("js", new Date());
+        window.gtag("config", GA_ID);
+      })();
+    </script>
+
     <!-- SEO -->
     <title>My Study Guide — Prepare Smart, Achieve More</title>
     <meta
       name="description"
-      content="My Study Guide: subject-wise quizzes, full-length test series, instant results, performance analytics and leaderboards for serious exam aspirants."
+      content="My Study Guide offers subject-wise quizzes, mock tests, test series, instant results, performance analytics and study resources for competitive exam preparation."
     />
     <meta name="keywords" content="quiz, test series, exam preparation, JEE, NEET, mock tests, online learning" />
     <meta name="author" content="My Study Guide" />
-    <link rel="canonical" href="https://mystudyguideme.vercel.app/" />
+    <link rel="canonical" href="https://www.mystudyguide.in/" />
 
     <!-- Open Graph -->
     <meta property="og:type" content="website" />
-    <meta property="og:url" content="https://mystudyguideme.vercel.app/" />
+    <meta property="og:url" content="https://www.mystudyguide.in/" />
     <meta property="og:title" content="My Study Guide — Prepare Smart, Achieve More" />
     <meta
       property="og:description"
       content="Subject-wise quizzes, full-length test series, instant results and analytics."
     />
     <meta property="og:site_name" content="My Study Guide" />
-    <meta property="og:image" content="https://mystudyguideme.vercel.app/og-image.png" />
+    <meta property="og:image" content="https://www.mystudyguide.in/og-image.png" />
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />
     <meta property="og:image:alt" content="My Study Guide — Prepare Smart, Achieve More" />
@@ -38,7 +125,36 @@
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content="My Study Guide — Prepare Smart, Achieve More" />
     <meta name="twitter:description" content="Quizzes, test series and analytics for exam aspirants." />
-    <meta name="twitter:image" content="https://mystudyguideme.vercel.app/og-image.png" />
+    <meta name="twitter:image" content="https://www.mystudyguide.in/og-image.png" />
+
+    <!-- Site-wide structured data (Schema.org). Organization + WebSite only —
+         real facts (name, URL, logo, description). No SearchAction (there is no
+         public search results URL) and no fake ratings/reviews. Page-level
+         JSON-LD (BreadcrumbList etc.) is injected separately by useSeo under a
+         different <script id="seo-jsonld">, so these never collide. -->
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@graph": [
+          {
+            "@type": "Organization",
+            "@id": "https://www.mystudyguide.in/#organization",
+            "name": "My Study Guide",
+            "url": "https://www.mystudyguide.in/",
+            "logo": "https://www.mystudyguide.in/apple-touch-icon.png",
+            "description": "My Study Guide offers subject-wise quizzes, mock tests, test series, instant results, performance analytics and study resources for competitive exam preparation."
+          },
+          {
+            "@type": "WebSite",
+            "@id": "https://www.mystudyguide.in/#website",
+            "name": "My Study Guide",
+            "url": "https://www.mystudyguide.in/",
+            "inLanguage": "en",
+            "publisher": { "@id": "https://www.mystudyguide.in/#organization" }
+          }
+        ]
+      }
+    </script>
   </head>
   <body>
     <div id="root"></div>

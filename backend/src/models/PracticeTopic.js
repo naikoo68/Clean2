@@ -14,6 +14,15 @@ const practiceTopicSchema = new mongoose.Schema(
     description: { type: String },
     order: { type: Number, default: 0 },
     isActive: { type: Boolean, default: true },
+    // Admin "disable" switch — hides this node from students/public/client
+    // browse & play, but keeps it visible in the admin manager. See PracticeStream.
+    disabled: { type: Boolean, default: false },
+    // Public share link (see PracticeStream). Anyone with the link sees every
+    // quiz under this topic; enabling cascades to the quizzes beneath it.
+    publicShare: { type: Boolean, default: false },
+    publicToken: { type: String, index: true, default: null },
+    publicExpiresAt: { type: Date, default: null }, // null = never expires
+    publicViews: { type: Number, default: 0 },
   },
   { timestamps: true }
 );

@@ -1,18 +1,22 @@
 import { useState, useRef } from "react";
 import {
   Palette, Type, ImagePlus, Save, RotateCcw, CheckCircle2, Eye, EyeOff,
-  Share2, Phone, Plus, Trash2, Upload, X, Info, BarChart3, PanelTop, GripVertical, LayoutList,
+  Share2, Phone, Plus, Trash2, Upload, X, Info, BarChart3, PanelTop, GripVertical, LayoutList, Megaphone, Star, Camera, HelpCircle,
 } from "lucide-react";
 import { useSettings } from "../../context/SettingsContext";
+import Avatar from "../../components/ui/Avatar";
+import { fileToResizedDataUrl } from "../../lib/imageResize";
+import { FAQ_DEFAULTS } from "../../lib/faqDefaults";
 
 // Home-page sections (fixed set) that the admin can reorder / hide.
-const HOME_ORDER = ["hero", "stats", "quickAccess", "features", "howItWorks", "cta"];
+const HOME_ORDER = ["hero", "stats", "quickAccess", "features", "howItWorks", "testimonials", "cta"];
 const HOME_SECTION_LABELS = {
   hero: "Hero (tagline & progress card)",
   stats: "Statistics",
   quickAccess: "Quick Access (Quiz / Test / Study)",
   features: "Features",
   howItWorks: "How it works",
+  testimonials: "Testimonials",
   cta: "Call-to-action banner",
 };
 
@@ -109,6 +113,9 @@ const CONTACT_TYPES = ["email", "phone", "address"];
 const DEFAULTS = {
   siteName: "My Study Guide",
   tagline: "Prepare Smart, Achieve More.",
+  heroBadge: "",
+  heroTitle: "",
+  heroSubtitle: "",
   logoUrl: "",
   primaryColor: "#2563eb",
   accentColor: "#f97316",
@@ -148,7 +155,13 @@ const DEFAULTS = {
     { title: "Our Promise", desc: "Honest content, transparent analytics and relentless focus on student outcomes." },
   ],
   statsAuto: true,
+  clientAnnouncement: { enabled: false, title: "", message: "" },
   homeSections: HOME_ORDER.map((key) => ({ key, visible: true })),
+  testimonials: [
+    { name: "Aisha Khan", exam: "Cleared SSC CGL 2025", rating: 5, text: "The subject-wise quizzes and instant solutions made my revision so much faster." },
+    { name: "Rahul Verma", exam: "NEET Aspirant", rating: 5, text: "Full-length mock tests feel just like the real exam — timers, palette and auto-submit." },
+    { name: "Sneha Patil", exam: "State PSC 2025", rating: 5, text: "I love that I can practise for free and track my rank. It kept me motivated every day." },
+  ],
   aboutStats: [
     { value: "1,20,000+", label: "Total Students" },
     { value: "8,500+", label: "Total Quizzes" },
@@ -172,8 +185,18 @@ export default function AdminCustomization() {
     contacts: settings.contacts?.length ? settings.contacts : DEFAULTS.contacts,
     aboutValues: settings.aboutValues?.length ? settings.aboutValues : DEFAULTS.aboutValues,
     aboutStats: settings.aboutStats?.length ? settings.aboutStats : DEFAULTS.aboutStats,
+    testimonials: settings.testimonials?.length ? settings.testimonials : DEFAULTS.testimonials,
+    clientAnnouncement: { ...DEFAULTS.clientAnnouncement, ...(settings.clientAnnouncement || {}) },
     homeSections: normalizeHomeSections(settings.homeSections),
+    // FAQ page content per audience — pre-fill with the current custom FAQs, or
+    // the built-in defaults so the admin edits the live questions.
+    faqs: {
+      student: settings.faqs?.student?.length ? settings.faqs.student : FAQ_DEFAULTS.student,
+      creator: settings.faqs?.creator?.length ? settings.faqs.creator : FAQ_DEFAULTS.creator,
+      institute: settings.faqs?.institute?.length ? settings.faqs.institute : FAQ_DEFAULTS.institute,
+    },
   });
+  const [faqTab, setFaqTab] = useState("student");
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState("");
   const [error, setError] = useState("");
@@ -198,6 +221,25 @@ export default function AdminCustomization() {
   const updateValue = (i, key, val) =>
     set("aboutValues", form.aboutValues.map((v, idx) => (idx === i ? { ...v, [key]: val } : v)));
   const removeValue = (i) => set("aboutValues", form.aboutValues.filter((_, idx) => idx !== i));
+
+  // ---- Testimonials ----
+  const addTestimonial = () => set("testimonials", [...form.testimonials, { name: "", exam: "", text: "", rating: 5 }]);
+  const updateTestimonial = (i, key, val) =>
+    set("testimonials", form.testimonials.map((t, idx) => (idx === i ? { ...t, [key]: val } : t)));
+  const removeTestimonial = (i) => set("testimonials", form.testimonials.filter((_, idx) => idx !== i));
+  const onTestimonialPhoto = async (i, e) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    try { updateTestimonial(i, "photo", await fileToResizedDataUrl(file, 200, 0.85)); } catch { /* ignore */ }
+  };
+
+  // ---- FAQ page (per audience: student / creator / institute) ----
+  const addFaq = (aud) => set("faqs", { ...form.faqs, [aud]: [...(form.faqs[aud] || []), { q: "", a: "" }] });
+  const updateFaq = (aud, i, key, val) =>
+    set("faqs", { ...form.faqs, [aud]: (form.faqs[aud] || []).map((f, idx) => (idx === i ? { ...f, [key]: val } : f)) });
+  const removeFaq = (aud, i) =>
+    set("faqs", { ...form.faqs, [aud]: (form.faqs[aud] || []).filter((_, idx) => idx !== i) });
 
   // ---- Home layout ----
   const toggleSection = (i) =>
@@ -232,6 +274,12 @@ export default function AdminCustomization() {
         contacts: form.contacts.filter((c) => c.value && c.value.trim()),
         aboutValues: form.aboutValues.filter((v) => v.title?.trim() || v.desc?.trim()),
         aboutStats: form.aboutStats.filter((s) => s.value?.trim() || s.label?.trim()),
+        testimonials: form.testimonials.filter((t) => t.text?.trim() || t.name?.trim()),
+        faqs: {
+          student: (form.faqs.student || []).filter((f) => f.q?.trim() || f.a?.trim()),
+          creator: (form.faqs.creator || []).filter((f) => f.q?.trim() || f.a?.trim()),
+          institute: (form.faqs.institute || []).filter((f) => f.q?.trim() || f.a?.trim()),
+        },
       };
       await save(payload);
       flash("Saved! Your changes are now live across the site.");
@@ -294,6 +342,24 @@ export default function AdminCustomization() {
               <label className="mb-1.5 block text-sm font-medium">Tagline</label>
               <input className="input" value={form.tagline} onChange={(e) => set("tagline", e.target.value)} />
             </div>
+            <div className="rounded-xl border border-slate-200 p-3 dark:border-slate-700">
+              <p className="mb-2 text-sm font-semibold">Home page banner</p>
+              <p className="mb-3 text-xs text-slate-400">The big headline at the top of your website. Leave blank to use the built-in defaults.</p>
+              <div className="space-y-3">
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-slate-500">Badge</label>
+                  <input className="input" value={form.heroBadge} onChange={(e) => set("heroBadge", e.target.value)} placeholder="e.g. India's smart prep platform" />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-slate-500">Headline</label>
+                  <input className="input" value={form.heroTitle} onChange={(e) => set("heroTitle", e.target.value)} placeholder="e.g. Prepare Smart, Achieve More." />
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-slate-500">Subheading</label>
+                  <textarea className="input min-h-[70px]" value={form.heroSubtitle} onChange={(e) => set("heroSubtitle", e.target.value)} placeholder="A line or two about what your institute offers." />
+                </div>
+              </div>
+            </div>
             <div>
               <label className="mb-1.5 block text-sm font-medium">Logo (upload an image)</label>
               <div className="flex items-center gap-4">
@@ -325,6 +391,44 @@ export default function AdminCustomization() {
           <p className="mt-4 rounded-xl bg-slate-50 p-4 text-lg dark:bg-slate-800/60" style={{ fontFamily: `'${form.fontFamily}', sans-serif` }}>
             The quick brown fox jumps over the lazy dog. 1234567890
           </p>
+        </div>
+
+        {/* Client welcome popup */}
+        <div className="card p-6 lg:col-span-2">
+          <h3 className="mb-1 flex items-center gap-2 font-bold"><Megaphone className="h-5 w-5 text-brand-600" /> Creator welcome popup</h3>
+          <p className="mb-4 text-sm text-slate-500 dark:text-slate-400">
+            A popup shown to creators <span className="font-semibold">every time</span> they open their workspace. It always shows a welcome heading (your tagline); add an optional announcement below.
+          </p>
+          <label className="mb-4 flex items-center gap-3">
+            <input
+              type="checkbox"
+              className="h-4 w-4 rounded border-slate-300 text-brand-600"
+              checked={!!form.clientAnnouncement?.enabled}
+              onChange={(e) => set("clientAnnouncement", { ...form.clientAnnouncement, enabled: e.target.checked })}
+            />
+            <span className="text-sm font-medium">Show an announcement inside the welcome popup</span>
+          </label>
+          <div className="space-y-4">
+            <div>
+              <label className="mb-1.5 block text-sm font-medium">Announcement title</label>
+              <input
+                className="input"
+                value={form.clientAnnouncement?.title || ""}
+                onChange={(e) => set("clientAnnouncement", { ...form.clientAnnouncement, title: e.target.value })}
+                placeholder="e.g. New: AI Generator is live!"
+              />
+            </div>
+            <div>
+              <label className="mb-1.5 block text-sm font-medium">Announcement message</label>
+              <textarea
+                className="input min-h-[110px]"
+                value={form.clientAnnouncement?.message || ""}
+                onChange={(e) => set("clientAnnouncement", { ...form.clientAnnouncement, message: e.target.value })}
+                placeholder="Write the message creators will see in the popup…"
+              />
+            </div>
+            <p className="text-xs text-slate-400">The announcement appears only when enabled and has a title or message. Line breaks are preserved.</p>
+          </div>
         </div>
 
         {/* Colours */}
@@ -597,6 +701,91 @@ export default function AdminCustomization() {
               {form.statsAuto && <p className="mt-2 text-xs text-slate-400">Pick a metric per row and give it a label. Add as many as you like — every one updates automatically from the live database.</p>}
             </div>
           </div>
+        </div>
+
+        {/* Testimonials */}
+        <div className="card p-6 lg:col-span-2">
+          <div className="mb-4 flex items-center justify-between">
+            <h3 className="flex items-center gap-2 font-bold"><Star className="h-5 w-5 text-amber-500" /> Testimonials (Home page)</h3>
+            <button type="button" onClick={addTestimonial} className="btn-outline py-1.5"><Plus className="h-4 w-4" /> Add</button>
+          </div>
+          <p className="mb-4 text-sm text-slate-500 dark:text-slate-400">Real student reviews build trust. Add a few with the exam they cleared. To hide the whole section, remove them all or toggle "Testimonials" off in the Home layout above.</p>
+          <div className="space-y-3">
+            {form.testimonials.map((t, i) => (
+              <div key={i} className="flex items-start gap-2 rounded-xl border border-slate-200 p-3 dark:border-slate-700">
+                <div className="flex flex-col items-center gap-1">
+                  <label className="group relative cursor-pointer" title="Add photo">
+                    <Avatar src={t.photo} name={t.name} size={48} />
+                    <span className="absolute inset-0 flex items-center justify-center rounded-full bg-black/40 opacity-0 transition group-hover:opacity-100">
+                      <Camera className="h-4 w-4 text-white" />
+                    </span>
+                    <input type="file" accept="image/*" className="hidden" onChange={(e) => onTestimonialPhoto(i, e)} />
+                  </label>
+                  {t.photo ? (
+                    <button type="button" onClick={() => updateTestimonial(i, "photo", "")} className="text-[10px] text-rose-600 hover:underline">Remove</button>
+                  ) : null}
+                </div>
+                <div className="flex-1 space-y-2">
+                  <div className="flex flex-col gap-2 sm:flex-row">
+                    <input className="input sm:flex-1" value={t.name} onChange={(e) => updateTestimonial(i, "name", e.target.value)} placeholder="Student name" />
+                    <input className="input sm:flex-1" value={t.exam} onChange={(e) => updateTestimonial(i, "exam", e.target.value)} placeholder="Exam / role (e.g. Cleared SSC CGL 2025)" />
+                    <select className="input sm:w-32" value={t.rating || 5} onChange={(e) => updateTestimonial(i, "rating", Number(e.target.value))}>
+                      {[5, 4, 3, 2, 1].map((r) => <option key={r} value={r}>{r} ★</option>)}
+                    </select>
+                  </div>
+                  <textarea rows={2} className="input resize-none" value={t.text} onChange={(e) => updateTestimonial(i, "text", e.target.value)} placeholder="What the student said…" />
+                </div>
+                <button type="button" onClick={() => removeTestimonial(i)} className="rounded-lg p-2 text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-900/30"><Trash2 className="h-4 w-4" /></button>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* FAQ page (public /faq) — editable per audience */}
+        <div className="card p-6 lg:col-span-2">
+          <h3 className="mb-1 flex items-center gap-2 font-bold"><HelpCircle className="h-5 w-5 text-brand-600" /> FAQ page</h3>
+          <p className="mb-4 text-sm text-slate-500 dark:text-slate-400">
+            Questions &amp; answers shown on your public <span className="font-semibold">/faq</span> page. Pick an audience, then edit its questions. Leave an audience with no questions to fall back to the built-in default FAQs.
+          </p>
+
+          {/* Audience sub-tabs */}
+          <div className="mb-4 flex flex-wrap gap-2">
+            {[
+              { key: "student", label: "Students" },
+              { key: "creator", label: "Creators" },
+              { key: "institute", label: "Institutes" },
+            ].map((t) => (
+              <button
+                key={t.key}
+                type="button"
+                onClick={() => setFaqTab(t.key)}
+                className={`rounded-lg px-3 py-1.5 text-sm font-semibold transition ${faqTab === t.key ? "bg-brand-600 text-white shadow-sm" : "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300"}`}
+              >
+                {t.label} <span className="opacity-70">({(form.faqs[t.key] || []).length})</span>
+              </button>
+            ))}
+          </div>
+
+          <div className="space-y-3">
+            {(form.faqs[faqTab] || []).length === 0 ? (
+              <p className="rounded-xl border border-dashed border-slate-300 p-4 text-sm text-slate-500 dark:border-slate-700 dark:text-slate-400">
+                No questions for this audience — the built-in default FAQs will be shown on the site. Add a question below to override them.
+              </p>
+            ) : (
+              (form.faqs[faqTab] || []).map((f, i) => (
+                <div key={i} className="flex items-start gap-2 rounded-xl border border-slate-200 p-3 dark:border-slate-700">
+                  <span className="mt-2 text-xs font-semibold text-slate-400">{i + 1}</span>
+                  <div className="flex-1 space-y-2">
+                    <input className="input" value={f.q} onChange={(e) => updateFaq(faqTab, i, "q", e.target.value)} placeholder="Question" />
+                    <textarea rows={3} className="input resize-none" value={f.a} onChange={(e) => updateFaq(faqTab, i, "a", e.target.value)} placeholder="Answer" />
+                  </div>
+                  <button type="button" onClick={() => removeFaq(faqTab, i)} className="rounded-lg p-2 text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-900/30"><Trash2 className="h-4 w-4" /></button>
+                </div>
+              ))
+            )}
+          </div>
+
+          <button type="button" onClick={() => addFaq(faqTab)} className="btn-outline mt-3"><Plus className="h-4 w-4" /> Add question</button>
         </div>
       </div>
 

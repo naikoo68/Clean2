@@ -15,7 +15,7 @@ const questionSchema = new mongoose.Schema(
     session: { type: mongoose.Schema.Types.ObjectId, ref: "Session" },
     quiz: { type: mongoose.Schema.Types.ObjectId, ref: "Quiz" },
     testSeries: { type: mongoose.Schema.Types.ObjectId, ref: "TestSeries" },
-    type: { type: String, enum: ["mcq", "matching", "statement", "pair", "pairselect", "image", "table", "assertion"], default: "mcq" },
+    type: { type: String, enum: ["mcq", "numericalmcq", "matching", "statement", "pair", "pairselect", "image", "table", "assertion", "journal", "ledger", "rearrange", "diagram"], default: "mcq" },
     text: { type: String, required: true },
     image: { type: String }, // diagram/figure for "image" (and any) questions
 
@@ -27,6 +27,25 @@ const questionSchema = new mongoose.Schema(
     // are dynamic — the table renders exactly as many rows/columns as supplied.
     // First row is treated as the header. Stored as Mixed to allow any shape.
     tableRows: { type: mongoose.Schema.Types.Mixed, default: undefined },
+
+    // Optional DIAGRAM/GRAPH shown with the question (e.g. an economics
+    // supply-demand curve). The AI outputs it as structured data and the app
+    // renders it as an SVG line chart. Stored as Mixed; shape:
+    //   { title?, xLabel?, yLabel?, xMax?, yMax?,
+    //     lines: [ { label?, color?, points: [[x,y], ...] } ],
+    //     points: [ { label?, x, y } ] }   // annotations e.g. equilibrium
+    graph: { type: mongoose.Schema.Types.Mixed, default: undefined },
+
+    // Diagrammatic ("diagram") questions: a full Visualization Studio spec,
+    // rendered by the app's Visualization Engine (Chart.js / Mermaid / Plotly /
+    // Cytoscape / SVG families). Stored verbatim as Mixed since the spec shape
+    // varies per engine. Shape (see frontend/src/viz/registry.js):
+    //   Chart.js: { type, title, labels:[…], series:[{name,data:[…]}], options:{…} }
+    //   Mermaid:  { type, title, code:"<mermaid source>" }
+    //   Plotly:   { type, title, plotly:{ data:[…], layout:{} } }
+    //   Graph:    { type, title, graph:{ nodes, edges, layout, directed } }
+    // The question stem (text) asks about the rendered diagram.
+    viz: { type: mongoose.Schema.Types.Mixed, default: undefined },
 
     // MCQ fields
     options: {
@@ -56,6 +75,12 @@ const questionSchema = new mongoose.Schema(
     // after answering so the student learns why each choice is right/wrong.
     optionExplanations: { type: [String], default: undefined },
     status: { type: String, enum: ["draft", "published"], default: "draft" },
+    // Total times this question has been viewed by end users (aggregated across
+    // every quiz/test it appears in). Shown to users, not just admin.
+    views: { type: Number, default: 0 },
+    // Recycle Bin (soft delete) — see utils/softDelete.js.
+    deleted: { type: Boolean, default: false },
+    deletedAt: { type: Date, default: null },
   },
   { timestamps: true }
 );
@@ -70,5 +95,15 @@ questionSchema.index(
     weights: { text: 10, options: 6, assertion: 6, reason: 6, columnA: 4, columnB: 4, explanation: 2 },
   }
 );
+
+// Lookup indexes for the hot query paths. Without these, listing a quiz's/
+// session's/test's questions, the per-subject count on every add, and the
+// duplicate scan all do FULL collection scans — which is why the app slowed
+// down as the question bank grew. Each index below matches a real query filter.
+questionSchema.index({ quiz: 1 });                 // GET quiz questions, quiz submit, move
+questionSchema.index({ session: 1 });              // GET session questions
+questionSchema.index({ subject: 1 });              // subject-based question mgmt + duplicates
+questionSchema.index({ owner: 1 });                // per-client question counts
+questionSchema.index({ testSeries: 1, section: 1 }); // test questions (prefix) + per-subject limit count
 
 export default mongoose.model("Question", questionSchema);

@@ -1,10 +1,12 @@
 import { useState } from "react";
 import { Link, NavLink, useNavigate } from "react-router-dom";
-import { Menu, X, Moon, Sun, LayoutDashboard, LogOut, User, ShieldCheck, ZoomIn, ZoomOut } from "lucide-react";
+import { Menu, X, Moon, Sun, LayoutDashboard, LogOut, User, UserCog, ShieldCheck, ZoomIn, ZoomOut } from "lucide-react";
 import { useTheme } from "../../context/ThemeContext";
 import { useAuth } from "../../context/AuthContext";
 import { useZoom } from "../../context/ZoomContext";
 import Brand from "./Brand";
+import InstallAppButton from "../client/InstallAppButton";
+import Avatar from "../ui/Avatar";
 
 const links = [
   { to: "/", label: "Home", end: true },
@@ -12,6 +14,7 @@ const links = [
   { to: "/test-series", label: "Test Series" },
   { to: "/practice", label: "My Practice" },
   { to: "/study", label: "Study Material" },
+  { to: "/pricing", label: "Pricing" },
   { to: "/about", label: "About Us" },
   { to: "/contact", label: "Contact" },
 ];
@@ -22,17 +25,18 @@ export default function Navbar() {
   const { user, logout } = useAuth();
   const { zoom, zoomIn, zoomOut } = useZoom();
   const navigate = useNavigate();
-  const isAdmin = user?.role === "admin";
+  // Platform super-admin AND institute admins both use the admin panel.
+  const isAdmin = user?.role === "admin" || user?.role === "institute_admin";
   const isClient = user?.role === "client";
   // Clients only ever use their own My Practice workspace — replace the whole
   // nav with a single link back to it so "Home"/the logo never strands them on
   // a page with no way back to their created questions.
   const visibleLinks = isClient
-    ? [{ to: "/client", label: "My Practice", end: true }]
+    ? [{ to: "/creator", label: "My Practice", end: true }]
     : user && user.quizAccess === false
     ? links.filter((l) => l.to !== "/quiz")
     : links;
-  const homeTo = isClient ? "/client" : "/";
+  const homeTo = isClient ? "/creator" : "/";
 
   const handleLogout = () => {
     logout();
@@ -80,6 +84,7 @@ export default function Navbar() {
         </div>
 
         <div className="flex items-center gap-2">
+          <InstallAppButton />
           <button
             onClick={toggleTheme}
             aria-label="Toggle theme"
@@ -96,12 +101,16 @@ export default function Navbar() {
                   <ShieldCheck className="h-4 w-4" /> Admin Mode
                 </Link>
               )}
-              <Link to={isClient ? "/client" : "/dashboard"} className="btn-ghost">
+              <Link to={isClient ? "/creator" : "/dashboard"} className="btn-ghost">
                 <LayoutDashboard className="h-4 w-4" /> {isClient ? "My Practice" : "Dashboard"}
               </Link>
-              <span className="flex h-9 w-9 items-center justify-center rounded-full bg-brand-600 text-sm font-bold text-white">
-                {user.avatar}
-              </span>
+              {/* Students manage their profile here; clients use the Account tab in their workspace */}
+              {!isClient && !isAdmin && (
+                <Link to="/account" className="btn-ghost" title="My Account">
+                  <UserCog className="h-4 w-4" /> Account
+                </Link>
+              )}
+              <Avatar src={user.avatar} name={user.name || user.email} size={36} />
               <button onClick={handleLogout} className="btn-ghost" title="Log out">
                 <LogOut className="h-4 w-4" />
               </button>
@@ -156,9 +165,14 @@ export default function Navbar() {
                       <ShieldCheck className="h-4 w-4" /> Admin Mode
                     </Link>
                   )}
-                  <Link to={isClient ? "/client" : "/dashboard"} onClick={() => setOpen(false)} className="btn-outline w-full">
+                  <Link to={isClient ? "/creator" : "/dashboard"} onClick={() => setOpen(false)} className="btn-outline w-full">
                     <LayoutDashboard className="h-4 w-4" /> {isClient ? "My Practice" : "Dashboard"}
                   </Link>
+                  {!isClient && !isAdmin && (
+                    <Link to="/account" onClick={() => setOpen(false)} className="btn-outline w-full">
+                      <UserCog className="h-4 w-4" /> Account
+                    </Link>
+                  )}
                   <button onClick={handleLogout} className="btn-ghost w-full">
                     <LogOut className="h-4 w-4" /> Log out
                   </button>

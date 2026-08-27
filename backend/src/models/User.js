@@ -5,14 +5,23 @@ const userSchema = new mongoose.Schema(
   {
     name: { type: String, required: true, trim: true },
     email: { type: String, required: true, unique: true, lowercase: true, trim: true },
+    // Optional contact phone number, editable by the user from their Account page.
+    phone: { type: String, trim: true, default: "" },
     password: { type: String, minlength: 6, select: false },
     googleId: { type: String },
     avatar: { type: String },
     // "client" = a self-service account that can ONLY use the My Practice
     // section, where it builds & practices its own private content.
-    role: { type: String, enum: ["student", "admin", "client"], default: "student" },
+    // "admin" = platform super-admin (cross-tenant). "institute_admin" = an
+    // institute's own admin (scoped to their tenant). "client"/"student" as before.
+    role: { type: String, enum: ["student", "admin", "institute_admin", "client"], default: "student" },
     plan: { type: String, enum: ["Free", "Premium", "Pro"], default: "Free" },
     status: { type: String, enum: ["active", "blocked"], default: "active" },
+    // Soft delete (recoverable). When true the account is in the "Recycle bin":
+    // it can't log in and is hidden from the normal lists, but its content is
+    // KEPT so an admin can restore it. A separate permanent-delete erases it.
+    deleted: { type: Boolean, default: false },
+    deletedAt: { type: Date, default: null },
     isEmailVerified: { type: Boolean, default: false },
     // Temporary accounts (created by an admin) expire at this time. When null
     // the account never expires. After expiry the user can no longer log in.
@@ -21,8 +30,18 @@ const userSchema = new mongoose.Schema(
     // can revoke quiz access for a specific user. Test-series access is stored
     // per test on the TestSeries model.
     quizAccess: { type: Boolean, default: true },
-    // AI access for client accounts (admin-controlled). aiAccess is the master
-    // switch — a client only sees the AI feature when the admin turns it on.
+  // Practice-content access grants. OFF by default: a user only sees the
+  // My-Quiz / My-Test items explicitly shared with them (per-item visibility).
+  // Turning these ON grants the user access to ALL My Quiz / My Test content
+  // (an additive master grant — it never removes per-item access).
+  myQuizAccess: { type: Boolean, default: false },
+  myTestAccess: { type: Boolean, default: false },
+    // AI access for client accounts. aiAccess is the master switch. New clients
+    // and active subscribers get it turned ON automatically (every plan carries
+    // AI limits); an admin can still turn it OFF for a specific client. The
+    // schema default stays false so admin/student docs (which never set it)
+    // don't imply AI access — client access is granted explicitly on register,
+    // on subscription activation, and via a one-time backfill for existing ones.
     // The two pools the client may draw from:
     //   • inbuilt — the platform's built-in (admin) API keys
     //   • self    — API keys the client adds themselves
@@ -31,6 +50,26 @@ const userSchema = new mongoose.Schema(
     aiAllowInbuilt: { type: Boolean, default: true },
     aiAllowSelf: { type: Boolean, default: true },
     aiMode: { type: String, enum: ["inbuilt", "self"], default: "inbuilt" },
+    // Per-feature access for the client workspace tabs. Dashboard/Build/Notes/
+    // Documents/User-manual are ON by default; the AI Generator is OFF by default
+    // (the AI keys tab is gated by aiAccess above, also OFF by default).
+    featDashboard: { type: Boolean, default: true },
+    featBuild: { type: Boolean, default: true },
+    featPapers: { type: Boolean, default: true },
+    featChecker: { type: Boolean, default: true },
+    featNotes: { type: Boolean, default: true },
+    featDocuments: { type: Boolean, default: true },
+    featManual: { type: Boolean, default: true },
+    featAiGenerator: { type: Boolean, default: false },
+    // First-run CREATOR setup guide progress (see CreatorSetupGuide on the
+    // frontend). The two AI-action steps are recorded server-side the first
+    // time the creator performs them; `completed` is set once the whole guide
+    // is finished so it never auto-opens again.
+    creatorGuide: {
+      regenerated: { type: Boolean, default: false }, // used "Regenerate question" at least once
+      extended: { type: Boolean, default: false },    // used "Extend explanation" at least once
+      completed: { type: Boolean, default: false },   // finished every setup step
+    },
     emailVerificationToken: String,
     otpHash: { type: String, select: false },
     otpExpires: { type: Date, select: false },
@@ -49,6 +88,19 @@ const userSchema = new mongoose.Schema(
     couponCode: { type: String },
     isTrial: { type: Boolean, default: false }, // on a free trial (vs a paid plan)
     paymentId: { type: String }, // Razorpay payment id (paid client signups)
+    // ---- STUDENT subscription ----
+    // A separate paywall for "student" accounts (kept distinct from the client
+    // fields above and from the admin-created temporary-account `expiresAt`, so
+    // it never interferes with login/expiry semantics for other roles). A
+    // student needs studentPlanExpiresAt in the FUTURE to reach gated features
+    // (attempting quizzes/test-series and their performance Dashboard).
+    studentPlan: { type: String },              // plan key, e.g. "1m" | "3m" | "6m" | "1y"
+    studentPlanMonths: { type: Number },
+    studentPlanPrice: { type: Number },          // final price paid after coupon/referral
+    studentPlanExpiresAt: { type: Date, default: null }, // subscription validity (null = free tier)
+    studentTrial: { type: Boolean, default: false },     // currently on the free trial
+    studentTrialUsed: { type: Boolean, default: false }, // the one-time free trial has been claimed
+    studentPaymentId: { type: String },          // Razorpay payment id (latest student payment)
     streak: { type: Number, default: 0 },
   },
   { timestamps: true }

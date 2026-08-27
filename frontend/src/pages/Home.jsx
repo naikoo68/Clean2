@@ -1,5 +1,6 @@
 import { Fragment, useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, Navigate } from "react-router-dom";
+import { useSeo } from "../lib/useSeo";
 import {
   BookMarked,
   FileText,
@@ -13,17 +14,20 @@ import {
   ListChecks,
   Layers,
   Star,
+  FileStack,
+  HelpCircle,
 } from "lucide-react";
 import { useSettings } from "../context/SettingsContext";
 import { useAuth } from "../context/AuthContext";
-import { analyticsService } from "../services";
+import { analyticsService, reviewService } from "../services";
 import GlobalSearch from "../components/ui/GlobalSearch";
+import ReviewCards from "../components/reviews/ReviewCards";
 
 // Icons applied by position to the editable stats from Customization.
 const STAT_ICONS = [Users, ListChecks, Layers];
 
 // Default order of home sections (used if none saved / for any missing keys).
-const DEFAULT_HOME_ORDER = ["hero", "stats", "quickAccess", "features", "howItWorks", "cta"];
+const DEFAULT_HOME_ORDER = ["hero", "stats", "quickAccess", "features", "howItWorks", "testimonials", "cta"];
 
 const features = [
   {
@@ -65,14 +69,46 @@ const steps = [
 ];
 
 export default function Home() {
+  useSeo();
   const { settings } = useSettings();
   const { user } = useAuth();
 
-  // Live platform stats (real counts) — refreshed on every visit.
+  // Live platform stats (real counts). Refetched on load, on a 45s interval,
+  // and whenever the tab regains focus — so the numbers update automatically
+  // as clients add/delete questions, without a manual page reload.
   const [realStats, setRealStats] = useState(null);
   useEffect(() => {
-    analyticsService.stats().then(setRealStats).catch(() => {});
+    let active = true;
+    const load = () =>
+      analyticsService.stats().then((r) => active && setRealStats(r)).catch(() => {});
+    load();
+    const id = setInterval(load, 45000);
+    const onVisible = () => document.visibilityState === "visible" && load();
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      active = false;
+      clearInterval(id);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
   }, []);
+
+  // Approved reviews for THIS institute (tenant-scoped by the API) drive the
+  // "What our students say" section — so every institute shows only its own real
+  // reviews, never seeded demo testimonials.
+  const [reviews, setReviews] = useState([]);
+  useEffect(() => {
+    let active = true;
+    reviewService.approved().then((r) => active && setReviews(r.items || [])).catch(() => {});
+    return () => { active = false; };
+  }, []);
+
+  // Hero content — editable from the setup wizard / Customization. Falls back to
+  // the built-in copy when an institute hasn't set its own.
+  const heroBadge = settings.heroBadge || "India's smart prep platform";
+  const heroTitle = settings.heroTitle || "Prepare Smart, Achieve More.";
+  const heroSubtitle =
+    settings.heroSubtitle ||
+    "Master every subject with adaptive quizzes, full-length test series, instant results and powerful analytics — built for serious aspirants.";
 
   const fmt = (n) => Number(n || 0).toLocaleString("en-IN");
   const DEFAULT_KEYS = ["students", "quizzes", "tests"];
@@ -148,34 +184,44 @@ export default function Home() {
         <div className="absolute -right-20 -top-20 -z-10 h-72 w-72 rounded-full bg-accent-300/30 blur-3xl dark:bg-accent-600/10" />
         <div className="absolute -left-20 top-40 -z-10 h-72 w-72 rounded-full bg-brand-300/30 blur-3xl dark:bg-brand-700/10" />
 
-        <div className="container-page grid items-center gap-12 py-16 lg:grid-cols-2 lg:py-24">
-          <div className="animate-fade-in-up">
-            <span className="badge bg-accent-100 text-accent-700 dark:bg-accent-900/40 dark:text-accent-300">
-              <Star className="h-3.5 w-3.5" /> India's smart prep platform
-            </span>
-            <h1 className="mt-5 text-4xl font-extrabold leading-tight tracking-tight sm:text-5xl lg:text-6xl">
-              Prepare Smart, <br />
-              <span className="bg-gradient-to-r from-brand-600 to-accent-500 bg-clip-text text-transparent">
-                Achieve More.
+        <div className="container-page py-16 lg:py-24">
+          {/* Full-width centered header — spans across both columns (above the card too). */}
+          <div className="animate-fade-in-up text-center">
+            {heroBadge && (
+              <span className="badge bg-accent-100 text-accent-700 dark:bg-accent-900/40 dark:text-accent-300">
+                <Star className="h-3.5 w-3.5" /> {heroBadge}
               </span>
+            )}
+            <h1 className="mt-5 text-4xl font-extrabold leading-tight tracking-tight sm:text-5xl lg:text-6xl">
+              {heroTitle}
             </h1>
-            <p className="mt-5 max-w-lg text-lg text-slate-600 dark:text-slate-300">
-              Master every subject with adaptive quizzes, full-length test series,
-              instant results and powerful analytics — built for serious aspirants.
+            <p className="mx-auto mt-5 max-w-3xl text-center text-base text-slate-600 dark:text-slate-300 sm:text-lg">
+              {heroSubtitle}
             </p>
-            <div className="mt-8 flex flex-wrap gap-3">
-              <Link to="/quiz" className="btn-primary text-base">
+          </div>
+
+          <div className="mt-10 grid grid-cols-2 items-center gap-4 sm:gap-8 md:gap-12">
+            <div className="animate-fade-in-up text-center">
+            <div className="relative mt-8 flex flex-wrap justify-center gap-3">
+              {/* Each opens a chooser PAGE where the user picks My vs Public. */}
+              <Link to="/choose/practice" className="btn-primary text-base">
                 <Play className="h-5 w-5" /> Start Practicing
               </Link>
-              <Link to="/test-series" className="btn-outline text-base">
+              <Link to="/choose/tests" className="btn-outline text-base">
                 Explore Test Series <ArrowRight className="h-4 w-4" />
+              </Link>
+              <Link to="/practice/paper" className="btn-outline text-base">
+                <FileText className="h-5 w-5" /> Previous Papers
+              </Link>
+              <Link to="/practice" className="btn-outline text-base">
+                <ListChecks className="h-5 w-5" /> My Practice
               </Link>
             </div>
             {/* Search all content — streams, subjects, topics, quizzes & tests */}
-            <div className="mt-6 max-w-lg">
+            <div className="mt-6 mx-auto max-w-lg">
               <GlobalSearch mode="public" placeholder="Search streams, subjects, topics, quizzes, tests…" />
             </div>
-            <div className="mt-8 flex flex-wrap items-center gap-x-6 gap-y-2 text-sm text-slate-500 dark:text-slate-400">
+            <div className="mt-8 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-sm text-slate-500 dark:text-slate-400">
               {["No credit card needed", "Free quizzes", "Detailed solutions"].map((t) => (
                 <span key={t} className="flex items-center gap-1.5">
                   <CheckCircle2 className="h-4 w-4 text-emerald-500" /> {t}
@@ -185,7 +231,7 @@ export default function Home() {
           </div>
 
           <div className="relative animate-scale-in">
-            <div className="card p-6 shadow-soft">
+            <div className="card p-4 shadow-soft sm:p-6">
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-slate-500 dark:text-slate-400">{progressSubtitle}</p>
@@ -208,9 +254,9 @@ export default function Home() {
                   </div>
                 ))}
               </div>
-              <div className="mt-5 grid grid-cols-3 gap-3 text-center">
+              <div className="mt-5 grid grid-cols-3 gap-2 text-center sm:gap-3">
                 {miniStats.map((s) => (
-                  <div key={s.l} className="rounded-xl bg-slate-50 p-3 dark:bg-slate-800/60">
+                  <div key={s.l} className="rounded-xl bg-slate-50 p-2 dark:bg-slate-800/60 sm:p-3">
                     <p className="text-lg font-bold text-brand-600 dark:text-brand-400">{s.v}</p>
                     <p className="text-xs text-slate-500 dark:text-slate-400">{s.l}</p>
                   </div>
@@ -222,6 +268,27 @@ export default function Home() {
               <p className="text-xs font-semibold">Top 5%</p>
             </div>
           </div>
+          </div>
+
+          {/* Hero boxes for the three products */}
+          <div className="mt-14 grid gap-5 sm:grid-cols-3">
+            {[
+              { to: "/choose/practice", label: "Quizzes", desc: "Subject-wise adaptive quizzes with instant solutions.", Icon: ListChecks, cls: "from-brand-600 to-indigo-600" },
+              { to: "/choose/tests", label: "Test Series", desc: "Full-length & sectional mocks with real exam timing.", Icon: FileText, cls: "from-accent-500 to-orange-600" },
+              { to: "/study", label: "Study Material", desc: "Curated notes, PDFs and resources to revise faster.", Icon: BookMarked, cls: "from-emerald-500 to-teal-600" },
+            ].map((p) => (
+              <Link key={p.to} to={p.to} className="card-hover group relative overflow-hidden p-6">
+                <span className={`flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br ${p.cls} text-white`}>
+                  <p.Icon className="h-7 w-7" />
+                </span>
+                <h3 className="mt-4 text-lg font-bold">{p.label}</h3>
+                <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{p.desc}</p>
+                <span className="mt-4 inline-flex items-center gap-1 text-sm font-semibold text-brand-600 dark:text-brand-400">
+                  Explore <ArrowRight className="h-4 w-4 transition group-hover:translate-x-0.5" />
+                </span>
+              </Link>
+            ))}
+          </div>
         </div>
       </section>
     ),
@@ -229,44 +296,55 @@ export default function Home() {
     stats:
       stats.length > 0 ? (
         <section className="container-page">
-          <div className="grid gap-4 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm sm:grid-cols-3 dark:border-slate-800 dark:bg-slate-900">
-            {stats.map((s) => (
-              <div key={s.label} className="flex items-center justify-center gap-4 py-4">
-                <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-brand-100 text-brand-600 dark:bg-brand-900/40 dark:text-brand-300">
-                  <s.icon className="h-7 w-7" />
-                </span>
-                <div>
+          <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+            <p className="mb-5 text-center text-sm font-semibold uppercase tracking-wide text-slate-400">
+              Platform statistics — all time
+            </p>
+            <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
+              {stats.map((s) => (
+                <div key={s.label} className="flex flex-col items-center gap-2 rounded-2xl bg-slate-50 p-5 text-center dark:bg-slate-800/60">
+                  <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-brand-100 text-brand-600 dark:bg-brand-900/40 dark:text-brand-300">
+                    <s.icon className="h-6 w-6" />
+                  </span>
                   <p className="text-2xl font-extrabold sm:text-3xl">{s.value}</p>
                   <p className="text-sm text-slate-500 dark:text-slate-400">{s.label}</p>
                 </div>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
         </section>
       ) : null,
 
-    quickAccess: (
-      <section className="container-page pt-10">
-        <div className="grid gap-4 sm:grid-cols-3">
-          {[
-            { to: "/quiz", label: "Quiz", desc: "Subject-wise practice quizzes", Icon: ListChecks, cls: "from-brand-600 to-indigo-600" },
-            { to: "/test-series", label: "Test Series", desc: "Full-length & sectional mocks", Icon: FileText, cls: "from-accent-500 to-orange-600" },
-            { to: "/study", label: "Study Material", desc: "Notes, PDFs & resources", Icon: BookMarked, cls: "from-emerald-500 to-teal-600" },
-          ].map((q) => (
-            <Link key={q.to} to={q.to} className="card-hover flex items-center gap-4 p-5">
-              <span className={`flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br ${q.cls} text-white`}>
-                <q.Icon className="h-6 w-6" />
-              </span>
-              <div className="min-w-0 flex-1">
-                <p className="font-bold">{q.label}</p>
-                <p className="truncate text-sm text-slate-500 dark:text-slate-400">{q.desc}</p>
+    // Combined totals across ALL clients (their "My Practice" content),
+    // computed live on every visit — updates automatically as clients build.
+    // Hidden when the super-admin has turned the Client feature off for the
+    // public (so we don't advertise "Total Clients" a visitor can't become).
+    clientStats: realStats && settings?.publicClientEnabled !== false ? (
+      <section className="container-page pt-6">
+        <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+          <p className="mb-5 text-center text-sm font-semibold uppercase tracking-wide text-slate-400">
+            Across all creator accounts — updated live
+          </p>
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+            {[
+              { v: realStats.clients, l: "Total Creators", Icon: Users },
+              { v: realStats.clientQuizzes, l: "Total Quizzes", Icon: ListChecks },
+              { v: realStats.clientTests, l: "Total Tests", Icon: FileStack },
+              { v: realStats.clientQuestions, l: "Total Questions", Icon: HelpCircle },
+            ].map((s) => (
+              <div key={s.l} className="flex flex-col items-center gap-2 rounded-2xl bg-slate-50 p-5 text-center dark:bg-slate-800/60">
+                <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-brand-100 text-brand-600 dark:bg-brand-900/40 dark:text-brand-300">
+                  <s.Icon className="h-6 w-6" />
+                </span>
+                <p className="text-2xl font-extrabold sm:text-3xl">{fmt(s.v)}</p>
+                <p className="text-sm text-slate-500 dark:text-slate-400">{s.l}</p>
               </div>
-              <ArrowRight className="h-5 w-5 flex-shrink-0 text-slate-400" />
-            </Link>
-          ))}
+            ))}
+          </div>
         </div>
       </section>
-    ),
+    ) : null,
+
 
     features: (
       <section className="container-page py-20">
@@ -323,6 +401,32 @@ export default function Home() {
       </section>
     ),
 
+    testimonials:
+      reviews.length > 0 ? (
+        <section className="bg-slate-50 py-20 dark:bg-slate-900/40">
+          <div className="container-page">
+            <div className="mx-auto max-w-2xl text-center">
+              <span className="badge bg-accent-100 text-accent-700 dark:bg-accent-900/40 dark:text-accent-300">
+                <Star className="h-3.5 w-3.5" /> Loved by students
+              </span>
+              <h2 className="mt-4 text-3xl font-extrabold sm:text-4xl">What our students say</h2>
+              <p className="mt-3 text-slate-600 dark:text-slate-300">
+                Real results from learners preparing with {settings.siteName}.
+              </p>
+            </div>
+            <div className="mt-12">
+              <ReviewCards items={reviews.slice(0, 5)} />
+            </div>
+            <div className="mt-10 flex flex-wrap justify-center gap-3">
+              {reviews.length > 5 && (
+                <Link to="/review" className="btn-primary"><Star className="h-4 w-4" /> See all reviews</Link>
+              )}
+              <Link to="/review" className="btn-outline"><Star className="h-4 w-4" /> Share your review</Link>
+            </div>
+          </div>
+        </section>
+      ) : null,
+
     cta: (
       <section className="container-page py-20">
         <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-brand-700 via-brand-600 to-accent-500 px-8 py-14 text-center text-white">
@@ -335,7 +439,7 @@ export default function Home() {
             <Link to="/register" className="btn bg-white text-brand-700 hover:bg-slate-100">
               Create Free Account
             </Link>
-            <Link to="/quiz" className="btn border border-white/40 text-white hover:bg-white/10">
+            <Link to="/choose/practice" className="btn border border-white/40 text-white hover:bg-white/10">
               Browse Quizzes
             </Link>
           </div>
@@ -353,12 +457,26 @@ export default function Home() {
     ...DEFAULT_HOME_ORDER.filter((k) => !savedKeys.includes(k)).map((k) => ({ key: k, visible: true })),
   ];
 
+  // Only CLIENTS are bounced off the public landing page. The app deliberately
+  // keeps a client inside their own /client workspace (their nav has NO link to
+  // "/"), so reaching this page means an accidental browser-Back — send them
+  // home. Admins ("Switch to Student Mode") and students ("Home" in the navbar)
+  // intentionally visit the public site, so they are NOT redirected. Declared
+  // AFTER all hooks so the Rules of Hooks are preserved.
+  if (user?.role === "client") {
+    return <Navigate to="/creator" replace />;
+  }
+
   return (
     <div>
       {order
         .filter((s) => s.visible !== false && blocks[s.key])
         .map((s) => (
-          <Fragment key={s.key}>{blocks[s.key]}</Fragment>
+          <Fragment key={s.key}>
+            {blocks[s.key]}
+            {/* Live client-combined totals appear right after the stats strip. */}
+            {s.key === "stats" && blocks.clientStats}
+          </Fragment>
         ))}
     </div>
   );

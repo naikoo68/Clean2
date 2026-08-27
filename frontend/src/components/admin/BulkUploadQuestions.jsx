@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { X, Upload, FileText, CheckCircle2, AlertTriangle } from "lucide-react";
 
 // Full CSV parser that respects double-quoted fields — which may contain
@@ -37,6 +37,29 @@ function correctIndex(v) {
 }
 
 const asDifficulty = (d) => (["Easy", "Medium", "Hard"].includes(d) ? d : "Medium");
+
+// Assertion questions sometimes arrive with BOTH the Assertion and the Reason
+// packed into the single Assertion field — e.g. "Assertion (A): … Reason (R): …"
+// — leaving the Reason column empty (common in AI-generated CSV/JSON exports).
+// Recover them: when reason is empty and the assertion text contains a
+// "Reason (R):"/"Reason:" marker, split on it; also strip a leading
+// "Assertion (A):"/"Assertion:" label from the assertion part. Returns the
+// (possibly) repaired { assertion, reason } pair.
+function splitAssertionReason(assertion, reason) {
+  let a = String(assertion || "").trim();
+  let r = String(reason || "").trim();
+  if (!r && a) {
+    const m = a.match(/\bReason\b\s*(?:\([Rr]\))?\s*[:\-]/);
+    if (m && m.index > 0) {
+      r = a.slice(m.index + m[0].length).trim();
+      a = a.slice(0, m.index).trim();
+    }
+  }
+  a = a.replace(/^\s*Assertion\b\s*(?:\([Aa]\))?\s*[:\-]\s*/, "").trim();
+  r = r.replace(/^\s*Reason\b\s*(?:\([Rr]\))?\s*[:\-]\s*/, "").trim();
+  return { assertion: a, reason: r };
+}
+
 // Strip a leading list marker ("1.", "2)", "I.", "(iii)", "IV -") from an item,
 // since the app auto-numbers Column A (1,2,3,4) and Column B (I,II,III,IV) and
 // statement/pair lists. This avoids double numbering like "1  1. Constant MRT".
@@ -184,7 +207,9 @@ export function parseQuestionsCsv(text) {
 
     // ---- Assertion & Reason row ----
     if (first === "assertion") {
-      const [, assertion, reason, a, b, c, d, correct, difficulty, explanation, wa, wb, wc, wd] = cells;
+      const [, assertionRaw, reasonRaw, a, b, c, d, correct, difficulty, explanation, wa, wb, wc, wd] = cells;
+      // Recover rows where Assertion + Reason were packed into one field.
+      const { assertion, reason } = splitAssertionReason(assertionRaw, reasonRaw);
       if (!assertion || !reason || !a || !b || !c || !d) {
         errors.push(`Row ${idx + 1}: assertion needs an Assertion, a Reason and 4 options`);
         return;
@@ -257,15 +282,18 @@ export function parseQuestionsCsv(text) {
       return;
     }
 
-    // ---- MCQ row (optionally prefixed with "mcq") ----
-    const cols = first === "mcq" ? cells.slice(1) : cells;
+    // ---- MCQ / Journal / Ledger / Rearrange row (MCQ-shaped; optionally prefixed with "mcq", "journal", "ledger" or "rearrange") ----
+    const isJournal = first === "journal";
+    const isLedger = first === "ledger";
+    const isRearrange = first === "rearrange";
+    const cols = first === "mcq" || isJournal || isLedger || isRearrange ? cells.slice(1) : cells;
     if (cols.length < 5) { errors.push(`Row ${idx + 1}: needs a question + 4 options`); return; }
     const [qtext, a, b, c, d, correct, difficulty, explanation, wa, wb, wc, wd] = cols;
     if (!qtext || !a || !b || !c || !d) { errors.push(`Row ${idx + 1}: empty question or option`); return; }
     const ci = correctIndex(correct);
     const optExp = buildOptionExplanations([wa, wb, wc, wd], ci);
     rows.push({
-      type: "mcq",
+      type: isJournal ? "journal" : isLedger ? "ledger" : isRearrange ? "rearrange" : "mcq",
       text: qtext,
       options: [a, b, c, d],
       correct: ci,
@@ -311,6 +339,9 @@ export function questionsToCsv(questions) {
         case "table": cells = ["table", q.text, (q.tableRows || []).map((r) => (r || []).join(";")).join("|"), a, b, c, d, ...tail]; break;
         case "assertion": cells = ["assertion", q.assertion || "", q.reason || "", a, b, c, d, ...tail]; break;
         case "image": cells = ["image", q.image || "", q.text, a, b, c, d, ...tail]; break;
+        case "journal": cells = ["journal", q.text, a, b, c, d, ...tail]; break;
+        case "ledger": cells = ["ledger", q.text, a, b, c, d, ...tail]; break;
+        case "rearrange": cells = ["rearrange", q.text, a, b, c, d, ...tail]; break;
         default: cells = [q.text, a, b, c, d, ...tail];
       }
       while (cells.length && cells[cells.length - 1] === "") cells.pop(); // trim trailing empties
@@ -318,6 +349,183 @@ export function questionsToCsv(questions) {
     })
     .join("\n");
 }
+
+// Parse a JSON array of question objects into the SAME internal row shape the
+// CSV parser produces, so both feed the identical insert path. Accepts an array
+// or { questions: [...] }. `correct` may be an index (0–3), a number (1–4) or a
+// letter (A–D). Lists come as arrays (columnA/columnB/statements/tableRows).
+// Tolerant JSON parse for AI output: strips code fences, narrows to the outer
+// array/object, and — the big one — escapes stray LaTeX backslashes (e.g. "$\psi$",
+// "$\frac{d}{t}$") that models forget to double, which otherwise throw
+// "Bad escaped character". Returns { data } or { error }.
+// Single-pass, position-aware repair for the messy JSON that AI models emit.
+// A regex can only fix backslashes; the two errors that actually break real
+// pastes are (1) an UNESCAPED double-quote inside a string value (the model
+// writes  6" long  or  the "best" option ) and (2) a RAW newline/tab inside a
+// string — both throw "Expected ',' or ']'" / "Bad control character". This
+// walks the text tracking whether we're inside a string and fixes each case:
+//   • stray LaTeX backslash (\psi, \frac)         -> doubled (\\)
+//   • already-valid escapes (\" \\ \/ \n \uXXXX)  -> kept as-is
+//   • raw newline / carriage-return / tab in a str -> turned into \n \r \t
+//   • a " that is NOT followed (past spaces) by a , ] } : or end-of-input is
+//     treated as an inner quote and escaped; otherwise it's the real closer.
+// The one case no parser can resolve is an unescaped inner quote sitting right
+// before a comma/bracket (…the "best", …) — that stays ambiguous and is left to
+// the error snippet below.
+function repairJson(src) {
+  let out = "";
+  let inStr = false;
+  for (let i = 0; i < src.length; i++) {
+    const ch = src[i];
+    if (!inStr) {
+      out += ch;
+      if (ch === '"') inStr = true;
+      continue;
+    }
+    if (ch === "\\") {
+      const next = src[i + 1];
+      if (next === undefined) { out += "\\\\"; continue; } // trailing lone backslash
+      if ('"\\/bfnrt'.includes(next)) { out += ch + next; i++; continue; } // valid escape — keep
+      if (next === "u" && /^[0-9a-fA-F]{4}$/.test(src.substr(i + 2, 4))) { out += ch + next; i++; continue; } // \uXXXX — keep
+      out += "\\\\"; continue; // stray backslash → double it; reprocess `next` normally
+    }
+    if (ch === '"') {
+      let j = i + 1;
+      while (j < src.length && (src[j] === " " || src[j] === "\t" || src[j] === "\r" || src[j] === "\n")) j++;
+      const after = src[j];
+      if (after === undefined || after === "," || after === "]" || after === "}" || after === ":") {
+        inStr = false; out += ch; // genuine closing quote
+      } else {
+        out += '\\"'; // unescaped inner quote → escape it
+      }
+      continue;
+    }
+    if (ch === "\n") { out += "\\n"; continue; }
+    if (ch === "\r") { out += "\\r"; continue; }
+    if (ch === "\t") { out += "\\t"; continue; }
+    out += ch;
+  }
+  return out;
+}
+
+// Pull a short, readable snippet around the byte offset a JSON error reports, so
+// when auto-repair still can't fix it the user is pointed at the exact spot.
+function nearError(text, err) {
+  const m = /position (\d+)/.exec(err?.message || "");
+  if (!m) return "";
+  const pos = Number(m[1]);
+  const start = Math.max(0, pos - 35);
+  const snippet = text.slice(start, pos + 35).replace(/\s+/g, " ").trim();
+  return snippet ? ` Problem is near: …${snippet}…` : "";
+}
+
+function looseJsonParse(text) {
+  let raw = String(text || "").trim();
+  const fence = raw.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  if (fence) raw = fence[1].trim();
+  const first = raw.search(/[[{]/);
+  const last = Math.max(raw.lastIndexOf("]"), raw.lastIndexOf("}"));
+  if (first > 0 && last > first) raw = raw.slice(first, last + 1); // drop surrounding prose
+  // Escape stray LaTeX backslashes (\psi, \frac, \theta, \, \%) that models forget
+  // to double — WITHOUT corrupting ones that are already correctly doubled. We
+  // match an escaped-backslash PAIR (\\) first and keep it intact so its second
+  // backslash is never reprocessed; otherwise we double a lone backslash that
+  // isn't a real JSON escape (\" and \/ and \uXXXX are preserved). This lets a
+  // file MIX doubled and single backslashes (very common in AI output) and still
+  // parse. The old regex re-doubled the pair's 2nd backslash (\\, -> \\\,), which
+  // threw "Bad escaped character" whenever any single backslash forced this path.
+  const fixBackslashes = (s) => s.replace(/\\\\|\\(?!["/]|u[\da-fA-F]{4})/g, (m) => (m === "\\\\" ? m : "\\\\"));
+  const repaired = repairJson(raw); // also fixes inner quotes + raw newlines/tabs
+  const attempts = [
+    raw,
+    fixBackslashes(raw),
+    fixBackslashes(raw).replace(/,\s*([\]}])/g, "$1"),
+    repaired,
+    repaired.replace(/,\s*([\]}])/g, "$1"), // repaired + drop trailing commas
+  ];
+  let err, errText;
+  for (const t of attempts) { try { return { data: JSON.parse(t) }; } catch (e) { err = e; errText = t; } }
+  return { error: err, near: nearError(errText, err) };
+}
+
+function parseQuestionsJson(text) {
+  const rows = [];
+  const errors = [];
+  // An empty box isn't an error — it just means nothing has been pasted yet.
+  // Without this guard, JSON.parse("") throws "Unexpected end of JSON input",
+  // which showed a misleading "1 row will be skipped" on the empty modal.
+  if (!String(text || "").trim()) return { rows, errors };
+  const parsed = looseJsonParse(text);
+  if (parsed.error) return { rows, errors: [`Invalid JSON: ${parsed.error.message || "could not parse"}.${parsed.near || ""} (The importer auto-fixes stray LaTeX backslashes, raw line breaks and most inner quotes; a quote sitting right before a comma — like "best", — can't be guessed, so escape it as \\" or remove it.)`] };
+  const data = parsed.data;
+  const list = Array.isArray(data) ? data : (Array.isArray(data?.questions) ? data.questions : null);
+  if (!list) return { rows, errors: ['JSON must be an array of questions, or { "questions": [ ... ] }.'] };
+
+  const S = (v) => (v == null ? "" : String(v)).trim();
+  const arr = (x) => (Array.isArray(x) ? x.map((v) => (v == null ? "" : String(v))) : []);
+  const normCorrect = (v) => {
+    const s = String(v ?? "").trim().toUpperCase();
+    if (["A", "B", "C", "D"].includes(s)) return "ABCD".indexOf(s);
+    const n = parseInt(s, 10);
+    if (n >= 1 && n <= 4) return n - 1; // 1-based
+    if (n >= 0 && n <= 3) return n;     // 0-based index
+    return 0;
+  };
+  const KNOWN = ["mcq", "matching", "statement", "pair", "pairselect", "assertion", "table", "image", "journal"];
+
+  list.forEach((q, i) => {
+    const type = KNOWN.includes(q?.type) ? q.type : "mcq";
+    const options = arr(q?.options);
+    const opts4 = [options[0] || "", options[1] || "", options[2] || "", options[3] || ""];
+    const row = {
+      type,
+      text: S(q?.text ?? q?.question),
+      options: opts4,
+      correct: normCorrect(q?.correct),
+      difficulty: ["Easy", "Medium", "Hard"].includes(q?.difficulty) ? q.difficulty : "Medium",
+      explanation: S(q?.explanation),
+      optionExplanations: arr(q?.optionExplanations ?? q?.whys).slice(0, 4),
+    };
+    const need4 = () => opts4.every((o) => o.trim());
+    if (type === "assertion") {
+      const ar = splitAssertionReason(q?.assertion, q?.reason);
+      row.assertion = ar.assertion; row.reason = ar.reason;
+      // The DB requires a `text` on every question, but an assertion carries its
+      // meaning in assertion/reason — supply the standard stem when omitted (same
+      // default the AI generator uses) so it isn't silently dropped on save.
+      if (!row.text) row.text = "Consider the following Assertion (A) and Reason (R):";
+      if (!row.assertion || !row.reason || !need4()) { errors.push(`Question ${i + 1} (assertion): needs assertion, reason and 4 options.`); return; }
+    } else if (type === "image") {
+      row.image = S(q?.image ?? q?.imageUrl);
+      if (!row.image || !row.text || !need4()) { errors.push(`Question ${i + 1} (image): needs image URL, text and 4 options.`); return; }
+    } else if (type === "table") {
+      row.tableRows = Array.isArray(q?.tableRows) ? q.tableRows.map(arr).filter((r) => r.some((c) => c !== "")) : [];
+      if (!row.text || row.tableRows.length < 2 || !need4()) { errors.push(`Question ${i + 1} (table): needs text, ≥2 table rows and 4 options.`); return; }
+    } else if (type === "matching" || type === "pair" || type === "pairselect") {
+      row.columnA = arr(q?.columnA ?? q?.leftList);
+      row.columnB = arr(q?.columnB ?? q?.rightList);
+      if (!row.text || !row.columnA.length || !row.columnB.length || !need4()) { errors.push(`Question ${i + 1} (${type}): needs text, columnA, columnB and 4 options.`); return; }
+    } else if (type === "statement") {
+      row.columnA = arr(q?.columnA ?? q?.statements);
+      if (!row.text) row.text = "Consider the following statements:"; // default intro when omitted
+      if (!row.columnA.length || !need4()) { errors.push(`Question ${i + 1} (statement): needs statements (columnA) and 4 options.`); return; }
+    } else { // mcq
+      if (!row.text || !need4()) { errors.push(`Question ${i + 1} (mcq): needs text and 4 options.`); return; }
+    }
+    rows.push(row);
+  });
+  return { rows, errors };
+}
+
+const TEMPLATE_JSON = JSON.stringify([
+  { type: "mcq", text: "What is 2+2?", options: ["3", "4", "5", "6"], correct: "B", difficulty: "Easy", explanation: "2+2 equals 4.", optionExplanations: ["3 is 2+1.", "", "5 is 2+3.", "6 is 2+4."] },
+  { type: "statement", text: "Consider the following statements:", columnA: ["The Sun is a star.", "The Moon is a planet."], options: ["1 only", "2 only", "1 and 2 only", "Neither 1 nor 2"], correct: "A", difficulty: "Medium", explanation: "Only statement 1 is correct; the Moon is a satellite." },
+  { type: "matching", text: "Match the scientist to the discovery:", columnA: ["Newton", "Einstein", "Bohr"], columnB: ["Gravity", "Relativity", "Atom model"], options: ["1-I, 2-II, 3-III", "1-II, 2-I, 3-III", "1-III, 2-II, 3-I", "1-I, 2-III, 3-II"], correct: "A", difficulty: "Medium", explanation: "Newton–Gravity, Einstein–Relativity, Bohr–Atom model." },
+  { type: "pair", text: "Consider the following pairs:", columnA: ["Xylem", "Phloem", "Stomata"], columnB: ["Water transport", "Food transport", "Gas exchange"], options: ["Only one pair", "Only two pairs", "All three pairs", "None"], correct: "C", difficulty: "Easy", explanation: "All three pairs are correctly matched." },
+  { type: "pairselect", text: "Consider the following vector-disease pairs:", columnA: ["Anopheles", "Aedes", "Housefly"], columnB: ["Malaria", "Dengue", "Malaria"], options: ["1 and 2 only", "2 and 3 only", "1 and 3 only", "All of the above"], correct: "A", difficulty: "Easy", explanation: "Anopheles-malaria and Aedes-dengue are correct; the housefly does not transmit malaria, so pair 3 is wrong.", optionExplanations: ["", "Pair 3 is wrong", "Pair 3 is wrong", "Pair 3 is wrong"] },
+  { type: "assertion", text: "Consider the following Assertion (A) and Reason (R):", assertion: "Earth is closer to the Sun in January.", reason: "Earth's orbit is elliptical.", options: ["Both A and R are true and R is the correct explanation of A", "Both A and R are true but R is NOT the correct explanation of A", "A is true but R is false", "A is false but R is true"], correct: "A", difficulty: "Medium", explanation: "Perihelion is in early January because the orbit is elliptical." },
+  { type: "table", text: "Study the table and answer which product had the highest sales:", tableRows: [["Product", "Sales"], ["Pens", "120"], ["Books", "340"], ["Bags", "90"]], options: ["Pens", "Books", "Bags", "Cannot be determined"], correct: "B", difficulty: "Easy", explanation: "Books have the highest sales at 340." },
+], null, 2);
 
 const TEMPLATE =
   "Question,Option A,Option B,Option C,Option D,Correct,Difficulty,Explanation,WhyA,WhyB,WhyC,WhyD\n" +
@@ -333,16 +541,22 @@ const TEMPLATE =
 
 // Reusable bulk-upload modal. `onUpload(questions)` should return a promise
 // (e.g. resolving to { inserted }). Used for both quizzes and test series.
-export default function BulkUploadQuestions({ open, onClose, onUpload, title = "Bulk Upload Questions", sections = [] }) {
+// `defaultSection` pre-selects the target subject (when opened from a subject).
+export default function BulkUploadQuestions({ open, onClose, onUpload, title = "Bulk Upload Questions", sections = [], defaultSection = "" }) {
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState("");
   const [replace, setReplace] = useState(false); // remove existing questions first
-  const [section, setSection] = useState(sections[0] || ""); // subject to tag uploaded questions
+  const [section, setSection] = useState(defaultSection || sections[0] || ""); // subject to tag uploaded questions
+  const [mode, setMode] = useState("csv"); // "csv" | "json"
+
+  // Re-sync the target subject each time the modal is (re)opened, since the
+  // component stays mounted between opens.
+  useEffect(() => { if (open) setSection(defaultSection || sections[0] || ""); /* eslint-disable-next-line */ }, [open, defaultSection]);
 
   if (!open) return null;
 
-  const { rows, errors } = parseQuestionsCsv(text);
+  const { rows, errors } = mode === "json" ? parseQuestionsJson(text) : parseQuestionsCsv(text);
 
   const onFile = (e) => {
     const file = e.target.files?.[0];
@@ -359,7 +573,24 @@ export default function BulkUploadQuestions({ open, onClose, onUpload, title = "
     setMsg("");
     try {
       const res = await onUpload(rows, { replace, section });
-      setMsg(`✓ ${replace ? "Replaced with" : "Uploaded"} ${res?.inserted ?? rows.length} question(s).`);
+      const inserted = res?.inserted ?? rows.length;
+      const skipped = res?.skipped ?? Math.max(0, (res?.requested ?? rows.length) - inserted);
+      if (skipped > 0) {
+        // Some questions passed the paste-time check but were rejected when
+        // saved. Show the count AND the first few reasons, and DON'T auto-close
+        // or clear the box — so you can see which ones failed and re-upload.
+        const why = (res?.errors || [])
+          .slice(0, 4)
+          .map((e) => `#${e.number ?? "?"} ${e.type || ""}: ${e.reason}`)
+          .join("  •  ");
+        setMsg(
+          `⚠ ${replace ? "Replaced with" : "Uploaded"} ${inserted} of ${inserted + skipped} — ${skipped} skipped.` +
+          (why ? `\nReasons: ${why}` : "")
+        );
+        setBusy(false);
+        return; // keep the modal open so nothing is lost silently
+      }
+      setMsg(`✓ ${replace ? "Replaced with" : "Uploaded"} ${inserted} question(s).`);
       setText("");
       setReplace(false);
       setTimeout(onClose, 1000);
@@ -371,13 +602,40 @@ export default function BulkUploadQuestions({ open, onClose, onUpload, title = "
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/50 p-4">
-      <div className="my-8 w-full max-w-2xl animate-scale-in card p-6">
+    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/50 p-0 sm:p-4">
+      <div className="min-h-full w-full max-w-none animate-scale-in card m-0 rounded-none p-4 sm:rounded-2xl sm:p-6">
         <div className="mb-4 flex items-center justify-between">
           <h3 className="flex items-center gap-2 text-lg font-bold"><Upload className="h-5 w-5" /> {title}</h3>
           <button type="button" onClick={onClose}><X className="h-5 w-5" /></button>
         </div>
 
+        {/* Input format toggle: CSV or JSON */}
+        <div className="mb-3 inline-flex rounded-lg border border-slate-200 p-0.5 dark:border-slate-700">
+          <button type="button" onClick={() => setMode("csv")} className={`rounded-md px-3 py-1 text-sm font-semibold ${mode === "csv" ? "bg-brand-600 text-white" : "text-slate-600 dark:text-slate-300"}`}>CSV</button>
+          <button type="button" onClick={() => setMode("json")} className={`rounded-md px-3 py-1 text-sm font-semibold ${mode === "json" ? "bg-brand-600 text-white" : "text-slate-600 dark:text-slate-300"}`}>JSON</button>
+        </div>
+
+        {mode === "json" && (
+          <div className="mb-4 rounded-xl bg-slate-50 p-4 text-sm dark:bg-slate-800/60">
+            <p className="font-semibold">JSON format:</p>
+            <p className="mt-1 text-slate-500 dark:text-slate-400">Paste an array of question objects (or <code>{`{ "questions": [ ... ] }`}</code>). Each object:</p>
+            <pre className="mt-2 overflow-x-auto rounded-lg bg-white p-2 text-xs dark:bg-slate-900/50">{`{ "type": "mcq", "text": "...", "options": ["A","B","C","D"],
+  "correct": "B", "difficulty": "Easy", "explanation": "...",
+  "optionExplanations": ["","","",""] }`}</pre>
+            <ul className="mt-2 list-disc space-y-0.5 pl-5 text-xs text-slate-500 dark:text-slate-400">
+              <li><b>type</b>: mcq · matching · statement · pair · pairselect · assertion · table · image (default mcq).</li>
+              <li><b>correct</b>: a letter <code>A–D</code>, a number <code>1–4</code>, or a 0-based index <code>0–3</code>.</li>
+              <li><b>Lists as arrays</b>: matching/pair/pairselect use <code>columnA</code> &amp; <code>columnB</code>; statement uses <code>columnA</code> (or <code>statements</code>); table uses <code>tableRows</code> (array of rows, each an array of cells).</li>
+              <li><b>assertion</b>: <code>assertion</code> + <code>reason</code>; <b>image</b>: <code>image</code> (URL) + <code>text</code>.</li>
+              <li><b>optionExplanations</b>: 4 per-option notes (leave the correct one ""). Math in <code>$…$</code>.</li>
+            </ul>
+            <button type="button" onClick={() => setText(TEMPLATE_JSON)} className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-brand-600 hover:underline">
+              <FileText className="h-3.5 w-3.5" /> Load JSON example
+            </button>
+          </div>
+        )}
+
+        {mode === "csv" && (
         <div className="mb-4 rounded-xl bg-slate-50 p-4 text-sm dark:bg-slate-800/60">
           <p className="font-semibold">CSV format (one question per line):</p>
           <p className="mt-1 text-slate-500 dark:text-slate-400">Every row ends with the same tail: <code>…, Correct, Difficulty, Explanation, WhyA, WhyB, WhyC, WhyD</code></p>
@@ -406,6 +664,7 @@ export default function BulkUploadQuestions({ open, onClose, onUpload, title = "
             <FileText className="h-3.5 w-3.5" /> Load example
           </button>
         </div>
+        )}
 
         {sections.length > 0 && (
           <div className="mb-3 flex items-center gap-2">
@@ -419,8 +678,8 @@ export default function BulkUploadQuestions({ open, onClose, onUpload, title = "
 
         <div className="mb-3 flex flex-wrap gap-2">
           <label className="btn-outline cursor-pointer">
-            <FileText className="h-4 w-4" /> Choose CSV file
-            <input type="file" accept=".csv,text/csv,text/plain" className="hidden" onChange={onFile} />
+            <FileText className="h-4 w-4" /> {mode === "json" ? "Choose JSON file" : "Choose CSV file"}
+            <input type="file" accept={mode === "json" ? ".json,application/json,text/plain" : ".csv,text/csv,text/plain"} className="hidden" onChange={onFile} />
           </label>
           {text.trim() && (
             <button type="button" onClick={() => { setText(""); setMsg(""); }} className="btn-outline">
@@ -432,7 +691,7 @@ export default function BulkUploadQuestions({ open, onClose, onUpload, title = "
         <textarea
           rows={9}
           className="input resize-y font-mono text-xs"
-          placeholder="Paste your CSV rows here, or use “Choose CSV file” above…"
+          placeholder={mode === "json" ? 'Paste a JSON array of questions here (or { "questions": [ ... ] }), or use “Choose JSON file” above…' : "Paste your CSV rows here, or use “Choose CSV file” above…"}
           value={text}
           onChange={(e) => setText(e.target.value)}
         />
@@ -463,7 +722,7 @@ export default function BulkUploadQuestions({ open, onClose, onUpload, title = "
           </span>
         </label>
 
-        {msg && <p className="mt-3 text-sm font-medium">{msg}</p>}
+        {msg && <p className="mt-3 whitespace-pre-line text-sm font-medium">{msg}</p>}
 
         <div className="mt-6 flex justify-end gap-3">
           <button type="button" onClick={onClose} className="btn-outline">Cancel</button>

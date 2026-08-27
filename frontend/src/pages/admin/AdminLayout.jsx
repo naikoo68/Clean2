@@ -15,50 +15,110 @@ import {
   KeyRound,
   Sparkles,
   GraduationCap,
-  Store,
   Ticket,
   ArrowRightLeft,
+  Share2,
+  MonitorCheck,
+  SearchCheck,
+  BookOpen,
   LogOut,
   Menu,
-  X,
   Moon,
   Sun,
   Home,
+  Feather,
+  FilePlus2,
+  LayoutGrid,
+  Files,
+  HardDrive,
+  DatabaseBackup,
+  Star,
 } from "lucide-react";
 import { useTheme } from "../../context/ThemeContext";
 import { useAuth } from "../../context/AuthContext";
 import { useSettings } from "../../context/SettingsContext";
 import { messageService } from "../../services";
+import OnboardingWizard from "../../components/admin/OnboardingWizard";
 import GlobalSearch from "../../components/ui/GlobalSearch";
+import { Facebook as FacebookIcon } from "../../components/ui/SocialIcons";
+import Avatar from "../../components/ui/Avatar";
 
+// `superOnly: true` items are visible only to the platform super-admin (role
+// "admin"); an institute_admin sees the rest, scoped to their own institute.
 const nav = [
   { to: "/admin", label: "Dashboard", icon: LayoutDashboard, end: true },
-  { to: "/admin/content", label: "Content", icon: BookCopy },
-  { to: "/admin/tests", label: "Test Series", icon: FileStack },
-  { to: "/admin/practice", label: "My Practice", icon: GraduationCap },
-  { to: "/admin/migration", label: "Migration", icon: ArrowRightLeft },
-  { to: "/admin/clients", label: "Clients", icon: Store },
-  { to: "/admin/coupons", label: "Coupons", icon: Ticket },
-  { to: "/admin/study", label: "Study Material", icon: BookMarked },
-  { to: "/admin/documents", label: "Documents", icon: FileText },
-  { to: "/admin/users", label: "Users", icon: Users },
-  { to: "/admin/performance", label: "Performance", icon: Trophy },
-  { to: "/admin/feedback", label: "Feedback", icon: MessageSquare },
-  { to: "/admin/messages", label: "Messages", icon: Mail },
-  { to: "/admin/notices", label: "Notice Board", icon: Megaphone },
-  { to: "/admin/ai-generator", label: "AI Generator", icon: Sparkles },
-  { to: "/admin/ai-keys", label: "AI Keys", icon: KeyRound },
+  { to: "/admin/content", label: "Content", icon: BookCopy, feature: "content" },
+  { to: "/admin/tests", label: "Test Series", icon: FileStack, feature: "tests" },
+  { to: "/admin/practice", label: "My Practice", icon: GraduationCap, feature: "practice" },
+  { to: "/admin/previous-papers", label: "Previous Papers", icon: Files, feature: "previousPapers" },
+  { to: "/admin/checker", label: "Question Checker", icon: SearchCheck, feature: "checker" },
+  { to: "/admin/shared", label: "Shared Links", icon: Share2, feature: "shared" },
+  { to: "/admin/cbt", label: "Online Exams", icon: MonitorCheck, feature: "cbt" },
+  { to: "/admin/migration", label: "Migration", icon: ArrowRightLeft, feature: "migration" },
+  { to: "/admin/coupons", label: "Coupons", icon: Ticket, feature: "coupons" },
+  { to: "/admin/study", label: "Study Material", icon: BookMarked, feature: "study" },
+  { to: "/admin/documents", label: "Documents", icon: FileText, feature: "documents" },
+  { to: "/admin/notes", label: "Handwritten Notes", icon: Feather, feature: "notes" },
+  { to: "/admin/pdf-builder", label: "PDF Builder", icon: FilePlus2, feature: "pdfBuilder" },
+  { to: "/admin/resume", label: "Resume Builder", icon: FileText, feature: "resume" },
+  { to: "/admin/users", label: "Users", icon: Users, feature: "users" },
+  { to: "/admin/performance", label: "Performance", icon: Trophy, feature: "performance" },
+  { to: "/admin/storage", label: "Storage", icon: HardDrive, superOnly: true },
+  { to: "/admin/backup", label: "Backup & Restore", icon: DatabaseBackup, feature: "backup" },
+  { to: "/admin/feedback", label: "Feedback", icon: MessageSquare, feature: "feedback" },
+  { to: "/admin/reviews", label: "Reviews", icon: Star, feature: "reviews" },
+  { to: "/admin/messages", label: "Messages", icon: Mail, feature: "messages" },
+  { to: "/admin/notices", label: "Notice Board", icon: Megaphone, feature: "notices" },
+  { to: "/admin/facebook", label: "Facebook Auto-Post", icon: FacebookIcon, feature: "facebook" },
+  { to: "/admin/ai-generator", label: "AI Generator", icon: Sparkles, feature: "aiGenerator" },
+  { to: "/admin/visualize", label: "Visualization Studio", icon: LayoutGrid, feature: "visualize" },
+  { to: "/admin/ai-keys", label: "AI Keys (APIs)", icon: KeyRound, feature: "aiKeys" }, // institute admins manage their OWN keys (tenant-scoped); super-admin manages platform keys
+  { to: "/connections", label: "Companion", icon: Sparkles },
   { to: "/admin/customization", label: "Customization", icon: Palette },
+  { to: "/admin/manual", label: "User Manual", icon: BookOpen },
 ];
 
 export default function AdminLayout() {
   const [open, setOpen] = useState(false);
   const [unread, setUnread] = useState(0);
+
+  // Lock background page scroll while the mobile drawer is open, so scrolling
+  // inside the drawer doesn't move the page behind it (and the drawer can scroll
+  // independently to reveal every nav item + Log out on small screens).
+  useEffect(() => {
+    if (!open) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => { document.body.style.overflow = prev; };
+  }, [open]);
   const { theme, toggleTheme } = useTheme();
   const { user, logout } = useAuth();
   const { settings } = useSettings();
+  // First-run setup wizard: auto-opens for a fresh institute admin until they
+  // finish it. Never shown to the platform super-admin (role "admin").
+  const [wizardDone, setWizardDone] = useState(false);
+  const showOnboarding = user?.role === "institute_admin" && settings?.onboardingCompleted !== true && !wizardDone;
   const navigate = useNavigate();
   const location = useLocation();
+
+  // Per-institute feature access. For an institute admin, features their
+  // super-admin turned OFF are hidden from the sidebar; the platform super-admin
+  // (role "admin") always sees everything. A feature is ON unless set to false.
+  const instituteFeatures = user?.role === "institute_admin" ? (user?.tenant?.features || {}) : null;
+  const visibleNav = nav.filter((n) => {
+    if (n.superOnly && user?.role !== "admin") return false;
+    if (instituteFeatures && n.feature && instituteFeatures[n.feature] === false) return false;
+    return true;
+  });
+
+  // Guard direct-URL access: if an institute admin opens a page for a feature
+  // they don't have, send them back to the dashboard.
+  useEffect(() => {
+    if (!instituteFeatures) return;
+    const hit = nav.find((n) => n.feature && (location.pathname === n.to || location.pathname.startsWith(n.to + "/")));
+    if (hit && instituteFeatures[hit.feature] === false) navigate("/admin", { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.pathname]);
 
   // Keep the unread-messages badge fresh
   useEffect(() => {
@@ -93,8 +153,8 @@ export default function AdminLayout() {
         </div>
       </Link>
 
-      <nav className="flex-1 space-y-1 px-3">
-        {nav.map((n) => (
+      <nav className="min-h-0 flex-1 space-y-1 overflow-y-auto px-3">
+        {visibleNav.map((n) => (
           <NavLink
             key={n.to}
             to={n.to}
@@ -120,9 +180,18 @@ export default function AdminLayout() {
       </nav>
 
       <div className="space-y-1 border-t border-slate-200 p-3 dark:border-slate-800">
-        <Link to="/" className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800">
-          <Home className="h-5 w-5" /> Switch to Student Mode
-        </Link>
+        {user?.role === "institute_admin" && user?.tenant?.slug ? (
+          // Institute admins get sent to THEIR OWN public portal (?t=<slug>),
+          // not the platform site. A full-page load is required so the tenant
+          // query param is applied by the API layer for every request.
+          <a href={`/?t=${user.tenant.slug}`} className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800">
+            <Home className="h-5 w-5" /> View my student portal
+          </a>
+        ) : (
+          <Link to="/" className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800">
+            <Home className="h-5 w-5" /> Switch to Student Mode
+          </Link>
+        )}
         <button onClick={handleLogout} className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-900/20">
           <LogOut className="h-5 w-5" /> Log out
         </button>
@@ -132,6 +201,8 @@ export default function AdminLayout() {
 
   return (
     <div className="flex min-h-screen bg-slate-50 dark:bg-slate-950">
+      {showOnboarding && <OnboardingWizard onDone={() => setWizardDone(true)} onClose={() => setWizardDone(true)} />}
+
       {/* Desktop sidebar */}
       <aside className="hidden w-64 flex-shrink-0 border-r border-slate-200 bg-white lg:block dark:border-slate-800 dark:bg-slate-900">
         <div className="sticky top-0 h-screen">
@@ -167,9 +238,8 @@ export default function AdminLayout() {
             <button onClick={toggleTheme} className="rounded-lg p-2 text-slate-600 dark:text-slate-300">
               {theme === "dark" ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
             </button>
-            <span className="flex h-9 w-9 items-center justify-center rounded-full bg-brand-600 text-sm font-bold text-white">
-              {user?.avatar || "AD"}
-            </span>
+            <Avatar src={user?.avatar} name={user?.name || "Admin"} size={36} />
+
           </div>
         </header>
 

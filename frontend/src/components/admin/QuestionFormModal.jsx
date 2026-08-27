@@ -1,7 +1,8 @@
 import { useState } from "react";
-import { Plus, Trash2, X, Image as ImageIcon, Upload, Loader2, Eraser, FileText } from "lucide-react";
-import { uploadService } from "../../services";
+import { Plus, Trash2, X, Image as ImageIcon, Upload, Loader2, Eraser, FileText, Wand2, LayoutGrid } from "lucide-react";
+import { uploadService, aiService } from "../../services";
 import { parseQuestionsCsv } from "./BulkUploadQuestions";
+import VizView from "../ui/VizView";
 
 // Roman numerals for Column B labels (I, II, III, IV…)
 function toRomanLite(n) {
@@ -26,6 +27,7 @@ export const emptyQuestion = {
   explanation: "",
   status: "published",
   image: "",
+  viz: null,
 };
 
 function Field({ label, children }) {
@@ -40,10 +42,10 @@ function Field({ label, children }) {
 // Reusable Add/Edit question modal supporting simple MCQs and matching MCQs.
 // `question` = existing data (edit) or null (add). `onSave(payload)` receives a
 // clean payload (the parent attaches context like quiz/testSeries + calls the API).
-export default function QuestionFormModal({ question, saving, onClose, onSave, sections = [] }) {
+export default function QuestionFormModal({ question, saving, onClose, onSave, sections = [], defaultSection = "" }) {
   const data = question || emptyQuestion;
   const [form, setForm] = useState(() => ({
-    section: data.section || "",
+    section: data.section || defaultSection || "",
     type: data.type || "mcq",
     text: data.text || "",
     options: data.options && data.options.length ? [...data.options] : ["", "", "", ""],
@@ -58,10 +60,16 @@ export default function QuestionFormModal({ question, saving, onClose, onSave, s
     explanation: data.explanation || "",
     status: data.status || "published",
     image: data.image || "",
+    viz: data.viz || null,
   }));
 
   const [imgUploading, setImgUploading] = useState(false);
   const [imgErr, setImgErr] = useState("");
+  // Diagram ("viz") builder state: a prompt → AI spec, plus manual JSON editing.
+  const [vizPrompt, setVizPrompt] = useState("");
+  const [vizBusy, setVizBusy] = useState(false);
+  const [vizErr, setVizErr] = useState("");
+  const [vizJson, setVizJson] = useState(() => (data.viz ? JSON.stringify(data.viz, null, 2) : ""));
   const [csvOpen, setCsvOpen] = useState(false);
   const [csvText, setCsvText] = useState("");
   const [csvErr, setCsvErr] = useState("");
@@ -123,6 +131,39 @@ export default function QuestionFormModal({ question, saving, onClose, onSave, s
     }
   };
 
+  // Diagram question: generate a Visualization-Studio spec from a prompt (reuses
+  // the /api/ai/visualize endpoint that powers the Studio), preview it, and store
+  // it on the question. The admin can also paste/edit the spec JSON by hand.
+  const generateViz = async () => {
+    if (!vizPrompt.trim()) { setVizErr("Describe the diagram you want, e.g. \u201cbar chart of yearly exports\u201d."); return; }
+    setVizErr("");
+    setVizBusy(true);
+    try {
+      const res = await aiService.visualize(vizPrompt.trim());
+      if (!res?.spec) throw new Error("No diagram returned — try rephrasing the prompt.");
+      setForm((f) => ({ ...f, viz: res.spec }));
+      setVizJson(JSON.stringify(res.spec, null, 2));
+    } catch (err) {
+      setVizErr(err.message || "Couldn't generate the diagram.");
+    } finally {
+      setVizBusy(false);
+    }
+  };
+
+  // Apply hand-edited JSON to the live diagram (validates it's parseable).
+  const applyVizJson = () => {
+    setVizErr("");
+    const t = vizJson.trim();
+    if (!t) { setForm((f) => ({ ...f, viz: null })); return; }
+    try {
+      const spec = JSON.parse(t);
+      if (!spec || typeof spec !== "object") throw new Error("Spec must be a JSON object.");
+      setForm((f) => ({ ...f, viz: spec }));
+    } catch {
+      setVizErr("That isn't valid JSON. Check the spec and try again.");
+    }
+  };
+
   const submit = (e) => {
     e.preventDefault();
     const base = {
@@ -136,6 +177,8 @@ export default function QuestionFormModal({ question, saving, onClose, onSave, s
       optionExplanations: (form.optionExplanations || []).map((x, i) => (i === form.correct ? "" : (x || "").trim())),
       status: form.status,
       section: form.section || "",
+      // Diagram spec — only carried for diagram questions (null clears it otherwise).
+      viz: form.type === "diagram" ? (form.viz || null) : null,
     };
     let payload;
     if (form.type === "matching") {
@@ -146,7 +189,7 @@ export default function QuestionFormModal({ question, saving, onClose, onSave, s
         options: form.options,
         correct: form.correct,
       };
-    } else if (form.type === "statement") {
+    } else if (form.type === "statement" || form.type === "rearrange") {
       payload = {
         ...base,
         columnA: (form.columnA || []).map((x) => (x || "").trim()).filter(Boolean),
@@ -192,8 +235,8 @@ export default function QuestionFormModal({ question, saving, onClose, onSave, s
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/50 p-4">
-      <form onSubmit={submit} className="my-8 w-full max-w-lg animate-scale-in card p-6">
+    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/50 p-0 sm:p-4">
+      <form onSubmit={submit} className="min-h-full w-full max-w-none animate-scale-in card m-0 rounded-none p-4 sm:rounded-2xl sm:p-6">
         <div className="mb-4 flex items-center justify-between">
           <h3 className="text-lg font-bold">{question ? "Edit" : "Add"} Question</h3>
           <button type="button" onClick={onClose}><X className="h-5 w-5" /></button>
@@ -240,12 +283,16 @@ export default function QuestionFormModal({ question, saving, onClose, onSave, s
               <option value="image">Image / Diagram-based</option>
               <option value="table">Table-based</option>
               <option value="assertion">Assertion &amp; Reason</option>
+              <option value="journal">Journal Entry</option>
+              <option value="ledger">Ledger Posting (T-account)</option>
+              <option value="rearrange">Sentence Rearrangement</option>
+              <option value="diagram">Diagram (Visualization Studio chart)</option>
             </select>
           </Field>
 
-          <Field label={form.type === "assertion" ? "Directive line (optional)" : ["statement", "pair", "pairselect", "table"].includes(form.type) ? "Intro / directive line" : "Question Text"}>
-            <textarea required={form.type !== "assertion"} rows={2} className="input resize-none" value={form.text} onChange={(e) => setForm({ ...form, text: e.target.value })} placeholder={form.type === "statement" ? "Consider the following statements:" : form.type === "pair" || form.type === "pairselect" ? "Consider the following pairs (Item — Description):" : form.type === "table" ? "Study the table below and answer:" : form.type === "assertion" ? "Leave blank for the standard directive, or write your own" : "Use $...$ for equations, e.g. Solve $x^2+2x-3=0$"} />
-            <p className="mt-1 text-xs text-slate-400">{["statement", "pair", "pairselect"].includes(form.type) ? "The numbered list you add below appears under this line, followed by the closing question automatically." : form.type === "table" ? "The table you build below appears under this line." : form.type === "assertion" ? "If left blank, a standard Assertion–Reason directive is used automatically." : "Tip: wrap maths in dollar signs to render equations."}</p>
+          <Field label={form.type === "assertion" ? "Directive line (optional)" : ["statement", "pair", "pairselect", "table", "rearrange"].includes(form.type) ? "Intro / directive line" : "Question Text"}>
+            <textarea required={form.type !== "assertion"} rows={2} className="input resize-none" value={form.text} onChange={(e) => setForm({ ...form, text: e.target.value })} placeholder={form.type === "statement" ? "Consider the following statements:" : form.type === "pair" || form.type === "pairselect" ? "Consider the following pairs (Item — Description):" : form.type === "table" ? "Study the table below and answer:" : form.type === "assertion" ? "Leave blank for the standard directive, or write your own" : form.type === "journal" ? "Journalise the transaction, e.g. Purchased goods for cash 5,000 — enter the 4 candidate journal entries as the options below" : form.type === "ledger" ? "State the transactions/entries and the task, e.g. Prepare the Cash A/c — enter the 4 candidate ledger (T-account) tables as the options below" : form.type === "rearrange" ? "Rearrange the following sentences to form a meaningful paragraph:" : "Use $...$ for equations, e.g. Solve $x^2+2x-3=0$"} />
+            <p className="mt-1 text-xs text-slate-400">{["statement", "pair", "pairselect", "rearrange"].includes(form.type) ? "The numbered list you add below appears under this line, followed by the closing question automatically." : form.type === "table" ? "The table you build below appears under this line." : form.type === "assertion" ? "If left blank, a standard Assertion–Reason directive is used automatically." : "Tip: wrap maths in dollar signs to render equations."}</p>
           </Field>
 
           <Field label={form.type === "image" ? "Image / Diagram (required for this type)" : "Image (optional)"}>
@@ -270,6 +317,48 @@ export default function QuestionFormModal({ question, saving, onClose, onSave, s
             <p className="mt-1 text-xs text-slate-400">Pick a file from your device — it uploads to Cloudinary and fills the link automatically.</p>
           </Field>
 
+          {form.type === "diagram" && (
+            <Field label="Diagram (required for this type)">
+              <p className="mb-2 text-xs text-slate-500 dark:text-slate-400">
+                Describe the chart/diagram and generate it with AI (same engine as the Visualization Studio), or paste a spec below. The student answers by reading this diagram, so make your question text refer to it.
+              </p>
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <input
+                  className="input flex-1"
+                  value={vizPrompt}
+                  onChange={(e) => setVizPrompt(e.target.value)}
+                  placeholder='e.g. "bar chart: exports 2019=120, 2020=90, 2021=150, 2022=170" or "flowchart of the water cycle"'
+                />
+                <button type="button" onClick={generateViz} disabled={vizBusy} className="btn-primary py-2 disabled:opacity-50">
+                  {vizBusy ? <><Loader2 className="h-4 w-4 animate-spin" /> Generating…</> : <><Wand2 className="h-4 w-4" /> Generate diagram</>}
+                </button>
+              </div>
+              {vizErr && <p className="mt-1 text-xs text-rose-600">{vizErr}</p>}
+
+              {form.viz && (
+                <div className="mt-3">
+                  <div className="mb-1 flex items-center justify-between">
+                    <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-500 dark:text-slate-400"><LayoutGrid className="h-3.5 w-3.5" /> Preview</span>
+                    <button type="button" onClick={() => { setForm((f) => ({ ...f, viz: null })); setVizJson(""); }} className="text-xs font-medium text-rose-600 hover:underline">Remove diagram</button>
+                  </div>
+                  <VizView q={{ viz: form.viz }} />
+                </div>
+              )}
+
+              <details className="mt-3 rounded-lg border border-slate-200 p-2 dark:border-slate-700">
+                <summary className="cursor-pointer text-xs font-semibold text-slate-500 dark:text-slate-400">Edit spec JSON (advanced)</summary>
+                <textarea
+                  rows={6}
+                  className="input mt-2 resize-y font-mono text-xs"
+                  value={vizJson}
+                  onChange={(e) => setVizJson(e.target.value)}
+                  placeholder={'{"type":"bar","title":"Exports","labels":["2019","2020"],"series":[{"name":"Exports","data":[120,90]}]}'}
+                />
+                <button type="button" onClick={applyVizJson} className="btn-outline mt-2 py-1.5 text-xs">Apply JSON to diagram</button>
+              </details>
+            </Field>
+          )}
+
           {form.type === "assertion" && (
             <>
               <Field label="Assertion (A)">
@@ -282,17 +371,17 @@ export default function QuestionFormModal({ question, saving, onClose, onSave, s
             </>
           )}
 
-          {form.type === "statement" && (
-            <Field label="Statements (shown numbered 1, 2, 3…)">
+          {(form.type === "statement" || form.type === "rearrange") && (
+            <Field label={form.type === "rearrange" ? "Sentences (shown in their own boxes as I, II, III, IV)" : "Statements (shown numbered 1, 2, 3…)"}>
               <div className="space-y-2">
                 {form.columnA.map((item, i) => (
                   <div key={i} className="flex items-center gap-2">
-                    <span className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-md bg-brand-100 text-xs font-bold text-brand-700 dark:bg-brand-900/40 dark:text-brand-300">{i + 1}</span>
-                    <input className="input" value={item} onChange={(e) => setForm({ ...form, columnA: form.columnA.map((x, xi) => (xi === i ? e.target.value : x)) })} placeholder={`Statement ${i + 1}`} />
+                    <span className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-md bg-brand-100 text-xs font-bold text-brand-700 dark:bg-brand-900/40 dark:text-brand-300">{form.type === "rearrange" ? (["I", "II", "III", "IV", "V", "VI", "VII", "VIII"][i] || i + 1) : i + 1}</span>
+                    <input className="input" value={item} onChange={(e) => setForm({ ...form, columnA: form.columnA.map((x, xi) => (xi === i ? e.target.value : x)) })} placeholder={form.type === "rearrange" ? `Sentence ${i + 1}` : `Statement ${i + 1}`} />
                     <button type="button" onClick={() => setForm({ ...form, columnA: form.columnA.filter((_, xi) => xi !== i) })} className="flex-shrink-0 rounded-lg p-2 text-rose-600 hover:bg-rose-50 disabled:opacity-40 dark:hover:bg-rose-900/30" disabled={form.columnA.length <= 2}><Trash2 className="h-4 w-4" /></button>
                   </div>
                 ))}
-                <button type="button" onClick={() => setForm({ ...form, columnA: [...form.columnA, ""] })} className="btn-outline py-2"><Plus className="h-4 w-4" /> Add statement</button>
+                <button type="button" onClick={() => setForm({ ...form, columnA: [...form.columnA, ""] })} className="btn-outline py-2"><Plus className="h-4 w-4" /> {form.type === "rearrange" ? "Add sentence" : "Add statement"}</button>
               </div>
             </Field>
           )}

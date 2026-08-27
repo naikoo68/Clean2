@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
-import { Crown, Check, Tag, Gift, Loader2, AlarmClock, ShieldCheck } from "lucide-react";
+import { Crown, Check, Tag, Gift, Loader2, AlarmClock, ShieldCheck, Sparkles } from "lucide-react";
 import { authService, subscriptionService } from "../../services";
 import { useAuth } from "../../context/AuthContext";
+import { useSettings } from "../../context/SettingsContext";
+import PlanPicker from "../../components/client/PlanPicker";
 
 const FALLBACK_PLANS = [
   { key: "1m", label: "1 Month", months: 1, price: 299 },
@@ -25,6 +27,7 @@ function loadRazorpay() {
 // apply a coupon/referral, pay via Razorpay, and instantly regain access.
 export default function ClientUpgrade({ onClose }) {
   const { user, refreshUser } = useAuth();
+  const { settings } = useSettings();
   const [plans, setPlans] = useState(FALLBACK_PLANS);
   const [planKey, setPlanKey] = useState("1m");
   const [coupon, setCoupon] = useState("");
@@ -77,10 +80,11 @@ export default function ClientUpgrade({ onClose }) {
             order_id: order.orderId,
             amount: order.amount,
             currency: order.currency || "INR",
-            name: "My Study Guide",
+            name: settings?.siteName || "My Study Guide",
+            image: settings?.logoUrl || undefined,
             description: `${selectedPlan?.label} plan`,
             prefill: { name: user?.name, email: user?.email },
-            theme: { color: "#2563eb" },
+            theme: { color: settings?.primaryColor || "#2563eb" },
             handler: async (resp) => {
               try {
                 await subscriptionService.activate({
@@ -134,26 +138,22 @@ export default function ClientUpgrade({ onClose }) {
           <div className="mt-4 rounded-xl bg-rose-50 px-3 py-2.5 text-sm text-rose-700 dark:bg-rose-900/30 dark:text-rose-300">{error}</div>
         )}
 
-        {/* Plans */}
-        <div className="mt-5 grid grid-cols-2 gap-2">
-          {plans.map((p) => {
-            const active = p.key === planKey;
-            return (
-              <button
-                type="button"
-                key={p.key}
-                onClick={() => setPlanKey(p.key)}
-                className={`relative rounded-xl border p-3 text-left transition ${
-                  active ? "border-brand-500 bg-brand-50 ring-1 ring-brand-500 dark:bg-brand-900/20" : "border-slate-200 hover:border-slate-300 dark:border-slate-700"
-                }`}
-              >
-                {active && <Check className="absolute right-2 top-2 h-4 w-4 text-brand-600" />}
-                <p className="text-sm font-semibold">{p.label}</p>
-                <p className="text-lg font-extrabold">₹{p.price}</p>
-              </button>
-            );
-          })}
+        {/* Plans — choose a billing cycle, then a plan */}
+        <div className="mt-5">
+          <PlanPicker plans={plans} value={planKey} onChange={setPlanKey} includeTrial={false} />
         </div>
+
+        {/* AI generation limits for the chosen plan */}
+        {selectedPlan?.maxPerBatch ? (
+          <div className="mt-2 rounded-xl border border-brand-200 bg-brand-50/60 p-3 text-xs dark:border-brand-900/40 dark:bg-brand-900/10">
+            <p className="mb-1.5 flex items-center gap-1 font-semibold text-brand-700 dark:text-brand-300"><Sparkles className="h-3.5 w-3.5" /> AI question generation — {selectedPlan.label}</p>
+            <div className="grid grid-cols-3 gap-2 text-center">
+              <div className="rounded-lg bg-white/70 p-2 dark:bg-slate-800/50"><p className="text-sm font-extrabold text-slate-700 dark:text-slate-200">{selectedPlan.maxPerBatch}</p><p className="text-[10px] text-slate-500 dark:text-slate-400">Questions / batch</p></div>
+              <div className="rounded-lg bg-white/70 p-2 dark:bg-slate-800/50"><p className="text-sm font-extrabold text-slate-700 dark:text-slate-200">{selectedPlan.perWindow}</p><p className="text-[10px] text-slate-500 dark:text-slate-400">Questions / window</p></div>
+              <div className="rounded-lg bg-white/70 p-2 dark:bg-slate-800/50"><p className="text-sm font-extrabold text-slate-700 dark:text-slate-200">{selectedPlan.windowMinutes || 5} min</p><p className="text-[10px] text-slate-500 dark:text-slate-400">Window</p></div>
+            </div>
+          </div>
+        ) : null}
 
         {/* Coupon + referral */}
         <div className="mt-3 grid gap-3 sm:grid-cols-2">

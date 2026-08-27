@@ -5,9 +5,11 @@ import { useEffect, useState } from "react";
 import { contentService } from "../../services";
 import { useAuth } from "../../context/AuthContext";
 import { Loading, ErrorState, EmptyState } from "../../components/ui/AsyncState";
+import { useSeo } from "../../lib/useSeo";
 
 // Top of the quiz hierarchy: pick a Stream (e.g. JKSSB) → then its subjects.
 export default function QuizHome() {
+  useSeo("Online Quizzes & Mock Tests", "Practise subject-wise online quizzes and mock tests with instant results and detailed solutions across every stream and topic on My Study Guide.");
   const { user } = useAuth();
   const [query, setQuery] = useState("");
   const [streams, setStreams] = useState([]);

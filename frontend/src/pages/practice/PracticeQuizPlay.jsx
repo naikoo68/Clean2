@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
+  FileText,
   ChevronLeft,
   ChevronRight,
   Bookmark,
@@ -21,20 +22,27 @@ import {
   ZoomOut,
   Trophy,
   Search,
+  Eye,
 } from "lucide-react";
 import { practiceService, testService } from "../../services";
 import { useAuth } from "../../context/AuthContext";
 import ProgressBar from "../../components/ui/ProgressBar";
 import Badge from "../../components/ui/Badge";
 import MathText from "../../components/ui/MathText";
+import OptionContent from "../../components/ui/OptionContent";
 import StatementPairView from "../../components/ui/StatementPairView";
 import TableView from "../../components/ui/TableView";
+import GraphView from "../../components/ui/GraphView";
+import VizView from "../../components/ui/VizView";
 import AssertionReasonView from "../../components/ui/AssertionReasonView";
 import Watermark from "../../components/ui/Watermark";
 import FeedbackButton from "../../components/ui/FeedbackButton";
 import { useZoom } from "../../context/ZoomContext";
 import { Loading, ErrorState, EmptyState } from "../../components/ui/AsyncState";
-import { questionDateText, searchQuestions } from "../../lib/questions";
+import { questionDateText, searchQuestions, stemText, displayOptions } from "../../lib/questions";
+import { shuffleAll, toOriginalIndex, makeSeed } from "../../lib/shuffleOptions";
+import PaperExport from "../../components/admin/PaperExport";
+import { useSeo } from "../../lib/useSeo";
 
 const optionLabels = ["A", "B", "C", "D"];
 
@@ -62,28 +70,48 @@ const TIMER_OPTIONS = [
 // bookmarks. Loads questions WITH answers from the practice endpoint and
 // records the attempt via testService.submit (so it shows in My Progress).
 export default function PracticeQuizPlay() {
-  const { itemId } = useParams();
+  const { itemId, token, freeId } = useParams();
+  const isPublic = !!token; // opened via a public share link (no login needed)
+  const isFree = !!freeId; // FREE first-quiz-per-topic preview (no login needed)
+  const playId = itemId || token || freeId;
   const navigate = useNavigate();
   const { user } = useAuth();
   const isClient = user?.role === "client"; // clients return to their own workspace
+  const storageKey = `mpm-practice-quiz-${playId}`;
+
+  // Any saved, unfinished progress for this quiz (so an exit/refresh can resume).
+  const saved = (() => {
+    try { return JSON.parse(localStorage.getItem(storageKey)) || {}; } catch { return {}; }
+  })();
 
   const [questions, setQuestions] = useState([]);
   const [title, setTitle] = useState("Practice Quiz");
+  const [views, setViews] = useState(0); // total times this quiz was opened (shown to users)
+  const [quizId, setQuizId] = useState(null); // the loaded quiz id (for view counting on every open)
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  const [current, setCurrent] = useState(0);
-  const [answers, setAnswers] = useState({});
-  const [timedOut, setTimedOut] = useState({});
-  const [bookmarks, setBookmarks] = useState({});
-  const [seconds, setSeconds] = useState(0);
-  const [timerMode, setTimerMode] = useState(null); // null=not chosen, "off", or seconds
-  const [qTime, setQTime] = useState(0);
+  const [current, setCurrent] = useState(saved.current || 0);
+  const [answers, setAnswers] = useState(saved.answers || {});
+  const [timedOut, setTimedOut] = useState(saved.timedOut || {});
+  const [bookmarks, setBookmarks] = useState(saved.bookmarks || {});
+  const [seconds, setSeconds] = useState(saved.seconds || 0);
+  const [timerMode, setTimerMode] = useState(saved.timerMode ?? null); // null=not chosen, "off", or seconds
+  const [qTime, setQTime] = useState(saved.qTime ?? 0);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState(null);
+  const [paper, setPaper] = useState({ paperPdfUrl: "", answerKeyPdfUrl: "", answerKeys: [], additionalInfo: "" }); // Previous Papers extras
   const [showReview, setShowReview] = useState(false);
   const [reviewSearch, setReviewSearch] = useState("");
+  // Per-attempt option-shuffle seed — persisted so "Continue" keeps the SAME
+  // question/option order; a new attempt gets a fresh seed (reshuffle).
+  const [seed, setSeed] = useState(() => (typeof saved.seed === "number" ? saved.seed : makeSeed()));
+  // Offer Continue/Start-new when an unfinished attempt is saved.
+  const hasSavedSession =
+    saved.timerMode != null &&
+    (Object.keys(saved.answers || {}).length > 0 || (saved.current || 0) > 0 || (saved.seconds || 0) > 0);
+  const [showResume, setShowResume] = useState(hasSavedSession);
   const [fullscreen, setFullscreen] = useState(false);
   const containerRef = useRef(null);
   const { zoom, zoomIn, zoomOut } = useZoom();
@@ -109,23 +137,72 @@ export default function PracticeQuizPlay() {
   const load = useCallback(() => {
     setLoading(true);
     setError("");
-    practiceService
-      .quizPlay(itemId)
+    (isPublic ? testService.getPublic(token) : isFree ? practiceService.freeQuizPlay(freeId) : practiceService.quizPlay(itemId))
       .then((data) => {
-        setQuestions(data.questions || []);
+        setQuestions(shuffleAll(data.questions || [], seed)); // reshuffle options
         setTitle(data.name || "Practice Quiz");
+        setViews(data.views || 0);
+        setQuizId(data._id || null);
+        setPaper({ paperPdfUrl: data.paperPdfUrl || "", answerKeyPdfUrl: data.answerKeyPdfUrl || "", answerKeys: Array.isArray(data.answerKeys) ? data.answerKeys : [], additionalInfo: data.additionalInfo || "" });
       })
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false));
-  }, [itemId]);
+  }, [itemId, token, freeId, isPublic, isFree, seed]);
   useEffect(load, [load]);
+
+  // Dynamic SEO — only for the genuinely public, no-login views (shared link or
+  // free preview). Authenticated play keeps the app default title. Uses the
+  // real quiz name + question count; no fabricated content.
+  const anonSeo = isPublic || isFree;
+  const seoTitle = anonSeo && title && title !== "Practice Quiz" ? `${title} — Online Quiz` : null;
+  const seoDesc = anonSeo && title && title !== "Practice Quiz"
+    ? `Attempt the ${title} quiz online${questions.length ? ` with ${questions.length} question${questions.length === 1 ? "" : "s"}` : ""} on My Study Guide. Reveal answers and explanations as you go — free, no login required.`
+    : null;
+  useSeo(seoTitle, seoDesc);
+
+  // Count a public OPEN once per browser (impression tracking for shared links).
+  useEffect(() => {
+    if (!isPublic || !token) return;
+    const key = `mpm-viewed-${token}`;
+    if (localStorage.getItem(key)) return;
+    localStorage.setItem(key, "1");
+    testService.registerPublicView(token).catch(() => {});
+  }, [isPublic, token]);
+
+  // Count a VISIT — every time the quiz is opened, by any audience (student,
+  // client, free preview or public link). This is a TOTAL views counter, so it
+  // climbs on every open; we reflect the new totals live in the UI.
+  useEffect(() => {
+    if (!quizId) return;
+    testService.registerView(quizId)
+      .then((r) => {
+        if (r?.views != null) setViews(r.views);
+        setQuestions((qs) => qs.map((qq) => ({ ...qq, views: (qq.views || 0) + 1 })));
+      })
+      .catch(() => {});
+  }, [quizId]);
+
+  // Saved position may point past a changed question list — clamp it.
+  useEffect(() => {
+    if (questions.length && current > questions.length - 1) setCurrent(0);
+  }, [questions, current]);
 
   // Total elapsed timer.
   useEffect(() => {
-    if (!started || result) return;
+    if (!started || result || showResume) return;
     const t = setInterval(() => setSeconds((s) => s + 1), 1000);
     return () => clearInterval(t);
-  }, [started, result]);
+  }, [started, result, showResume]);
+
+  // Auto-save progress so an exit/refresh can resume this attempt.
+  useEffect(() => {
+    if (!loading && started && !result) {
+      localStorage.setItem(
+        storageKey,
+        JSON.stringify({ answers, timedOut, bookmarks, seconds, current, timerMode, qTime, seed })
+      );
+    }
+  }, [answers, timedOut, bookmarks, seconds, current, timerMode, qTime, seed, storageKey, loading, started, result]);
 
   const lockedAt = (i) => answers[i] !== undefined || !!timedOut[i];
 
@@ -138,7 +215,7 @@ export default function PracticeQuizPlay() {
 
   // Per-question countdown → lock (reveal) at 0.
   useEffect(() => {
-    if (!isTimed || lockedAt(current)) return;
+    if (!isTimed || showResume || lockedAt(current)) return;
     if (qTime <= 0) {
       setTimedOut((t) => ({ ...t, [current]: true }));
       return;
@@ -152,11 +229,14 @@ export default function PracticeQuizPlay() {
     setSubmitting(true);
     const byId = {};
     questions.forEach((qq, i) => {
-      if (answers[i] !== undefined) byId[qq._id] = answers[i];
+      if (answers[i] !== undefined) byId[qq._id] = toOriginalIndex(qq, answers[i]);
     });
     let graded = null;
     try {
-      graded = await testService.submit(itemId, byId, seconds);
+      // FREE preview quizzes are graded LOCALLY (no server attempt is recorded
+      // for a guest); public links and logged-in plays record on the server.
+      if (isPublic) graded = await testService.submitPublic(token, byId, seconds);
+      else if (!isFree) graded = await testService.submit(itemId, byId, seconds);
     } catch {
       /* still show a local result even if recording fails */
     }
@@ -176,15 +256,45 @@ export default function PracticeQuizPlay() {
       };
     }
     graded.timeTaken = seconds;
+    localStorage.removeItem(storageKey); // attempt finished — clear saved session
     setResult(graded);
     setSubmitting(false);
     if (document.fullscreenElement) document.exitFullscreen?.().catch(() => {});
-  }, [answers, questions, seconds, itemId]);
+  }, [answers, questions, seconds, itemId, token, isPublic, isFree, storageKey]);
 
   if (loading) return <div className="container-page"><Loading label="Loading quiz..." /></div>;
   if (error) return <div className="container-page"><ErrorState message={error} onRetry={load} /></div>;
   if (!questions.length)
     return <div className="container-page"><EmptyState message="No questions in this quiz yet." /></div>;
+
+  // Effective answer-key list: the new multi-key array if present, else the
+  // legacy single key as one entry.
+  const answerKeyList = (paper.answerKeys && paper.answerKeys.length)
+    ? paper.answerKeys.filter((k) => k && k.url)
+    : (paper.answerKeyPdfUrl ? [{ label: "Answer key", url: paper.answerKeyPdfUrl }] : []);
+
+  // Uploaded Previous-Papers resources (question paper PDF, answer-key PDFs and
+  // additional information). Shown on BOTH the start screen and the results
+  // screen when present; empty/hidden for normal quizzes.
+  const paperResources = (paper.paperPdfUrl || answerKeyList.length || paper.additionalInfo) ? (
+    <div className="mx-auto mt-4 max-w-lg card p-5 text-left">
+      <h2 className="flex items-center gap-2 text-sm font-bold"><FileText className="h-4 w-4 text-brand-600" /> Paper resources</h2>
+      {(paper.paperPdfUrl || answerKeyList.length > 0) && (
+        <div className="mt-3 flex flex-wrap gap-2">
+          {paper.paperPdfUrl && <a href={paper.paperPdfUrl} target="_blank" rel="noreferrer" className="btn-outline text-sm"><FileText className="h-4 w-4" /> View question paper (PDF)</a>}
+          {answerKeyList.map((k, i) => (
+            <a key={i} href={k.url} target="_blank" rel="noreferrer" className="btn-outline text-sm"><FileText className="h-4 w-4" /> View {k.label || "answer key"} (PDF)</a>
+          ))}
+        </div>
+      )}
+      {paper.additionalInfo && (
+        <div className="mt-3 whitespace-pre-line rounded-xl bg-slate-50 p-3 text-sm text-slate-600 dark:bg-slate-800/60 dark:text-slate-300">
+          <p className="mb-1 font-semibold text-slate-700 dark:text-slate-200">Additional information</p>
+          {paper.additionalInfo}
+        </div>
+      )}
+    </div>
+  ) : null;
 
   // ---- Result screen ----
   if (result) {
@@ -221,8 +331,20 @@ export default function PracticeQuizPlay() {
             <button onClick={() => setShowReview((v) => !v)} className="btn-accent">
               <Lightbulb className="h-4 w-4" /> {showReview ? "Hide Answers" : "Review Answers"}
             </button>
-            {isClient ? (
-              <button onClick={() => navigate("/client")} className="btn-primary">Back to My Practice</button>
+            {/* Generated "Paper / Key" (built from the questions) — always
+                shown. For Previous Papers, the admin-uploaded paper/answer keys
+                also appear in the Paper resources panel below. */}
+            <PaperExport title={title || "Practice Quiz"} questions={questions} />
+            {isPublic ? (
+              <button onClick={() => navigate("/")} className="btn-primary">Done</button>
+            ) : isFree && !user ? (
+              // Free preview finished by a guest — nudge them to unlock the rest.
+              <>
+                <button onClick={() => navigate(-1)} className="btn-outline">Back to Quizzes</button>
+                <button onClick={() => navigate("/register")} className="btn-primary">Sign up to unlock all quizzes</button>
+              </>
+            ) : isClient ? (
+              <button onClick={() => navigate("/creator")} className="btn-primary">Back to My Practice</button>
             ) : (
               <>
                 <button onClick={() => navigate(-1)} className="btn-primary">Back to Quizzes</button>
@@ -231,6 +353,9 @@ export default function PracticeQuizPlay() {
             )}
           </div>
         </div>
+
+        {/* Uploaded question paper / answer key / additional info (papers) */}
+        {paperResources}
 
         {/* Answer review */}
         {showReview && (
@@ -286,7 +411,7 @@ export default function PracticeQuizPlay() {
                   </div>
 
                   {q.image && <img src={q.image} alt="" className="mb-3 max-h-56 rounded-xl object-contain" />}
-                  <p className="font-semibold leading-relaxed"><MathText>{q.text}</MathText></p>
+                  <p className="font-semibold leading-relaxed"><MathText>{stemText(q)}</MathText></p>
 
                   {(Array.isArray(q.columnA) && q.columnA.length > 0) || (Array.isArray(q.columnB) && q.columnB.length > 0) ? (
                     <div className="mt-3 grid grid-cols-2 gap-3">
@@ -303,10 +428,12 @@ export default function PracticeQuizPlay() {
 
                   <StatementPairView q={q} />
                   <TableView q={q} />
+                  <GraphView q={q} />
+                  <VizView q={q} />
                   <AssertionReasonView q={q} />
 
                   <div className="mt-3 space-y-2">
-                    {(q.options || []).map((opt, idx) => {
+                    {displayOptions(q).map((opt, idx) => {
                       const optExp = q.optionExplanations?.[idx];
                       const cls =
                         idx === q.correct
@@ -318,7 +445,7 @@ export default function PracticeQuizPlay() {
                         <div key={idx}>
                           <div className={`flex items-center gap-2 rounded-xl border-2 px-3 py-2 text-sm ${cls}`}>
                             <span className="flex h-6 w-6 items-center justify-center rounded-lg border text-xs font-bold">{optionLabels[idx]}</span>
-                            <span className="flex-1"><MathText>{opt}</MathText></span>
+                            <span className="flex-1"><OptionContent>{opt}</OptionContent></span>
                             {idx === q.correct && <CheckCircle2 className="h-4 w-4 text-emerald-500" />}
                             {idx === userAns && idx !== q.correct && <XCircle className="h-4 w-4 text-rose-500" />}
                           </div>
@@ -350,11 +477,53 @@ export default function PracticeQuizPlay() {
     );
   }
 
+  // ---- Resume prompt (an unfinished attempt exists) ----
+  if (showResume) {
+    const answeredCount = Object.keys(saved.answers || {}).length;
+    return (
+      <div className="container-page py-10">
+        <button onClick={() => navigate(isPublic ? "/" : -1)} className="btn-ghost -ml-2 mb-6">
+          <ChevronLeft className="h-4 w-4" /> Back
+        </button>
+        <div className="mx-auto max-w-lg card p-8 text-center">
+          <span className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-brand-100 text-brand-600 dark:bg-brand-900/40 dark:text-brand-300">
+            <Play className="h-7 w-7" />
+          </span>
+          <h1 className="mt-4 text-2xl font-extrabold">Resume {title}?</h1>
+          <p className="mt-1 text-slate-500 dark:text-slate-400">
+            You have an unfinished attempt — {answeredCount} of {questions.length} question(s) answered.
+          </p>
+          <div className="mt-6 space-y-3">
+            <button onClick={() => setShowResume(false)} className="btn-primary w-full justify-center">
+              <Play className="h-4 w-4" /> Continue previous session
+            </button>
+            <button
+              onClick={() => {
+                localStorage.removeItem(storageKey);
+                setAnswers({}); setTimedOut({}); setBookmarks({});
+                setSeconds(0); setCurrent(0); setTimerMode(null); setQTime(0);
+                setSeed(makeSeed()); // fresh seed → questions & options reshuffle
+                setShowResume(false);
+              }}
+              className="btn-outline w-full justify-center"
+            >
+              Start a new session
+            </button>
+          </div>
+          <p className="mt-4 text-xs text-slate-400">
+            Continuing keeps your saved answers and the same question &amp; option order.
+            Starting new discards the previous answers and reshuffles.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   // ---- Timer setup screen ----
   if (!started) {
     return (
       <div className="container-page py-10">
-        <button onClick={() => navigate(-1)} className="btn-ghost -ml-2 mb-6">
+        <button onClick={() => navigate(isPublic ? "/" : -1)} className="btn-ghost -ml-2 mb-6">
           <ChevronLeft className="h-4 w-4" /> Back
         </button>
         <div className="mx-auto max-w-lg card p-8 text-center">
@@ -392,6 +561,8 @@ export default function PracticeQuizPlay() {
             With a timer, each question reveals its answer when time runs out. You can still review and continue.
           </p>
         </div>
+
+        {paperResources}
       </div>
     );
   }
@@ -447,7 +618,7 @@ export default function PracticeQuizPlay() {
     <div ref={containerRef} className={fullscreen ? "fixed inset-0 z-[60] overflow-y-auto bg-slate-50 px-4 py-6 dark:bg-slate-950" : "container-page py-6"}>
       <Watermark />
       <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
-        <button onClick={() => navigate(-1)} className="btn-ghost -ml-2">
+        <button onClick={() => navigate(isPublic ? "/" : -1)} className="btn-ghost -ml-2">
           <ChevronLeft className="h-4 w-4" /> Exit
         </button>
         <div className="flex flex-wrap items-center justify-end gap-2">
@@ -474,9 +645,15 @@ export default function PracticeQuizPlay() {
       </div>
 
       <div className="mb-5">
-        <div className="mb-1.5 flex justify-between text-sm">
-          <span className="font-medium">Question {current + 1} of {questions.length}</span>
-          <span className="text-slate-500">{Object.keys(answers).length} answered</span>
+        <div className="mb-1.5 flex flex-wrap items-center justify-between gap-2 text-sm">
+          <span className="flex items-center gap-2 font-medium">
+            Question {current + 1} of {questions.length}
+            <span className="inline-flex items-center gap-1 text-xs font-normal text-slate-400" title="Views of this question"><Eye className="h-3.5 w-3.5" /> {(q.views || 0).toLocaleString()}</span>
+          </span>
+          <span className="flex items-center gap-3 text-slate-500">
+            <span className="inline-flex items-center gap-1 text-xs" title="Total views of this quiz"><Eye className="h-3.5 w-3.5" /> {(views || 0).toLocaleString()} views</span>
+            <span>{Object.keys(answers).length} answered</span>
+          </span>
         </div>
         <ProgressBar value={((current + 1) / questions.length) * 100} />
       </div>
@@ -493,7 +670,7 @@ export default function PracticeQuizPlay() {
               )}
             </div>
             <div className="flex items-center gap-4">
-              <FeedbackButton context="question" questionText={q.text} questionNumber={current + 1} source={title} question={{ ...q, chosen: answers[current] ?? null }} label="Feedback" />
+              {!isPublic && <FeedbackButton context="question" questionText={q.text} questionNumber={current + 1} source={title} question={{ ...q, chosen: answers[current] ?? null }} label="Feedback" />}
               <button onClick={toggleBookmark} className={`flex items-center gap-1.5 text-sm font-medium transition ${bookmarks[current] ? "text-accent-600 dark:text-accent-400" : "text-slate-400 hover:text-accent-500"}`}>
                 {bookmarks[current] ? <BookmarkCheck className="h-5 w-5" /> : <Bookmark className="h-5 w-5" />}
                 {bookmarks[current] ? "Bookmarked" : "Bookmark"}
@@ -502,7 +679,7 @@ export default function PracticeQuizPlay() {
           </div>
 
           {q.image && <img src={q.image} alt="" className="mb-4 max-h-64 rounded-xl object-contain" />}
-          <h2 className="text-lg font-semibold leading-relaxed"><MathText>{q.text}</MathText></h2>
+          <h2 className="text-lg font-semibold leading-relaxed"><MathText>{stemText(q)}</MathText></h2>
 
           {isMatching && (
             <div className="mt-4 grid grid-cols-2 gap-4">
@@ -533,11 +710,13 @@ export default function PracticeQuizPlay() {
 
           <StatementPairView q={q} />
           <TableView q={q} />
+          <GraphView q={q} />
+          <VizView q={q} />
           <AssertionReasonView q={q} />
 
           <div className="mt-5 space-y-3">
             {isMatching && <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Choose the correct matching sequence:</p>}
-            {(q.options || []).map((opt, idx) => {
+            {displayOptions(q).map((opt, idx) => {
               const optExp = q.optionExplanations?.[idx];
               return (
                 <div key={idx}>
@@ -548,7 +727,7 @@ export default function PracticeQuizPlay() {
                       : "border-slate-300 dark:border-slate-600"}`}>
                       {isMatching ? `(${String.fromCharCode(97 + idx)})` : optionLabels[idx]}
                     </span>
-                    <span className="flex-1"><MathText>{opt}</MathText></span>
+                    <span className="flex-1"><OptionContent>{opt}</OptionContent></span>
                     {locked && idx === q.correct && <CheckCircle2 className="h-5 w-5 text-emerald-500" />}
                     {locked && idx === answers[current] && idx !== q.correct && <XCircle className="h-5 w-5 text-rose-500" />}
                   </button>

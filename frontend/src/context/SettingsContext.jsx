@@ -1,8 +1,30 @@
 import { createContext, useContext, useEffect, useState, useCallback } from "react";
 import { settingsService } from "../services";
 import { applyTheme } from "../lib/theme";
+import { applyBranding } from "../lib/branding";
 
 const SettingsContext = createContext();
+
+// Built-in Google OAuth Web Client ID for "Back up / Restore to Google Drive".
+// Intentionally left blank for distribution so no real credential ships in the
+// source. To enable Google Drive backup, either set VITE_GOOGLE_CLIENT_ID in
+// your hosting env (recommended for white-label deployments), paste your own
+// Client ID from the Google Cloud Console under Admin → Backup & Restore, or
+// hardcode your own Client ID as the value below. When left blank, the Drive
+// backup buttons stay hidden until a Client ID is configured.
+const DEFAULT_GOOGLE_CLIENT_ID = "";
+const ENV_GOOGLE_CLIENT_ID = String(
+  import.meta.env.VITE_GOOGLE_CLIENT_ID || DEFAULT_GOOGLE_CLIENT_ID || ""
+).trim();
+
+// Merge server/cached settings over the defaults. The built-in Client ID (env
+// var, else the constant above) always wins, so an old/wrong value left in the
+// database can never break Google Drive sign-in.
+function withDefaults(s = {}) {
+  const merged = { ...DEFAULTS, ...s };
+  if (ENV_GOOGLE_CLIENT_ID) merged.googleClientId = ENV_GOOGLE_CLIENT_ID;
+  return merged;
+}
 
 const DEFAULTS = {
   siteName: "My Study Guide",
@@ -28,14 +50,19 @@ const DEFAULTS = {
   guardHoldMs: 1500,
   statsAuto: true,
   notifyOnNewContent: false,
+  publicClientEnabled: true,
+  publicInstituteEnabled: true,
+  googleClientId: "",
   homeSections: [
     { key: "hero", visible: true },
     { key: "stats", visible: true },
     { key: "quickAccess", visible: true },
     { key: "features", visible: true },
     { key: "howItWorks", visible: true },
+    { key: "testimonials", visible: true },
     { key: "cta", visible: true },
   ],
+  testimonials: [],
   socialLinks: [],
   contacts: [],
   aboutHeading: "Built by educators, loved by toppers",
@@ -56,23 +83,23 @@ const DEFAULTS = {
 export function SettingsProvider({ children }) {
   const [settings, setSettings] = useState(() => {
     const cached = localStorage.getItem("msg-settings");
-    return cached ? { ...DEFAULTS, ...JSON.parse(cached) } : DEFAULTS;
+    return withDefaults(cached ? JSON.parse(cached) : {});
   });
 
   const apply = useCallback((s) => {
     setSettings(s);
     localStorage.setItem("msg-settings", JSON.stringify(s));
     applyTheme(s);
-    document.title = `${s.siteName} — ${s.tagline}`;
+    applyBranding(s);
   }, []);
 
   // Apply cached theme immediately, then refresh from the server.
   useEffect(() => {
     applyTheme(settings);
-    document.title = `${settings.siteName} — ${settings.tagline}`;
+    applyBranding(settings);
     settingsService
       .get()
-      .then((s) => apply({ ...DEFAULTS, ...s }))
+      .then((s) => apply(withDefaults(s)))
       .catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -80,7 +107,7 @@ export function SettingsProvider({ children }) {
   // Admin save
   const save = async (patch) => {
     const updated = await settingsService.update(patch);
-    apply({ ...DEFAULTS, ...updated });
+    apply(withDefaults(updated));
     return updated;
   };
 

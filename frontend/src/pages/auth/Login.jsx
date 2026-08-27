@@ -18,9 +18,10 @@ export default function Login() {
   const [busy, setBusy] = useState(false);
 
   const dest = location.state?.from || "/dashboard";
-  // Route each role to its home: admins → admin panel, clients → My Practice
-  // workspace, students → their intended destination.
-  const homeFor = (role) => (role === "admin" ? "/admin" : role === "client" ? "/client" : dest);
+  // Route each role to its home: admins & institute admins → admin panel,
+  // clients → My Practice workspace, students → their intended destination.
+  const homeFor = (role) =>
+    (role === "admin" || role === "institute_admin") ? "/admin" : role === "client" ? "/creator" : dest;
 
   const submit = async (e) => {
     e.preventDefault();
@@ -55,7 +56,12 @@ export default function Login() {
 
   return (
     <AuthShell title="Welcome back" subtitle="Log in to your account.">
-      <AccountTypeTabs active={acctType} onSelect={setAcctType} />
+      <AccountTypeTabs active={acctType} onSelect={setAcctType} withInstitute />
+      {acctType === "institute" && (
+        <p className="mb-4 rounded-xl bg-brand-50 px-3 py-2 text-xs text-brand-800 dark:bg-brand-900/20 dark:text-brand-200">
+          Institute admins: log in with your <b>admin email &amp; password</b> — you'll be taken straight to your admin panel.
+        </p>
+      )}
       <form onSubmit={submit} className="space-y-4">
         {error && (
           <div className="flex items-center gap-2 rounded-xl bg-rose-50 px-3 py-2.5 text-sm text-rose-700 dark:bg-rose-900/30 dark:text-rose-300">
@@ -124,10 +130,17 @@ export default function Login() {
 
       <GoogleButton />
 
-      {acctType === "client" ? (
+      {acctType === "institute" ? (
         <p className="mt-6 text-center text-sm text-slate-600 dark:text-slate-300">
-          New client?{" "}
-          <Link to="/client/register" className="font-semibold text-accent-600 hover:underline dark:text-accent-400">
+          New institute?{" "}
+          <Link to="/institute/register" className="font-semibold text-brand-600 hover:underline dark:text-brand-400">
+            Register your institute
+          </Link>
+        </p>
+      ) : acctType === "client" ? (
+        <p className="mt-6 text-center text-sm text-slate-600 dark:text-slate-300">
+          New creator?{" "}
+          <Link to="/creator/register" className="font-semibold text-accent-600 hover:underline dark:text-accent-400">
             Pick a plan &amp; sign up
           </Link>
         </p>

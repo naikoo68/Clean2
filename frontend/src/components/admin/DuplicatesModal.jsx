@@ -5,6 +5,7 @@ import { Loading, ErrorState } from "../ui/AsyncState";
 import MathText from "../ui/MathText";
 import AssertionReasonView from "../ui/AssertionReasonView";
 import TableView from "../ui/TableView";
+import GraphView from "../ui/GraphView";
 
 const toRoman = (n) => ["I", "II", "III", "IV", "V", "VI", "VII", "VIII"][n] || String(n + 1);
 
@@ -43,6 +44,8 @@ export default function DuplicatesModal({
   const [expanded, setExpanded] = useState({}); // groupKey -> bool
   const [subjects, setSubjects] = useState([]); // for the subject dropdown
   const [subjectId, setSubjectId] = useState(defaultSubject || "all"); // "all" or a subject _id
+  const [bulkBusy, setBulkBusy] = useState(false); // deleting all extras in one go
+  const [bulkProgress, setBulkProgress] = useState(0);
 
   const scan = useCallback((params) => {
     setLoading(true);
@@ -116,6 +119,43 @@ export default function DuplicatesModal({
     }
   };
 
+  // Delete EVERY extra copy in the currently-shown groups, keeping one of each
+  // (prefers a published copy). One click instead of deleting them one by one.
+  const deleteAllExtras = async () => {
+    const groups = visible;
+    const toDelete = [];
+    groups.forEach((g) => {
+      const qs = g.questions || [];
+      if (qs.length < 2) return;
+      const keep = qs.find((q) => q.status !== "draft") || qs[0]; // keep one (prefer published)
+      qs.forEach((q) => { if (q._id !== keep._id) toDelete.push(q._id); });
+    });
+    if (!toDelete.length) return;
+    if (!window.confirm(`Delete ${toDelete.length} extra copy(ies) across ${groups.length} group(s)? ONE copy of each question is kept. This cannot be undone.`)) return;
+    setBulkBusy(true); setBulkProgress(0); setError("");
+    const deletedIds = new Set();
+    const BATCH = 8; // delete in small parallel batches
+    try {
+      for (let i = 0; i < toDelete.length; i += BATCH) {
+        const slice = toDelete.slice(i, i + BATCH);
+        const results = await Promise.allSettled(slice.map((id) => contentService.deleteQuestion(id)));
+        results.forEach((r, k) => { if (r.status === "fulfilled") deletedIds.add(slice[k]); });
+        setBulkProgress(Math.min(toDelete.length, i + slice.length));
+      }
+    } finally {
+      setData((prev) => {
+        if (!prev) return prev;
+        const duplicates = prev.duplicates
+          .map((g) => { const questions = g.questions.filter((q) => !deletedIds.has(q._id)); return { ...g, questions, count: questions.length }; })
+          .filter((g) => g.questions.length > 1); // resolved groups drop off
+        return { ...prev, duplicates, groups: duplicates.length, extras: duplicates.reduce((s, g) => s + (g.count - 1), 0) };
+      });
+      setBulkBusy(false);
+      const failed = toDelete.length - deletedIds.size;
+      if (failed) setError(`${deletedIds.size} deleted, ${failed} couldn't be deleted — click "Delete all extra copies" again to retry the rest.`);
+    }
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/50 p-4">
       <div className="my-8 w-full max-w-3xl animate-scale-in card p-6">
@@ -177,6 +217,25 @@ export default function DuplicatesModal({
               A question counts as a duplicate only when the <b>whole question</b> matches (text + all options). Duplicates
               are found <b>within</b> each container — Quiz per subject, Test Series and Practice separately.
             </p>
+
+            {/* One-click cleanup: delete every extra copy, keep one of each. */}
+            {visible.length > 0 && (
+              <div className="mb-3 flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={deleteAllExtras}
+                  disabled={bulkBusy || loading}
+                  className="btn-primary bg-rose-600 hover:bg-rose-700 disabled:opacity-50"
+                >
+                  {bulkBusy
+                    ? <><Loader2 className="h-4 w-4 animate-spin" /> Deleting… {bulkProgress}</>
+                    : <><Trash2 className="h-4 w-4" /> Delete all extra copies (keep one of each)</>}
+                </button>
+                <span className="text-xs text-slate-500 dark:text-slate-400">
+                  Removes every duplicate copy but keeps one of each{filter !== "All" ? ` in “${filter}”` : ""} (prefers a published copy).
+                </span>
+              </div>
+            )}
 
             {/* Category tabs (Quiz / Test Series / Practice …) */}
             {categories.length > 1 && (
@@ -242,6 +301,7 @@ export default function DuplicatesModal({
 
                           {/* Table-based */}
                           <TableView q={g} />
+                          <GraphView q={g} />
 
                           {/* Matching / pair columns */}
                           {(Array.isArray(g.columnA) && g.columnA.length > 0) || (Array.isArray(g.columnB) && g.columnB.length > 0) ? (
@@ -296,7 +356,7 @@ export default function DuplicatesModal({
                             </div>
                             <button
                               onClick={() => deleteOne(groupKey, q._id)}
-                              disabled={deleting[q._id]}
+                              disabled={deleting[q._id] || bulkBusy}
                               className="flex items-center gap-1 rounded-lg px-2 py-1 font-semibold text-rose-600 hover:bg-rose-50 disabled:opacity-50 dark:hover:bg-rose-900/30"
                             >
                               {deleting[q._id] ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}

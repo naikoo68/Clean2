@@ -20,6 +20,7 @@ const attemptSchema = new mongoose.Schema(
     correct: Number,
     incorrect: Number,
     score: Number,
+    maxScore: Number,
     percentage: Number,
     timeTaken: Number, // seconds
     rank: Number,
@@ -27,5 +28,12 @@ const attemptSchema = new mongoose.Schema(
   },
   { timestamps: true }
 );
+
+// Indexes for the dashboard / analytics / leaderboard queries, which filter
+// attempts by user (newest first) and by the test/quiz taken. Unindexed, these
+// scan every attempt — increasingly slow as attempts accumulate.
+attemptSchema.index({ user: 1, createdAt: -1 });
+attemptSchema.index({ testSeries: 1 });
+attemptSchema.index({ quiz: 1 });
 
 export default mongoose.model("Attempt", attemptSchema);

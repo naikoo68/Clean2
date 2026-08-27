@@ -1,7 +1,8 @@
 import User from "../models/User.js";
-import Coupon from "../models/Coupon.js";
+import { redeemCoupon } from "../models/Coupon.js";
 import { computeOffer, creditReferrer } from "./authController.js";
-import { razorpayConfigured, razorpayKeyId, createRazorpayOrder, verifyPaymentSignature } from "../config/razorpay.js";
+import { razorpayConfigured, razorpayKeyId, createRazorpayOrder, verifyPaymentSignature, verifyPaidOrder } from "../config/razorpay.js";
+import { runUnscoped } from "../utils/tenantContext.js";
 
 // Both routes run behind attachUser + authorize("client"), so an EXPIRED
 // client (e.g. a finished trial) can still renew/upgrade their own account.
@@ -49,6 +50,29 @@ export async function upgradeActivate(req, res) {
     if (!verifyPaymentSignature({ orderId: razorpay_order_id, paymentId: razorpay_payment_id, signature: razorpay_signature })) {
       return res.status(400).json({ message: "Payment could not be verified. Please try again." });
     }
+    // Re-fetch the order and confirm it was paid in full for THIS plan/price and
+    // belongs to THIS user — the signature alone doesn't prove any of that, so a
+    // cheap order can't be replayed to claim an expensive upgrade.
+    const match = await verifyPaidOrder({
+      orderId: razorpay_order_id,
+      expectedAmountRupees: offer.finalPrice,
+      expectedPlan: offer.plan.key,
+      expectedUserId: req.user._id,
+    });
+    if (!match.ok) {
+      console.error("[payment] upgrade order verification failed", { order: razorpay_order_id, reason: match.reason });
+      return res.status(400).json({ message: "Payment could not be verified. Please try again." });
+    }
+    // Replay protection: a payment id may only be consumed once, across accounts.
+    const usedPayment = await runUnscoped(() =>
+      User.findOne({
+        _id: { $ne: req.user._id },
+        $or: [{ paymentId: razorpay_payment_id }, { studentPaymentId: razorpay_payment_id }],
+      }).select("_id")
+    );
+    if (usedPayment) {
+      return res.status(400).json({ message: "This payment has already been used." });
+    }
     req.user.paymentId = razorpay_payment_id;
   }
 
@@ -60,6 +84,9 @@ export async function upgradeActivate(req, res) {
 
   req.user.expiresAt = base;
   req.user.isTrial = false;
+  // A paid plan includes AI generation limits — make sure AI access is on so a
+  // subscriber (or a renewing client whose access was never granted) can use it.
+  req.user.aiAccess = true;
   req.user.subscriptionPlan = offer.plan.key;
   req.user.subscriptionMonths = offer.plan.months;
   req.user.subscriptionPrice = offer.finalPrice;
@@ -71,7 +98,7 @@ export async function upgradeActivate(req, res) {
   await req.user.save();
 
   if (offer.applied?.coupon && !offer.applied.coupon.invalid) {
-    Coupon.updateOne({ code: offer.applied.coupon.code }, { $inc: { usedCount: 1 } }).catch(() => {});
+    redeemCoupon(offer.applied.coupon.code).catch(() => {});
   }
 
   res.json({ ok: true, expiresAt: req.user.expiresAt, plan: offer.plan.key });

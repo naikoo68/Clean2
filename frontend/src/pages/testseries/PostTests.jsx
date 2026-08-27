@@ -1,21 +1,37 @@
 import { useEffect, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useParams, useNavigate } from "react-router-dom";
 import { Clock, FileText, Award, Play, Lock, CheckCircle2, Layers, ChevronLeft } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import { examService, testService } from "../../services";
 import Badge from "../../components/ui/Badge";
+import PaperExport from "../../components/admin/PaperExport";
 import { Loading, ErrorState, EmptyState } from "../../components/ui/AsyncState";
+import { useSeo } from "../../lib/useSeo";
+import Breadcrumbs, { breadcrumbLd } from "../../components/ui/Breadcrumbs";
 
 const categories = ["All", "Full-Length", "Subject-wise", "Chapter-wise", "Previous Year"];
 
 export default function PostTests() {
   const { examId, postId } = useParams();
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [active, setActive] = useState("All");
   const [post, setPost] = useState(null);
   const [tests, setTests] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+
+  const crumbs = post
+    ? [{ label: "Home", to: "/" }, { label: "Test Series", to: "/test-series" }, { label: post.name }]
+    : [];
+  useSeo(
+    post ? `${post.name} — Mock Tests` : "Test Series",
+    post
+      ? `Attempt ${post.name} tests on My Study Guide — full-length mocks, subject and chapter tests and previous-year papers with instant results and detailed solutions.`
+      : undefined,
+    undefined,
+    post ? breadcrumbLd(crumbs) : undefined
+  );
 
   const load = () => {
     setLoading(true);
@@ -34,6 +50,7 @@ export default function PostTests() {
 
   return (
     <div className="container-page py-12">
+      {crumbs.length > 0 && <Breadcrumbs items={crumbs} />}
       <Link to={`/test-series/${examId}`} className="btn-ghost mb-6 -ml-2 w-fit">
         <ChevronLeft className="h-4 w-4" /> Back to posts
       </Link>
@@ -80,8 +97,9 @@ export default function PostTests() {
           {filtered.map((t, i) => (
             <div
               key={t._id}
+              onClick={() => navigate(user ? `/test-series/attempt/${t._id}` : "/login")}
               style={{ animationDelay: `${i * 40}ms` }}
-              className="card-hover flex animate-fade-in-up flex-col p-6 opacity-0"
+              className="card-hover flex animate-fade-in-up cursor-pointer flex-col p-6 opacity-0"
             >
               <div className="flex items-start justify-between">
                 <span className="badge bg-brand-100 text-brand-700 dark:bg-brand-900/40 dark:text-brand-300">
@@ -124,13 +142,18 @@ export default function PostTests() {
               )}
 
               {user ? (
-                <Link to={`/test-series/attempt/${t._id}`} className="btn-primary mt-5 w-full">
-                  <Play className="h-4 w-4" /> Start Test
-                </Link>
+                <div className="mt-5 space-y-2">
+                  <span className="btn-primary w-full">
+                    <Play className="h-4 w-4" /> Start Test
+                  </span>
+                  <div className="flex justify-center" onClick={(e) => e.stopPropagation()}>
+                    <PaperExport title={t.name || "Test"} label="Download question paper" paperOnly load={() => testService.get(t._id)} />
+                  </div>
+                </div>
               ) : (
-                <Link to="/login" className="btn-outline mt-5 w-full">
+                <span className="btn-outline mt-5 w-full">
                   <Lock className="h-4 w-4" /> Login to Start
-                </Link>
+                </span>
               )}
             </div>
           ))}

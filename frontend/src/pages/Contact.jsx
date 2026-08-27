@@ -4,11 +4,13 @@ import { Mail, Phone, MapPin, Send, CheckCircle2, Loader2, AlertCircle, LogIn, U
 import { useSettings } from "../context/SettingsContext";
 import { useAuth } from "../context/AuthContext";
 import { messageService } from "../services";
+import { useSeo } from "../lib/useSeo";
 
 const ICONS = { email: Mail, phone: Phone, address: MapPin };
 const LABELS = { email: "Email", phone: "Phone", address: "Address" };
 
 export default function Contact() {
+  useSeo("Contact Us", "Get in touch with My Study Guide for support, questions and partnership enquiries.");
   const { settings } = useSettings();
   const { user } = useAuth();
   const [sent, setSent] = useState(false);

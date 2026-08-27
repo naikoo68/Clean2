@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useMemo, useRef } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
   ChevronLeft,
@@ -24,14 +24,18 @@ import { contentService, quizService } from "../../services";
 import ProgressBar from "../../components/ui/ProgressBar";
 import Badge from "../../components/ui/Badge";
 import MathText from "../../components/ui/MathText";
+import OptionContent from "../../components/ui/OptionContent";
 import StatementPairView from "../../components/ui/StatementPairView";
 import TableView from "../../components/ui/TableView";
+import GraphView from "../../components/ui/GraphView";
+import VizView from "../../components/ui/VizView";
 import AssertionReasonView from "../../components/ui/AssertionReasonView";
 import Watermark from "../../components/ui/Watermark";
 import FeedbackButton from "../../components/ui/FeedbackButton";
 import { useZoom } from "../../context/ZoomContext";
 import { Loading, ErrorState, EmptyState } from "../../components/ui/AsyncState";
-import { questionDateText } from "../../lib/questions";
+import { questionDateText, stemText, displayOptions } from "../../lib/questions";
+import { shuffleAll, toOriginalIndex, makeSeed } from "../../lib/shuffleOptions";
 
 const optionLabels = ["A", "B", "C", "D"];
 
@@ -83,6 +87,17 @@ export default function QuizPlay() {
   const [seconds, setSeconds] = useState(saved.seconds || 0); // total elapsed
   const [timerMode, setTimerMode] = useState(saved.timerMode ?? null); // null=not chosen, "off", or seconds
   const [qTime, setQTime] = useState(saved.qTime ?? 0); // remaining for current question
+  // Seed for per-attempt option shuffling — persisted so a refresh resumes the
+  // SAME order; a new attempt (storage cleared on submit) gets a new order.
+  const [seed, setSeed] = useState(() => (typeof saved.seed === "number" ? saved.seed : makeSeed()));
+  // If a previous, UNFINISHED attempt is saved, ask whether to resume it or
+  // start fresh — instead of silently resuming. "Continue" keeps the saved
+  // answers AND the same question/option order (same seed); "Start new" clears
+  // it and reshuffles.
+  const hasSavedSession =
+    saved.timerMode != null &&
+    (Object.keys(saved.answers || {}).length > 0 || (saved.current || 0) > 0 || (saved.seconds || 0) > 0);
+  const [showResume, setShowResume] = useState(hasSavedSession);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [fullscreen, setFullscreen] = useState(false);
@@ -124,7 +139,7 @@ export default function QuizPlay() {
       contentService.quizzes(sessionId).catch(() => []),
     ])
       .then(([qs, subjects, topics, sessions, quizzes]) => {
-        setQuestions(qs);
+        setQuestions(shuffleAll(qs, seed)); // reshuffle options for this attempt
         const subj = subjects.find?.((s) => s._id === subjectId);
         const top = topics.find?.((t) => t._id === topicId);
         const ses = sessions.find?.((s) => s._id === sessionId);
@@ -134,13 +149,13 @@ export default function QuizPlay() {
       })
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false));
-  }, [quizId, subjectId]);
+  }, [quizId, subjectId, seed]);
 
   useEffect(load, [load]);
 
   // Total elapsed timer (runs once the quiz has started)
   useEffect(() => {
-    if (!started) return;
+    if (!started || showResume) return;
     const t = setInterval(() => setSeconds((s) => s + 1), 1000);
     return () => clearInterval(t);
   }, [started]);
@@ -162,7 +177,7 @@ export default function QuizPlay() {
 
   // Per-question countdown → when it hits 0, lock the question (reveal answer).
   useEffect(() => {
-    if (!isTimed || lockedAt(current)) return;
+    if (!isTimed || showResume || lockedAt(current)) return;
     if (qTime <= 0) {
       setTimedOut((t) => ({ ...t, [current]: true }));
       return;
@@ -177,10 +192,10 @@ export default function QuizPlay() {
     if (!loading && started) {
       localStorage.setItem(
         storageKey,
-        JSON.stringify({ answers, timedOut, bookmarks, seconds, current, timerMode, qTime })
+        JSON.stringify({ answers, timedOut, bookmarks, seconds, current, timerMode, qTime, seed })
       );
     }
-  }, [answers, timedOut, bookmarks, seconds, current, timerMode, qTime, storageKey, loading, started]);
+  }, [answers, timedOut, bookmarks, seconds, current, timerMode, qTime, seed, storageKey, loading, started]);
 
   const submit = useCallback(async () => {
     setSubmitting(true);
@@ -220,6 +235,8 @@ export default function QuizPlay() {
         columnA: qq.columnA,
         columnB: qq.columnB,
         tableRows: qq.tableRows,
+        graph: qq.graph,
+        viz: qq.viz,
         assertion: qq.assertion,
         reason: qq.reason,
         chosen: answers[i] ?? null,
@@ -230,7 +247,9 @@ export default function QuizPlay() {
 
     const byId = {};
     questions.forEach((qq, i) => {
-      if (answers[i] !== undefined) byId[qq._id] = answers[i];
+      // Map the chosen DISPLAY index back to the original stored index so the
+      // server (which scores against Question.correct) grades correctly.
+      if (answers[i] !== undefined) byId[qq._id] = toOriginalIndex(qq, answers[i]);
     });
     try {
       await quizService.submit(quizId, byId, seconds);
@@ -242,10 +261,58 @@ export default function QuizPlay() {
     navigate(`/quiz/${subjectId}/${topicId}/${sessionId}/${quizId}/result`, { state: result });
   }, [answers, questions, seconds, subjectId, topicId, sessionId, quizId, subjectName, navigate, storageKey]);
 
+  // Resume an unfinished attempt as-is, or wipe it and begin a fresh one.
+  const continueSession = () => setShowResume(false);
+  const startNewSession = () => {
+    localStorage.removeItem(storageKey);
+    setAnswers({});
+    setTimedOut({});
+    setBookmarks({});
+    setSeconds(0);
+    setCurrent(0);
+    setTimerMode(null);
+    setQTime(0);
+    setSeed(makeSeed()); // fresh seed → questions & options reshuffle
+    setShowResume(false);
+  };
+
   if (loading) return <div className="container-page"><Loading label="Loading quiz..." /></div>;
   if (error) return <div className="container-page"><ErrorState message={error} onRetry={load} /></div>;
   if (!questions.length)
     return <div className="container-page"><EmptyState message="No questions in this session yet." /></div>;
+
+  // ---- Resume prompt (an unfinished attempt exists) ----
+  if (showResume) {
+    const answeredCount = Object.keys(saved.answers || {}).length;
+    return (
+      <div className="container-page py-10">
+        <button onClick={() => navigate(`/quiz/${subjectId}/${topicId}`)} className="btn-ghost -ml-2 mb-6">
+          <ChevronLeft className="h-4 w-4" /> Back
+        </button>
+        <div className="mx-auto max-w-lg card p-8 text-center">
+          <span className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-brand-100 text-brand-600 dark:bg-brand-900/40 dark:text-brand-300">
+            <Play className="h-7 w-7" />
+          </span>
+          <h1 className="mt-4 text-2xl font-extrabold">Resume {subjectName} Quiz?</h1>
+          <p className="mt-1 text-slate-500 dark:text-slate-400">
+            You have an unfinished attempt — {answeredCount} of {questions.length} question(s) answered.
+          </p>
+          <div className="mt-6 space-y-3">
+            <button onClick={continueSession} className="btn-primary w-full justify-center">
+              <Play className="h-4 w-4" /> Continue previous session
+            </button>
+            <button onClick={startNewSession} className="btn-outline w-full justify-center">
+              Start a new session
+            </button>
+          </div>
+          <p className="mt-4 text-xs text-slate-400">
+            Continuing keeps your saved answers and the same question &amp; option order.
+            Starting new discards the previous answers and reshuffles.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   // ---- Timer setup screen (shown before the quiz starts) ----
   if (!started) {
@@ -423,7 +490,7 @@ export default function QuizPlay() {
 
           {q.image && <img src={q.image} alt="" className="mb-4 max-h-64 rounded-xl object-contain" />}
           <h2 className="text-lg font-semibold leading-relaxed">
-            <MathText>{q.text}</MathText>
+            <MathText>{stemText(q)}</MathText>
           </h2>
 
           {/* Matching questions show the two columns above the answer options */}
@@ -457,11 +524,13 @@ export default function QuizPlay() {
           {/* Statement/pair lists, table grids, and assertion–reason statements */}
           <StatementPairView q={q} />
           <TableView q={q} />
+          <GraphView q={q} />
+          <VizView q={q} />
           <AssertionReasonView q={q} />
 
           <div className="mt-5 space-y-3">
             {isMatching && <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Choose the correct matching sequence:</p>}
-            {(q.options || []).map((opt, idx) => {
+            {displayOptions(q).map((opt, idx) => {
               const optExp = q.optionExplanations?.[idx];
               return (
                 <div key={idx}>
@@ -477,7 +546,7 @@ export default function QuizPlay() {
                     >
                       {isMatching ? `(${String.fromCharCode(97 + idx)})` : optionLabels[idx]}
                     </span>
-                    <span className="flex-1"><MathText>{opt}</MathText></span>
+                    <span className="flex-1"><OptionContent>{opt}</OptionContent></span>
                     {locked && idx === q.correct && <CheckCircle2 className="h-5 w-5 text-emerald-500" />}
                     {locked && idx === answers[current] && idx !== q.correct && <XCircle className="h-5 w-5 text-rose-500" />}
                   </button>

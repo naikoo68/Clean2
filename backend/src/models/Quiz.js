@@ -11,6 +11,13 @@ const quizSchema = new mongoose.Schema(
     index: { type: Number, default: 1 },
     difficulty: { type: String, enum: ["Easy", "Medium", "Hard"], default: "Medium" },
     isActive: { type: Boolean, default: true },
+    // Remembered AI generator inputs (topic/subtopics) so reopening the
+    // generator for this quiz pre-fills them and coverage can continue.
+    aiTopic: { type: String, default: "" },
+    aiSubtopics: { type: String, default: "" },
+    // Recycle Bin (soft delete) — see utils/softDelete.js.
+    deleted: { type: Boolean, default: false },
+    deletedAt: { type: Date, default: null },
   },
   { timestamps: true }
 );

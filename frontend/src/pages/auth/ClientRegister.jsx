@@ -1,10 +1,12 @@
 import { useEffect, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useLocation } from "react-router-dom";
 import { User, Mail, Lock, Eye, EyeOff, UserPlus, Loader2, AlertCircle, Sparkles, Check, Tag, Gift } from "lucide-react";
 import AuthShell from "../../components/auth/AuthShell";
 import OtpVerify from "../../components/auth/OtpVerify";
 import AccountTypeTabs from "../../components/auth/AccountTypeTabs";
+import PlanPicker from "../../components/client/PlanPicker";
 import { useAuth } from "../../context/AuthContext";
+import { useSettings } from "../../context/SettingsContext";
 import { authService, paymentService } from "../../services";
 
 // Load Razorpay Checkout once, on demand.
@@ -22,7 +24,7 @@ function loadRazorpay() {
 // Prices mirror the backend (single source of truth) — used only until the
 // live /auth/plans response arrives, so the form never renders empty.
 const FALLBACK_PLANS = [
-  { key: "trial", label: "1-Day Free Trial", months: 0, price: 0, trial: true },
+  { key: "trial", label: "1-Day Free Trial", months: 0, days: 1, price: 0, trial: true },
   { key: "1m", label: "1 Month", months: 1, price: 299 },
   { key: "2m", label: "2 Months", months: 2, price: 499 },
   { key: "6m", label: "6 Months", months: 6, price: 699 },
@@ -33,12 +35,19 @@ const FALLBACK_PLANS = [
 // gets a private My Practice workspace to build and take their own quizzes/tests.
 export default function ClientRegister() {
   const { register, applySession } = useAuth();
+  const { settings } = useSettings();
   const navigate = useNavigate();
+  const location = useLocation();
+  // If the super-admin hid Client sign-up from the public, block direct-URL access too.
+  useEffect(() => {
+    if (settings?.publicClientEnabled === false) navigate("/", { replace: true });
+  }, [settings?.publicClientEnabled, navigate]);
   const [showPw, setShowPw] = useState(false);
   const [otpStep, setOtpStep] = useState(null); // { email, devOtp, emailSent }
   const [form, setForm] = useState({ name: "", email: "", password: "" });
   const [plans, setPlans] = useState(FALLBACK_PLANS);
-  const [planKey, setPlanKey] = useState("trial"); // default: free 1-day trial
+  // Pre-select the plan chosen on the public /pricing page (if any), else trial.
+  const [planKey, setPlanKey] = useState(location.state?.plan || "trial");
   const [coupon, setCoupon] = useState("");
   const [referral, setReferral] = useState("");
   const [offer, setOffer] = useState(null); // { basePrice, discount, finalPrice, applied }
@@ -65,9 +74,19 @@ export default function ClientRegister() {
   }, [planKey, coupon, referral, form.email]);
 
   const selectedPlan = plans.find((p) => p.key === planKey) || plans[0];
+  // The free trial has no price, so coupon/referral don't apply — hide them.
+  const isFreePlan = !!selectedPlan?.trial || (selectedPlan?.price ?? 0) <= 0;
+  const trialLen = Number(selectedPlan?.days) || 1; // free-trial length in days
   const basePrice = offer?.basePrice ?? selectedPlan?.price ?? 0;
   const discount = offer?.discount ?? 0;
   const total = offer?.finalPrice ?? selectedPlan?.price ?? 0;
+
+  // Pick a plan; clear coupon/referral when switching to a free/trial plan.
+  const handlePickPlan = (key) => {
+    setPlanKey(key);
+    const p = plans.find((x) => x.key === key);
+    if (p && (p.trial || (p.price ?? 0) <= 0)) { setCoupon(""); setReferral(""); }
+  };
 
   // Create the account. `paymentFields` carries the verified Razorpay details
   // for paid signups; empty for free/OTP signups.
@@ -81,7 +100,7 @@ export default function ClientRegister() {
     // Paid signup → server returns a session; log in and go straight to the app.
     if (res?.paid && res?.token) {
       applySession(res.token, res.user);
-      navigate("/client", { replace: true });
+      navigate("/creator", { replace: true });
       return;
     }
     // Free / payments-off → verify email via OTP.
@@ -112,10 +131,11 @@ export default function ClientRegister() {
               order_id: order.orderId,
               amount: order.amount,
               currency: order.currency || "INR",
-              name: "My Study Guide",
+              name: settings?.siteName || "My Study Guide",
+              image: settings?.logoUrl || undefined,
               description: `${selectedPlan?.label} plan`,
               prefill: { name: form.name, email: form.email },
-              theme: { color: "#2563eb" },
+              theme: { color: settings?.primaryColor || "#2563eb" },
               handler: async (resp) => {
                 try {
                   await doRegister({
@@ -152,7 +172,7 @@ export default function ClientRegister() {
           email={otpStep.email}
           devOtp={otpStep.devOtp}
           emailSent={otpStep.emailSent}
-          onVerified={() => navigate("/client", { replace: true })}
+          onVerified={() => navigate("/creator", { replace: true })}
           onLater={() => navigate("/login")}
         />
       </AuthShell>
@@ -160,11 +180,11 @@ export default function ClientRegister() {
   }
 
   return (
-    <AuthShell title="Create a Client account" subtitle="Pick a plan and build your own private quizzes & tests.">
-      <AccountTypeTabs active="client" onSelect={(k) => { if (k === "student") navigate("/register"); }} />
+    <AuthShell title="Create a Creator account" subtitle="Pick a plan and build your own private quizzes & tests.">
+      <AccountTypeTabs active="client" withInstitute onSelect={(k) => { if (k === "student") navigate("/register"); else if (k === "institute") navigate("/institute/register"); }} />
       <div className="mb-5 flex items-start gap-2 rounded-xl border border-accent-200 bg-accent-50 px-3 py-2.5 text-sm text-accent-800 dark:border-accent-900/50 dark:bg-accent-900/20 dark:text-accent-200">
         <Sparkles className="mt-0.5 h-4 w-4 flex-shrink-0" />
-        A Client account gives you your own private <b>My Practice</b> space to create and take your own quizzes and tests.
+        A Creator account gives you your own private <b>My Practice</b> space to create and take your own quizzes and tests.
       </div>
       <form onSubmit={submit} className="space-y-4">
         {error && (
@@ -227,31 +247,24 @@ export default function ClientRegister() {
 
         {/* Plan selection */}
         <div>
-          <label className="mb-1.5 block text-sm font-medium">Choose your plan</label>
-          <div className="grid grid-cols-2 gap-2">
-            {plans.map((p) => {
-              const active = p.key === planKey;
-              return (
-                <button
-                  type="button"
-                  key={p.key}
-                  onClick={() => setPlanKey(p.key)}
-                  className={`relative rounded-xl border p-3 text-left transition ${
-                    active
-                      ? "border-brand-500 bg-brand-50 ring-1 ring-brand-500 dark:bg-brand-900/20"
-                      : "border-slate-200 hover:border-slate-300 dark:border-slate-700"
-                  }`}
-                >
-                  {active && <Check className="absolute right-2 top-2 h-4 w-4 text-brand-600" />}
-                  <p className="text-sm font-semibold">{p.label}</p>
-                  <p className="text-lg font-extrabold">{p.price > 0 ? `₹${p.price}` : "Free"}</p>
-                </button>
-              );
-            })}
-          </div>
+          <label className="mb-1.5 block text-sm font-medium">Choose your billing cycle &amp; plan</label>
+          <PlanPicker plans={plans} value={planKey} onChange={handlePickPlan} />
+
+          {/* AI generation limits for the chosen plan */}
+          {selectedPlan?.maxPerBatch ? (
+            <div className="mt-2 rounded-xl border border-brand-200 bg-brand-50/60 p-3 text-xs dark:border-brand-900/40 dark:bg-brand-900/10">
+              <p className="mb-1.5 flex items-center gap-1 font-semibold text-brand-700 dark:text-brand-300"><Sparkles className="h-3.5 w-3.5" /> AI question generation — {selectedPlan.label}</p>
+              <div className="grid grid-cols-3 gap-2 text-center">
+                <div className="rounded-lg bg-white/70 p-2 dark:bg-slate-800/50"><p className="text-sm font-extrabold text-slate-700 dark:text-slate-200">{selectedPlan.maxPerBatch}</p><p className="text-[10px] text-slate-500 dark:text-slate-400">Questions / batch</p></div>
+                <div className="rounded-lg bg-white/70 p-2 dark:bg-slate-800/50"><p className="text-sm font-extrabold text-slate-700 dark:text-slate-200">{selectedPlan.perWindow}</p><p className="text-[10px] text-slate-500 dark:text-slate-400">Questions / window</p></div>
+                <div className="rounded-lg bg-white/70 p-2 dark:bg-slate-800/50"><p className="text-sm font-extrabold text-slate-700 dark:text-slate-200">{selectedPlan.windowMinutes || 5} min</p><p className="text-[10px] text-slate-500 dark:text-slate-400">Window</p></div>
+              </div>
+            </div>
+          ) : null}
         </div>
 
-        {/* Coupon + referral */}
+        {/* Coupon + referral — hidden for the free trial (nothing to discount) */}
+        {!isFreePlan && (
         <div className="grid gap-3 sm:grid-cols-2">
           <div>
             <label className="mb-1.5 block text-sm font-medium">
@@ -290,6 +303,7 @@ export default function ClientRegister() {
             )}
           </div>
         </div>
+        )}
 
         {/* Price summary */}
         <div className="rounded-xl border border-slate-200 p-3 text-sm dark:border-slate-700">
@@ -319,14 +333,14 @@ export default function ClientRegister() {
           {busy
             ? "Processing..."
             : planKey === "trial"
-            ? "Start 1-day free trial"
+            ? `Start ${trialLen}-day free trial`
             : payEnabled && total > 0
             ? `Pay ₹${total} & Create account`
             : `Create account · ₹${total}`}
         </button>
         <p className="text-center text-xs text-slate-400">
           {planKey === "trial"
-            ? "Free 1-day trial — no payment needed. You can upgrade to a paid plan anytime."
+            ? `Free ${trialLen}-day trial — no payment needed. You can upgrade to a paid plan anytime.`
             : payEnabled && total > 0
             ? "You'll pay securely via Razorpay, then your account activates instantly for the selected duration."
             : "After verifying your email, your account is active for the selected duration."}

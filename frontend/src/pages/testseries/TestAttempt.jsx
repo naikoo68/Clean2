@@ -17,18 +17,26 @@ import {
   ZoomOut,
   Search,
   LogOut,
+  Mail,
+  Eye,
 } from "lucide-react";
-import { testService } from "../../services";
+import { testService, cbtService } from "../../services";
 import { useAuth } from "../../context/AuthContext";
 import { Loading, ErrorState } from "../../components/ui/AsyncState";
 import MathText from "../../components/ui/MathText";
+import OptionContent from "../../components/ui/OptionContent";
+import { getCbtSession, clearCbtSession } from "../../lib/cbtSession";
 import StatementPairView from "../../components/ui/StatementPairView";
 import TableView from "../../components/ui/TableView";
+import GraphView from "../../components/ui/GraphView";
 import AssertionReasonView from "../../components/ui/AssertionReasonView";
 import Watermark from "../../components/ui/Watermark";
 import FeedbackButton from "../../components/ui/FeedbackButton";
 import { useZoom } from "../../context/ZoomContext";
-import { questionDateText, searchQuestions } from "../../lib/questions";
+import { questionDateText, searchQuestions, stemText, displayOptions } from "../../lib/questions";
+import { shuffleAll, shuffleQuestion, shuffleQuestionOrder, toOriginalIndex, toDisplayIndex, makeSeed } from "../../lib/shuffleOptions";
+import PaperExport from "../../components/admin/PaperExport";
+import { useSeo } from "../../lib/useSeo";
 
 // Roman numerals for Column B labels (I, II, III, IV…)
 function toRoman(n) {
@@ -49,8 +57,64 @@ const STATUS = {
   ANSWERED_MARKED: "answered_marked",
 };
 
+// Bind the CBT timer to the exam's end: a late joiner gets only the time left
+// until the exam closes (never more than the test's own duration). serverNow
+// avoids trusting the client's clock.
+function cbtRemainingSeconds(endAt, serverNow, durationMin) {
+  const dur = (durationMin || 30) * 60;
+  if (!endAt) return dur;
+  const secsToEnd = Math.floor((new Date(endAt).getTime() - new Date(serverNow || Date.now()).getTime()) / 1000);
+  return Math.max(1, Math.min(dur, secsToEnd));
+}
+
+// CBT results are DEFERRED: after submitting, the candidate sees only a
+// confirmation. Their score & rank are emailed and become viewable once the
+// exam is over (its end time / the admin's release).
+function CbtSubmitted({ result, test, candidate, navigate }) {
+  const endText = result?.endAt
+    ? `after the exam ends on ${new Date(result.endAt).toLocaleString()}`
+    : "once the exam is over";
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-slate-100 p-4 dark:bg-slate-950">
+      <div className="card w-full max-w-lg p-8 text-center">
+        <CheckCircle2 className="mx-auto h-14 w-14 text-emerald-500" />
+        <h1 className="mt-4 text-2xl font-extrabold">Response recorded</h1>
+        <p className="mt-1 text-slate-500 dark:text-slate-400">{test?.name}</p>
+
+        <div className="mt-5 rounded-2xl bg-slate-50 p-4 text-left text-sm dark:bg-slate-800/60">
+          <p className="flex items-start gap-2">
+            <Clock className="mt-0.5 h-4 w-4 flex-shrink-0 text-amber-500" />
+            <span>Your <b>score and rank</b> will be available <b>{endText}</b> — results are released only after the exam is over so ranks are final.</span>
+          </p>
+          <p className="mt-3 flex items-start gap-2">
+            <Mail className="mt-0.5 h-4 w-4 flex-shrink-0 text-brand-500" />
+            <span>
+              {result?.emailConfigured
+                ? <>We'll email your full scorecard to <b>{candidate?.email}</b> when results are released.</>
+                : <>Save the status link below — you can check your result there once it's released.</>}
+            </span>
+          </p>
+        </div>
+
+        <div className="mt-6 flex flex-wrap justify-center gap-3">
+          {result?.resultToken && (
+            <a href={`/cbt/result/${result.resultToken}`} target="_blank" rel="noreferrer" className="btn-outline">
+              Check result status
+            </a>
+          )}
+          <button onClick={() => navigate("/online-exams")} className="btn-primary">Back to exams</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function TestAttempt() {
-  const { testId } = useParams();
+  const { testId, token, cbtToken, freeId } = useParams();
+  const isPublic = !!token; // opened via /public/test/:token — no login needed
+  const isCbt = !!cbtToken; // opened via /cbt/exam/:token — sign in with name+email
+  const isFree = !!freeId; // FREE first-test-per-subject preview — no login needed
+  const anonymous = isPublic || isCbt || isFree; // no logged-in user → hide student-only UI
   const navigate = useNavigate();
   const { user } = useAuth();
   const isClient = user?.role === "client"; // clients return to their own workspace
@@ -72,33 +136,106 @@ export default function TestAttempt() {
   const [showReview, setShowReview] = useState(false);
   const [reviewSearch, setReviewSearch] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [seed] = useState(makeSeed()); // per-attempt option shuffle
+  const [candidate, setCandidate] = useState(null); // CBT: { name, email } (sign-in gate)
   const containerRef = useRef(null);
 
-  // Load the test + its questions (answers hidden by the API).
+  // CBT: set up questions from the /start response and bind the timer to the
+  // exam's end (late joiners get only the time left until it closes).
+  const startCbtExam = useCallback((res, cand) => {
+    const t = { name: res.name, duration: res.duration, marks: res.marks, negativeMarking: res.negativeMarking, questions: res.questions, endAt: res.endAt };
+    setTest(t);
+    const qs = shuffleQuestionOrder(t.questions || [], seed);
+    setQuestions(shuffleAll(qs, seed));
+    setCandidate(cand);
+    setRemaining(cbtRemainingSeconds(res.endAt, res.serverNow, res.duration));
+  }, [seed]);
+
+  // Load the test + its questions (answers hidden by the API). For CBT the
+  // candidate must already be registered on the portal — we read that session
+  // and start the exam directly; if there's no session we send them to the
+  // portal to register there (registration is NOT done per-test).
   const load = useCallback(() => {
+    if (isCbt) {
+      const session = getCbtSession();
+      if (!session) { navigate("/online-exams", { replace: true }); return; }
+      setLoading(true);
+      setError("");
+      cbtService
+        .start(cbtToken, { email: session.email, sessionToken: session.sessionToken })
+        .then((res) => startCbtExam(res, session))
+        .catch((e) => {
+          // Session expired/invalid → clear it and go register on the portal.
+          if (e?.status === 401 || e?.data?.needRegister) { clearCbtSession(); navigate("/online-exams", { replace: true }); return; }
+          setError(e.message || "Could not start the exam.");
+        })
+        .finally(() => setLoading(false));
+      return;
+    }
     setLoading(true);
     setError("");
-    testService
-      .get(testId)
+    (isPublic ? testService.getPublic(token) : isFree ? testService.getFree(freeId) : testService.get(testId))
       .then((t) => {
+        // A shared QUIZ (practiceKind "quiz") should open in the quiz-style
+        // player, not this exam UI. Redirect old /public/test links accordingly.
+        if (isPublic && t?.practiceKind === "quiz") {
+          navigate(`/public/quiz/${token}`, { replace: true });
+          return;
+        }
         setTest(t);
-        // Order questions by the test's subject plan so each subject's questions
-        // sit together (English block, then Economics block, …), unassigned last.
-        const plan = (t.subjectPlan || []).map((p) => p.subject);
-        const rank = (sec) => {
-          const i = plan.indexOf(sec || "");
-          if (i !== -1) return i;
-          return sec ? plan.length : plan.length + 1; // unknown section, then unassigned
-        };
-        const qs = [...(t.questions || [])].sort((a, b) => rank(a.section) - rank(b.section));
-        setQuestions(qs);
+        // Keep each subject's questions together, but reshuffle the SUBJECT
+        // order and the questions WITHIN each subject for this attempt (so GK
+        // isn't always first), then reshuffle each question's OPTIONS too.
+        const qs = shuffleQuestionOrder(t.questions || [], seed);
+        setQuestions(shuffleAll(qs, seed));
         setRemaining((t.duration || 30) * 60);
       })
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false));
-  }, [testId]);
+  }, [testId, token, cbtToken, freeId, isPublic, isCbt, isFree, seed, navigate, startCbtExam]);
 
   useEffect(load, [load]);
+
+  // Dynamic SEO — only for the genuinely public, no-login views (shared link or
+  // free preview). CBT (live time-bound exams) and authenticated attempts keep
+  // the app default. Uses the real test name + question count/marks; no fake data.
+  const anonSeo = isPublic || isFree;
+  const seoTitle = anonSeo && test?.name ? `${test.name} — Online Test` : null;
+  const seoDesc = anonSeo && test?.name
+    ? `Attempt the ${test.name} online test${questions.length ? ` (${questions.length} question${questions.length === 1 ? "" : "s"}${test.marks ? `, ${test.marks} marks` : ""})` : ""} on My Study Guide. Free mock test with instant results — no login required.`
+    : null;
+  useSeo(seoTitle, seoDesc);
+
+  // Count a public OPEN once per browser (impression tracking for shared links).
+  useEffect(() => {
+    if (!isPublic || !token) return;
+    const key = `mpm-viewed-${token}`;
+    if (localStorage.getItem(key)) return;
+    localStorage.setItem(key, "1");
+    testService.registerPublicView(token).catch(() => {});
+  }, [isPublic, token]);
+
+  // Count a VISIT — every time this test is opened, by any audience (student,
+  // client, free preview or public link). TOTAL views (climbs on every open);
+  // we reflect the new totals live in the UI. (CBT keeps its own cbtViews.)
+  useEffect(() => {
+    if (isCbt || !test?._id) return;
+    testService.registerView(test._id)
+      .then((r) => {
+        if (r?.views != null) setTest((t) => (t ? { ...t, views: r.views } : t));
+        setQuestions((qs) => qs.map((qq) => ({ ...qq, views: (qq.views || 0) + 1 })));
+      })
+      .catch(() => {});
+  }, [isCbt, test?._id]);
+
+  // Count a CBT exam OPEN once per browser (impression tracking for the exam).
+  useEffect(() => {
+    if (!isCbt || !cbtToken) return;
+    const key = `mpm-cbt-viewed-${cbtToken}`;
+    if (localStorage.getItem(key)) return;
+    localStorage.setItem(key, "1");
+    cbtService.registerView(cbtToken).catch(() => {});
+  }, [isCbt, cbtToken]);
 
   const finalize = useCallback(async () => {
     if (submitting || result) return;
@@ -106,11 +243,17 @@ export default function TestAttempt() {
     setConfirmOpen(false);
     const byId = {};
     questions.forEach((q, i) => {
-      if (answers[i] !== undefined) byId[q._id] = answers[i];
+      if (answers[i] !== undefined) byId[q._id] = toOriginalIndex(q, answers[i]);
     });
     const elapsed = (test?.duration || 0) * 60 - remaining;
     try {
-      const res = await testService.submit(testId, byId, elapsed);
+      const res = isCbt
+        ? await cbtService.submit(cbtToken, { name: candidate?.name, email: candidate?.email, sessionToken: candidate?.sessionToken, answers: byId, timeTaken: elapsed })
+        : isPublic
+        ? await testService.submitPublic(token, byId, elapsed)
+        : isFree
+        ? await testService.submitFree(freeId, byId, elapsed)
+        : await testService.submit(testId, byId, elapsed);
       setResult(res);
     } catch (e) {
       setError(e.message || "Could not submit the test.");
@@ -118,18 +261,18 @@ export default function TestAttempt() {
       setSubmitting(false);
       if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
     }
-  }, [answers, questions, test, remaining, testId, submitting, result]);
+  }, [answers, questions, test, remaining, testId, token, cbtToken, freeId, isPublic, isCbt, isFree, candidate, submitting, result]);
 
   // Countdown with auto-submit at 0.
   useEffect(() => {
-    if (loading || result || !test) return;
+    if (loading || result || !test || (isCbt && !candidate)) return; // CBT: wait for sign-in
     if (remaining <= 0) {
       finalize();
       return;
     }
     const t = setInterval(() => setRemaining((r) => r - 1), 1000);
     return () => clearInterval(t);
-  }, [remaining, loading, result, test, finalize]);
+  }, [remaining, loading, result, test, finalize, isCbt, candidate]);
 
   useEffect(() => {
     const onChange = () => { if (!document.fullscreenElement) setFullscreen(false); };
@@ -140,7 +283,7 @@ export default function TestAttempt() {
   // Leave the test. After submitting, just go back; mid-test, confirm first
   // (answers are not saved) and drop out of fullscreen.
   const exitTest = () => {
-    const dest = isClient ? "/client" : "/test-series";
+    const dest = anonymous ? "/" : isClient ? "/creator" : "/test-series";
     if (!result && !window.confirm("Exit the test? Your answers won't be submitted or saved.")) return;
     if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
     navigate(dest);
@@ -221,6 +364,10 @@ export default function TestAttempt() {
   if (loading) return <div className="container-page"><Loading label="Loading test..." /></div>;
   if (error && !result) return <div className="container-page"><ErrorState message={error} onRetry={load} /></div>;
 
+  // CBT: while the exam is being started from the stored portal session, the
+  // loading state covers it; if it fails we show the error (with retry). There's
+  // no per-test sign-in — registration happens on the portal.
+
   const hh = String(Math.floor(remaining / 3600)).padStart(2, "0");
   const mm = String(Math.floor((remaining % 3600) / 60)).padStart(2, "0");
   const ss = String(remaining % 60).padStart(2, "0");
@@ -229,6 +376,11 @@ export default function TestAttempt() {
   const testSource = test
     ? [test.exam?.name, test.post?.name, test.name].filter(Boolean).join(" › ") + " (Test)"
     : "Test";
+
+  // ---- CBT: deferred-result confirmation (no score/rank shown now) ----
+  if (result && isCbt) {
+    return <CbtSubmitted result={result} test={test} candidate={candidate} navigate={navigate} />;
+  }
 
   // ---- Result screen (uses backend-graded data) ----
   if (result) {
@@ -242,8 +394,13 @@ export default function TestAttempt() {
       { l: "Wrong", v: result.incorrect, c: "text-rose-600 dark:text-rose-400" },
       { l: "Skipped", v: result.skipped, c: "text-amber-600 dark:text-amber-400" },
     ];
-    // Searchable review list — keep the original index for numbering.
-    const reviewEntries = review.map((r, i) => ({ ...r, _idx: i }));
+    // Searchable review list — keep the original index for numbering. Re-apply
+    // the SAME per-attempt shuffle so the review shows options in the exact
+    // order the user saw during the test (correct & chosen remapped to match).
+    const reviewEntries = shuffleQuestionOrder(review, seed).map((r, i) => {
+      const s = shuffleQuestion(r, seed);
+      return { ...s, chosen: toDisplayIndex(s, r.chosen), _idx: i };
+    });
     const reviewResults = searchQuestions(reviewEntries, reviewSearch);
     const reviewShown = reviewResults || reviewEntries;
     return (
@@ -270,9 +427,18 @@ export default function TestAttempt() {
                   {showReview ? "Hide" : "Review"} Answers
                 </button>
               )}
-              <FeedbackButton context="test" source={testSource} label="Give Feedback" className="btn-outline" />
-              {isClient ? (
-                <button onClick={() => navigate("/client")} className="btn-primary">Back to My Practice</button>
+              {review.length > 0 && <PaperExport title={test.name || "Test"} questions={review} />}
+              {!anonymous && <FeedbackButton context="test" source={testSource} label="Give Feedback" className="btn-outline" />}
+              {isPublic ? (
+                <button onClick={() => navigate("/")} className="btn-primary">Done</button>
+              ) : isFree && !user ? (
+                // Free preview finished by a guest — nudge them to unlock the rest.
+                <>
+                  <button onClick={() => navigate(-1)} className="btn-outline">Back to Tests</button>
+                  <button onClick={() => navigate("/register")} className="btn-primary">Sign up to unlock all tests</button>
+                </>
+              ) : isClient ? (
+                <button onClick={() => navigate("/creator")} className="btn-primary">Back to My Practice</button>
               ) : (
                 <>
                   <button onClick={() => navigate("/dashboard")} className="btn-primary">Go to Dashboard</button>
@@ -312,7 +478,7 @@ export default function TestAttempt() {
                   <div className="flex items-start justify-between gap-3">
                     <p className="font-semibold">
                       <span className="mr-2 text-slate-400">Q{i + 1}.</span>
-                      <MathText>{r.text}</MathText>
+                      <MathText>{stemText(r)}</MathText>
                     </p>
                     <div className="flex flex-shrink-0 flex-col items-end gap-1">
                       <span className={`text-xs font-semibold ${
@@ -320,16 +486,18 @@ export default function TestAttempt() {
                       }`}>
                         {r.chosen === null ? "Skipped" : r.isCorrect ? "Correct" : "Wrong"}
                       </span>
-                      <FeedbackButton
-                        context="question"
-                        label="Feedback"
-                        questionNumber={i + 1}
-                        questionText={r.text}
-                        source={testSource}
-                        details={`Correct: ${optLetter(r.correct)}${r.chosen != null ? `, Chosen: ${optLetter(r.chosen)}` : ", Skipped"}`}
-                        question={r}
-                        className="inline-flex items-center gap-1 text-xs font-medium text-slate-500 hover:text-brand-600 dark:text-slate-400"
-                      />
+                      {!anonymous && (
+                        <FeedbackButton
+                          context="question"
+                          label="Feedback"
+                          questionNumber={i + 1}
+                          questionText={r.text}
+                          source={testSource}
+                          details={`Correct: ${optLetter(r.correct)}${r.chosen != null ? `, Chosen: ${optLetter(r.chosen)}` : ", Skipped"}`}
+                          question={r}
+                          className="inline-flex items-center gap-1 text-xs font-medium text-slate-500 hover:text-brand-600 dark:text-slate-400"
+                        />
+                      )}
                     </div>
                   </div>
                   {(r._match != null || questionDateText(r)) && (
@@ -363,10 +531,11 @@ export default function TestAttempt() {
 
                   <StatementPairView q={r} />
                   <TableView q={r} />
+                  <GraphView q={r} />
                   <AssertionReasonView q={r} />
 
                   <div className="mt-3 space-y-2">
-                    {(r.options || []).map((opt, idx) => {
+                    {displayOptions(r).map((opt, idx) => {
                       const isCorrect = idx === r.correct;
                       const isChosen = idx === r.chosen;
                       const optExp = r.optionExplanations?.[idx];
@@ -379,7 +548,7 @@ export default function TestAttempt() {
                           <div className={cls}>
                             {isCorrect ? <CheckCircle2 className="h-4 w-4 flex-shrink-0" /> : isChosen ? <XCircle className="h-4 w-4 flex-shrink-0" /> : <span className="h-4 w-4" />}
                             {r.type === "matching" && <span className="font-bold">({String.fromCharCode(97 + idx)})</span>}
-                            <MathText>{opt}</MathText>
+                            <OptionContent>{opt}</OptionContent>
                           </div>
                           {isChosen && !isCorrect && optExp && optExp.trim() && (
                             <p className="ml-6 mt-0.5 text-xs text-rose-500 dark:text-rose-400"><MathText>{optExp}</MathText></p>
@@ -419,7 +588,10 @@ export default function TestAttempt() {
       <Watermark />
       <header className="sticky top-0 z-30 border-b border-slate-200 bg-white px-4 py-3 dark:border-slate-800 dark:bg-slate-900">
         <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-2">
-          <h1 className="min-w-0 flex-1 truncate text-sm font-bold sm:text-base">{test.name}</h1>
+          <div className="flex min-w-0 flex-1 items-center gap-2">
+            <h1 className="min-w-0 truncate text-sm font-bold sm:text-base">{test.name}</h1>
+            <span className="hidden flex-shrink-0 items-center gap-1 text-xs text-slate-400 sm:inline-flex" title="Total views of this test"><Eye className="h-3.5 w-3.5" /> {(test.views || 0).toLocaleString()}</span>
+          </div>
           <div className="flex flex-wrap items-center justify-end gap-2">
             <span
               className={`flex items-center gap-1.5 rounded-xl px-3 py-2 font-mono text-sm font-bold sm:px-4 sm:text-base ${
@@ -455,12 +627,13 @@ export default function TestAttempt() {
           <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 pb-3 dark:border-slate-800">
             <span className="flex flex-wrap items-center gap-2 font-bold">
               Question {current + 1} of {questions.length}
+              <span className="inline-flex items-center gap-1 text-xs font-normal text-slate-400" title="Views of this question"><Eye className="h-3 w-3" /> {(q.views || 0).toLocaleString()}</span>
               {questionDateText(q) && (
                 <span className="inline-flex items-center gap-1 text-xs font-normal text-slate-400"><Clock className="h-3 w-3" /> {questionDateText(q)}</span>
               )}
             </span>
             <div className="flex items-center gap-4">
-              <FeedbackButton context="question" questionText={q.text} questionNumber={current + 1} source={testSource} question={{ ...q, chosen: answers[current] ?? null }} label="Feedback" />
+              {!anonymous && <FeedbackButton context="question" questionText={q.text} questionNumber={current + 1} source={testSource} question={{ ...q, chosen: answers[current] ?? null }} label="Feedback" />}
               <span className="text-sm text-slate-500">
                 +{(test.marks / questions.length).toFixed(1)} / -{test.negativeMarking ?? 0.25}
               </span>
@@ -468,7 +641,7 @@ export default function TestAttempt() {
           </div>
 
           {q.image && <img src={q.image} alt="" className="mt-4 max-h-64 rounded-xl object-contain" />}
-          <h2 className="mt-5 text-lg font-semibold leading-relaxed"><MathText>{q.text}</MathText></h2>
+          <h2 className="mt-5 text-lg font-semibold leading-relaxed"><MathText>{stemText(q)}</MathText></h2>
 
           {/* Matching questions show the two columns before the answer options. */}
           {q.type === "matching" && (
@@ -491,11 +664,12 @@ export default function TestAttempt() {
           {/* Statement/pair lists, table grids, and assertion–reason statements */}
           <StatementPairView q={q} />
           <TableView q={q} />
+          <GraphView q={q} />
           <AssertionReasonView q={q} />
 
           <div className="mt-5 space-y-3">
             {q.type === "matching" && <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Choose the correct matching sequence:</p>}
-            {(q.options || []).map((opt, idx) => (
+            {displayOptions(q).map((opt, idx) => (
               <label
                 key={idx}
                 className={`flex cursor-pointer items-center gap-3 rounded-xl border-2 px-4 py-3.5 text-sm font-medium transition ${
@@ -512,7 +686,7 @@ export default function TestAttempt() {
                   className="h-4 w-4 text-brand-600"
                 />
                 {q.type === "matching" && <span className="font-bold">({String.fromCharCode(97 + idx)})</span>}
-                <MathText>{opt}</MathText>
+                <OptionContent>{opt}</OptionContent>
               </label>
             ))}
           </div>

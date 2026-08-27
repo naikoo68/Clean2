@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import { Search, Ban, CheckCircle2, KeyRound, Crown, UserPlus, Pencil, Trash2, X, Clock, AlarmClock, ListChecks, BookOpen } from "lucide-react";
-import { userService, testService } from "../../services";
+import { Search, Ban, CheckCircle2, KeyRound, Crown, UserPlus, Pencil, Trash2, X, Clock, AlarmClock, ListChecks, BookOpen, FileStack } from "lucide-react";
+import { userService, testService, authService } from "../../services";
 import Badge from "../../components/ui/Badge";
 import { Loading, ErrorState } from "../../components/ui/AsyncState";
 
@@ -16,7 +16,28 @@ const blankUser = {
   isTemp: false, // temporary account toggle
   durationValue: 7, // "valid for" amount
   durationUnit: "Days", // amount unit
+  // Student subscription (manual admin grant). studentSubEdit gates whether a
+  // save touches the subscription at all (so editing other fields never changes
+  // it by accident).
+  studentSubEdit: false,
+  studentAction: "set", // "set" (grant/extend) | "remove"
+  studentPlanKey: "",
+  studentDurationValue: 1,
+  studentDurationUnit: "Months",
 };
+
+// Add a duration to a base date, returning a new Date. Used for the student
+// subscription validity (Months/Years need calendar math, not fixed ms).
+function addDuration(base, value, unit) {
+  const d = new Date(base);
+  const v = Math.max(1, Number(value) || 1);
+  if (unit === "Days") d.setDate(d.getDate() + v);
+  else if (unit === "Weeks") d.setDate(d.getDate() + v * 7);
+  else if (unit === "Months") d.setMonth(d.getMonth() + v);
+  else if (unit === "Years") d.setFullYear(d.getFullYear() + v);
+  return d;
+}
+const STUDENT_UNITS = ["Days", "Weeks", "Months", "Years"];
 
 // Human-friendly absolute date, e.g. "22 Jun 2026, 4:30 PM".
 const fmtDate = (d) =>
@@ -35,7 +56,9 @@ function relativeTo(d) {
 }
 const isExpired = (d) => d && new Date(d).getTime() < Date.now();
 
-export default function AdminUsers() {
+// `role` (optional) restricts the list to one account type (e.g. "student"),
+// used when this screen is embedded as the "Students" tab of the Users hub.
+export default function AdminUsers({ role = "" }) {
   const [users, setUsers] = useState([]);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
@@ -45,6 +68,12 @@ export default function AdminUsers() {
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState(blankUser);
   const [saving, setSaving] = useState(false);
+  const [studentPlans, setStudentPlans] = useState([]); // for the manual-subscription plan picker
+
+  // Load the student plan catalog once (used to label/assign a manual sub).
+  useEffect(() => {
+    authService.studentPlans().then((r) => setStudentPlans(r?.plans || [])).catch(() => {});
+  }, []);
 
   // "Manage access" panel state
   const [accessUser, setAccessUser] = useState(null); // the user whose access is open
@@ -85,6 +114,8 @@ export default function AdminUsers() {
     try {
       await userService.updateAccess(accessUser._id, {
         quizAccess: access.quizAccess,
+        myQuizAccess: access.myQuizAccess,
+        myTestAccess: access.myTestAccess,
         tests: access.tests.map((t) => ({ _id: t._id, visible: t.visible, validUntil: t.validUntil })),
       });
       // Reflect temp/test changes in the row's expiry is not needed; just refresh count
@@ -110,6 +141,13 @@ export default function AdminUsers() {
       isTemp: !!u.expiresAt,
       durationValue: 7,
       durationUnit: "Days",
+      // Don't auto-modify the subscription; pre-fill the picker with the
+      // student's current plan for convenience.
+      studentSubEdit: false,
+      studentAction: "set",
+      studentPlanKey: u.studentPlan || "",
+      studentDurationValue: 1,
+      studentDurationUnit: "Months",
     });
     setEditing(u);
     setError("");
@@ -120,13 +158,13 @@ export default function AdminUsers() {
     setLoading(true);
     setError("");
     userService
-      .list()
+      .list("", role)
       .then((res) => setUsers(res.users || []))
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false));
   };
 
-  useEffect(load, []);
+  useEffect(load, [role]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const flash = (msg) => {
     setToast(msg);
@@ -172,8 +210,21 @@ export default function AdminUsers() {
         ? new Date(Date.now() + Math.max(1, Number(form.durationValue) || 1) * UNIT_MS[form.durationUnit]).toISOString()
         : null;
 
+      // Student subscription fields — only built when the admin explicitly chose
+      // to modify it (studentSubEdit), so unrelated edits never touch it.
+      const studentFields = {};
+      if (form.role === "student" && form.studentSubEdit) {
+        if (form.studentAction === "remove") {
+          studentFields.studentPlan = "";
+          studentFields.studentPlanExpiresAt = null;
+        } else {
+          studentFields.studentPlan = form.studentPlanKey || "1m";
+          studentFields.studentPlanExpiresAt = addDuration(new Date(), form.studentDurationValue, form.studentDurationUnit).toISOString();
+        }
+      }
+
       if (editing) {
-        const payload = { name: form.name, email: form.email, role: form.role, plan: form.plan };
+        const payload = { name: form.name, email: form.email, role: form.role, plan: form.plan, ...studentFields };
         if (form.password) payload.password = form.password; // only change if provided
         // Only recompute expiry when a new duration was chosen; otherwise keep
         // the existing one. Turning the toggle OFF clears it (sends null).
@@ -183,7 +234,7 @@ export default function AdminUsers() {
         setUsers((list) => list.map((x) => (x._id === editing._id ? { ...x, ...updated } : x)));
         flash("User updated.");
       } else {
-        const created = await userService.create({ ...form, expiresAt });
+        const created = await userService.create({ ...form, expiresAt, ...studentFields });
         setUsers((list) => [created, ...list]);
         flash(form.isTemp ? "Temporary account created." : "User created.");
       }
@@ -271,12 +322,23 @@ export default function AdminUsers() {
                       </div>
                     </td>
                     <td className="px-5 py-3">
-                      <Badge variant={u.role === "admin" ? "accent" : "neutral"}>{u.role}</Badge>
+                      <Badge variant={u.role === "admin" ? "accent" : u.role === "client" ? "brand" : "neutral"}>{u.role}</Badge>
                     </td>
                     <td className="px-5 py-3">
-                      <Badge variant={planVariant(u.plan)}>
-                        {u.plan !== "Free" && <Crown className="h-3 w-3" />} {u.plan}
-                      </Badge>
+                      <div className="flex flex-col items-start gap-1">
+                        <Badge variant={planVariant(u.plan)}>
+                          {u.plan !== "Free" && <Crown className="h-3 w-3" />} {u.plan}
+                        </Badge>
+                        {u.role === "student" && u.studentPlanExpiresAt && (
+                          new Date(u.studentPlanExpiresAt).getTime() > Date.now() ? (
+                            <Badge variant="Easy" title={`Subscription active until ${fmtDate(u.studentPlanExpiresAt)}`}>
+                              Sub · {relativeTo(u.studentPlanExpiresAt)}
+                            </Badge>
+                          ) : (
+                            <Badge variant="Hard" title={`Subscription expired ${fmtDate(u.studentPlanExpiresAt)}`}>Sub expired</Badge>
+                          )
+                        )}
+                      </div>
                     </td>
                     <td className="px-5 py-3">
                       <Badge variant={u.status === "active" ? "Easy" : "Hard"}>{u.status}</Badge>
@@ -355,6 +417,7 @@ export default function AdminUsers() {
                   <label className="mb-1.5 block text-sm font-medium">Role</label>
                   <select className="input" value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}>
                     <option value="student">Student</option>
+                    <option value="client">Creator</option>
                     <option value="admin">Admin</option>
                   </select>
                 </div>
@@ -415,6 +478,79 @@ export default function AdminUsers() {
                   </div>
                 )}
               </div>
+
+              {/* Student subscription — manual grant / extend / remove. Gates a
+                  student's access to attempting quizzes/test-series & Dashboard. */}
+              {form.role === "student" && (
+                <div className="rounded-xl border border-slate-200 p-4 dark:border-slate-700">
+                  <label className="flex cursor-pointer items-center justify-between gap-3">
+                    <span className="flex items-center gap-2 text-sm font-medium">
+                      <Crown className="h-4 w-4 text-brand-600" /> Manage student subscription
+                    </span>
+                    <input
+                      type="checkbox"
+                      className="h-4 w-4 accent-brand-600"
+                      checked={form.studentSubEdit}
+                      onChange={(e) => setForm({ ...form, studentSubEdit: e.target.checked })}
+                    />
+                  </label>
+
+                  {editing && (
+                    <p className="mt-3 rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-500 dark:bg-slate-800 dark:text-slate-400">
+                      {editing.studentPlanExpiresAt && new Date(editing.studentPlanExpiresAt).getTime() > Date.now()
+                        ? <>Active{editing.studentTrial ? " (trial)" : ""} — expires <strong>{fmtDate(editing.studentPlanExpiresAt)}</strong> ({relativeTo(editing.studentPlanExpiresAt)}).</>
+                        : "No active subscription — this student can't attempt quizzes/test-series or open their Dashboard."}
+                    </p>
+                  )}
+
+                  {form.studentSubEdit && (
+                    <div className="mt-3 space-y-3">
+                      <div>
+                        <label className="mb-1.5 block text-sm font-medium">Action</label>
+                        <select className="input" value={form.studentAction} onChange={(e) => setForm({ ...form, studentAction: e.target.value })}>
+                          <option value="set">Grant / set validity</option>
+                          <option value="remove">Remove subscription</option>
+                        </select>
+                      </div>
+
+                      {form.studentAction === "set" ? (
+                        <>
+                          <div>
+                            <label className="mb-1.5 block text-sm font-medium">Plan</label>
+                            <select className="input" value={form.studentPlanKey} onChange={(e) => setForm({ ...form, studentPlanKey: e.target.value })}>
+                              <option value="">(auto — 1 Month)</option>
+                              {studentPlans.map((p) => (
+                                <option key={p.key} value={p.key}>{p.label}{p.price > 0 ? ` — ₹${p.price}` : ""}</option>
+                              ))}
+                            </select>
+                          </div>
+                          <div className="grid grid-cols-2 gap-3">
+                            <div>
+                              <label className="mb-1.5 block text-sm font-medium">Valid for</label>
+                              <input type="number" min={1} className="input" value={form.studentDurationValue} onChange={(e) => setForm({ ...form, studentDurationValue: e.target.value })} />
+                            </div>
+                            <div>
+                              <label className="mb-1.5 block text-sm font-medium">Unit</label>
+                              <select className="input" value={form.studentDurationUnit} onChange={(e) => setForm({ ...form, studentDurationUnit: e.target.value })}>
+                                {STUDENT_UNITS.map((u) => <option key={u}>{u}</option>)}
+                              </select>
+                            </div>
+                          </div>
+                          <p className="flex flex-wrap items-center gap-1.5 text-sm text-brand-700 dark:text-brand-300">
+                            <Clock className="h-4 w-4" /> Active until{" "}
+                            <strong>{fmtDate(addDuration(new Date(), form.studentDurationValue, form.studentDurationUnit))}</strong>
+                          </p>
+                          <p className="text-xs text-slate-400">Sets validity to now + the chosen duration (no payment taken).</p>
+                        </>
+                      ) : (
+                        <p className="rounded-lg bg-rose-50 px-3 py-2 text-xs text-rose-700 dark:bg-rose-900/30 dark:text-rose-300">
+                          This removes the student's subscription access on save.
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
             <div className="mt-6 flex justify-end gap-3">
               <button type="button" onClick={() => setModal(false)} className="btn-outline">Cancel</button>
@@ -450,6 +586,36 @@ export default function AdminUsers() {
                   <label className="inline-flex cursor-pointer items-center gap-2 text-sm">
                     <input type="checkbox" className="h-4 w-4 accent-brand-600" checked={access.quizAccess} onChange={(e) => setAccess({ ...access, quizAccess: e.target.checked })} />
                     {access.quizAccess ? "Enabled" : "Disabled"}
+                  </label>
+                </div>
+
+                {/* My Quiz access (practice) — OFF by default */}
+                <div className="flex items-center justify-between rounded-xl border border-slate-200 p-4 dark:border-slate-700">
+                  <div className="flex items-center gap-3">
+                    <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300"><ListChecks className="h-5 w-5" /></span>
+                    <div>
+                      <p className="font-medium">My Quiz</p>
+                      <p className="text-xs text-slate-500 dark:text-slate-400">Grants access to all My Quiz practice content. Off by default.</p>
+                    </div>
+                  </div>
+                  <label className="inline-flex cursor-pointer items-center gap-2 text-sm">
+                    <input type="checkbox" className="h-4 w-4 accent-violet-600" checked={!!access.myQuizAccess} onChange={(e) => setAccess({ ...access, myQuizAccess: e.target.checked })} />
+                    {access.myQuizAccess ? "Enabled" : "Disabled"}
+                  </label>
+                </div>
+
+                {/* My Test access (practice) — OFF by default */}
+                <div className="flex items-center justify-between rounded-xl border border-slate-200 p-4 dark:border-slate-700">
+                  <div className="flex items-center gap-3">
+                    <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300"><FileStack className="h-5 w-5" /></span>
+                    <div>
+                      <p className="font-medium">My Test</p>
+                      <p className="text-xs text-slate-500 dark:text-slate-400">Grants access to all My Test practice content. Off by default.</p>
+                    </div>
+                  </div>
+                  <label className="inline-flex cursor-pointer items-center gap-2 text-sm">
+                    <input type="checkbox" className="h-4 w-4 accent-amber-600" checked={!!access.myTestAccess} onChange={(e) => setAccess({ ...access, myTestAccess: e.target.checked })} />
+                    {access.myTestAccess ? "Enabled" : "Disabled"}
                   </label>
                 </div>
 

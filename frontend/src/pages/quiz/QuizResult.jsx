@@ -18,14 +18,17 @@ import {
   Search,
   X,
 } from "lucide-react";
+import PaperExport from "../../components/admin/PaperExport";
 import StatCard from "../../components/ui/StatCard";
 import MathText from "../../components/ui/MathText";
+import OptionContent from "../../components/ui/OptionContent";
 import StatementPairView from "../../components/ui/StatementPairView";
 import TableView from "../../components/ui/TableView";
+import GraphView from "../../components/ui/GraphView";
 import AssertionReasonView from "../../components/ui/AssertionReasonView";
 import Watermark from "../../components/ui/Watermark";
 import FeedbackButton from "../../components/ui/FeedbackButton";
-import { questionDateText, searchQuestions } from "../../lib/questions";
+import { questionDateText, searchQuestions, stemText, displayOptions } from "../../lib/questions";
 
 function toRomanLite(n) {
   const m = [["X", 10], ["IX", 9], ["V", 5], ["IV", 4], ["I", 1]];
@@ -183,6 +186,7 @@ export default function QuizResult() {
           {showReview ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
           {showReview ? "Hide" : "Review"} Answers
         </button>
+        {(review || []).length > 0 && <PaperExport title={`${subjectName || "Quiz"}`} questions={review} />}
         <Link to={`/quiz/${subjectId}/${topicId}/${sessionId}/${quizId}`} className="btn-outline">
           <RefreshCw className="h-4 w-4" /> Retake Quiz
         </Link>
@@ -235,7 +239,7 @@ export default function QuizResult() {
                     </div>
                   )}
                   <div className="flex items-start justify-between gap-2">
-                    <p className="font-semibold"><MathText>{r.text}</MathText></p>
+                    <p className="font-semibold"><MathText>{stemText(r)}</MathText></p>
                     <FeedbackButton
                       context="question"
                       label="Feedback"
@@ -268,10 +272,11 @@ export default function QuizResult() {
 
                   <StatementPairView q={r} />
                   <TableView q={r} />
+                  <GraphView q={r} />
                   <AssertionReasonView q={r} />
 
                   <div className="mt-3 space-y-2">
-                    {(r.options || []).map((opt, idx) => {
+                    {displayOptions(r).map((opt, idx) => {
                       const isCorrect = idx === r.correct;
                       const isChosen = idx === r.chosen;
                       const optExp = r.optionExplanations?.[idx];
@@ -290,7 +295,7 @@ export default function QuizResult() {
                               <span className="h-4 w-4" />
                             )}
                             {r.type === "matching" && <span className="font-bold">({String.fromCharCode(97 + idx)})</span>}
-                            <MathText>{opt}</MathText>
+                            <OptionContent>{opt}</OptionContent>
                           </div>
                           {!isCorrect && optExp && optExp.trim() && (
                             <p className={`ml-6 mt-0.5 text-xs ${isChosen ? "text-rose-500 dark:text-rose-400" : "text-slate-400 dark:text-slate-500"}`}><MathText>{optExp}</MathText></p>
